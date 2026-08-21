@@ -1,0 +1,97 @@
+// Schema da Fase 0 — Fundacao.
+// Apenas as entidades necessarias para autenticacao, perfis, filas basicas e White Label.
+// Conversa / Mensagem / Contato entram na Fase 1 (MVP de Atendimento).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Perfis de acesso (Fase 0 do escopo).
+enum Role {
+  ADMIN
+  SUPERVISOR
+  AGENTE
+}
+
+/// Status de presenca do agente, exibido no cabecalho.
+enum AgentStatus {
+  OFFLINE
+  DISPONIVEL
+  EM_ATENDIMENTO
+  PAUSA
+}
+
+model User {
+  id           String      @id @default(uuid())
+  nome         String
+  email        String      @unique
+  senhaHash    String      @map("senha_hash")
+  perfil       Role        @default(AGENTE)
+  status       AgentStatus @default(OFFLINE)
+  ativo        Boolean     @default(true)
+  ultimoLogin  DateTime?   @map("ultimo_login")
+  criadoEm     DateTime    @default(now()) @map("criado_em")
+  atualizadoEm DateTime    @updatedAt @map("atualizado_em")
+
+  filas QueueAgent[]
+
+  @@index([perfil])
+  @@map("usuarios")
+}
+
+/// Canais de atendimento previstos. Fase 1 comeca por WEBCHAT.
+enum Channel {
+  WEBCHAT
+  WHATSAPP
+  INSTAGRAM
+  FACEBOOK
+  EMAIL
+  VOZ
+}
+
+model Queue {
+  id           String   @id @default(uuid())
+  nome         String   @unique
+  descricao    String?
+  canalPadrao  Channel  @default(WEBCHAT) @map("canal_padrao")
+  ativa        Boolean  @default(true)
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  agentes QueueAgent[]
+
+  @@map("filas")
+}
+
+/// Vinculo agente <-> fila.
+model QueueAgent {
+  id        String   @id @default(uuid())
+  filaId    String   @map("fila_id")
+  usuarioId String   @map("usuario_id")
+  criadoEm  DateTime @default(now()) @map("criado_em")
+
+  fila    Queue @relation(fields: [filaId], references: [id], onDelete: Cascade)
+  usuario User  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([filaId, usuarioId])
+  @@index([usuarioId])
+  @@map("filas_agentes")
+}
+
+/// White Label — registro unico (id fixo "default") com a identidade visual da instancia.
+model Branding {
+  id            String   @id @default("default")
+  appName       String   @default("Plataforma de Atendimento") @map("app_name")
+  logoUrl       String?  @map("logo_url")
+  corPrimaria   String   @default("#2563eb") @map("cor_primaria")
+  corSecundaria String   @default("#0f172a") @map("cor_secundaria")
+  corDestaque   String   @default("#16a34a") @map("cor_destaque")
+  atualizadoEm  DateTime @updatedAt @map("atualizado_em")
+
+  @@map("branding")
+}

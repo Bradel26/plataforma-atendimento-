@@ -1,0 +1,23 @@
+@import 'tailwindcss';
+
+/*
+ * White Label: estas variaveis sao sobrescritas em tempo de execucao pelo
+ * BrandingProvider com as cores salvas no banco. Use-as via classes
+ * utilitarias arbitrarias, ex.: bg-[var(--brand-primary)].
+ */
+:root {
+  --brand-primary: #2563eb;
+  --brand-secondary: #0f172a;
+  --brand-accent: #16a34a;
+  --brand-primary-soft: color-mix(in srgb, var(--brand-primary) 12%, white);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-slate-100 text-slate-800 antialiased;
+}

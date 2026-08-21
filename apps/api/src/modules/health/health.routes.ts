@@ -1,0 +1,19 @@
+import { Router } from 'express';
+import { prisma } from '../../lib/prisma';
+import { redis } from '../../lib/redis';
+
+export const healthRoutes = Router();
+
+healthRoutes.get('/', async (_req, res) => {
+  const [postgres, cache] = await Promise.all([
+    prisma.$queryRaw`SELECT 1`.then(() => 'ok' as const).catch(() => 'falha' as const),
+    redis.ping().then(() => 'ok' as const).catch(() => 'falha' as const),
+  ]);
+
+  const saudavel = postgres === 'ok' && cache === 'ok';
+  res.status(saudavel ? 200 : 503).json({
+    status: saudavel ? 'ok' : 'degradado',
+    dependencias: { postgres, redis: cache },
+    versao: process.env.npm_package_version ?? '0.1.0',
+  });
+});

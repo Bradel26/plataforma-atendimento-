@@ -1,0 +1,27 @@
+{
+  "name": "plataforma-atendimento",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Plataforma de Atendimento Multicanal + PABX/Call Center + CRM",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspaces --if-present",
+    "dev:api": "npm run dev -w @plataforma/api",
+    "dev:web": "npm run dev -w @plataforma/web",
+    "build": "npm run build -w @plataforma/api && npm run build -w @plataforma/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run typecheck",
+    "infra:up": "docker compose up -d",
+    "infra:down": "docker compose down",
+    "infra:reset": "docker compose down -v",
+    "db:migrate": "npm run db:migrate -w @plataforma/api",
+    "db:seed": "npm run db:seed -w @plataforma/api",
+    "db:studio": "npm run db:studio -w @plataforma/api",
+    "setup": "npm install && npm run infra:up && npm run db:migrate && npm run db:seed"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
