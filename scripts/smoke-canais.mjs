@@ -18,6 +18,14 @@ const APP_SECRET = 'segredo-de-teste-do-app-meta';
 const VERIFY_TOKEN = 'token-de-verificacao-123';
 const TOKEN_FALSO = 'EAAG-token-falso-para-teste-de-erro';
 
+/**
+ * Sufixo por execucao. Os ids de mensagem precisam ser novos a cada rodada:
+ * `Message.idExterno` e unico e a plataforma trata id repetido como reentrega
+ * da Meta — com id fixo, a segunda execucao do teste veria "duplicada" e
+ * acusaria falha onde o comportamento esta correto.
+ */
+const EXECUCAO = Date.now().toString(36);
+
 const ok = (b) => (b ? 'ok' : 'FALHOU');
 
 async function json(caminho, opcoes = {}) {
@@ -106,7 +114,7 @@ const enviarWebhook = async (canal, corpo, segredo = APP_SECRET) =>
     body: corpo,
   });
 
-const corpo1 = payloadWhatsApp('wamid.TESTE001', 'Bom dia, preciso de ajuda com meu pedido');
+const corpo1 = payloadWhatsApp(`wamid.${EXECUCAO}-001`, 'Bom dia, preciso de ajuda com meu pedido');
 const r1 = await enviarWebhook('whatsapp', corpo1);
 const d1 = await r1.json();
 console.log('5. mensagem do WhatsApp processada:', ok(r1.status === 200 && d1.processadas === 1), JSON.stringify(d1));
@@ -117,7 +125,7 @@ const d2 = await r2.json();
 console.log('6. reentrega do mesmo id nao duplica:', ok(d2.duplicadas === 1 && d2.processadas === 0), JSON.stringify(d2));
 
 // 7. Assinatura invalida
-const r3 = await enviarWebhook('whatsapp', payloadWhatsApp('wamid.TESTE002', 'x'), 'segredo-errado');
+const r3 = await enviarWebhook('whatsapp', payloadWhatsApp(`wamid.${EXECUCAO}-002`, 'x'), 'segredo-errado');
 console.log('7. assinatura invalida recusada:', ok(r3.status === 401));
 
 // 8. Instagram Direct
@@ -129,7 +137,7 @@ const corpoIg = JSON.stringify({
       sender: { id: 'IGSID-99887766' },
       recipient: { id: '888999' },
       timestamp: 1787577100,
-      message: { mid: 'mid.IG-TESTE-001', text: 'Vi o anuncio, tem em estoque?' },
+      message: { mid: `mid.IG-${EXECUCAO}-001`, text: 'Vi o anuncio, tem em estoque?' },
     }],
   }],
 });
@@ -160,7 +168,7 @@ console.log('    mensagem NAO entrou no historico:', ok(antes === depois), `(${a
 
 // 11. Canal desativado recusa o webhook
 await json('/canais/whatsapp', { method: 'PUT', headers: admin, body: JSON.stringify({ ativo: false }) });
-const r5 = await enviarWebhook('whatsapp', payloadWhatsApp('wamid.TESTE003', 'y'));
+const r5 = await enviarWebhook('whatsapp', payloadWhatsApp(`wamid.${EXECUCAO}-003`, 'y'));
 console.log('11. canal inativo recusa webhook:', ok(r5.status === 503));
 
 // 12. Canal nao suportado
