@@ -37,9 +37,11 @@ Construir uma aplicação web própria no formato de plataforma de atendimento o
 - **Conversa**: id, canal, contato_id, status, fila_id, agente_id, criado_em, finalizado_em ✅ implementado
 - **Mensagem**: id, conversa_id, autor, conteudo, tipo_anexo, timestamp ✅ implementado
 - **Cliente/Contato**: id, nome, telefone, email, canal_origem, tags ✅ implementado
-- **Conta/Empresa**: id, nome, cnpj, contatos_vinculados — Fase 2
-- **Lead**: id, contato_id, fase, tipo, responsavel_id, prazo, canal_origem, motivo_perda — Fase 2
-- **Oportunidade**: id, conta_id, valor, funil_id, estagio, responsavel_id — Fase 2
+- **Conta/Empresa**: id, nome, cnpj, contatos_vinculados ✅ implementado
+- **Lead**: id, contato_id, fase, tipo, responsavel_id, prazo, canal_origem, motivo_perda ✅ implementado
+- **Oportunidade**: id, conta_id, valor, funil_id, estagio, responsavel_id ✅ implementado
+- **Funil / Estágio**: funil customizável com probabilidade por estágio ✅ implementado
+- **Produto / Catálogo de Preços / Item de Oportunidade** ✅ implementado
 - **Chamado/Protocolo**: id, conversa_id, status, anexos, comentarios, agendamentos — Fase 2
 - **Escala**: id, agente_id, dia_semana, horario_inicio, horario_fim — Fase 3
 
@@ -77,13 +79,17 @@ Construir uma aplicação web própria no formato de plataforma de atendimento o
 - [x] Filas básicas e transferência de atendimento entre agentes (com registro do motivo no histórico)
 - [x] CRM básico: contatos criados automaticamente pelo Webchat + ficha com histórico de conversas
 
-### Fase 2 — Multicanal + CRM completo
+### Fase 2 — Multicanal + CRM completo 🚧 em andamento
 - [ ] Integração WhatsApp Business API (Meta) — requer verificação de conta (CNPJ, comprovante, site)
 - [ ] Integração Instagram Direct e Facebook Messenger
-- [ ] CRM completo: Leads (fase, tipo, responsável, prazo, canal_origem, motivo_perda), filtros avançados, visualização Kanban
-- [ ] Contas, Oportunidades (funil customizável), Catálogo de Preços, Produtos
+- [x] CRM completo: Leads (fase, tipo, responsável, prazo, canal_origem, motivo_perda), filtros avançados, visualização Kanban
+- [x] Contas, Oportunidades (funil customizável), Catálogo de Preços, Produtos
 - [ ] Importação/exportação (Excel/CSV) de leads e relatórios
 - [ ] Módulo de Protocolo/Chamados (Kanban, anexos, agendamentos, comentários internos/externos)
+
+**Ordem adotada:** o CRM veio antes das integrações Meta porque WhatsApp/Instagram dependem de
+verificação da conta pela Meta (dias/semanas) e não podem ser validados de ponta a ponta enquanto
+isso; o CRM é utilizável no mesmo dia.
 
 ### Fase 3 — Gestão e Relatórios
 - [ ] Dashboards com indicadores em tempo real (conversas em espera, tempo médio de espera, TMA)
@@ -207,3 +213,28 @@ sessão de visitante nunca é aceita como credencial de usuário interno (verifi
 Agente vê as conversas atribuídas a ele **mais** as em espera nas filas em que está vinculado.
 Admin e supervisor veem tudo. A regra fica em `escopoVisivel()` e é aplicada tanto na listagem
 quanto nos contadores das abas, para que os números batam com a lista.
+
+### 10. Decimal do Prisma vira number na borda (Fase 2)
+Valores monetários usam `Decimal(14,2)` no Postgres — `Float` não serve para dinheiro. O Prisma
+devolve `Decimal` (decimal.js), que o `JSON.stringify` transformaria em **string**, quebrando
+`toFixed`/somas no frontend. A conversão para `number` acontece num único lugar,
+`crm.serializers.ts`, e não espalhada pelas rotas.
+
+Consequência aceita: `number` tem 15–16 dígitos significativos de precisão, suficiente para
+valores de venda. Se algum dia houver necessidade de precisão exata em cálculo financeiro no
+frontend, o caminho é trafegar string e usar decimal.js também no cliente.
+
+### 11. Valor da oportunidade: itens x valor informado
+`valor` é a fonte de verdade da oportunidade. Ao criar com itens, ele é calculado pela soma;
+`PUT /oportunidades/:id/itens` recalcula. Mas um `valor` explícito **sobrepõe** a soma — é comum
+negociar um total fechado, diferente da soma da tabela. O serializer expõe `totalItens` ao lado de
+`valor` para que a divergência fique visível na tela em vez de escondida.
+
+O preço de cada item vem do catálogo informado (ou do primeiro catálogo ativo); `precoUnitario`
+explícito sobrepõe, que é como se aplica desconto. Produto sem preço no catálogo e sem preço
+informado é erro 400, não um item de valor zero.
+
+### 12. Reabrir lead perdido limpa o motivo
+`motivoPerda` só existe na fase `PERDIDO`. Mover um lead de volta para uma fase ativa apaga o
+motivo. A validação rejeita apenas o motivo **enviado** para uma fase não-PERDIDO — olhar o motivo
+já gravado quebrava a reabertura (bug encontrado e corrigido no teste da Fase 2).

@@ -9,6 +9,10 @@ import { authRoutes } from './modules/auth/auth.routes';
 import { brandingRoutes } from './modules/branding/branding.routes';
 import { contactsRoutes } from './modules/contacts/contacts.routes';
 import { conversationsRoutes } from './modules/conversations/conversations.routes';
+import { accountsRoutes } from './modules/crm/accounts.routes';
+import { catalogsRoutes, productsRoutes } from './modules/crm/catalog.routes';
+import { leadsRoutes } from './modules/crm/leads.routes';
+import { funnelsRoutes, opportunitiesRoutes } from './modules/crm/opportunities.routes';
 import { healthRoutes } from './modules/health/health.routes';
 import { queuesRoutes } from './modules/queues/queues.routes';
 import { usersRoutes } from './modules/users/users.routes';
@@ -31,6 +35,12 @@ export function createApp() {
   app.use('/api/conversas', conversationsRoutes);
   app.use('/api/contatos', contactsRoutes);
   app.use('/api/webchat', webchatRoutes);
+  app.use('/api/contas', accountsRoutes);
+  app.use('/api/leads', leadsRoutes);
+  app.use('/api/oportunidades', opportunitiesRoutes);
+  app.use('/api/funis', funnelsRoutes);
+  app.use('/api/produtos', productsRoutes);
+  app.use('/api/catalogos', catalogsRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

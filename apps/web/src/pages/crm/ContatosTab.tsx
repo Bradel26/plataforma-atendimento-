@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Alerta, Badge, Card, EmptyState, Input } from '../components/ui';
-import { ApiError, api } from '../lib/api';
-import { LABEL_CONVERSA_STATUS, type Contato, type ConversaResumo } from '../lib/types';
+import { Alerta, Badge, Card, EmptyState, Input } from '../../components/ui';
+import { ApiError, api } from '../../lib/api';
+import { LABEL_CONVERSA_STATUS, type Contato, type ConversaResumo } from '../../lib/types';
 
-/** CRM basico da Fase 1: contatos e o historico de conversas de cada um. */
-export function CrmPage() {
+/** Aba de contatos: ficha e historico de conversas (base do CRM, Fase 1). */
+export function ContatosTab() {
   const [contatos, setContatos] = useState<Contato[]>([]);
   const [busca, setBusca] = useState('');
   const [selecionado, setSelecionado] = useState<{ contato: Contato; conversas: ConversaResumo[] } | null>(null);

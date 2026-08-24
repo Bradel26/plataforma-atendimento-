@@ -3,7 +3,7 @@ import { AppShell } from './components/layout/AppShell';
 import { NAV } from './components/layout/nav';
 import { useAuth } from './features/auth/AuthProvider';
 import { AtendimentoPage } from './pages/AtendimentoPage';
-import { CrmPage } from './pages/CrmPage';
+import { CrmPage } from './pages/crm/CrmPage';
 import { LoginPage } from './pages/LoginPage';
 import { PlaceholderPage } from './pages/PlaceholderPage';
 import { WebchatPage } from './pages/WebchatPage';
@@ -18,7 +18,6 @@ const DESCRICOES: Record<string, string> = {
   '/campanhas': 'Discagem ativa e campanhas em massa.',
   '/relatorios': 'Relatorios detalhados com exportacao para Excel e PDF.',
   '/escalas': 'Jornada de trabalho, escalas e pausas dos agentes.',
-  '/crm': 'Contas, leads, oportunidades, catalogo e produtos entram na Fase 2.',
 };
 
 /** Rotas ja implementadas — as demais caem no placeholder da fase. */

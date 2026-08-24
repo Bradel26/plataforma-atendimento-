@@ -2,7 +2,7 @@
 
 Plataforma de atendimento multicanal + call center + CRM. Escopo completo e roadmap em [SCOPE.md](SCOPE.md).
 
-**Estado atual: Fases 0 (Fundação) e 1 (MVP de Atendimento) concluídas.**
+**Estado atual:** Fases 0 (Fundação) e 1 (MVP de Atendimento) concluídas. Fase 2 em andamento — CRM completo pronto; integrações Meta e Protocolo pendentes.
 
 ## Estrutura
 
@@ -12,7 +12,8 @@ apps/
     prisma/       schema.prisma e seed
     src/
       modules/    auth, users, queues, branding, health,
-                  conversations (conversas), contacts (contatos), webchat
+                  conversations (conversas), contacts (contatos), webchat,
+                  crm (contas, leads, oportunidades, funis, produtos, catalogos)
       realtime/   servidor Socket.IO, salas e hub de eventos
       http/       middlewares (auth, validação, erros)
       lib/        prisma, redis, jwt/tokens, senhas, erros
@@ -104,6 +105,20 @@ Base: `/api`. Corpo e respostas em JSON. Erros no formato `{ error: { code, mess
 | POST | `/webchat/sessoes` | **público** (visitante) |
 | GET | `/webchat/conversa` | token de sessão do webchat |
 | POST | `/webchat/mensagens` | token de sessão do webchat |
+| GET/POST/PATCH | `/contas`, `/contas/:id` | autenticado (DELETE: admin) |
+| POST | `/contas/:id/contatos` | autenticado (vincula contato à conta) |
+| GET | `/leads`, `/leads/kanban`, `/leads/resumo` | autenticado |
+| POST/PATCH | `/leads`, `/leads/:id` | autenticado |
+| DELETE | `/leads/:id` | admin, supervisor |
+| GET | `/oportunidades`, `/oportunidades/kanban` | autenticado |
+| POST/PATCH | `/oportunidades`, `/oportunidades/:id` | autenticado |
+| POST | `/oportunidades/:id/fechar` | autenticado (`GANHA` ou `PERDIDA` + motivo) |
+| PUT | `/oportunidades/:id/itens` | autenticado (recalcula o valor) |
+| GET | `/funis` | autenticado |
+| POST | `/funis` | admin, supervisor |
+| GET | `/produtos`, `/catalogos` | autenticado |
+| POST/PATCH | `/produtos` | admin, supervisor |
+| POST | `/catalogos`, `PUT /catalogos/:id/precos` | admin, supervisor |
 
 WebSocket em `/socket.io`. Contrato de eventos e salas documentado no [SCOPE.md](SCOPE.md).
 
@@ -141,7 +156,25 @@ Verifica handshake do WebSocket nos três tipos de cliente, recusa de conexão s
 entrega de `conversa:nova`/`mensagem:nova` para agente, supervisão e visitante, e que eventos
 internos não vazam para o visitante.
 
+## CRM (Fase 2)
+
+O módulo **CRM** tem cinco abas:
+
+- **Contatos** — ficha e histórico de conversas (criados automaticamente pelo Webchat).
+- **Contas** — empresas com CNPJ normalizado (guardado só com dígitos, exibido com máscara) e
+  visão 360: contatos, leads e oportunidades vinculados.
+- **Leads** — Kanban por fase com arrastar e soltar, filtros por tipo, responsável, atraso e busca.
+  Mover para *Perdido* exige o motivo da perda.
+- **Oportunidades** — Kanban pelos estágios do funil (customizável), com total em aberto e
+  **previsão ponderada** pela probabilidade de cada estágio. Fechar como ganha ou perdida.
+- **Produtos e preços** — produtos por SKU e catálogo de preços. O preço do catálogo alimenta os
+  itens da oportunidade; `precoUnitario` explícito aplica desconto.
+
+O seed cria o funil *Funil de Vendas* (5 estágios) e o catálogo *Tabela Padrão* com 3 produtos —
+sem um funil não é possível abrir oportunidades.
+
 ## Próximo passo
 
-Fase 2 — multicanal (WhatsApp Business API, Instagram, Facebook), CRM completo (leads,
-contas, oportunidades) e módulo de Protocolo. Detalhes no [SCOPE.md](SCOPE.md).
+Restante da Fase 2: integrações WhatsApp Business API / Instagram / Facebook (dependem de
+verificação da conta na Meta), importação e exportação Excel/CSV, e o módulo de Protocolo/Chamados.
+Detalhes no [SCOPE.md](SCOPE.md).

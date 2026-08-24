@@ -45,6 +45,8 @@ model User {
   filas             QueueAgent[]
   conversas         Conversation[]
   mensagensEnviadas Message[]
+  leads             Lead[]
+  oportunidades     Opportunity[]
 
   @@index([perfil])
   @@map("usuarios")
@@ -142,7 +144,11 @@ model Contact {
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
+  contaId String? @map("conta_id")
+
+  conta     Account?       @relation(fields: [contaId], references: [id], onDelete: SetNull)
   conversas Conversation[]
+  leads     Lead[]
 
   @@index([email])
   @@index([telefone])
@@ -191,4 +197,194 @@ model Message {
 
   @@index([conversaId, criadoEm])
   @@map("mensagens")
+}
+
+// ---------------------------------------------------------------------------
+// Fase 2 — CRM completo
+// ---------------------------------------------------------------------------
+
+/// Fases do funil de leads. GANHO/PERDIDO sao terminais.
+enum LeadFase {
+  NOVO
+  QUALIFICACAO
+  PROPOSTA
+  NEGOCIACAO
+  GANHO
+  PERDIDO
+}
+
+enum LeadTipo {
+  INBOUND
+  OUTBOUND
+  INDICACAO
+  PARCEIRO
+}
+
+enum MotivoPerda {
+  PRECO
+  SEM_INTERESSE
+  CONCORRENTE
+  SEM_BUDGET
+  SEM_RESPOSTA
+  OUTRO
+}
+
+enum OportunidadeStatus {
+  ABERTA
+  GANHA
+  PERDIDA
+}
+
+/// Conta/Empresa: agrupa contatos e oportunidades.
+model Account {
+  id          String   @id @default(uuid())
+  nome        String
+  cnpj        String?  @unique
+  segmento    String?
+  site        String?
+  telefone    String?
+  email       String?
+  observacoes String?
+  criadoEm    DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  contatos      Contact[]
+  leads         Lead[]
+  oportunidades Opportunity[]
+
+  @@index([nome])
+  @@map("contas")
+}
+
+model Lead {
+  id             String       @id @default(uuid())
+  contatoId      String       @map("contato_id")
+  contaId        String?      @map("conta_id")
+  fase           LeadFase     @default(NOVO)
+  tipo           LeadTipo     @default(INBOUND)
+  responsavelId  String?      @map("responsavel_id")
+  prazo          DateTime?
+  canalOrigem    Channel      @default(WEBCHAT) @map("canal_origem")
+  motivoPerda    MotivoPerda? @map("motivo_perda")
+  valorEstimado  Decimal?     @map("valor_estimado") @db.Decimal(14, 2)
+  observacoes    String?
+  criadoEm       DateTime     @default(now()) @map("criado_em")
+  atualizadoEm   DateTime     @updatedAt @map("atualizado_em")
+  fechadoEm      DateTime?    @map("fechado_em")
+
+  contato     Contact @relation(fields: [contatoId], references: [id], onDelete: Cascade)
+  conta       Account? @relation(fields: [contaId], references: [id], onDelete: SetNull)
+  responsavel User?   @relation(fields: [responsavelId], references: [id], onDelete: SetNull)
+
+  @@index([fase, atualizadoEm])
+  @@index([responsavelId, fase])
+  @@map("leads")
+}
+
+/// Funil customizavel de oportunidades.
+model Funnel {
+  id       String   @id @default(uuid())
+  nome     String   @unique
+  ativo    Boolean  @default(true)
+  criadoEm DateTime @default(now()) @map("criado_em")
+
+  estagios      FunnelStage[]
+  oportunidades Opportunity[]
+
+  @@map("funis")
+}
+
+model FunnelStage {
+  id            String @id @default(uuid())
+  funilId       String @map("funil_id")
+  nome          String
+  ordem         Int
+  /// Probabilidade de fechamento no estagio (0-100), usada em previsao.
+  probabilidade Int    @default(0)
+
+  funil         Funnel        @relation(fields: [funilId], references: [id], onDelete: Cascade)
+  oportunidades Opportunity[]
+
+  @@unique([funilId, ordem])
+  @@map("funil_estagios")
+}
+
+model Opportunity {
+  id                 String             @id @default(uuid())
+  titulo             String
+  contaId            String             @map("conta_id")
+  funilId            String             @map("funil_id")
+  estagioId          String             @map("estagio_id")
+  valor              Decimal            @default(0) @db.Decimal(14, 2)
+  responsavelId      String?            @map("responsavel_id")
+  status             OportunidadeStatus @default(ABERTA)
+  motivoPerda        MotivoPerda?       @map("motivo_perda")
+  previsaoFechamento DateTime?          @map("previsao_fechamento")
+  criadoEm           DateTime           @default(now()) @map("criado_em")
+  atualizadoEm       DateTime           @updatedAt @map("atualizado_em")
+  fechadoEm          DateTime?          @map("fechado_em")
+
+  conta       Account     @relation(fields: [contaId], references: [id], onDelete: Cascade)
+  funil       Funnel      @relation(fields: [funilId], references: [id])
+  estagio     FunnelStage @relation(fields: [estagioId], references: [id])
+  responsavel User?       @relation(fields: [responsavelId], references: [id], onDelete: SetNull)
+  itens       OpportunityItem[]
+
+  @@index([status, atualizadoEm])
+  @@index([funilId, estagioId])
+  @@map("oportunidades")
+}
+
+model Product {
+  id        String   @id @default(uuid())
+  nome      String
+  sku       String   @unique
+  descricao String?
+  ativo     Boolean  @default(true)
+  criadoEm  DateTime @default(now()) @map("criado_em")
+
+  itensCatalogo CatalogItem[]
+  itensOportunidade OpportunityItem[]
+
+  @@map("produtos")
+}
+
+/// Catalogo de precos: mesmo produto pode ter preco diferente por catalogo.
+model PriceCatalog {
+  id       String   @id @default(uuid())
+  nome     String   @unique
+  moeda    String   @default("BRL")
+  ativo    Boolean  @default(true)
+  criadoEm DateTime @default(now()) @map("criado_em")
+
+  itens CatalogItem[]
+
+  @@map("catalogos_preco")
+}
+
+model CatalogItem {
+  id         String  @id @default(uuid())
+  catalogoId String  @map("catalogo_id")
+  produtoId  String  @map("produto_id")
+  preco      Decimal @db.Decimal(14, 2)
+
+  catalogo PriceCatalog @relation(fields: [catalogoId], references: [id], onDelete: Cascade)
+  produto  Product      @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+
+  @@unique([catalogoId, produtoId])
+  @@map("catalogo_itens")
+}
+
+model OpportunityItem {
+  id             String  @id @default(uuid())
+  oportunidadeId String  @map("oportunidade_id")
+  produtoId      String  @map("produto_id")
+  quantidade     Int     @default(1)
+  precoUnitario  Decimal @map("preco_unitario") @db.Decimal(14, 2)
+
+  oportunidade Opportunity @relation(fields: [oportunidadeId], references: [id], onDelete: Cascade)
+  produto      Product     @relation(fields: [produtoId], references: [id])
+
+  @@unique([oportunidadeId, produtoId])
+  @@map("oportunidade_itens")
 }

@@ -45,10 +45,67 @@ async function main() {
     }
   }
 
+  await semearCrm();
+
   console.log('Seed concluido.');
   console.log(`  admin:      ${ADMIN_EMAIL} / ${ADMIN_SENHA}`);
   console.log('  supervisor: supervisor@plataforma.local / Super@123');
   console.log('  agente:     agente1@plataforma.local / Agente@123');
+}
+
+/**
+ * CRM (Fase 2): um funil padrao e um catalogo de precos, necessarios para abrir
+ * oportunidades. Idempotente — pode rodar de novo sem duplicar.
+ */
+async function semearCrm() {
+  const estagios = [
+    { nome: 'Prospeccao', probabilidade: 10 },
+    { nome: 'Qualificacao', probabilidade: 25 },
+    { nome: 'Proposta', probabilidade: 50 },
+    { nome: 'Negociacao', probabilidade: 75 },
+    { nome: 'Fechamento', probabilidade: 90 },
+  ];
+
+  const funil = await prisma.funnel.upsert({
+    where: { nome: 'Funil de Vendas' },
+    update: {},
+    create: { nome: 'Funil de Vendas' },
+  });
+
+  for (const [indice, estagio] of estagios.entries()) {
+    await prisma.funnelStage.upsert({
+      where: { funilId_ordem: { funilId: funil.id, ordem: indice + 1 } },
+      update: { nome: estagio.nome, probabilidade: estagio.probabilidade },
+      create: { funilId: funil.id, ordem: indice + 1, ...estagio },
+    });
+  }
+
+  const catalogo = await prisma.priceCatalog.upsert({
+    where: { nome: 'Tabela Padrao' },
+    update: {},
+    create: { nome: 'Tabela Padrao', moeda: 'BRL' },
+  });
+
+  const produtos = [
+    { sku: 'PLAT-BASIC', nome: 'Plataforma - Plano Basico', preco: 299.9 },
+    { sku: 'PLAT-PRO', nome: 'Plataforma - Plano Pro', preco: 799.9 },
+    { sku: 'AGENTE-ADD', nome: 'Licenca adicional de agente', preco: 89.9 },
+  ];
+
+  for (const p of produtos) {
+    const produto = await prisma.product.upsert({
+      where: { sku: p.sku },
+      update: { nome: p.nome },
+      create: { sku: p.sku, nome: p.nome },
+    });
+    await prisma.catalogItem.upsert({
+      where: { catalogoId_produtoId: { catalogoId: catalogo.id, produtoId: produto.id } },
+      update: { preco: p.preco },
+      create: { catalogoId: catalogo.id, produtoId: produto.id, preco: p.preco },
+    });
+  }
+
+  console.log(`  funil: ${funil.nome} (${estagios.length} estagios) | catalogo: ${catalogo.nome}`);
 }
 
 main()
