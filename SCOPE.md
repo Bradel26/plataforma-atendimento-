@@ -84,8 +84,8 @@ Construir uma aplicação web própria no formato de plataforma de atendimento o
 - [ ] Integração Instagram Direct e Facebook Messenger
 - [x] CRM completo: Leads (fase, tipo, responsável, prazo, canal_origem, motivo_perda), filtros avançados, visualização Kanban
 - [x] Contas, Oportunidades (funil customizável), Catálogo de Preços, Produtos
-- [ ] Importação/exportação (Excel/CSV) de leads e relatórios
-- [ ] Módulo de Protocolo/Chamados (Kanban, anexos, agendamentos, comentários internos/externos)
+- [x] Importação/exportação (CSV) de leads e relatórios
+- [x] Módulo de Protocolo/Chamados (Kanban, anexos, agendamentos, comentários internos/externos)
 
 **Ordem adotada:** o CRM veio antes das integrações Meta porque WhatsApp/Instagram dependem de
 verificação da conta pela Meta (dias/semanas) e não podem ser validados de ponta a ponta enquanto
@@ -238,3 +238,33 @@ informado é erro 400, não um item de valor zero.
 `motivoPerda` só existe na fase `PERDIDO`. Mover um lead de volta para uma fase ativa apaga o
 motivo. A validação rejeita apenas o motivo **enviado** para uma fase não-PERDIDO — olhar o motivo
 já gravado quebrava a reabertura (bug encontrado e corrigido no teste da Fase 2).
+
+### 13. Protocolo: número sequencial e datas de encerramento
+O chamado tem `id` (uuid, uso interno) **e** `numero` (sequencial, `autoincrement`), porque é o
+número que o cliente informa ao ligar — daí o endpoint `GET /protocolos/numero/:numero`.
+
+`FECHADO` também conta como resolvido: mover de `RESOLVIDO` para `FECHADO` **preserva**
+`resolvidoEm`, senão o tempo de resolução se perderia justamente nos chamados encerrados — que são
+os que entram nos relatórios de SLA. Reabrir limpa as duas datas. (Bug encontrado no teste.)
+
+Comentários são **internos por padrão** (`interno: true`): esquecer o campo gera nota interna, não
+uma mensagem enviada ao cliente por acidente.
+
+Anexos são registrados por URL — o upload direto depende do armazenamento de mídia (S3/MinIO), que
+o escopo trata como infra. A tabela já guarda nome, tipo e tamanho, então trocar o registro por
+upload real depois não muda o modelo.
+
+### 14. CSV: separador ";" e BOM, por causa do Excel pt-BR
+A exportação usa `;` e escreve BOM UTF-8: o Excel em português trata `,` como separador decimal e,
+sem BOM, corrompe os acentos. Valores monetários saem com vírgula decimal (`2500,00`) pelo mesmo
+motivo. A leitura aceita `,` e `;` (detecta pelo cabeçalho) e respeita campos entre aspas, então
+uma planilha exportada de outra ferramenta entra sem conversão manual.
+
+Sem dependência de biblioteca: o parser está em `modules/dados/csv.ts`. Se o requisito virar `.xlsx`
+de verdade (fórmulas, múltiplas abas), aí entra uma lib como `exceljs`.
+
+**`dryRun` valida contra o banco.** Toda checagem que depende de consulta (ex.: o responsável
+existe?) roda **antes** do corte do dry run — na primeira versão o dry run aprovava 4 linhas e a
+importação real aceitava 3, o que torna a prévia inútil. Linhas inválidas não abortam a
+importação: voltam em `erros` com o número da linha, para corrigir a planilha sem perder o que
+já entrou.

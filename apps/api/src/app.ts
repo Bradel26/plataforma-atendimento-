@@ -10,12 +10,14 @@ import { brandingRoutes } from './modules/branding/branding.routes';
 import { contactsRoutes } from './modules/contacts/contacts.routes';
 import { conversationsRoutes } from './modules/conversations/conversations.routes';
 import { accountsRoutes } from './modules/crm/accounts.routes';
+import { dadosRoutes } from './modules/dados/dados.routes';
 import { catalogsRoutes, productsRoutes } from './modules/crm/catalog.routes';
 import { leadsRoutes } from './modules/crm/leads.routes';
 import { funnelsRoutes, opportunitiesRoutes } from './modules/crm/opportunities.routes';
 import { healthRoutes } from './modules/health/health.routes';
 import { queuesRoutes } from './modules/queues/queues.routes';
 import { usersRoutes } from './modules/users/users.routes';
+import { ticketsRoutes } from './modules/tickets/tickets.routes';
 import { webchatRoutes } from './modules/webchat/webchat.routes';
 
 export function createApp() {
@@ -41,6 +43,8 @@ export function createApp() {
   app.use('/api/funis', funnelsRoutes);
   app.use('/api/produtos', productsRoutes);
   app.use('/api/catalogos', catalogsRoutes);
+  app.use('/api/protocolos', ticketsRoutes);
+  app.use('/api/dados', dadosRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

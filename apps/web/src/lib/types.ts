@@ -262,3 +262,91 @@ export const moeda = (valor: number | null, sigla = 'BRL') =>
   valor === null
     ? '—'
     : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: sigla }).format(valor);
+
+// --------------------------------------------------------------------------
+// Fase 2 — Protocolo / Chamados
+// --------------------------------------------------------------------------
+
+export type TicketStatus = 'ABERTO' | 'EM_ANDAMENTO' | 'AGUARDANDO_CLIENTE' | 'RESOLVIDO' | 'FECHADO';
+export type TicketPrioridade = 'BAIXA' | 'NORMAL' | 'ALTA' | 'URGENTE';
+
+export type ProtocoloComentario = {
+  id: string;
+  conteudo: string;
+  interno: boolean;
+  criadoEm: string;
+  autor: { id: string; nome: string } | null;
+};
+
+export type ProtocoloAnexo = {
+  id: string;
+  nome: string;
+  url: string;
+  tipo: string | null;
+  tamanho: number | null;
+  criadoEm: string;
+};
+
+export type ProtocoloAgendamento = {
+  id: string;
+  titulo: string;
+  inicio: string;
+  fim: string | null;
+  concluido: boolean;
+  responsavel: { id: string; nome: string } | null;
+};
+
+export type Protocolo = {
+  id: string;
+  numero: number;
+  titulo: string;
+  descricao: string;
+  status: TicketStatus;
+  prioridade: TicketPrioridade;
+  prazoSla: string | null;
+  criadoEm: string;
+  atualizadoEm: string;
+  resolvidoEm: string | null;
+  fechadoEm: string | null;
+  conversaId: string | null;
+  contato: { id: string; nome: string; email: string | null } | null;
+  conta: { id: string; nome: string } | null;
+  responsavel: { id: string; nome: string } | null;
+  fila: { id: string; nome: string } | null;
+  comentarios: ProtocoloComentario[];
+  anexos: ProtocoloAnexo[];
+  agendamentos: ProtocoloAgendamento[];
+  slaVencido: boolean;
+};
+
+export const STATUS_PROTOCOLO: TicketStatus[] = [
+  'ABERTO',
+  'EM_ANDAMENTO',
+  'AGUARDANDO_CLIENTE',
+  'RESOLVIDO',
+  'FECHADO',
+];
+
+export const LABEL_STATUS_PROTOCOLO: Record<TicketStatus, string> = {
+  ABERTO: 'Aberto',
+  EM_ANDAMENTO: 'Em andamento',
+  AGUARDANDO_CLIENTE: 'Aguardando cliente',
+  RESOLVIDO: 'Resolvido',
+  FECHADO: 'Fechado',
+};
+
+export const PRIORIDADES_PROTOCOLO: TicketPrioridade[] = ['BAIXA', 'NORMAL', 'ALTA', 'URGENTE'];
+
+export const LABEL_PRIORIDADE: Record<TicketPrioridade, string> = {
+  BAIXA: 'Baixa',
+  NORMAL: 'Normal',
+  ALTA: 'Alta',
+  URGENTE: 'Urgente',
+};
+
+export const COR_PRIORIDADE: Record<TicketPrioridade, string> = {
+  BAIXA: 'bg-slate-100 text-slate-600',
+  NORMAL: 'bg-blue-50 text-blue-700',
+  ALTA: 'bg-amber-50 text-amber-700',
+  URGENTE: 'bg-red-50 text-red-700',
+};

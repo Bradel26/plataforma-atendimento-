@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ContasTab } from './ContasTab';
+import { DadosTab } from './DadosTab';
 import { ContatosTab } from './ContatosTab';
 import { LeadsTab } from './LeadsTab';
 import { OportunidadesTab } from './OportunidadesTab';
@@ -11,6 +12,7 @@ const ABAS = [
   { id: 'leads', label: 'Leads' },
   { id: 'oportunidades', label: 'Oportunidades' },
   { id: 'produtos', label: 'Produtos e precos' },
+  { id: 'dados', label: 'Importar / Exportar' },
 ] as const;
 
 type AbaId = (typeof ABAS)[number]['id'];
@@ -42,6 +44,7 @@ export function CrmPage() {
       {aba === 'leads' && <LeadsTab />}
       {aba === 'oportunidades' && <OportunidadesTab />}
       {aba === 'produtos' && <ProdutosTab />}
+      {aba === 'dados' && <DadosTab />}
     </div>
   );
 }

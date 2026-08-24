@@ -11,6 +11,8 @@ export const EVENTOS = {
   mensagemNova: 'mensagem:nova',
   /** Agente mudou de status de presenca. */
   agenteStatus: 'agente:status',
+  /** Chamado criado ou alterado (status, comentario, anexo, agendamento). */
+  protocoloAtualizado: 'protocolo:atualizado',
 } as const;
 
 /** Salas: um agente escuta as filas dele e a propria caixa; gestao escuta tudo. */

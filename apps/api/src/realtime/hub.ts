@@ -45,6 +45,12 @@ export const notificarConversaAtualizada = (conversa: unknown, destinos: Destino
 export const notificarMensagem = (payload: unknown, destinos: Destinos) =>
   emitir(EVENTOS.mensagemNova, payload, destinos);
 
+/** Chamados: interessa ao responsavel, a fila e a gestao. */
+export const notificarProtocolo = (
+  protocolo: unknown,
+  destinos: { responsavelId?: string | null; filaId?: string | null },
+) => emitir(EVENTOS.protocoloAtualizado, protocolo, { agenteId: destinos.responsavelId, filaId: destinos.filaId });
+
 export const notificarStatusAgente = (payload: unknown) => {
   io?.to(salas.supervisao).emit(EVENTOS.agenteStatus, payload);
 };

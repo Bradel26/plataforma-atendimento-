@@ -47,6 +47,10 @@ model User {
   mensagensEnviadas Message[]
   leads             Lead[]
   oportunidades     Opportunity[]
+  protocolos        Ticket[]
+  comentarios       TicketComment[]
+  anexos            TicketAttachment[]
+  agendamentos      TicketSchedule[]
 
   @@index([perfil])
   @@map("usuarios")
@@ -71,8 +75,9 @@ model Queue {
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
-  agentes   QueueAgent[]
-  conversas Conversation[]
+  agentes    QueueAgent[]
+  conversas  Conversation[]
+  protocolos Ticket[]
 
   @@map("filas")
 }
@@ -146,9 +151,10 @@ model Contact {
 
   contaId String? @map("conta_id")
 
-  conta     Account?       @relation(fields: [contaId], references: [id], onDelete: SetNull)
-  conversas Conversation[]
-  leads     Lead[]
+  conta      Account?       @relation(fields: [contaId], references: [id], onDelete: SetNull)
+  conversas  Conversation[]
+  leads      Lead[]
+  protocolos Ticket[]
 
   @@index([email])
   @@index([telefone])
@@ -172,8 +178,9 @@ model Conversation {
 
   contato   Contact @relation(fields: [contatoId], references: [id], onDelete: Cascade)
   fila      Queue?  @relation(fields: [filaId], references: [id], onDelete: SetNull)
-  agente    User?   @relation(fields: [agenteId], references: [id], onDelete: SetNull)
-  mensagens Message[]
+  agente     User?    @relation(fields: [agenteId], references: [id], onDelete: SetNull)
+  mensagens  Message[]
+  protocolos Ticket[]
 
   @@index([status, ultimaMensagemEm])
   @@index([agenteId, status])
@@ -251,6 +258,7 @@ model Account {
   contatos      Contact[]
   leads         Lead[]
   oportunidades Opportunity[]
+  protocolos    Ticket[]
 
   @@index([nome])
   @@map("contas")
@@ -387,4 +395,108 @@ model OpportunityItem {
 
   @@unique([oportunidadeId, produtoId])
   @@map("oportunidade_itens")
+}
+
+// ---------------------------------------------------------------------------
+// Fase 2 — Protocolo / Chamados
+// ---------------------------------------------------------------------------
+
+enum TicketStatus {
+  ABERTO
+  EM_ANDAMENTO
+  AGUARDANDO_CLIENTE
+  RESOLVIDO
+  FECHADO
+}
+
+enum TicketPrioridade {
+  BAIXA
+  NORMAL
+  ALTA
+  URGENTE
+}
+
+model Ticket {
+  /// Numero sequencial legivel, usado na comunicacao com o cliente.
+  numero        Int              @unique @default(autoincrement())
+  id            String           @id @default(uuid())
+  titulo        String
+  descricao     String
+  status        TicketStatus     @default(ABERTO)
+  prioridade    TicketPrioridade @default(NORMAL)
+  contatoId     String?          @map("contato_id")
+  contaId       String?          @map("conta_id")
+  /// Conversa que originou o chamado, quando aberto pelo atendimento.
+  conversaId    String?          @map("conversa_id")
+  responsavelId String?          @map("responsavel_id")
+  filaId        String?          @map("fila_id")
+  prazoSla      DateTime?        @map("prazo_sla")
+  criadoEm      DateTime         @default(now()) @map("criado_em")
+  atualizadoEm  DateTime         @updatedAt @map("atualizado_em")
+  resolvidoEm   DateTime?        @map("resolvido_em")
+  fechadoEm     DateTime?        @map("fechado_em")
+
+  contato      Contact?      @relation(fields: [contatoId], references: [id], onDelete: SetNull)
+  conta        Account?      @relation(fields: [contaId], references: [id], onDelete: SetNull)
+  conversa     Conversation? @relation(fields: [conversaId], references: [id], onDelete: SetNull)
+  responsavel  User?         @relation(fields: [responsavelId], references: [id], onDelete: SetNull)
+  fila         Queue?        @relation(fields: [filaId], references: [id], onDelete: SetNull)
+  comentarios  TicketComment[]
+  anexos       TicketAttachment[]
+  agendamentos TicketSchedule[]
+
+  @@index([status, atualizadoEm])
+  @@index([responsavelId, status])
+  @@map("protocolos")
+}
+
+model TicketComment {
+  id        String   @id @default(uuid())
+  ticketId  String   @map("ticket_id")
+  autorId   String?  @map("autor_id")
+  conteudo  String
+  /// true = nota interna (nao visivel ao cliente); false = resposta ao cliente.
+  interno   Boolean  @default(true)
+  criadoEm  DateTime @default(now()) @map("criado_em")
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  autor  User?  @relation(fields: [autorId], references: [id], onDelete: SetNull)
+
+  @@index([ticketId, criadoEm])
+  @@map("protocolo_comentarios")
+}
+
+/// Anexo registrado por URL. O upload direto depende do armazenamento de midia
+/// (S3/MinIO), previsto na infra — aqui guardamos apenas os metadados.
+model TicketAttachment {
+  id       String   @id @default(uuid())
+  ticketId String   @map("ticket_id")
+  nome     String
+  url      String
+  tipo     String?
+  tamanho  Int?
+  autorId  String?  @map("autor_id")
+  criadoEm DateTime @default(now()) @map("criado_em")
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  autor  User?  @relation(fields: [autorId], references: [id], onDelete: SetNull)
+
+  @@map("protocolo_anexos")
+}
+
+model TicketSchedule {
+  id            String    @id @default(uuid())
+  ticketId      String    @map("ticket_id")
+  titulo        String
+  inicio        DateTime
+  fim           DateTime?
+  responsavelId String?   @map("responsavel_id")
+  concluido     Boolean   @default(false)
+  criadoEm      DateTime  @default(now()) @map("criado_em")
+
+  ticket      Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  responsavel User?  @relation(fields: [responsavelId], references: [id], onDelete: SetNull)
+
+  @@index([inicio])
+  @@map("protocolo_agendamentos")
 }

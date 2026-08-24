@@ -100,6 +100,33 @@ export const api = {
   del: <T>(path: string) => request<T>('DELETE', path),
 };
 
+/**
+ * Baixa um CSV da API. Um <a href> simples nao serve: a rota exige o header
+ * Authorization, que o navegador nao envia em navegacao — entao buscamos o
+ * conteudo e disparamos o download por object URL.
+ */
+export async function baixarCsv(path: string, nomeArquivo: string): Promise<void> {
+  let res = await raw(path, { method: 'GET' });
+
+  if (res.status === 401 && (await renovarSessao())) {
+    res = await raw(path, { method: 'GET' });
+  }
+  if (!res.ok) {
+    await parse(res); // reaproveita o tratamento de erro padrao
+    return;
+  }
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = nomeArquivo;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 /** Login e refresh sao chamados direto: nao devem entrar no ciclo de renovacao. */
 export async function loginRequest(email: string, senha: string) {
   const res = await raw('/auth/login', { method: 'POST', body: JSON.stringify({ email, senha }) });

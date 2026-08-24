@@ -2,7 +2,7 @@
 
 Plataforma de atendimento multicanal + call center + CRM. Escopo completo e roadmap em [SCOPE.md](SCOPE.md).
 
-**Estado atual:** Fases 0 (Fundação) e 1 (MVP de Atendimento) concluídas. Fase 2 em andamento — CRM completo pronto; integrações Meta e Protocolo pendentes.
+**Estado atual:** Fases 0 (Fundação) e 1 (MVP de Atendimento) concluídas. Fase 2 em andamento — CRM, Protocolo e importação/exportação CSV prontos; integrações Meta pendentes.
 
 ## Estrutura
 
@@ -13,7 +13,8 @@ apps/
     src/
       modules/    auth, users, queues, branding, health,
                   conversations (conversas), contacts (contatos), webchat,
-                  crm (contas, leads, oportunidades, funis, produtos, catalogos)
+                  crm (contas, leads, oportunidades, funis, produtos, catalogos),
+                  tickets (protocolos), dados (importacao/exportacao CSV)
       realtime/   servidor Socket.IO, salas e hub de eventos
       http/       middlewares (auth, validação, erros)
       lib/        prisma, redis, jwt/tokens, senhas, erros
@@ -119,6 +120,17 @@ Base: `/api`. Corpo e respostas em JSON. Erros no formato `{ error: { code, mess
 | GET | `/produtos`, `/catalogos` | autenticado |
 | POST/PATCH | `/produtos` | admin, supervisor |
 | POST | `/catalogos`, `PUT /catalogos/:id/precos` | admin, supervisor |
+| GET | `/protocolos`, `/protocolos/kanban` | autenticado |
+| GET | `/protocolos/:id`, `/protocolos/numero/:numero` | autenticado |
+| POST/PATCH | `/protocolos`, `/protocolos/:id` | autenticado |
+| POST | `/protocolos/:id/comentarios` | autenticado (`interno` true/false) |
+| POST | `/protocolos/:id/anexos` | autenticado (registro por URL) |
+| POST | `/protocolos/:id/agendamentos` | autenticado |
+| POST | `/protocolos/:id/agendamentos/:agId/concluir` | autenticado |
+| DELETE | `/protocolos/:id` | admin, supervisor |
+| GET | `/dados/exportar/{leads,contatos,oportunidades,protocolos,conversas}.csv` | autenticado |
+| GET | `/dados/modelos/leads.csv` | autenticado |
+| POST | `/dados/importar/leads` | admin, supervisor (`dryRun` para validar antes) |
 
 WebSocket em `/socket.io`. Contrato de eventos e salas documentado no [SCOPE.md](SCOPE.md).
 

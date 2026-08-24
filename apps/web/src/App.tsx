@@ -4,6 +4,7 @@ import { NAV } from './components/layout/nav';
 import { useAuth } from './features/auth/AuthProvider';
 import { AtendimentoPage } from './pages/AtendimentoPage';
 import { CrmPage } from './pages/crm/CrmPage';
+import { ProtocoloPage } from './pages/protocolo/ProtocoloPage';
 import { LoginPage } from './pages/LoginPage';
 import { PlaceholderPage } from './pages/PlaceholderPage';
 import { WebchatPage } from './pages/WebchatPage';
@@ -12,7 +13,6 @@ import { ConfiguracoesPage } from './pages/configuracoes/ConfiguracoesPage';
 /** Descricao de cada modulo ainda nao implementado, exibida no placeholder. */
 const DESCRICOES: Record<string, string> = {
   '/dashboards': 'Indicadores gerais de chamadas, atendimentos e filas em tempo real.',
-  '/protocolo': 'Gestao de chamados e tickets em Kanban, com anexos, comentarios e agendamentos.',
   '/monitoramento': 'Acompanhamento dos agentes em tempo real, com status e produtividade.',
   '/gestao': 'Painel do supervisor: metricas de qualidade, monitoria e acompanhamento da equipe.',
   '/campanhas': 'Discagem ativa e campanhas em massa.',
@@ -21,7 +21,7 @@ const DESCRICOES: Record<string, string> = {
 };
 
 /** Rotas ja implementadas — as demais caem no placeholder da fase. */
-const PRONTOS = ['/configuracoes', '/atendimento', '/crm'];
+const PRONTOS = ['/configuracoes', '/atendimento', '/crm', '/protocolo'];
 
 function AppRoutes() {
   const { usuario, carregando, temPerfil } = useAuth();
@@ -53,6 +53,7 @@ function AppRoutes() {
         <Route path="/configuracoes" element={<ConfiguracoesPage />} />
         <Route path="/atendimento" element={<AtendimentoPage />} />
         <Route path="/crm" element={<CrmPage />} />
+        <Route path="/protocolo" element={<ProtocoloPage />} />
         {permitidos
           .filter((item) => !PRONTOS.includes(item.rota))
           .map(({ rota, label, fase }) => (
