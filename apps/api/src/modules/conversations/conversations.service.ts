@@ -2,6 +2,7 @@ import type { Prisma, Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { badRequest, forbidden, notFound } from '../../lib/errors';
 import { notificarConversaAtualizada, notificarMensagem } from '../../realtime/hub';
+import { enviarParaCanal, exigeEnvioExterno } from '../channels/outbound.service';
 import {
   inclusaoDetalhe,
   inclusaoResumo,
@@ -131,8 +132,20 @@ export async function enviarMensagem(solicitante: Solicitante, id: string, conte
   // Responder sem ter assumido atribui a conversa ao agente automaticamente.
   const assumir = conversa.agenteId ? {} : { agenteId: solicitante.sub, atribuidoEm: new Date() };
 
+  // Canal externo: envia ANTES de gravar. Se a Meta recusar, a mensagem nao
+  // entra no historico — nao existe "enviada" que o cliente nunca recebeu.
+  const envio = exigeEnvioExterno(conversa.canal)
+    ? await enviarParaCanal(conversa.canal, conversa.enderecoExterno, conteudo)
+    : { idExterno: null };
+
   const mensagem = await prisma.message.create({
-    data: { conversaId: id, autor: 'AGENTE', autorId: solicitante.sub, conteudo },
+    data: {
+      conversaId: id,
+      autor: 'AGENTE',
+      autorId: solicitante.sub,
+      conteudo,
+      idExterno: envio.idExterno,
+    },
   });
 
   await prisma.conversation.update({

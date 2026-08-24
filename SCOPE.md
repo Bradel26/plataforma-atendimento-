@@ -79,17 +79,23 @@ Construir uma aplicação web própria no formato de plataforma de atendimento o
 - [x] Filas básicas e transferência de atendimento entre agentes (com registro do motivo no histórico)
 - [x] CRM básico: contatos criados automaticamente pelo Webchat + ficha com histórico de conversas
 
-### Fase 2 — Multicanal + CRM completo 🚧 em andamento
-- [ ] Integração WhatsApp Business API (Meta) — requer verificação de conta (CNPJ, comprovante, site)
-- [ ] Integração Instagram Direct e Facebook Messenger
+### Fase 2 — Multicanal + CRM completo ✅ concluída (código); ⚠️ Meta pendente de credenciais
+- [x] Integração WhatsApp Business API (Meta) — código pronto e testado com payload assinado; **falta credencial real** (conta verificada: CNPJ, comprovante, site)
+- [x] Integração Instagram Direct e Facebook Messenger — mesmo webhook e mesmo envio pela Graph API
 - [x] CRM completo: Leads (fase, tipo, responsável, prazo, canal_origem, motivo_perda), filtros avançados, visualização Kanban
 - [x] Contas, Oportunidades (funil customizável), Catálogo de Preços, Produtos
 - [x] Importação/exportação (CSV) de leads e relatórios
 - [x] Módulo de Protocolo/Chamados (Kanban, anexos, agendamentos, comentários internos/externos)
 
 **Ordem adotada:** o CRM veio antes das integrações Meta porque WhatsApp/Instagram dependem de
-verificação da conta pela Meta (dias/semanas) e não podem ser validados de ponta a ponta enquanto
-isso; o CRM é utilizável no mesmo dia.
+verificação da conta pela Meta (dias/semanas); o CRM é utilizável no mesmo dia.
+
+**Estado das integrações Meta:** o código está completo — verificação do webhook, validação de
+assinatura, normalização dos payloads dos três canais, idempotência de reentrega e envio pela Graph
+API. O que falta é fora do código: conta verificada na Meta, `accessToken`, `appSecret` e uma URL
+HTTPS pública (túnel em dev). O `npm run smoke:canais` exercita todo o caminho com payloads assinados
+localmente — o que ele **não** prova é que a Meta aceita as credenciais reais, porque não há
+credencial real para testar.
 
 ### Fase 3 — Gestão e Relatórios
 - [ ] Dashboards com indicadores em tempo real (conversas em espera, tempo médio de espera, TMA)
@@ -268,3 +274,32 @@ existe?) roda **antes** do corte do dry run — na primeira versão o dry run ap
 importação real aceitava 3, o que torna a prévia inútil. Linhas inválidas não abortam a
 importação: voltam em `erros` com o número da linha, para corrigir a planilha sem perder o que
 já entrou.
+
+### 15. Webhook da Meta: corpo bruto, assinatura e idempotência
+Três decisões que não são óbvias e quebram silenciosamente se mudarem:
+
+1. **A rota do webhook é registrada antes do `express.json`.** A Meta assina os **bytes originais**
+   do corpo (`X-Hub-Signature-256` = HMAC-SHA256 com o App Secret). Se o JSON for parseado e
+   reserializado, a assinatura não fecha mais. Por isso `/api/webhooks` usa `express.raw`.
+2. **`Message.idExterno` é único.** A Meta reentrega qualquer webhook que não receba `200`. Sem a
+   restrição de unicidade, uma reentrega duplicaria a mensagem no histórico do cliente.
+3. **O webhook responde `200` mesmo para payload que não gera mensagem** (status de entrega, evento
+   desconhecido). Recusar um payload válido geraria reentrega infinita.
+
+A comparação da assinatura usa `timingSafeEqual`.
+
+### 16. Envio externo acontece antes de gravar
+Ao responder numa conversa de WhatsApp/Instagram/Facebook, a plataforma **envia pela Graph API
+primeiro** e só grava a mensagem se a Meta aceitar. Se a API recusar, a requisição do agente falha
+com `502` e nada entra no histórico — não existe mensagem marcada como enviada que o cliente nunca
+recebeu. O agente vê o erro e tenta de novo. Verificado no `smoke:canais`.
+
+Consequência: uma indisponibilidade da Meta bloqueia respostas naquele canal. A alternativa (gravar
+com status `pendente` e reenviar em fila) é melhor, e o Redis já está na stack para isso — fica para
+quando houver volume que justifique.
+
+### 17. Segredos dos canais no banco
+`accessToken` e `appSecret` ficam na tabela `canais_config` e **nunca** voltam pela API: a listagem
+devolve versão mascarada. Ainda assim é segredo em texto claro no banco — aceitável para o MVP,
+mas antes de produção o certo é cifrar em repouso (KMS/Vault) ou manter em variável de ambiente.
+Registrado como pendência de segurança.

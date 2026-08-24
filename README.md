@@ -2,7 +2,7 @@
 
 Plataforma de atendimento multicanal + call center + CRM. Escopo completo e roadmap em [SCOPE.md](SCOPE.md).
 
-**Estado atual:** Fases 0 (Fundação) e 1 (MVP de Atendimento) concluídas. Fase 2 em andamento — CRM, Protocolo e importação/exportação CSV prontos; integrações Meta pendentes.
+**Estado atual:** Fases 0 (Fundação) e 1 (MVP de Atendimento) concluídas. Fase 2 concluída no código — integrações Meta prontas mas aguardando credenciais reais da Meta.
 
 ## Estrutura
 
@@ -14,7 +14,8 @@ apps/
       modules/    auth, users, queues, branding, health,
                   conversations (conversas), contacts (contatos), webchat,
                   crm (contas, leads, oportunidades, funis, produtos, catalogos),
-                  tickets (protocolos), dados (importacao/exportacao CSV)
+                  tickets (protocolos), dados (importacao/exportacao CSV),
+                  channels (canais Meta: webhook, parser, envio Graph API)
       realtime/   servidor Socket.IO, salas e hub de eventos
       http/       middlewares (auth, validação, erros)
       lib/        prisma, redis, jwt/tokens, senhas, erros
@@ -131,6 +132,10 @@ Base: `/api`. Corpo e respostas em JSON. Erros no formato `{ error: { code, mess
 | GET | `/dados/exportar/{leads,contatos,oportunidades,protocolos,conversas}.csv` | autenticado |
 | GET | `/dados/modelos/leads.csv` | autenticado |
 | POST | `/dados/importar/leads` | admin, supervisor (`dryRun` para validar antes) |
+| GET | `/canais` | admin, supervisor (segredos mascarados) |
+| PUT | `/canais/{whatsapp,instagram,facebook}` | admin |
+| GET | `/webhooks/{canal}` | **público** — desafio de verificação da Meta |
+| POST | `/webhooks/{canal}` | **público** — exige `X-Hub-Signature-256` válida |
 
 WebSocket em `/socket.io`. Contrato de eventos e salas documentado no [SCOPE.md](SCOPE.md).
 
@@ -185,8 +190,27 @@ O módulo **CRM** tem cinco abas:
 O seed cria o funil *Funil de Vendas* (5 estágios) e o catálogo *Tabela Padrão* com 3 produtos —
 sem um funil não é possível abrir oportunidades.
 
+## Canais externos (Meta)
+
+Configure em **Configurações → Canais**. Para cada canal você informa Access Token, App Secret,
+Verify Token, o id (Phone Number ID no WhatsApp, Page ID no Messenger/Instagram) e a fila de destino.
+
+A URL de webhook a cadastrar no painel da Meta é `https://SEU_DOMINIO/api/webhooks/whatsapp`
+(ou `/instagram`, `/facebook`). Em desenvolvimento a Meta exige HTTPS público — use ngrok ou
+cloudflared apontando para a porta 3333.
+
+> ⚠️ O código está pronto e testado, mas **não foi validado contra a Meta de verdade**: isso exige
+> conta verificada (CNPJ, comprovante de endereço, site), processo que leva dias ou semanas.
+
+```bash
+npm run smoke:canais    # com a API de pé
+```
+
+Exercita o caminho completo com payloads no formato real, assinados localmente com HMAC: verificação
+do webhook, recusa de assinatura inválida, criação de conversa na fila certa, idempotência de
+reentrega e a garantia de que uma resposta recusada pela Graph API não entra no histórico.
+
 ## Próximo passo
 
-Restante da Fase 2: integrações WhatsApp Business API / Instagram / Facebook (dependem de
-verificação da conta na Meta), importação e exportação Excel/CSV, e o módulo de Protocolo/Chamados.
-Detalhes no [SCOPE.md](SCOPE.md).
+Fase 3 — dashboards em tempo real, relatórios com exportação, painel do supervisor, pesquisa de
+satisfação (NPS/CSAT) e escalas de trabalho. Detalhes no [SCOPE.md](SCOPE.md).

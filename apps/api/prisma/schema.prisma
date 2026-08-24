@@ -78,6 +78,7 @@ model Queue {
   agentes    QueueAgent[]
   conversas  Conversation[]
   protocolos Ticket[]
+  canais     ChannelConfig[]
 
   @@map("filas")
 }
@@ -175,6 +176,8 @@ model Conversation {
   finalizadoEm    DateTime? @map("finalizado_em")
   ultimaMensagemEm DateTime @default(now()) @map("ultima_mensagem_em")
   naoLidas        Int       @default(0) @map("nao_lidas")
+  /// Identificador do interlocutor no canal externo (wa_id, PSID, IGSID).
+  enderecoExterno String?   @map("endereco_externo")
 
   contato   Contact @relation(fields: [contatoId], references: [id], onDelete: Cascade)
   fila      Queue?  @relation(fields: [filaId], references: [id], onDelete: SetNull)
@@ -197,6 +200,8 @@ model Message {
   conteudo  String
   tipoAnexo AttachmentType @default(TEXTO) @map("tipo_anexo")
   anexoUrl  String?        @map("anexo_url")
+  /// Id da mensagem no provedor externo. Unico: o webhook da Meta reentrega.
+  idExterno String?        @unique @map("id_externo")
   criadoEm  DateTime       @default(now()) @map("criado_em")
 
   conversa Conversation @relation(fields: [conversaId], references: [id], onDelete: Cascade)
@@ -499,4 +504,38 @@ model TicketSchedule {
 
   @@index([inicio])
   @@map("protocolo_agendamentos")
+}
+
+// ---------------------------------------------------------------------------
+// Fase 2 — Canais externos (Meta: WhatsApp, Instagram, Facebook)
+// ---------------------------------------------------------------------------
+
+/// Credenciais e destino de fila por canal externo. Um registro por canal.
+model ChannelConfig {
+  id     String  @id @default(uuid())
+  canal  Channel @unique
+  ativo  Boolean @default(false)
+
+  /// WhatsApp Cloud API
+  phoneNumberId String? @map("phone_number_id")
+  wabaId        String? @map("waba_id")
+  /// Instagram Direct / Facebook Messenger
+  pageId        String? @map("page_id")
+  igUserId      String? @map("ig_user_id")
+
+  /// Token de acesso da Graph API. Nunca retornado pela API (mascarado).
+  accessToken String? @map("access_token")
+  /// App Secret, usado para validar a assinatura X-Hub-Signature-256.
+  appSecret   String? @map("app_secret")
+  /// Token do desafio de verificacao do webhook (GET hub.challenge).
+  verifyToken String? @map("verify_token")
+
+  /// Fila que recebe as conversas deste canal.
+  filaId String? @map("fila_id")
+
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  fila Queue? @relation(fields: [filaId], references: [id], onDelete: SetNull)
+
+  @@map("canais_config")
 }

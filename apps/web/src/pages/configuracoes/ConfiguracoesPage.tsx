@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { CanaisTab } from './CanaisTab';
 import { FilasTab } from './FilasTab';
 import { UsuariosTab } from './UsuariosTab';
 import { WhiteLabelTab } from './WhiteLabelTab';
@@ -6,6 +7,7 @@ import { WhiteLabelTab } from './WhiteLabelTab';
 const ABAS = [
   { id: 'usuarios', label: 'Usuarios e permissoes' },
   { id: 'filas', label: 'Filas' },
+  { id: 'canais', label: 'Canais' },
   { id: 'whitelabel', label: 'White Label' },
 ] as const;
 
@@ -35,6 +37,7 @@ export function ConfiguracoesPage() {
 
       {aba === 'usuarios' && <UsuariosTab />}
       {aba === 'filas' && <FilasTab />}
+      {aba === 'canais' && <CanaisTab />}
       {aba === 'whitelabel' && <WhiteLabelTab />}
     </div>
   );
