@@ -435,3 +435,73 @@ export type ResultadosPesquisa = {
 };
 
 export const DIAS_SEMANA = ['Domingo', 'Segunda', 'Terca', 'Quarta', 'Quinta', 'Sexta', 'Sabado'];
+
+// --------------------------------------------------------------------------
+// Fase 4 — Campanhas e Chatbot
+// --------------------------------------------------------------------------
+
+export type CampanhaStatus = 'RASCUNHO' | 'ATIVA' | 'PAUSADA' | 'CONCLUIDA';
+
+export type CampanhaItemStatus = 'PENDENTE' | 'ENVIADO' | 'FALHOU' | 'RESPONDIDO' | 'IGNORADO';
+
+export type Campanha = {
+  id: string;
+  nome: string;
+  canal: Canal;
+  mensagem: string;
+  status: CampanhaStatus;
+  fila: { id: string; nome: string } | null;
+  criadoPor: { id: string; nome: string } | null;
+  agendadaPara: string | null;
+  iniciadaEm: string | null;
+  concluidaEm: string | null;
+  criadoEm: string;
+  total: number;
+  contagens: Record<CampanhaItemStatus, number>;
+};
+
+export type CampanhaItem = {
+  id: string;
+  status: CampanhaItemStatus;
+  erro: string | null;
+  enviadoEm: string | null;
+  contato: { id: string; nome: string; telefone: string | null; email: string | null };
+};
+
+export type BotAcao = 'RESPONDER' | 'TRANSFERIR' | 'ENCERRAR';
+
+export type BotPasso = {
+  id?: string;
+  ordem?: number;
+  gatilhos: string[];
+  resposta: string;
+  acao: BotAcao;
+  filaId?: string | null;
+  fila?: { id: string; nome: string } | null;
+};
+
+export type Bot = {
+  id: string;
+  nome: string;
+  ativo: boolean;
+  canal: Canal | null;
+  mensagemBoasVindas: string;
+  fallback: string;
+  limiteSemResposta: number;
+  passos: BotPasso[];
+};
+
+export const LABEL_CAMPANHA_STATUS: Record<CampanhaStatus, string> = {
+  RASCUNHO: 'Rascunho',
+  ATIVA: 'Ativa',
+  PAUSADA: 'Pausada',
+  CONCLUIDA: 'Concluida',
+};
+
+export const LABEL_ITEM_STATUS: Record<CampanhaItemStatus, string> = {
+  PENDENTE: 'Pendente',
+  ENVIADO: 'Enviado',
+  FALHOU: 'Falhou',
+  RESPONDIDO: 'Respondido',
+  IGNORADO: 'Ignorado',
+};

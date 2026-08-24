@@ -50,6 +50,7 @@ model User {
   protocolos        Ticket[]
   escalas           WorkShift[]
   presenca          PresenceLog[]
+  campanhas         Campaign[]
   comentarios       TicketComment[]
   anexos            TicketAttachment[]
   agendamentos      TicketSchedule[]
@@ -81,6 +82,8 @@ model Queue {
   conversas  Conversation[]
   protocolos Ticket[]
   canais     ChannelConfig[]
+  campanhas  Campaign[]
+  botPassos  BotStep[]
 
   @@map("filas")
 }
@@ -130,6 +133,7 @@ enum MessageAuthor {
   CLIENTE
   AGENTE
   SISTEMA
+  BOT
 }
 
 enum AttachmentType {
@@ -155,9 +159,10 @@ model Contact {
   contaId String? @map("conta_id")
 
   conta      Account?       @relation(fields: [contaId], references: [id], onDelete: SetNull)
-  conversas  Conversation[]
-  leads      Lead[]
-  protocolos Ticket[]
+  conversas      Conversation[]
+  leads          Lead[]
+  protocolos     Ticket[]
+  itensCampanha  CampaignItem[]
 
   @@index([email])
   @@index([telefone])
@@ -604,4 +609,109 @@ model PresenceLog {
   @@index([usuarioId, iniciadoEm])
   @@index([iniciadoEm])
   @@map("presenca_log")
+}
+
+// ---------------------------------------------------------------------------
+// Fase 4 — Campanhas e Chatbot
+// ---------------------------------------------------------------------------
+
+enum CampanhaStatus {
+  RASCUNHO
+  ATIVA
+  PAUSADA
+  CONCLUIDA
+}
+
+enum CampanhaItemStatus {
+  PENDENTE
+  ENVIADO
+  FALHOU
+  RESPONDIDO
+  IGNORADO
+}
+
+/// Campanha de contato ativo (envio em massa por canal).
+model Campaign {
+  id           String         @id @default(uuid())
+  nome         String
+  canal        Channel        @default(WHATSAPP)
+  /// Template da mensagem. Suporta {{nome}}, {{email}} e {{telefone}}.
+  mensagem     String
+  status       CampanhaStatus @default(RASCUNHO)
+  filaId       String?        @map("fila_id")
+  criadoPorId  String?        @map("criado_por_id")
+  agendadaPara DateTime?      @map("agendada_para")
+  iniciadaEm   DateTime?      @map("iniciada_em")
+  concluidaEm  DateTime?      @map("concluida_em")
+  criadoEm     DateTime       @default(now()) @map("criado_em")
+  atualizadoEm DateTime       @updatedAt @map("atualizado_em")
+
+  fila      Queue?         @relation(fields: [filaId], references: [id], onDelete: SetNull)
+  criadoPor User?          @relation(fields: [criadoPorId], references: [id], onDelete: SetNull)
+  itens     CampaignItem[]
+
+  @@index([status])
+  @@map("campanhas")
+}
+
+model CampaignItem {
+  id          String             @id @default(uuid())
+  campanhaId  String             @map("campanha_id")
+  contatoId   String             @map("contato_id")
+  status      CampanhaItemStatus @default(PENDENTE)
+  /// Motivo da falha, para o operador corrigir sem abrir log.
+  erro        String?
+  conversaId  String?            @map("conversa_id")
+  enviadoEm   DateTime?          @map("enviado_em")
+  respondidoEm DateTime?         @map("respondido_em")
+
+  campanha Campaign @relation(fields: [campanhaId], references: [id], onDelete: Cascade)
+  contato  Contact  @relation(fields: [contatoId], references: [id], onDelete: Cascade)
+
+  @@unique([campanhaId, contatoId])
+  @@index([campanhaId, status])
+  @@map("campanha_itens")
+}
+
+enum BotAcao {
+  RESPONDER
+  TRANSFERIR
+  ENCERRAR
+}
+
+/// Fluxo de atendimento automatico que responde antes do agente assumir.
+model Bot {
+  id                 String   @id @default(uuid())
+  nome               String
+  ativo              Boolean  @default(false)
+  /// null = vale para todos os canais.
+  canal              Channel?
+  mensagemBoasVindas String   @map("mensagem_boas_vindas")
+  /// Resposta quando nenhum gatilho casa.
+  fallback           String
+  /// Depois de quantas trocas sem casar nada o bot desiste e deixa na fila.
+  limiteSemResposta  Int      @default(2) @map("limite_sem_resposta")
+  criadoEm           DateTime @default(now()) @map("criado_em")
+  atualizadoEm       DateTime @updatedAt @map("atualizado_em")
+
+  passos BotStep[]
+
+  @@map("bots")
+}
+
+model BotStep {
+  id       String   @id @default(uuid())
+  botId    String   @map("bot_id")
+  ordem    Int
+  /// Palavras-chave que ativam o passo (comparadas sem acento e sem caixa).
+  gatilhos String[]
+  resposta String
+  acao     BotAcao  @default(RESPONDER)
+  filaId   String?  @map("fila_id")
+
+  bot  Bot    @relation(fields: [botId], references: [id], onDelete: Cascade)
+  fila Queue? @relation(fields: [filaId], references: [id], onDelete: SetNull)
+
+  @@unique([botId, ordem])
+  @@map("bot_passos")
 }

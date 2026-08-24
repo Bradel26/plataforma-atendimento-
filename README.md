@@ -2,7 +2,9 @@
 
 Plataforma de atendimento multicanal + call center + CRM. Escopo completo e roadmap em [SCOPE.md](SCOPE.md).
 
-**Estado atual:** Fases 0, 1, 2 e 3 concluídas. Resta a Fase 4 (PABX/voz, campanhas, chatbots) e as credenciais reais da Meta para os canais.
+**Estado atual:** Fases 0 a 3 concluídas. Fase 4 parcial — campanhas e chatbot prontos;
+**telefonia (PABX/voz, monitoria, transcrição) não foi construída** e o motivo está no
+[SCOPE.md](SCOPE.md). Os canais da Meta aguardam credenciais reais.
 
 ## Estrutura
 
@@ -17,7 +19,8 @@ apps/
                   tickets (protocolos), dados (importacao/exportacao CSV),
                   channels (canais Meta: webhook, parser, envio Graph API),
                   metrics (indicadores, monitoramento, jornada), reports (CSV/PDF),
-                  surveys (CSAT/NPS), shifts (escalas)
+                  surveys (CSAT/NPS), shifts (escalas),
+                  campaigns (contato ativo), bots (chatbot por fluxo)
       realtime/   servidor Socket.IO, salas e hub de eventos
       http/       middlewares (auth, validação, erros)
       lib/        prisma, redis, jwt/tokens, senhas, erros
@@ -146,6 +149,13 @@ Base: `/api`. Corpo e respostas em JSON. Erros no formato `{ error: { code, mess
 | GET | `/escalas/jornada` | admin, supervisor |
 | GET | `/pesquisas/resultados` | admin, supervisor |
 | GET/POST | `/avaliacao/:token` | **público** — cliente responde por link |
+| GET/POST | `/campanhas`, `/campanhas/:id` | admin, supervisor |
+| POST | `/campanhas/:id/contatos` | admin, supervisor |
+| PATCH | `/campanhas/:id/status` | admin, supervisor |
+| POST | `/campanhas/:id/disparar` + `/reprocessar` | admin, supervisor |
+| GET | `/bots` | autenticado |
+| PUT | `/bots` | admin, supervisor |
+| DELETE | `/bots/:id` | admin |
 
 WebSocket em `/socket.io`. Contrato de eventos e salas documentado no [SCOPE.md](SCOPE.md).
 
@@ -234,7 +244,26 @@ reentrega e a garantia de que uma resposta recusada pela Graph API não entra no
 A pesquisa de satisfação é criada ao finalizar o atendimento; o cliente responde em
 `/avaliacao/<token>`, sem login. CSAT aceita 1-5, NPS 0-10.
 
-## Próximo passo
+## Campanhas e chatbot (Fase 4)
 
-Fase 4 (opcional, alto esforço): PABX e voz, monitoria de chamadas, transcrição automática,
-campanhas de discagem e chatbots com IA. Detalhes e recomendações no [SCOPE.md](SCOPE.md).
+**Campanhas** (menu Campanhas, admin/supervisor): cria a campanha, adiciona contatos, ativa e
+dispara em lote. A mensagem aceita `{{nome}}`, `{{email}}` e `{{telefone}}`. Cada contato falha por
+conta própria com o motivo gravado — contato sem telefone fica *Ignorado*, envio recusado pela API
+fica *Falhou* com a mensagem do provedor — e "Reprocessar falhas" devolve todos para a fila depois
+de corrigir os dados. Campanha de **voz é recusada**: depende de telefonia, que não existe.
+
+**Chatbot** (Configurações → Chatbot): fluxo por palavra-chave, não LLM. Cada passo tem gatilhos,
+resposta e uma ação (responder, transferir para fila, encerrar). O bot responde só enquanto a
+conversa está em espera e sem agente — assim que alguém assume, ele cala — e desiste depois de N
+tentativas sem entender, deixando a conversa na fila.
+
+## O que não foi construído
+
+**Telefonia: PABX, voz, monitoria de chamadas e transcrição.** Exige escolher provedor (Asterisk
+próprio x SIP gerenciado), credenciais e um tronco de voz, além de decisões regulatórias sobre
+gravação e discagem ativa. Nada disso é verificável sem contrato fechado, e um softphone que nunca
+completou uma chamada aparenta estar pronto sem estar. O raciocínio completo, o que já está
+preparado para receber voz e a recomendação de caminho estão em *Fase 4* no [SCOPE.md](SCOPE.md).
+
+**Integrações da Meta em produção.** O código está pronto e testado com payloads assinados
+localmente, mas nenhuma credencial real da Meta foi exercitada — depende de conta verificada.

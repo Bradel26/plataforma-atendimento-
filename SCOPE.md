@@ -105,12 +105,36 @@ credencial real para testar.
 - [x] Pesquisa de satisfação pós-atendimento (CSAT/NPS, disparada ao finalizar, página pública por token)
 - [x] Escalas de trabalho (grade semanal por agente + horas efetivas pelo log de presença)
 
-### Fase 4 — Avançado (opcional, alto esforço — considerar provedor pronto via API em vez de construir do zero)
-- [ ] PABX e voz (softphone web, ramais, URA) — Asterisk/FreePBX ou provedor SIP
-- [ ] Monitoria de chamadas (escuta, sussurro, espionagem)
-- [ ] Transcrição automática de voz (Whisper/OpenAI)
-- [ ] Campanhas de discagem ativa
-- [ ] Chatbots com IA
+### Fase 4 — Avançado (parcial)
+- [ ] **PABX e voz** (softphone web, ramais, URA) — **não construído**, ver *Por que a telefonia ficou de fora*
+- [ ] **Monitoria de chamadas** (escuta, sussurro, espionagem) — **não construído**, depende da telefonia
+- [ ] **Transcrição automática de voz** — **não construído**, depende da telefonia (é o passo seguinte à gravação)
+- [x] Campanhas de contato ativo (multicanal, template, disparo em lote, reprocessamento) — voz depende da telefonia
+- [x] Chatbot por fluxo de palavras-chave (responder, transferir para fila, encerrar), integrado ao Webchat e aos canais Meta
+
+#### Por que a telefonia ficou de fora
+
+O próprio escopo já marcava a Fase 4 como "opcional, alto esforço — considerar provedor pronto via
+API em vez de construir do zero". Três razões concretas para não ter sido implementada:
+
+1. **Exige uma decisão de arquitetura e contrato que não é técnica.** Asterisk/FreePBX
+   auto-hospedado, provedor SIP (Twilio, Zenvia, Vonage) ou PABX gerenciado brasileiro são caminhos
+   com custos, SLAs e implicações regulatórias diferentes. Escolher por conta própria seria decidir
+   no lugar de quem paga a conta.
+2. **Não há como verificar nada sem credenciais e um tronco SIP.** Um softphone WebRTC que nunca
+   completou uma chamada é pior que nenhum: parece pronto e não é.
+3. **Regulatório.** Discagem ativa no Brasil tem regras (horários, Não Me Perturbe, gravação com
+   aviso) que precisam ser decididas com quem responde pela operação.
+
+**O que já está pronto para receber telefonia:** o enum `Channel` tem `VOZ`; conversas, filas,
+protocolos, escalas, presença e relatórios são agnósticos de canal; o disparo de campanha recusa
+`VOZ` com mensagem explícita em vez de falhar silencioso. Quando houver provedor definido, o
+trabalho é um módulo `channels/voz` no mesmo formato do `channels/meta`: webhook de eventos de
+chamada, gravação como anexo e um adaptador de discagem — sem mexer no núcleo.
+
+**Recomendação:** provedor SIP com API HTTP (Twilio Programmable Voice ou equivalente nacional)
+em vez de Asterisk próprio. Elimina manutenção de infraestrutura de voz, que é uma especialidade
+por si só.
 
 ---
 
@@ -336,3 +360,35 @@ O dashboard e o monitoramento assinam os eventos do WebSocket (`conversa:nova`,
 `conversa:atualizada`, `agente:status`, `protocolo:atualizado`) e recarregam os indicadores quando
 algo muda de fato. Um `setInterval` de 5s geraria consultas agregadas contra o Postgres a cada
 5 segundos por supervisor logado, quase sempre para devolver o mesmo número.
+
+### 21. Chatbot: fluxo por palavra-chave, não LLM
+O bot casa palavras-chave (sem acento, sem caixa) contra passos ordenados e executa uma ação:
+responder, transferir para fila ou encerrar. Não usa modelo de linguagem.
+
+Motivo: um bot de LLM exige chave de API, decisão de custo por conversa e — principalmente —
+grade de proteção contra resposta inventada em contexto de atendimento ao cliente, onde uma
+informação errada sobre preço ou prazo gera problema real. O fluxo determinístico entrega valor
+hoje e é auditável: dá para apontar exatamente qual passo respondeu o quê.
+
+O ponto de extensão é o `responderAutomaticamente()` em `modules/bots/bots.service.ts`: trocar o
+casamento de palavra-chave por uma chamada a um modelo mantém o resto (quando o bot pode falar,
+quando desiste, como transfere) intacto.
+
+**Duas garantias que o bot respeita, verificadas em teste:**
+- Só fala enquanto a conversa está `EM_ESPERA` **e** sem agente — assim que alguém assume, cala.
+  Sem isso o bot responderia em cima do atendente.
+- Desiste depois de `limiteSemResposta` fallbacks e deixa a conversa na fila. Um bot que insiste em
+  não entender é pior que um bot ausente.
+
+### 22. Campanha: cada item falha por conta própria
+O disparo processa item por item e grava o motivo da falha em `erro`. Um contato sem telefone fica
+`IGNORADO`, um envio recusado pela Meta fica `FALHOU` com a mensagem da API — e nenhum dos dois
+interrompe o lote. `ENVIADO` nunca é reenviado, então chamar o disparo de novo é seguro; o botão
+"Reprocessar falhas" devolve `FALHOU`/`IGNORADO` para `PENDENTE` depois de corrigir os dados.
+
+Verificado com credencial falsa da Meta: 1 contato com telefone → `FALHOU` com
+"A Meta recusou o envio (401): Malformed access token"; 5 sem telefone → `IGNORADO`.
+
+O disparo é **síncrono, em lotes** (`limite`, padrão 100). Para volume grande o certo é fila de
+trabalho no Redis com retry e controle de taxa — o Redis já está na stack; fica para quando o
+volume justificar.

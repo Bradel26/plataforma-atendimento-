@@ -2,6 +2,7 @@ import { prisma } from '../../lib/prisma';
 import { badRequest, notFound } from '../../lib/errors';
 import { signWebchatToken } from '../../lib/tokens';
 import { notificarConversaAtualizada, notificarConversaNova, notificarMensagem } from '../../realtime/hub';
+import { responderAutomaticamente } from '../bots/bots.service';
 import { inclusaoDetalhe, toConversaDetalhe, toMensagem } from '../conversations/conversations.serializer';
 
 type IniciarInput = { nome: string; email?: string; telefone?: string; filaId?: string; assunto?: string };
@@ -106,6 +107,9 @@ export async function mensagemDoCliente(conversaId: string, conteudo: string) {
   notificarMensagem({ conversaId, mensagem: toMensagem(mensagem) }, destinos);
   // A conversa sobe na lista e o contador de nao lidas muda para quem estiver vendo.
   notificarConversaAtualizada(detalhe, destinos);
+
+  // Chatbot (Fase 4): responde so enquanto ninguem assumiu a conversa.
+  await responderAutomaticamente(conversaId, conteudo);
 
   return toMensagem(mensagem);
 }

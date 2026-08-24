@@ -1,6 +1,7 @@
 import type { Channel } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { notificarConversaAtualizada, notificarConversaNova, notificarMensagem } from '../../realtime/hub';
+import { responderAutomaticamente } from '../bots/bots.service';
 import { inclusaoDetalhe, toConversaDetalhe, toMensagem } from '../conversations/conversations.serializer';
 import type { MensagemNormalizada } from './meta.types';
 
@@ -81,6 +82,9 @@ export async function registrarMensagemEntrante(dados: MensagemNormalizada) {
   notificarMensagem({ conversaId: conversa.id, mensagem: toMensagem(mensagem) }, destinos);
   if (nova) notificarConversaNova(detalhe, destinos);
   else notificarConversaAtualizada(detalhe, destinos);
+
+  // Chatbot (Fase 4): mesmo tratamento do webchat nos canais externos.
+  await responderAutomaticamente(conversa.id, dados.conteudo);
 
   return { duplicada: false as const, conversaId: conversa.id, mensagemId: mensagem.id };
 }

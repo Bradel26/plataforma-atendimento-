@@ -8,6 +8,8 @@ import { errorHandler, notFoundHandler } from './http/middleware/error-handler';
 import { authRoutes } from './modules/auth/auth.routes';
 import { brandingRoutes } from './modules/branding/branding.routes';
 import { contactsRoutes } from './modules/contacts/contacts.routes';
+import { botsRoutes } from './modules/bots/bots.routes';
+import { campanhasRoutes } from './modules/campaigns/campaigns.routes';
 import { channelsRoutes } from './modules/channels/channels.routes';
 import { webhooksRoutes } from './modules/channels/webhooks.routes';
 import { conversationsRoutes } from './modules/conversations/conversations.routes';
@@ -62,6 +64,8 @@ export function createApp() {
   app.use('/api/pesquisas', pesquisasRoutes);
   // Publico: o cliente responde a pesquisa por link, sem conta na plataforma.
   app.use('/api/avaliacao', pesquisasPublicasRoutes);
+  app.use('/api/campanhas', campanhasRoutes);
+  app.use('/api/bots', botsRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
