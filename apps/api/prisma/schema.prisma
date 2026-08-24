@@ -8,7 +8,11 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // Endpoint pooled (pgbouncer) para a aplicacao.
+  url       = env("DATABASE_URL")
+  // Endpoint direto: o Prisma Migrate precisa de conexao sem pooler.
+  // Em ambientes sem pooler, aponte as duas variaveis para a mesma URL.
+  directUrl = env("DIRECT_URL")
 }
 
 /// Perfis de acesso (Fase 0 do escopo).

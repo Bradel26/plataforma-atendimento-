@@ -37,8 +37,9 @@ npm run dev                 # API em :3333 e web em :5173
 
 Atalho: `npm run setup` faz install + infra + migrate + seed.
 
-> ⚠️ Nesta máquina o Docker Desktop não inicia porque o WSL2 não está instalado.
-> Veja *Pendências de ambiente* no [SCOPE.md](SCOPE.md) para as opções de desbloqueio.
+Alternativa sem Docker (é o que está em uso hoje): Postgres no **Neon** e Redis no **Upstash**.
+Nesse caso pule o `infra:up` e preencha `DATABASE_URL`, `DIRECT_URL` e `REDIS_URL` no `.env`.
+Detalhes em *Ambiente de desenvolvimento* no [SCOPE.md](SCOPE.md).
 
 Acesse http://localhost:5173. O Vite faz proxy de `/api` para a API, mantendo front e
 backend na mesma origem (necessário para o cookie de refresh).

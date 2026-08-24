@@ -157,25 +157,24 @@ precisa do tema antes de haver autenticação. A escrita (`PUT`) exige perfil AD
 
 ---
 
-## Pendências de ambiente
+## Ambiente de desenvolvimento
 
-### Docker Desktop não inicia nesta máquina (bloqueia Postgres + Redis)
-O `docker-compose.yml` está pronto, mas o daemon não sobe: **WSL2 não está instalado**
-(`wsl --status` → "O Subsistema do Windows para Linux não está instalado").
+Postgres e Redis rodam em **serviços gerenciados** (decidido em 24/08/2026):
 
-Para desbloquear, escolha uma opção:
+- **Neon** — PostgreSQL, região `sa-east-1`. Duas URLs no `.env`: `DATABASE_URL` (endpoint
+  *pooled*, usada pela aplicação) e `DIRECT_URL` (endpoint direto, exigida pelo Prisma Migrate —
+  o pgbouncer não suporta os comandos de migration).
+- **Upstash** — Redis, conexão `rediss://` (TLS). O `ioredis` trata TLS pelo próprio esquema da URL.
 
-1. **Instalar o WSL2** (recomendado) — em um PowerShell **como administrador**:
-   ```powershell
-   wsl --install
-   ```
-   Reinicie o Windows, abra o Docker Desktop e depois rode `npm run setup` na raiz do projeto.
+O `docker-compose.yml` continua no repositório e funciona em qualquer máquina com Docker; para
+usá-lo, aponte `DATABASE_URL` e `DIRECT_URL` para a mesma URL local.
 
-2. **Postgres e Redis nativos no Windows** — instalar o PostgreSQL 16 e o Redis (via Memurai ou
-   similar) e ajustar `DATABASE_URL` / `REDIS_URL` em `apps/api/.env`.
+> Nota: nesta máquina o Docker Desktop não inicia porque o **WSL2 não está instalado**
+> (`wsl --status` confirma). Para voltar a usar containers localmente: `wsl --install` em
+> PowerShell como administrador e reiniciar o Windows.
 
-3. **Serviços gerenciados para dev** — ex.: Neon (Postgres) e Upstash (Redis); basta trocar as URLs
-   no `.env`. Não exige nada instalado localmente.
-
-Enquanto isso não for resolvido, `prisma migrate` e o seed não rodam, e os endpoints que tocam o
-banco retornam erro (o `GET /api/health` acusa `postgres: falha` / `redis: falha`).
+### Validado em 24/08/2026
+Migration e seed aplicados no Neon, e o fluxo da Fase 0 exercitado ponta a ponta:
+login nos 3 perfis, guards de permissão (403 nos acessos indevidos), rotação de uso único do
+refresh token, revogação no logout, validação Zod, CRUD de filas com vínculo de agentes,
+White Label e o login pelo proxy do Vite com cookie `HttpOnly`.
