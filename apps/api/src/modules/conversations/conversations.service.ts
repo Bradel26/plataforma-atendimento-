@@ -3,7 +3,7 @@ import { prisma } from '../../lib/prisma';
 import { badRequest, forbidden, notFound } from '../../lib/errors';
 import { notificarConversaAtualizada, notificarMensagem } from '../../realtime/hub';
 import { enviarParaCanal, exigeEnvioExterno } from '../channels/outbound.service';
-import { criarPesquisa } from '../surveys/surveys.service';
+import { criarPesquisa, entregarPesquisa } from '../surveys/surveys.service';
 import {
   inclusaoDetalhe,
   inclusaoResumo,
@@ -207,8 +207,11 @@ export async function finalizarConversa(solicitante: Solicitante, id: string) {
     data: { status: 'FINALIZADO', finalizadoEm: new Date() },
   });
   await registrarEventoSistema(id, `${solicitante.nome} finalizou o atendimento.`);
-  // Pesquisa de satisfacao pos-atendimento (Fase 3).
+  // Pesquisa de satisfacao pos-atendimento (Fase 3): cria e entrega o link ao
+  // cliente. entregarPesquisa nao lanca — finalizar o atendimento nao pode
+  // falhar porque o canal recusou o convite.
   await criarPesquisa(id);
+  await entregarPesquisa(id);
 
   return publicar(id, { agenteAnteriorId: conversa.agenteId, filaAnteriorId: conversa.filaId });
 }

@@ -102,7 +102,8 @@ credencial real para testar.
 - [x] Dashboards com indicadores em tempo real (em espera, TME, TMA, CSAT, NPS, SLA vencido, volume por canal)
 - [x] Relatórios detalhados com exportação **CSV e PDF** (5 relatórios; PDF gerado com a identidade do White Label)
 - [x] Painel do Supervisor / Monitoramento (status dos agentes em tempo real, carga e tempo no status)
-- [x] Pesquisa de satisfação pós-atendimento (CSAT/NPS, disparada ao finalizar, página pública por token)
+- [x] Pesquisa de satisfação pós-atendimento (CSAT/NPS, disparada ao finalizar, **link entregue ao
+  cliente no canal da conversa**, página pública por token)
 - [x] Escalas de trabalho (grade semanal por agente + horas efetivas pelo log de presença)
 
 ### Fase 4 — Avançado (parcial)
@@ -392,3 +393,26 @@ Verificado com credencial falsa da Meta: 1 contato com telefone → `FALHOU` com
 O disparo é **síncrono, em lotes** (`limite`, padrão 100). Para volume grande o certo é fila de
 trabalho no Redis com retry e controle de taxa — o Redis já está na stack; fica para quando o
 volume justificar.
+### 23. A pesquisa só existe se o link chegar ao cliente
+A primeira versão criava a pesquisa ao finalizar o atendimento e parava aí: o cliente nunca recebia
+o link. Uma pesquisa que ninguém vê não é uma pesquisa com taxa de resposta baixa — é uma pesquisa
+que não foi feita. O convite agora sai como **última mensagem da conversa**, pelo mesmo canal em que
+o cliente falou (Webchat pelo socket, WhatsApp/Instagram/Facebook pela Graph API).
+
+Três regras que a entrega respeita:
+- **Fala com o canal antes de gravar**, igual à resposta do agente: se a Meta recusa, o convite não
+  entra no histórico como se tivesse sido enviado.
+- **Nunca derruba a finalização.** O atendimento já foi encerrado; não pode voltar a estar aberto
+  porque um canal recusou uma mensagem. A falha vira uma nota de sistema no histórico, visível para
+  o agente, e `entregue_em` fica nulo.
+- **`entregue_em` separa criada de entregue.** A Área da Gestão mostra as duas colunas e calcula a
+  taxa de resposta sobre as **entregues** — o denominador honesto. Sobre as criadas, a taxa cairia
+  por causa de conversas que nunca tiveram caminho de volta.
+
+Verificado por `npm run smoke:pesquisa` (16 checagens, re-executável): no Webchat o convite aparece
+no histórico, o link abre a pesquisa e aceita uma única resposta; no WhatsApp com token falso a Graph
+API devolve 401, a finalização continua respondendo 200 e o histórico registra
+"Pesquisa de satisfacao nao enviada: A Meta recusou o envio (401)".
+
+**Não implementado:** reenvio automático de convite que falhou. Hoje a falha fica registrada e para
+ali. O lugar certo é a mesma fila de trabalho no Redis que as campanhas pedem (decisão 22).

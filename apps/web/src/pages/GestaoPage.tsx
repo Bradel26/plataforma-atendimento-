@@ -38,6 +38,7 @@ export function GestaoPage() {
     .map((a) => ({ rotulo: `${a.nome} (${a.respostas})`, valor: a.media, cor: SERIES[0] }));
 
   const taxa = dados?.taxaResposta ?? null;
+  const naoEntregues = dados?.naoEntregues ?? 0;
 
   return (
     <div className="space-y-5">
@@ -54,13 +55,19 @@ export function GestaoPage() {
 
       {erro && <Alerta>{erro}</Alerta>}
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <StatTile rotulo="Pesquisas enviadas" valor={dados?.enviadas ?? '—'} detalhe="uma por atendimento finalizado" />
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatTile rotulo="Pesquisas geradas" valor={dados?.enviadas ?? '—'} detalhe="uma por atendimento finalizado" />
+        <StatTile
+          rotulo="Entregues ao cliente"
+          valor={dados?.entregues ?? '—'}
+          detalhe={naoEntregues > 0 ? `${naoEntregues} sem caminho de volta ou recusadas` : 'link enviado no canal da conversa'}
+          estado={naoEntregues > 0 ? ESTADO.atencao : undefined}
+        />
         <StatTile rotulo="Respondidas" valor={dados?.respondidas ?? '—'} detalhe="clientes que avaliaram" />
         <StatTile
           rotulo="Taxa de resposta"
           valor={taxa === null ? '—' : `${taxa}%`}
-          detalhe="abaixo de 20% a media e pouco confiavel"
+          detalhe="sobre as entregues; abaixo de 20% a media e pouco confiavel"
           estado={taxa !== null && taxa < 20 ? ESTADO.atencao : undefined}
         />
       </div>

@@ -421,6 +421,8 @@ export type Jornada = {
 
 export type ResultadosPesquisa = {
   enviadas: number;
+  entregues: number;
+  naoEntregues: number;
   respondidas: number;
   taxaResposta: number | null;
   porAgente: Array<{ id: string; nome: string; respostas: number; media: number }>;

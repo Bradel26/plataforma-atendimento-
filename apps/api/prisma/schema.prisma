@@ -568,6 +568,8 @@ model Survey {
   /// Token opaco usado no link enviado ao cliente.
   token      String       @unique
   enviadoEm  DateTime     @default(now()) @map("enviado_em")
+  /// Preenchido quando o link chega ao cliente. Nulo = criada e nao entregue.
+  entregueEm DateTime?    @map("entregue_em")
   respondidoEm DateTime?  @map("respondido_em")
 
   conversa Conversation @relation(fields: [conversaId], references: [id], onDelete: Cascade)

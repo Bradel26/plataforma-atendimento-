@@ -241,8 +241,18 @@ reentrega e a garantia de que uma resposta recusada pela Graph API não entra no
   período e exportação **CSV e PDF**. O PDF sai com o nome e a cor configurados no White Label.
 - **Escalas** — grade semanal por agente e as **horas efetivas** apuradas pelo log de presença.
 
-A pesquisa de satisfação é criada ao finalizar o atendimento; o cliente responde em
+A pesquisa de satisfação é criada ao finalizar o atendimento e o **link é entregue ao cliente como
+última mensagem da conversa**, pelo canal em que ele falou. O cliente responde em
 `/avaliacao/<token>`, sem login. CSAT aceita 1-5, NPS 0-10.
+
+Se o canal recusar o convite (token expirado, canal inativo, cliente fora da janela de 24h do
+WhatsApp), a finalização do atendimento continua valendo e a falha entra no histórico como nota de
+sistema. A Área da Gestão separa **geradas**, **entregues** e **respondidas**, e a taxa de resposta é
+calculada sobre as entregues:
+
+```bash
+npm run smoke:pesquisa   # com a API de pé; cobre a entrega e a recusa do canal
+```
 
 ## Campanhas e chatbot (Fase 4)
 
