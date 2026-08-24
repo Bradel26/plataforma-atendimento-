@@ -2,7 +2,7 @@
 
 Plataforma de atendimento multicanal + call center + CRM. Escopo completo e roadmap em [SCOPE.md](SCOPE.md).
 
-**Estado atual: Fase 0 (Fundação) concluída.**
+**Estado atual: Fases 0 (Fundação) e 1 (MVP de Atendimento) concluídas.**
 
 ## Estrutura
 
@@ -11,14 +11,16 @@ apps/
   api/            Express + TypeScript + Prisma (PostgreSQL) + Redis
     prisma/       schema.prisma e seed
     src/
-      modules/    auth, users (usuarios), queues (filas), branding, health
+      modules/    auth, users, queues, branding, health,
+                  conversations (conversas), contacts (contatos), webchat
+      realtime/   servidor Socket.IO, salas e hub de eventos
       http/       middlewares (auth, validação, erros)
       lib/        prisma, redis, jwt/tokens, senhas, erros
   web/            React + Vite + TypeScript + Tailwind v4
     src/
       components/ layout (Sidebar, Topbar, AppShell) e UI kit
       features/   auth e branding (contextos)
-      pages/      login, placeholders dos módulos, configurações
+      pages/      login, atendimento, webchat, CRM, configurações, placeholders
 docker-compose.yml  PostgreSQL 16 + Redis 7 para dev local
 ```
 
@@ -89,6 +91,21 @@ Base: `/api`. Corpo e respostas em JSON. Erros no formato `{ error: { code, mess
 | DELETE | `/filas/:id/agentes/:usuarioId` | admin, supervisor |
 | GET | `/branding` | público (tela de login precisa do tema) |
 | PUT | `/branding` | admin |
+| GET | `/conversas` | autenticado (escopo por perfil) |
+| GET | `/conversas/contadores` | autenticado |
+| GET | `/conversas/:id` | autenticado (dono da conversa ou gestão) |
+| POST | `/conversas/:id/assumir` | autenticado |
+| POST | `/conversas/:id/mensagens` | autenticado |
+| POST | `/conversas/:id/transferir` | autenticado (`agenteId` **ou** `filaId`) |
+| POST | `/conversas/:id/finalizar` | autenticado |
+| POST | `/conversas/:id/ler` | autenticado |
+| GET | `/contatos`, `/contatos/:id` | autenticado |
+| PATCH | `/contatos/:id` | autenticado |
+| POST | `/webchat/sessoes` | **público** (visitante) |
+| GET | `/webchat/conversa` | token de sessão do webchat |
+| POST | `/webchat/mensagens` | token de sessão do webchat |
+
+WebSocket em `/socket.io`. Contrato de eventos e salas documentado no [SCOPE.md](SCOPE.md).
 
 ## Perfis
 
@@ -104,7 +121,27 @@ As cores ficam na tabela `branding` e são aplicadas em runtime como CSS variabl
 (`--brand-primary`, `--brand-secondary`, `--brand-accent`). Um admin edita em
 **Configurações → White Label**, com prévia ao vivo. Nada de rebuild para trocar tema.
 
+## Atendimento (Fase 1)
+
+O painel em **Atendimento** lista as conversas por aba (Em espera / Atribuído / Em atendimento /
+Finalizado) com contadores, e o chat permite assumir, responder, transferir para outro agente,
+devolver à fila e finalizar. Tudo se atualiza por WebSocket, sem recarregar.
+
+Para simular um cliente, abra **http://localhost:5173/webchat** numa aba anônima: o visitante
+preenche nome e e-mail, a conversa cai na primeira fila de Webchat ativa e aparece na hora no
+painel do agente vinculado a essa fila.
+
+### Smoke test do tempo real
+
+```bash
+npm run smoke     # com a API de pé e o seed aplicado
+```
+
+Verifica handshake do WebSocket nos três tipos de cliente, recusa de conexão sem credencial,
+entrega de `conversa:nova`/`mensagem:nova` para agente, supervisão e visitante, e que eventos
+internos não vazam para o visitante.
+
 ## Próximo passo
 
-Fase 1 — módulo de Atendimento: lista de conversas com abas, painel de chat, WebSocket
-(Socket.IO) e canal Webchat. Detalhes no [SCOPE.md](SCOPE.md).
+Fase 2 — multicanal (WhatsApp Business API, Instagram, Facebook), CRM completo (leads,
+contas, oportunidades) e módulo de Protocolo. Detalhes no [SCOPE.md](SCOPE.md).

@@ -7,9 +7,12 @@ import { env } from './env';
 import { errorHandler, notFoundHandler } from './http/middleware/error-handler';
 import { authRoutes } from './modules/auth/auth.routes';
 import { brandingRoutes } from './modules/branding/branding.routes';
+import { contactsRoutes } from './modules/contacts/contacts.routes';
+import { conversationsRoutes } from './modules/conversations/conversations.routes';
 import { healthRoutes } from './modules/health/health.routes';
 import { queuesRoutes } from './modules/queues/queues.routes';
 import { usersRoutes } from './modules/users/users.routes';
+import { webchatRoutes } from './modules/webchat/webchat.routes';
 
 export function createApp() {
   const app = express();
@@ -25,6 +28,9 @@ export function createApp() {
   app.use('/api/usuarios', usersRoutes);
   app.use('/api/filas', queuesRoutes);
   app.use('/api/branding', brandingRoutes);
+  app.use('/api/conversas', conversationsRoutes);
+  app.use('/api/contatos', contactsRoutes);
+  app.use('/api/webchat', webchatRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

@@ -19,7 +19,8 @@
     "db:migrate": "npm run db:migrate -w @plataforma/api",
     "db:seed": "npm run db:seed -w @plataforma/api",
     "db:studio": "npm run db:studio -w @plataforma/api",
-    "setup": "npm install && npm run infra:up && npm run db:migrate && npm run db:seed"
+    "setup": "npm install && npm run infra:up && npm run db:migrate && npm run db:seed",
+    "smoke": "node scripts/smoke-atendimento.mjs"
   },
   "engines": {
     "node": ">=20"

@@ -2,6 +2,7 @@ import type { AgentStatus, Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { conflict, notFound } from '../../lib/errors';
 import { hashPassword } from '../../lib/password';
+import { notificarStatusAgente } from '../../realtime/hub';
 import { toPublicUser } from './users.serializer';
 import type { CreateUserInput, ListUsersQuery, UpdateUserInput } from './users.schemas';
 
@@ -72,5 +73,8 @@ export async function deactivateUser(id: string) {
 
 export async function updateStatus(id: string, status: AgentStatus) {
   const user = await prisma.user.update({ where: { id }, data: { status } });
-  return toPublicUser(user);
+  const publico = toPublicUser(user);
+  // A gestao acompanha presenca em tempo real (base do Monitoramento, Fase 3).
+  notificarStatusAgente(publico);
+  return publico;
 }

@@ -24,11 +24,45 @@ export function signAccessToken(payload: AccessPayload): string {
 }
 
 export function verifyAccessToken(token: string): AccessPayload {
+  let payload: AccessPayload & { tipo?: string };
   try {
-    return jwt.verify(token, env.JWT_ACCESS_SECRET) as AccessPayload;
+    payload = jwt.verify(token, env.JWT_ACCESS_SECRET) as AccessPayload & { tipo?: string };
   } catch {
     throw unauthorized('Token de acesso invalido ou expirado');
   }
+  // Token de visitante do webchat nao vale como credencial de usuario interno.
+  if (payload.tipo === WEBCHAT_TIPO || !payload.perfil) {
+    throw unauthorized('Token de acesso invalido ou expirado');
+  }
+  return payload;
+}
+
+const WEBCHAT_TIPO = 'webchat';
+
+export type WebchatPayload = {
+  tipo: typeof WEBCHAT_TIPO;
+  conversaId: string;
+  contatoId: string;
+};
+
+/**
+ * Credencial do visitante do webchat: nao ha usuario, so a conversa que ele abriu.
+ * Assinada com o mesmo segredo, mas marcada com `tipo` para nunca ser aceita
+ * como token de usuario interno (ver verifyAccessToken).
+ */
+export function signWebchatToken(dados: Omit<WebchatPayload, 'tipo'>): string {
+  return jwt.sign({ ...dados, tipo: WEBCHAT_TIPO }, env.JWT_ACCESS_SECRET, { expiresIn: '12h' });
+}
+
+export function verifyWebchatToken(token: string): WebchatPayload {
+  let payload: WebchatPayload;
+  try {
+    payload = jwt.verify(token, env.JWT_ACCESS_SECRET) as WebchatPayload;
+  } catch {
+    throw unauthorized('Sessao do webchat invalida ou expirada');
+  }
+  if (payload.tipo !== WEBCHAT_TIPO) throw unauthorized('Sessao do webchat invalida');
+  return payload;
 }
 
 /**

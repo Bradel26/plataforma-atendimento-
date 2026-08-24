@@ -13,6 +13,12 @@ export default defineConfig({
         target: 'http://localhost:3333',
         changeOrigin: false,
       },
+      // WebSocket do Socket.IO (ws: true faz o upgrade de protocolo).
+      '/socket.io': {
+        target: 'http://localhost:3333',
+        ws: true,
+        changeOrigin: false,
+      },
     },
   },
 });

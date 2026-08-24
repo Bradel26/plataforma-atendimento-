@@ -42,7 +42,9 @@ model User {
   criadoEm     DateTime    @default(now()) @map("criado_em")
   atualizadoEm DateTime    @updatedAt @map("atualizado_em")
 
-  filas QueueAgent[]
+  filas             QueueAgent[]
+  conversas         Conversation[]
+  mensagensEnviadas Message[]
 
   @@index([perfil])
   @@map("usuarios")
@@ -67,7 +69,8 @@ model Queue {
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
-  agentes QueueAgent[]
+  agentes   QueueAgent[]
+  conversas Conversation[]
 
   @@map("filas")
 }
@@ -98,4 +101,94 @@ model Branding {
   atualizadoEm  DateTime @updatedAt @map("atualizado_em")
 
   @@map("branding")
+}
+
+// ---------------------------------------------------------------------------
+// Fase 1 — MVP de Atendimento
+// ---------------------------------------------------------------------------
+
+/// Abas do painel de atendimento.
+enum ConversationStatus {
+  EM_ESPERA
+  ATRIBUIDO
+  EM_ATENDIMENTO
+  FINALIZADO
+}
+
+/// Quem escreveu a mensagem. SISTEMA registra eventos (atribuicao, transferencia, fim).
+enum MessageAuthor {
+  CLIENTE
+  AGENTE
+  SISTEMA
+}
+
+enum AttachmentType {
+  TEXTO
+  IMAGEM
+  AUDIO
+  VIDEO
+  ARQUIVO
+}
+
+/// Contato/cliente final. Base do CRM (expandido na Fase 2 com Conta, Lead e Oportunidade).
+model Contact {
+  id           String   @id @default(uuid())
+  nome         String
+  telefone     String?
+  email        String?
+  canalOrigem  Channel  @default(WEBCHAT) @map("canal_origem")
+  tags         String[] @default([])
+  observacoes  String?
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  conversas Conversation[]
+
+  @@index([email])
+  @@index([telefone])
+  @@map("contatos")
+}
+
+model Conversation {
+  id        String             @id @default(uuid())
+  canal     Channel            @default(WEBCHAT)
+  status    ConversationStatus @default(EM_ESPERA)
+  contatoId String             @map("contato_id")
+  filaId    String?            @map("fila_id")
+  agenteId  String?            @map("agente_id")
+  assunto   String?
+
+  criadoEm        DateTime  @default(now()) @map("criado_em")
+  atribuidoEm     DateTime? @map("atribuido_em")
+  finalizadoEm    DateTime? @map("finalizado_em")
+  ultimaMensagemEm DateTime @default(now()) @map("ultima_mensagem_em")
+  naoLidas        Int       @default(0) @map("nao_lidas")
+
+  contato   Contact @relation(fields: [contatoId], references: [id], onDelete: Cascade)
+  fila      Queue?  @relation(fields: [filaId], references: [id], onDelete: SetNull)
+  agente    User?   @relation(fields: [agenteId], references: [id], onDelete: SetNull)
+  mensagens Message[]
+
+  @@index([status, ultimaMensagemEm])
+  @@index([agenteId, status])
+  @@index([filaId, status])
+  @@map("conversas")
+}
+
+model Message {
+  id        String         @id @default(uuid())
+  conversaId String        @map("conversa_id")
+  autor     MessageAuthor
+  /// Preenchido quando autor = AGENTE.
+  autorId   String?        @map("autor_id")
+  conteudo  String
+  tipoAnexo AttachmentType @default(TEXTO) @map("tipo_anexo")
+  anexoUrl  String?        @map("anexo_url")
+  criadoEm  DateTime       @default(now()) @map("criado_em")
+
+  conversa Conversation @relation(fields: [conversaId], references: [id], onDelete: Cascade)
+  autorUsuario User?    @relation(fields: [autorId], references: [id], onDelete: SetNull)
+
+  @@index([conversaId, criadoEm])
+  @@map("mensagens")
 }

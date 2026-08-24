@@ -20,7 +20,7 @@ Construir uma aplicação web própria no formato de plataforma de atendimento o
 |---|---|---|
 | Frontend | React (Vite) + TypeScript + Tailwind CSS v4 | Produtividade, fácil de estilizar como referência |
 | Backend/API | Node.js + Express + TypeScript | REST, fácil integração com WebSocket |
-| Tempo real | WebSocket (Socket.IO) — Fase 1 | Atualização instantânea de conversas/status |
+| Tempo real | WebSocket (Socket.IO) | Atualização instantânea de conversas/status |
 | Banco de dados | PostgreSQL + Prisma ORM | Relacional, robusto para CRM e histórico |
 | Cache/filas | Redis | Refresh tokens, fila de atendimento, presença online |
 | Autenticação | JWT (access + refresh) | Padrão de mercado |
@@ -34,9 +34,9 @@ Construir uma aplicação web própria no formato de plataforma de atendimento o
 - **Usuário**: id, nome, email, senha, perfil, status_online ✅ implementado
 - **Fila**: id, nome, canal_padrao, agentes_vinculados ✅ implementado
 - **Branding (White Label)**: appName, logoUrl, cores ✅ implementado
-- **Conversa**: id, canal, cliente_id, status, fila_id, agente_id, criado_em, finalizado_em — Fase 1
-- **Mensagem**: id, conversa_id, remetente, conteudo, tipo_anexo, timestamp — Fase 1
-- **Cliente/Contato**: id, nome, telefone, email, canal_origem, tags — Fase 1
+- **Conversa**: id, canal, contato_id, status, fila_id, agente_id, criado_em, finalizado_em ✅ implementado
+- **Mensagem**: id, conversa_id, autor, conteudo, tipo_anexo, timestamp ✅ implementado
+- **Cliente/Contato**: id, nome, telefone, email, canal_origem, tags ✅ implementado
 - **Conta/Empresa**: id, nome, cnpj, contatos_vinculados — Fase 2
 - **Lead**: id, contato_id, fase, tipo, responsavel_id, prazo, canal_origem, motivo_perda — Fase 2
 - **Oportunidade**: id, conta_id, valor, funil_id, estagio, responsavel_id — Fase 2
@@ -69,13 +69,13 @@ Construir uma aplicação web própria no formato de plataforma de atendimento o
 - [x] Layout base: menu lateral fixo (Dashboards, Atendimento, Protocolo, Monitoramento, Área da Gestão, Campanhas, Relatórios, Escalas, CRM, Configurações), cabeçalho com status do agente e tema com cores customizáveis (White Label)
 - [x] Configurações: CRUD de usuários com perfis, CRUD de filas, editor de White Label
 
-### Fase 1 — MVP de Atendimento
-- [ ] Módulo de Atendimento: lista de conversas com abas (Em espera / Atribuído / Em atendimento / Finalizado)
-- [ ] Janela de chat com histórico de mensagens
-- [ ] WebSocket para atualização em tempo real (novas mensagens, mudança de status)
-- [ ] Integração com 1 canal — **começar por Webchat** (widget simples, sem depender de aprovação de terceiros)
-- [ ] Filas básicas e transferência de atendimento entre agentes
-- [ ] CRM básico: contatos + histórico de conversas
+### Fase 1 — MVP de Atendimento ✅ concluída
+- [x] Módulo de Atendimento: lista de conversas com abas (Em espera / Atribuído / Em atendimento / Finalizado), com contadores por aba
+- [x] Janela de chat com histórico de mensagens, eventos do sistema e ações (assumir, transferir, devolver à fila, finalizar)
+- [x] WebSocket (Socket.IO) para atualização em tempo real de conversas, mensagens e status de presença
+- [x] Integração com 1 canal — **Webchat** em `/webchat` (⚠️ é uma página própria; o script embutível em site de terceiro ainda não existe)
+- [x] Filas básicas e transferência de atendimento entre agentes (com registro do motivo no histórico)
+- [x] CRM básico: contatos criados automaticamente pelo Webchat + ficha com histórico de conversas
 
 ### Fase 2 — Multicanal + CRM completo
 - [ ] Integração WhatsApp Business API (Meta) — requer verificação de conta (CNPJ, comprovante, site)
@@ -178,3 +178,32 @@ Migration e seed aplicados no Neon, e o fluxo da Fase 0 exercitado ponta a ponta
 login nos 3 perfis, guards de permissão (403 nos acessos indevidos), rotação de uso único do
 refresh token, revogação no logout, validação Zod, CRUD de filas com vínculo de agentes,
 White Label e o login pelo proxy do Vite com cookie `HttpOnly`.
+
+### 7. Contrato de eventos do WebSocket (Fase 1)
+Eventos declarados em `apps/api/src/realtime/events.ts` e espelhados em
+`apps/web/src/lib/realtime.ts` — as duas pontas usam as mesmas strings.
+
+| Evento | Quando | Quem recebe |
+|---|---|---|
+| `conversa:nova` | Webchat abre um atendimento | fila de destino + supervisão |
+| `conversa:atualizada` | status, agente, fila ou não lidas mudaram | fila, agente atual, **agente anterior**, quem tem a conversa aberta, supervisão |
+| `mensagem:nova` | mensagem de cliente ou agente | sala da conversa + fila + agente |
+| `agente:status` | agente muda presença | apenas supervisão |
+
+Salas: `usuario:<id>`, `fila:<id>`, `conversa:<id>` e `supervisao`. O agente entra nas filas em
+que está vinculado; admin e supervisor entram em `supervisao` e veem tudo. O evento vai também
+para o **agente anterior** numa transferência — sem isso, a conversa transferida continuaria
+aparecendo na lista de quem a perdeu.
+
+Os services não conhecem o Socket.IO: eles chamam `realtime/hub.ts`, que só emite se o servidor
+tiver registrado a instância. Assim os services continuam testáveis sem WebSocket.
+
+### 8. Token de sessão do Webchat
+O visitante não tem conta. Ao abrir o atendimento ele recebe um JWT de 12h com `conversaId`,
+marcado com `tipo: 'webchat'`. O `verifyAccessToken` **rejeita** tokens com essa marca, então uma
+sessão de visitante nunca é aceita como credencial de usuário interno (verificado no smoke test).
+
+### 9. Escopo de visibilidade das conversas
+Agente vê as conversas atribuídas a ele **mais** as em espera nas filas em que está vinculado.
+Admin e supervisor veem tudo. A regra fica em `escopoVisivel()` e é aplicada tanto na listagem
+quanto nos contadores das abas, para que os números batam com a lista.

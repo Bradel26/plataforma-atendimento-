@@ -25,6 +25,9 @@ export const setAccessToken = (token: string | null) => {
   accessToken = token;
 };
 
+/** Usado pelo Socket.IO, que autentica no handshake e nao via header. */
+export const getAccessToken = () => accessToken;
+
 /** Disparado quando a sessao expira de forma irreversivel. */
 export const AUTH_EXPIRADA = 'auth:expirada';
 

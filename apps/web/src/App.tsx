@@ -2,22 +2,27 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/layout/AppShell';
 import { NAV } from './components/layout/nav';
 import { useAuth } from './features/auth/AuthProvider';
+import { AtendimentoPage } from './pages/AtendimentoPage';
+import { CrmPage } from './pages/CrmPage';
 import { LoginPage } from './pages/LoginPage';
 import { PlaceholderPage } from './pages/PlaceholderPage';
+import { WebchatPage } from './pages/WebchatPage';
 import { ConfiguracoesPage } from './pages/configuracoes/ConfiguracoesPage';
 
 /** Descricao de cada modulo ainda nao implementado, exibida no placeholder. */
 const DESCRICOES: Record<string, string> = {
   '/dashboards': 'Indicadores gerais de chamadas, atendimentos e filas em tempo real.',
-  '/atendimento': 'Painel central com lista de conversas (Em espera, Atribuido, Em atendimento, Finalizado) e chat ativo.',
   '/protocolo': 'Gestao de chamados e tickets em Kanban, com anexos, comentarios e agendamentos.',
   '/monitoramento': 'Acompanhamento dos agentes em tempo real, com status e produtividade.',
   '/gestao': 'Painel do supervisor: metricas de qualidade, monitoria e acompanhamento da equipe.',
   '/campanhas': 'Discagem ativa e campanhas em massa.',
   '/relatorios': 'Relatorios detalhados com exportacao para Excel e PDF.',
   '/escalas': 'Jornada de trabalho, escalas e pausas dos agentes.',
-  '/crm': 'Contas, contatos, leads, oportunidades, catalogo e produtos.',
+  '/crm': 'Contas, leads, oportunidades, catalogo e produtos entram na Fase 2.',
 };
+
+/** Rotas ja implementadas — as demais caem no placeholder da fase. */
+const PRONTOS = ['/configuracoes', '/atendimento', '/crm'];
 
 function AppRoutes() {
   const { usuario, carregando, temPerfil } = useAuth();
@@ -31,6 +36,7 @@ function AppRoutes() {
   if (!usuario) {
     return (
       <Routes>
+        <Route path="/webchat" element={<WebchatPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
@@ -42,11 +48,14 @@ function AppRoutes() {
 
   return (
     <Routes>
+      <Route path="/webchat" element={<WebchatPage />} />
       <Route path="/login" element={<Navigate to={inicial} replace />} />
       <Route element={<AppShell />}>
         <Route path="/configuracoes" element={<ConfiguracoesPage />} />
+        <Route path="/atendimento" element={<AtendimentoPage />} />
+        <Route path="/crm" element={<CrmPage />} />
         {permitidos
-          .filter((item) => item.rota !== '/configuracoes')
+          .filter((item) => !PRONTOS.includes(item.rota))
           .map(({ rota, label, fase }) => (
             <Route
               key={rota}

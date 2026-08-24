@@ -1,0 +1,53 @@
+import { Router } from 'express';
+import { z } from 'zod';
+import { asyncHandler } from '../../http/async-handler';
+import { validateBody } from '../../http/middleware/validate';
+import { unauthorized } from '../../lib/errors';
+import { verifyWebchatToken } from '../../lib/tokens';
+import { historico, iniciarSessao, mensagemDoCliente } from './webchat.service';
+
+export const webchatRoutes = Router();
+
+const iniciarSchema = z.object({
+  nome: z.string().trim().min(2, 'Informe seu nome').max(120),
+  email: z.string().email('Informe um email valido').optional(),
+  telefone: z.string().trim().min(8).max(20).optional(),
+  assunto: z.string().trim().max(140).optional(),
+  filaId: z.string().uuid().optional(),
+});
+
+const mensagemSchema = z.object({
+  conteudo: z.string().trim().min(1, 'Escreva uma mensagem').max(4000),
+});
+
+/** Le o token de sessao do visitante (header Authorization: Bearer <sessaoToken>). */
+function sessao(req: { headers: { authorization?: string } }) {
+  const header = req.headers.authorization;
+  if (!header?.startsWith('Bearer ')) throw unauthorized('Sessao do webchat ausente');
+  return verifyWebchatToken(header.slice('Bearer '.length).trim());
+}
+
+/** Publico: o visitante nao tem conta na plataforma. */
+webchatRoutes.post(
+  '/sessoes',
+  validateBody(iniciarSchema),
+  asyncHandler(async (req, res) => {
+    res.status(201).json(await iniciarSessao(req.body));
+  }),
+);
+
+webchatRoutes.get(
+  '/conversa',
+  asyncHandler(async (req, res) => {
+    res.json({ conversa: await historico(sessao(req).conversaId) });
+  }),
+);
+
+webchatRoutes.post(
+  '/mensagens',
+  validateBody(mensagemSchema),
+  asyncHandler(async (req, res) => {
+    const { conversaId } = sessao(req);
+    res.status(201).json({ mensagem: await mensagemDoCliente(conversaId, req.body.conteudo) });
+  }),
+);
