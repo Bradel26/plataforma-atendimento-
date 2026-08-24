@@ -2,6 +2,7 @@ import { prisma } from '../../lib/prisma';
 import { AppError, unauthorized } from '../../lib/errors';
 import { verifyPassword } from '../../lib/password';
 import { issueRefreshToken, signAccessToken } from '../../lib/tokens';
+import { registrarPresenca } from '../metrics/metrics.service';
 import { toPublicUser } from '../users/users.serializer';
 import type { LoginInput } from './auth.schemas';
 
@@ -22,6 +23,9 @@ export async function login({ email, senha }: LoginInput) {
       status: user.status === 'OFFLINE' ? 'DISPONIVEL' : user.status,
     },
   });
+  // O login abre a jornada: sem este registro o relatorio de horas comecaria
+  // apenas na primeira troca manual de status.
+  await registrarPresenca(atualizado.id, atualizado.status);
 
   return buildSession(atualizado);
 }
@@ -45,5 +49,8 @@ async function buildSession(user: Awaited<ReturnType<typeof prisma.user.findUniq
 }
 
 export async function marcarOffline(userId: string) {
-  await prisma.user.update({ where: { id: userId }, data: { status: 'OFFLINE' } }).catch(() => undefined);
+  await prisma.user
+    .update({ where: { id: userId }, data: { status: 'OFFLINE' } })
+    .then(() => registrarPresenca(userId, 'OFFLINE'))
+    .catch(() => undefined);
 }

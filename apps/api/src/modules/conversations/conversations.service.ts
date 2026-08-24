@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma';
 import { badRequest, forbidden, notFound } from '../../lib/errors';
 import { notificarConversaAtualizada, notificarMensagem } from '../../realtime/hub';
 import { enviarParaCanal, exigeEnvioExterno } from '../channels/outbound.service';
+import { criarPesquisa } from '../surveys/surveys.service';
 import {
   inclusaoDetalhe,
   inclusaoResumo,
@@ -206,6 +207,8 @@ export async function finalizarConversa(solicitante: Solicitante, id: string) {
     data: { status: 'FINALIZADO', finalizadoEm: new Date() },
   });
   await registrarEventoSistema(id, `${solicitante.nome} finalizou o atendimento.`);
+  // Pesquisa de satisfacao pos-atendimento (Fase 3).
+  await criarPesquisa(id);
 
   return publicar(id, { agenteAnteriorId: conversa.agenteId, filaAnteriorId: conversa.filaId });
 }

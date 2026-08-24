@@ -13,6 +13,10 @@ import { webhooksRoutes } from './modules/channels/webhooks.routes';
 import { conversationsRoutes } from './modules/conversations/conversations.routes';
 import { accountsRoutes } from './modules/crm/accounts.routes';
 import { dadosRoutes } from './modules/dados/dados.routes';
+import { metricsRoutes } from './modules/metrics/metrics.routes';
+import { relatoriosRoutes } from './modules/reports/reports.routes';
+import { escalasRoutes } from './modules/shifts/shifts.routes';
+import { pesquisasPublicasRoutes, pesquisasRoutes } from './modules/surveys/surveys.routes';
 import { catalogsRoutes, productsRoutes } from './modules/crm/catalog.routes';
 import { leadsRoutes } from './modules/crm/leads.routes';
 import { funnelsRoutes, opportunitiesRoutes } from './modules/crm/opportunities.routes';
@@ -52,6 +56,12 @@ export function createApp() {
   app.use('/api/protocolos', ticketsRoutes);
   app.use('/api/dados', dadosRoutes);
   app.use('/api/canais', channelsRoutes);
+  app.use('/api/metricas', metricsRoutes);
+  app.use('/api/relatorios', relatoriosRoutes);
+  app.use('/api/escalas', escalasRoutes);
+  app.use('/api/pesquisas', pesquisasRoutes);
+  // Publico: o cliente responde a pesquisa por link, sem conta na plataforma.
+  app.use('/api/avaliacao', pesquisasPublicasRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

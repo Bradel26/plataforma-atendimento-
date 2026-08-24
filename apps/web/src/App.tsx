@@ -3,6 +3,12 @@ import { AppShell } from './components/layout/AppShell';
 import { NAV } from './components/layout/nav';
 import { useAuth } from './features/auth/AuthProvider';
 import { AtendimentoPage } from './pages/AtendimentoPage';
+import { AvaliacaoPage } from './pages/AvaliacaoPage';
+import { DashboardsPage } from './pages/DashboardsPage';
+import { EscalasPage } from './pages/EscalasPage';
+import { GestaoPage } from './pages/GestaoPage';
+import { MonitoramentoPage } from './pages/MonitoramentoPage';
+import { RelatoriosPage } from './pages/RelatoriosPage';
 import { CrmPage } from './pages/crm/CrmPage';
 import { ProtocoloPage } from './pages/protocolo/ProtocoloPage';
 import { LoginPage } from './pages/LoginPage';
@@ -12,16 +18,21 @@ import { ConfiguracoesPage } from './pages/configuracoes/ConfiguracoesPage';
 
 /** Descricao de cada modulo ainda nao implementado, exibida no placeholder. */
 const DESCRICOES: Record<string, string> = {
-  '/dashboards': 'Indicadores gerais de chamadas, atendimentos e filas em tempo real.',
-  '/monitoramento': 'Acompanhamento dos agentes em tempo real, com status e produtividade.',
-  '/gestao': 'Painel do supervisor: metricas de qualidade, monitoria e acompanhamento da equipe.',
   '/campanhas': 'Discagem ativa e campanhas em massa.',
-  '/relatorios': 'Relatorios detalhados com exportacao para Excel e PDF.',
-  '/escalas': 'Jornada de trabalho, escalas e pausas dos agentes.',
 };
 
 /** Rotas ja implementadas — as demais caem no placeholder da fase. */
-const PRONTOS = ['/configuracoes', '/atendimento', '/crm', '/protocolo'];
+const PRONTOS = [
+  '/configuracoes',
+  '/atendimento',
+  '/crm',
+  '/protocolo',
+  '/dashboards',
+  '/monitoramento',
+  '/gestao',
+  '/relatorios',
+  '/escalas',
+];
 
 function AppRoutes() {
   const { usuario, carregando, temPerfil } = useAuth();
@@ -36,6 +47,7 @@ function AppRoutes() {
     return (
       <Routes>
         <Route path="/webchat" element={<WebchatPage />} />
+        <Route path="/avaliacao/:token" element={<AvaliacaoPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
@@ -48,12 +60,18 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/webchat" element={<WebchatPage />} />
+      <Route path="/avaliacao/:token" element={<AvaliacaoPage />} />
       <Route path="/login" element={<Navigate to={inicial} replace />} />
       <Route element={<AppShell />}>
         <Route path="/configuracoes" element={<ConfiguracoesPage />} />
         <Route path="/atendimento" element={<AtendimentoPage />} />
         <Route path="/crm" element={<CrmPage />} />
         <Route path="/protocolo" element={<ProtocoloPage />} />
+        <Route path="/dashboards" element={<DashboardsPage />} />
+        <Route path="/monitoramento" element={<MonitoramentoPage />} />
+        <Route path="/gestao" element={<GestaoPage />} />
+        <Route path="/relatorios" element={<RelatoriosPage />} />
+        <Route path="/escalas" element={<EscalasPage />} />
         {permitidos
           .filter((item) => !PRONTOS.includes(item.rota))
           .map(({ rota, label, fase }) => (

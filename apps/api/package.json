@@ -29,6 +29,7 @@
     "ioredis": "^5.4.2",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
+    "pdfkit": "^0.20.1",
     "socket.io": "^4.8.3",
     "zod": "^3.24.1"
   },
@@ -40,6 +41,7 @@
     "@types/jsonwebtoken": "^9.0.7",
     "@types/morgan": "^1.9.9",
     "@types/node": "^22.10.5",
+    "@types/pdfkit": "^0.17.6",
     "prisma": "^6.2.1",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3"

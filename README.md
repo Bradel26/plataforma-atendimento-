@@ -2,7 +2,7 @@
 
 Plataforma de atendimento multicanal + call center + CRM. Escopo completo e roadmap em [SCOPE.md](SCOPE.md).
 
-**Estado atual:** Fases 0 (Fundação) e 1 (MVP de Atendimento) concluídas. Fase 2 concluída no código — integrações Meta prontas mas aguardando credenciais reais da Meta.
+**Estado atual:** Fases 0, 1, 2 e 3 concluídas. Resta a Fase 4 (PABX/voz, campanhas, chatbots) e as credenciais reais da Meta para os canais.
 
 ## Estrutura
 
@@ -15,7 +15,9 @@ apps/
                   conversations (conversas), contacts (contatos), webchat,
                   crm (contas, leads, oportunidades, funis, produtos, catalogos),
                   tickets (protocolos), dados (importacao/exportacao CSV),
-                  channels (canais Meta: webhook, parser, envio Graph API)
+                  channels (canais Meta: webhook, parser, envio Graph API),
+                  metrics (indicadores, monitoramento, jornada), reports (CSV/PDF),
+                  surveys (CSAT/NPS), shifts (escalas)
       realtime/   servidor Socket.IO, salas e hub de eventos
       http/       middlewares (auth, validação, erros)
       lib/        prisma, redis, jwt/tokens, senhas, erros
@@ -136,6 +138,14 @@ Base: `/api`. Corpo e respostas em JSON. Erros no formato `{ error: { code, mess
 | PUT | `/canais/{whatsapp,instagram,facebook}` | admin |
 | GET | `/webhooks/{canal}` | **público** — desafio de verificação da Meta |
 | POST | `/webhooks/{canal}` | **público** — exige `X-Hub-Signature-256` válida |
+| GET | `/metricas/indicadores` | admin, supervisor |
+| GET | `/metricas/agentes` | admin, supervisor |
+| GET | `/relatorios` | admin, supervisor |
+| GET | `/relatorios/:nome` + `/csv` + `/pdf` | admin, supervisor |
+| GET/PUT/DELETE | `/escalas`, `/escalas/:id` | autenticado (escrita: admin, supervisor) |
+| GET | `/escalas/jornada` | admin, supervisor |
+| GET | `/pesquisas/resultados` | admin, supervisor |
+| GET/POST | `/avaliacao/:token` | **público** — cliente responde por link |
 
 WebSocket em `/socket.io`. Contrato de eventos e salas documentado no [SCOPE.md](SCOPE.md).
 
@@ -210,7 +220,21 @@ Exercita o caminho completo com payloads no formato real, assinados localmente c
 do webhook, recusa de assinatura inválida, criação de conversa na fila certa, idempotência de
 reentrega e a garantia de que uma resposta recusada pela Graph API não entra no histórico.
 
+## Gestão e relatórios (Fase 3)
+
+- **Dashboards** — em espera, TME, TMA, CSAT, NPS, SLA vencido, volume por canal e agentes por
+  status. Atualiza por evento do WebSocket, não por polling.
+- **Monitoramento** — cada agente com status, tempo no status, conversas ativas e filas.
+- **Área da Gestão** — resultado das pesquisas de satisfação por agente, com taxa de resposta e
+  comentários dos clientes.
+- **Relatórios** — 5 relatórios (atendimentos, filas, protocolos, jornada, funil) com filtro de
+  período e exportação **CSV e PDF**. O PDF sai com o nome e a cor configurados no White Label.
+- **Escalas** — grade semanal por agente e as **horas efetivas** apuradas pelo log de presença.
+
+A pesquisa de satisfação é criada ao finalizar o atendimento; o cliente responde em
+`/avaliacao/<token>`, sem login. CSAT aceita 1-5, NPS 0-10.
+
 ## Próximo passo
 
-Fase 3 — dashboards em tempo real, relatórios com exportação, painel do supervisor, pesquisa de
-satisfação (NPS/CSAT) e escalas de trabalho. Detalhes no [SCOPE.md](SCOPE.md).
+Fase 4 (opcional, alto esforço): PABX e voz, monitoria de chamadas, transcrição automática,
+campanhas de discagem e chatbots com IA. Detalhes e recomendações no [SCOPE.md](SCOPE.md).

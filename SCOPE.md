@@ -43,7 +43,8 @@ Construir uma aplicação web própria no formato de plataforma de atendimento o
 - **Funil / Estágio**: funil customizável com probabilidade por estágio ✅ implementado
 - **Produto / Catálogo de Preços / Item de Oportunidade** ✅ implementado
 - **Chamado/Protocolo**: id, conversa_id, status, anexos, comentarios, agendamentos — Fase 2
-- **Escala**: id, agente_id, dia_semana, horario_inicio, horario_fim — Fase 3
+- **Escala**: id, agente_id, dia_semana, horario_inicio, horario_fim ✅ implementado
+- **Pesquisa (CSAT/NPS)** e **Log de presença** ✅ implementados
 
 ## Módulos (visão completa do produto)
 
@@ -97,12 +98,12 @@ HTTPS pública (túnel em dev). O `npm run smoke:canais` exercita todo o caminho
 localmente — o que ele **não** prova é que a Meta aceita as credenciais reais, porque não há
 credencial real para testar.
 
-### Fase 3 — Gestão e Relatórios
-- [ ] Dashboards com indicadores em tempo real (conversas em espera, tempo médio de espera, TMA)
-- [ ] Relatórios detalhados com exportação Excel/PDF
-- [ ] Painel do Supervisor / Monitoramento (status dos agentes em tempo real)
-- [ ] Pesquisa de satisfação pós-atendimento (NPS/CSAT)
-- [ ] Escalas de trabalho (jornada, horas, pausas)
+### Fase 3 — Gestão e Relatórios ✅ concluída
+- [x] Dashboards com indicadores em tempo real (em espera, TME, TMA, CSAT, NPS, SLA vencido, volume por canal)
+- [x] Relatórios detalhados com exportação **CSV e PDF** (5 relatórios; PDF gerado com a identidade do White Label)
+- [x] Painel do Supervisor / Monitoramento (status dos agentes em tempo real, carga e tempo no status)
+- [x] Pesquisa de satisfação pós-atendimento (CSAT/NPS, disparada ao finalizar, página pública por token)
+- [x] Escalas de trabalho (grade semanal por agente + horas efetivas pelo log de presença)
 
 ### Fase 4 — Avançado (opcional, alto esforço — considerar provedor pronto via API em vez de construir do zero)
 - [ ] PABX e voz (softphone web, ramais, URA) — Asterisk/FreePBX ou provedor SIP
@@ -303,3 +304,35 @@ quando houver volume que justifique.
 devolve versão mascarada. Ainda assim é segredo em texto claro no banco — aceitável para o MVP,
 mas antes de produção o certo é cifrar em repouso (KMS/Vault) ou manter em variável de ambiente.
 Registrado como pendência de segurança.
+
+### 18. Escala planejada x horas efetivas
+São duas coisas diferentes e o produto mostra as duas: `escalas` é o **planejado**
+(dia da semana + horário, uma linha por agente/dia); `presenca_log` é o **realizado** — um
+intervalo por status, aberto no login e fechado a cada troca de presença.
+
+O relatório de jornada soma o realizado, contando os intervalos ainda abertos até agora — sem
+isso o agente que está online no momento apareceria com zero horas. "Jornada produtiva" =
+`DISPONIVEL + EM_ATENDIMENTO`; pausa não conta.
+
+O login registra presença (`auth.service`), não só a troca manual de status: sem isso a jornada
+começaria a contar apenas na primeira vez que o agente mexesse no seletor do cabeçalho — e o
+relatório subestimaria as horas. (Corrigido durante o teste da Fase 3.)
+
+### 19. Paleta de dados é fixa, separada da cor da marca
+Os gráficos **não** usam `--brand-primary`. A cor da marca é escolhida pelo cliente no White
+Label: se ela virasse cor de série, bastaria alguém escolher um tom próximo do vizinho para o
+gráfico ficar ilegível — e não há como validar contraste de uma cor que muda em runtime.
+
+A paleta de séries (`apps/web/src/lib/viz.ts`) é fixa e validada para daltonismo na lista de
+pares adjacentes (pior par CVD ΔE 9.1, visão normal 19.6, sobre superfície branca). Três tons
+ficam abaixo de 3:1 de contraste, o que **obriga rótulo visível** — por isso o componente
+`BarList` sempre desenha nome e valor ao lado da barra, nunca só a cor.
+
+Status de agente usa **paleta de estado** (verde/azul/âmbar/cinza), não a de séries: estado não é
+identidade, e cor de estado é reservada.
+
+### 20. Dashboard atualiza por evento, não por polling
+O dashboard e o monitoramento assinam os eventos do WebSocket (`conversa:nova`,
+`conversa:atualizada`, `agente:status`, `protocolo:atualizado`) e recarregam os indicadores quando
+algo muda de fato. Um `setInterval` de 5s geraria consultas agregadas contra o Postgres a cada
+5 segundos por supervisor logado, quase sempre para devolver o mesmo número.

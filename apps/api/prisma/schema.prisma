@@ -48,6 +48,8 @@ model User {
   leads             Lead[]
   oportunidades     Opportunity[]
   protocolos        Ticket[]
+  escalas           WorkShift[]
+  presenca          PresenceLog[]
   comentarios       TicketComment[]
   anexos            TicketAttachment[]
   agendamentos      TicketSchedule[]
@@ -184,6 +186,7 @@ model Conversation {
   agente     User?    @relation(fields: [agenteId], references: [id], onDelete: SetNull)
   mensagens  Message[]
   protocolos Ticket[]
+  pesquisa   Survey?
 
   @@index([status, ultimaMensagemEm])
   @@index([agenteId, status])
@@ -538,4 +541,67 @@ model ChannelConfig {
   fila Queue? @relation(fields: [filaId], references: [id], onDelete: SetNull)
 
   @@map("canais_config")
+}
+
+// ---------------------------------------------------------------------------
+// Fase 3 — Gestao, Relatorios, Satisfacao e Escalas
+// ---------------------------------------------------------------------------
+
+enum TipoPesquisa {
+  CSAT
+  NPS
+}
+
+/// Pesquisa de satisfacao disparada ao finalizar o atendimento.
+model Survey {
+  id         String       @id @default(uuid())
+  conversaId String       @unique @map("conversa_id")
+  tipo       TipoPesquisa @default(CSAT)
+  /// CSAT: 1 a 5. NPS: 0 a 10.
+  nota       Int?
+  comentario String?
+  /// Token opaco usado no link enviado ao cliente.
+  token      String       @unique
+  enviadoEm  DateTime     @default(now()) @map("enviado_em")
+  respondidoEm DateTime?  @map("respondido_em")
+
+  conversa Conversation @relation(fields: [conversaId], references: [id], onDelete: Cascade)
+
+  @@index([respondidoEm])
+  @@map("pesquisas")
+}
+
+/// Escala de trabalho do agente: um registro por dia da semana.
+model WorkShift {
+  id        String   @id @default(uuid())
+  agenteId  String   @map("agente_id")
+  /// 0 = domingo ... 6 = sabado
+  diaSemana Int      @map("dia_semana")
+  /// "HH:MM" no fuso da operacao.
+  inicio    String
+  fim       String
+  ativo     Boolean  @default(true)
+  criadoEm  DateTime @default(now()) @map("criado_em")
+
+  agente User @relation(fields: [agenteId], references: [id], onDelete: Cascade)
+
+  @@unique([agenteId, diaSemana])
+  @@map("escalas")
+}
+
+/// Historico de presenca: um intervalo por status. Base das horas trabalhadas.
+model PresenceLog {
+  id         String      @id @default(uuid())
+  usuarioId  String      @map("usuario_id")
+  status     AgentStatus
+  iniciadoEm DateTime    @default(now()) @map("iniciado_em")
+  fim        DateTime?
+  /// Duracao em segundos, preenchida ao fechar o intervalo.
+  duracao    Int?
+
+  usuario User @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, iniciadoEm])
+  @@index([iniciadoEm])
+  @@map("presenca_log")
 }

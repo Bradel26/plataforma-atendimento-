@@ -350,3 +350,88 @@ export const COR_PRIORIDADE: Record<TicketPrioridade, string> = {
   ALTA: 'bg-amber-50 text-amber-700',
   URGENTE: 'bg-red-50 text-red-700',
 };
+
+// --------------------------------------------------------------------------
+// Fase 3 — Gestao, Relatorios e Escalas
+// --------------------------------------------------------------------------
+
+export type Indicadores = {
+  periodo: { desde: string; ate: string };
+  conversas: {
+    emEspera: number;
+    atribuidas: number;
+    emAtendimento: number;
+    finalizadas: number;
+    novasNoPeriodo: number;
+    mensagensNoPeriodo: number;
+    porCanal: Record<string, number>;
+  };
+  tempos: { tmeSegundos: number | null; tmaSegundos: number | null };
+  agentes: { total: number; porStatus: Record<string, number> };
+  protocolos: { porStatus: Record<string, number>; slaVencidos: number };
+  satisfacao: {
+    csat: number | null;
+    csatRespostas: number;
+    nps: number | null;
+    npsRespostas: number;
+  };
+};
+
+export type AgenteMonitorado = {
+  id: string;
+  nome: string;
+  perfil: Perfil;
+  status: AgentStatus;
+  ultimoLogin: string | null;
+  filas: Array<{ id: string; nome: string }>;
+  conversasAtivas: number;
+  protocolosAbertos: number;
+  segundosNoStatus: number | null;
+};
+
+export type Relatorio = {
+  titulo: string;
+  periodo: { desde: string; ate: string };
+  colunas: Array<{ chave: string; rotulo: string }>;
+  linhas: Array<Record<string, string | number>>;
+  totais?: Record<string, string | number>;
+};
+
+export type Escala = {
+  id: string;
+  agenteId: string;
+  diaSemana: number;
+  diaNome: string;
+  inicio: string;
+  fim: string;
+  ativo: boolean;
+  cargaMinutos: number;
+  agente: { id: string; nome: string; perfil: Perfil };
+};
+
+export type Jornada = {
+  id: string;
+  nome: string;
+  disponivel: number;
+  emAtendimento: number;
+  pausa: number;
+  offline: number;
+  trabalhado: number;
+};
+
+export type ResultadosPesquisa = {
+  enviadas: number;
+  respondidas: number;
+  taxaResposta: number | null;
+  porAgente: Array<{ id: string; nome: string; respostas: number; media: number }>;
+  comentarios: Array<{
+    nota: number | null;
+    tipo: 'CSAT' | 'NPS';
+    comentario: string | null;
+    cliente: string;
+    agente: string | null;
+    respondidoEm: string | null;
+  }>;
+};
+
+export const DIAS_SEMANA = ['Domingo', 'Segunda', 'Terca', 'Quarta', 'Quinta', 'Sexta', 'Sabado'];

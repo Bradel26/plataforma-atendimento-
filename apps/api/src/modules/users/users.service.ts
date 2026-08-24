@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma';
 import { conflict, notFound } from '../../lib/errors';
 import { hashPassword } from '../../lib/password';
 import { notificarStatusAgente } from '../../realtime/hub';
+import { registrarPresenca } from '../metrics/metrics.service';
 import { toPublicUser } from './users.serializer';
 import type { CreateUserInput, ListUsersQuery, UpdateUserInput } from './users.schemas';
 
@@ -73,6 +74,8 @@ export async function deactivateUser(id: string) {
 
 export async function updateStatus(id: string, status: AgentStatus) {
   const user = await prisma.user.update({ where: { id }, data: { status } });
+  // Historico de presenca: base das horas trabalhadas no relatorio de jornada.
+  await registrarPresenca(id, status);
   const publico = toPublicUser(user);
   // A gestao acompanha presenca em tempo real (base do Monitoramento, Fase 3).
   notificarStatusAgente(publico);
