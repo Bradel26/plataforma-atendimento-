@@ -1,9 +1,11 @@
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
-import express from 'express';
+import express, { type Express } from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { env } from './env';
+import { existsSync } from 'node:fs';
+import { join, resolve, sep } from 'node:path';
 import { errorHandler, notFoundHandler } from './http/middleware/error-handler';
 import { authRoutes } from './modules/auth/auth.routes';
 import { brandingRoutes } from './modules/branding/branding.routes';
@@ -84,8 +86,82 @@ export function createApp() {
   app.use('/api/campanhas', campanhasRoutes);
   app.use('/api/bots', botsRoutes);
 
+  // O front, quando servido por este processo (ver servirFront).
+  const comFront = servirFront(app);
+  if (comFront) console.log(`Front servido por esta API a partir de ${env.STATIC_DIR}`);
+
   app.use(notFoundHandler);
   app.use(errorHandler);
 
   return app;
+}
+
+/**
+ * Serve o front compilado pelo proprio processo da API.
+ *
+ * Existe para o caso em que nao ha um nginx nosso na frente — VPS onde outro
+ * proxy (Traefik do Coolify, por exemplo) e o dono das portas 80 e 443, e nao
+ * ha subdominio proprio para separar front e API em dois enderecos.
+ *
+ * Fica desligado quando a pasta nao existe, que e o caso em desenvolvimento (o
+ * Vite serve o front) e no deploy com nginx separado. Ligar sem querer nao
+ * quebra nada; nao ligar quando precisa deixaria o site fora do ar.
+ */
+function servirFront(app: Express) {
+  const pasta = resolve(process.cwd(), env.STATIC_DIR);
+  if (!existsSync(join(pasta, 'index.html'))) return false;
+
+  /**
+   * O Webchat vive num iframe dentro do site do cliente. Servido por nginx isso
+   * era automatico — arquivo estatico nao passa pelo helmet. Servido por aqui,
+   * passa: o helmet manda X-Frame-Options SAMEORIGIN e frame-ancestors 'self',
+   * e o widget para de carregar em qualquer dominio que nao seja o nosso.
+   *
+   * Entao esta rota, e so ela, libera o enquadramento. As demais continuam
+   * protegidas contra clickjacking.
+   */
+  const liberarEnquadramento = (res: express.Response) => {
+    res.removeHeader('X-Frame-Options');
+    res.setHeader(
+      'Content-Security-Policy',
+      [
+        "default-src 'self'",
+        "base-uri 'self'",
+        "font-src 'self' https: data:",
+        "form-action 'self'",
+        // A unica diferenca em relacao ao padrao do helmet.
+        'frame-ancestors *',
+        "img-src 'self' data:",
+        "object-src 'none'",
+        "script-src 'self'",
+        "script-src-attr 'none'",
+        "style-src 'self' https: 'unsafe-inline'",
+        'upgrade-insecure-requests',
+      ].join(';'),
+    );
+  };
+
+  // O bundle tem hash no nome: pode ser cacheado para sempre. O index nunca,
+  // senao o navegador fica preso numa versao apontando para arquivos que nao
+  // existem mais.
+  app.use(
+    express.static(pasta, {
+      index: false,
+      setHeaders: (res, caminho) => {
+        if (caminho.includes(`${sep}assets${sep}`)) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+      },
+    }),
+  );
+
+  // SPA: qualquer rota que nao seja da API devolve o index e o React resolve o
+  // caminho. Precisa vir depois de todas as rotas /api, e antes do 404.
+  app.get(/^(?!\/api\/).*/, (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    if (req.path.startsWith('/webchat')) liberarEnquadramento(res);
+    res.sendFile(join(pasta, 'index.html'));
+  });
+
+  return true;
 }

@@ -18,7 +18,9 @@ FROM node:22-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Dependencias de producao apenas; o client do Prisma vem gerado do estagio anterior.
+# Dependencias de producao apenas; o client do Prisma vem gerado do estagio
+# anterior. O CLI do prisma esta em dependencies de proposito: o CMD roda
+# migrate deploy, e sem ele o npx tentaria baixar da internet a cada start.
 COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/
 RUN npm ci --omit=dev --workspace @plataforma/api --include-workspace-root

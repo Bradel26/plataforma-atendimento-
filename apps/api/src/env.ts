@@ -11,6 +11,12 @@ const schema = z.object({
   JWT_ACCESS_TTL: z.string().default('15m'),
   JWT_REFRESH_TTL_DAYS: z.coerce.number().int().positive().default(7),
   WEB_ORIGIN: z.string().default('http://localhost:5173'),
+  /**
+   * Pasta do front compilado, relativa ao cwd da API. Quando ela existe, a
+   * propria API serve o site — util onde outro proxy e o dono das portas e nao
+   * ha subdominio para separar front e API.
+   */
+  STATIC_DIR: z.string().default('../web/dist'),
   /** Pasta do driver local de storage, relativa ao cwd da API. */
   STORAGE_DIR: z.string().default('./storage'),
   UPLOAD_MAX_MB: z.coerce.number().int().positive().max(100).default(10),
