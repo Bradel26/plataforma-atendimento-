@@ -1,8 +1,9 @@
-import type { Prisma, Role } from '@prisma/client';
+import type { AttachmentType, Prisma, Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
+import { salvar } from '../../lib/storage';
 import { badRequest, forbidden, notFound } from '../../lib/errors';
 import { notificarConversaAtualizada, notificarMensagem } from '../../realtime/hub';
-import { enviarParaCanal, exigeEnvioExterno } from '../channels/outbound.service';
+import { enviarArquivoParaCanal, enviarParaCanal, exigeEnvioExterno } from '../channels/outbound.service';
 import { TIPO_CONVITE_PESQUISA, criarPesquisa, entregarPesquisa } from '../surveys/surveys.service';
 import { enfileirar } from '../../lib/fila';
 import {
@@ -162,6 +163,64 @@ export async function enviarMensagem(solicitante: Solicitante, id: string, conte
   );
 
   return { mensagem: toMensagem(mensagem), conversa: atualizada };
+}
+
+/**
+ * Anexo enviado pelo agente.
+ *
+ * Fala com o canal a partir do buffer e so depois grava: se a Meta recusar, nao
+ * fica nem mensagem fantasma no historico nem arquivo orfao no disco.
+ */
+export async function enviarArquivo(
+  solicitante: Solicitante,
+  id: string,
+  arquivo: { buffer: Buffer; nome: string; tipo: string },
+  legenda?: string,
+) {
+  const conversa = await carregarOuFalhar(id);
+  if (conversa.status === 'FINALIZADO') throw badRequest('Conversa finalizada — nao aceita novas mensagens');
+  await garantirAcesso(solicitante, conversa);
+
+  const envio = exigeEnvioExterno(conversa.canal)
+    ? await enviarArquivoParaCanal(conversa.canal, conversa.enderecoExterno, { ...arquivo, legenda })
+    : { idExterno: null };
+
+  const salvo = await salvar(arquivo);
+  const assumir = conversa.agenteId ? {} : { agenteId: solicitante.sub, atribuidoEm: new Date() };
+
+  const mensagem = await prisma.message.create({
+    data: {
+      conversaId: id,
+      autor: 'AGENTE',
+      autorId: solicitante.sub,
+      conteudo: legenda?.trim() || salvo.nome,
+      tipoAnexo: tipoAnexoDe(salvo.tipo),
+      anexoUrl: salvo.url,
+      idExterno: envio.idExterno,
+    },
+  });
+
+  await prisma.conversation.update({
+    where: { id },
+    data: { ...assumir, status: 'EM_ATENDIMENTO', ultimaMensagemEm: mensagem.criadoEm },
+  });
+
+  const atualizada = await publicar(id, { filaAnteriorId: conversa.filaId });
+  notificarMensagem(
+    { conversaId: id, mensagem: toMensagem(mensagem) },
+    { conversaId: id, filaId: atualizada.fila?.id, agenteId: atualizada.agente?.id },
+  );
+
+  return { mensagem: toMensagem(mensagem), conversa: atualizada };
+}
+
+/** MIME -> classificacao do anexo usada no painel. */
+function tipoAnexoDe(mime: string): AttachmentType {
+  const grupo = mime.split('/')[0];
+  if (grupo === 'image') return 'IMAGEM';
+  if (grupo === 'audio') return 'AUDIO';
+  if (grupo === 'video') return 'VIDEO';
+  return 'ARQUIVO';
 }
 
 export async function transferirConversa(solicitante: Solicitante, id: string, input: TransferirInput) {

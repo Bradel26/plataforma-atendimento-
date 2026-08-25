@@ -77,7 +77,7 @@ backend na mesma origem (necessário para o cookie de refresh).
 | `npm run smoke` | tempo real do atendimento (9 checagens) |
 | `npm run smoke:canais` | webhooks e envio da Meta (17 checagens) |
 | `npm run smoke:pesquisa` | entrega da pesquisa de satisfação (16 checagens) |
-| `npm run smoke:midia` | upload, URL assinada e mídia dos canais (21 checagens) |
+| `npm run smoke:midia` | upload, URL assinada, mídia dos canais e anexo do agente (29 checagens) |
 | `npm run smoke:seguranca` | bloqueio de login, limite por IP e segredo cifrado (16 checagens) |
 | `npm run smoke:lgpd` | retenção, anonimização e trilha de auditoria (25 checagens) |
 | `npm run smoke:fila` | disparo assíncrono, nova tentativa e estado da fila (12 checagens) |
@@ -138,6 +138,7 @@ Base: `/api`. Corpo e respostas em JSON. Erros no formato `{ error: { code, mess
 | POST/PATCH | `/protocolos`, `/protocolos/:id` | autenticado |
 | POST | `/protocolos/:id/comentarios` | autenticado (`interno` true/false) |
 | POST | `/protocolos/:id/anexos` | autenticado (arquivo em `multipart/form-data`, campo `arquivo`, ou JSON com URL externa) |
+| POST | `/conversas/:id/anexos` | autenticado — anexo do agente (`multipart`, campo `arquivo`) |
 | POST | `/protocolos/:id/agendamentos` | autenticado |
 | POST | `/protocolos/:id/agendamentos/:agId/concluir` | autenticado |
 | DELETE | `/protocolos/:id` | admin, supervisor |
@@ -288,8 +289,17 @@ Messenger/Instagram baixando a URL temporária antes que ela expire.
 npm run smoke:midia    # com a API de pé; 21 checagens de upload, assinatura e download dos canais
 ```
 
-**Não implementado:** o agente enviar arquivo para o cliente. Exige subir a mídia para a Graph API
-antes de mandar a mensagem; hoje a resposta do agente é texto.
+**O agente também envia arquivo** (botão *Anexar* no painel, campo `arquivo` em
+`POST /conversas/:id/anexos`, com `legenda` opcional). Cada canal aceita de um jeito diferente:
+
+| Canal | Como vai |
+|---|---|
+| Webchat | direto pelo WebSocket, com a URL assinada |
+| WhatsApp | binário sobe em `/media`, e a mensagem referencia o `media id` |
+| Messenger | binário no próprio `/messages`, em multipart |
+| Instagram | **recusado com 501** — o Direct só aceita URL pública, que exige a plataforma num domínio acessível |
+
+Se o canal recusar, **nada é gravado**: nem mensagem no histórico nem arquivo no disco.
 
 ## Campanhas e chatbot (Fase 4)
 
@@ -415,5 +425,5 @@ banco e log de aplicação seguem a retenção deles.
 
 **Worker em processo separado.** A fila existe e funciona, mas o consumidor roda dentro da API.
 
-**Envio de arquivo pelo agente.** Exige subir a mídia para a Graph API antes da mensagem; hoje a
-resposta do agente é texto.
+**Anexo do agente no Instagram Direct.** O canal só aceita URL pública; o envio é recusado com
+explicação em vez de falhar com erro da Meta.

@@ -1,7 +1,10 @@
 import { Router } from 'express';
+import multer from 'multer';
 import { asyncHandler } from '../../http/async-handler';
 import { requireAuth } from '../../http/middleware/auth';
 import { param } from '../../http/params';
+import { badRequest } from '../../lib/errors';
+import { limiteBytes } from '../../lib/storage';
 import { validateBody, validateQuery } from '../../http/middleware/validate';
 import {
   enviarMensagemSchema,
@@ -11,6 +14,7 @@ import {
 import {
   assumirConversa,
   contarPorStatus,
+  enviarArquivo,
   enviarMensagem,
   finalizarConversa,
   listarConversas,
@@ -21,6 +25,8 @@ import {
 } from './conversations.service';
 
 export const conversationsRoutes = Router();
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: limiteBytes, files: 1 } });
 
 conversationsRoutes.use(requireAuth);
 
@@ -65,6 +71,23 @@ conversationsRoutes.post(
   validateBody(enviarMensagemSchema),
   asyncHandler(async (req, res) => {
     const resultado = await enviarMensagem(quem(req), param(req, 'id'), req.body.conteudo);
+    res.status(201).json(resultado);
+  }),
+);
+
+/** Anexo do agente: imagem, audio, video ou documento no campo `arquivo`. */
+conversationsRoutes.post(
+  '/:id/anexos',
+  upload.single('arquivo'),
+  asyncHandler(async (req, res) => {
+    if (!req.file) throw badRequest('Envie o arquivo no campo "arquivo"');
+    const legenda = typeof req.body?.legenda === 'string' ? req.body.legenda : undefined;
+    const resultado = await enviarArquivo(
+      quem(req),
+      param(req, 'id'),
+      { buffer: req.file.buffer, nome: req.file.originalname, tipo: req.file.mimetype },
+      legenda,
+    );
     res.status(201).json(resultado);
   }),
 );

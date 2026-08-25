@@ -211,5 +211,73 @@ checar(waMensagem?.tipoAnexo === 'IMAGEM', '   mensagem preservada com o tipo do
 checar(waMensagem?.anexoUrl === null, '   sem anexo baixado, anexoUrl fica nulo', String(waMensagem?.anexoUrl));
 checar(waMensagem?.conteudo === '[imagem recebida]', '   agente ve o marcador no lugar', waMensagem?.conteudo);
 
+// ---- Anexo enviado pelo agente ---------------------------------------------
+const { readdirSync, existsSync } = await import('node:fs');
+const { join, dirname } = await import('node:path');
+const { fileURLToPath } = await import('node:url');
+const pastaStorage = join(dirname(fileURLToPath(import.meta.url)), '..', 'apps/api/storage');
+const contarArquivos = () =>
+  existsSync(pastaStorage)
+    ? readdirSync(pastaStorage, { recursive: true }).filter((f) => String(f).includes('.')).length
+    : 0;
+
+// 9. Webchat: o anexo do agente entra no historico e o arquivo fica no storage
+const { dados: sessaoWeb } = await req('POST', '/webchat/sessoes', {
+  corpo: { nome: `Cliente Anexo ${EXECUCAO}`, aceiteLgpd: true },
+});
+const conversaWeb = sessaoWeb.conversa.id;
+await req('POST', `/conversas/${conversaWeb}/assumir`, { token: admin });
+
+const formAgente = new FormData();
+formAgente.append('arquivo', new Blob([PNG], { type: 'image/png' }), 'orientacao.png');
+formAgente.append('legenda', 'Segue o passo a passo');
+const envioAgente = await fetch(`${API}/conversas/${conversaWeb}/anexos`, {
+  method: 'POST',
+  headers: { Authorization: `Bearer ${admin}` },
+  body: formAgente,
+});
+const dadosAgente = await envioAgente.json().catch(() => ({}));
+checar(envioAgente.status === 201, '9. agente envia arquivo no webchat', `status ${envioAgente.status}`);
+checar(dadosAgente.mensagem?.tipoAnexo === 'IMAGEM', '   mensagem marcada como imagem', String(dadosAgente.mensagem?.tipoAnexo));
+checar(
+  dadosAgente.mensagem?.anexoUrl?.startsWith('/api/arquivos/'),
+  '   arquivo guardado no storage',
+  dadosAgente.mensagem?.anexoUrl?.slice(0, 34),
+);
+checar(
+  dadosAgente.mensagem?.conteudo === 'Segue o passo a passo',
+  '   legenda vira o texto da mensagem',
+  dadosAgente.mensagem?.conteudo,
+);
+
+// 10. Canal externo que recusa: nada de mensagem fantasma nem arquivo orfao
+const { dados: listaZap } = await req('GET', '/conversas?limite=100', { token: admin });
+const zapAberta = (listaZap.conversas ?? []).find((c) => c.canal === 'WHATSAPP' && c.status !== 'FINALIZADO');
+if (!zapAberta) {
+  console.log('--     sem conversa de WhatsApp aberta: passo 10 nao executado');
+} else {
+  const { dados: antes } = await req('GET', `/conversas/${zapAberta.id}`, { token: admin });
+  const arquivosAntes = contarArquivos();
+
+  const formZap = new FormData();
+  formZap.append('arquivo', new Blob([PNG], { type: 'image/png' }), 'nao-deve-entrar.png');
+  const recusado = await fetch(`${API}/conversas/${zapAberta.id}/anexos`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${admin}` },
+    body: formZap,
+  });
+  const erro = await recusado.json().catch(() => ({}));
+  checar(recusado.status === 502, '10. upload recusado pela Graph API devolve 502', `status ${recusado.status}`);
+  checar(erro.error?.code === 'ENVIO_RECUSADO', '    com o codigo do envio recusado', String(erro.error?.code));
+
+  const { dados: depois } = await req('GET', `/conversas/${zapAberta.id}`, { token: admin });
+  checar(
+    depois.conversa.mensagens.length === antes.conversa.mensagens.length,
+    '    mensagem NAO entrou no historico',
+    `${antes.conversa.mensagens.length} -> ${depois.conversa.mensagens.length}`,
+  );
+  checar(contarArquivos() === arquivosAntes, '    e nenhum arquivo orfao ficou no disco', `${arquivosAntes} arquivos`);
+}
+
 console.log(`\n${falhas} FALHOU`);
 process.exit(falhas === 0 ? 0 : 1);

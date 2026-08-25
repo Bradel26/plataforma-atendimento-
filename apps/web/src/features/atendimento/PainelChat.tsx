@@ -117,6 +117,29 @@ export function PainelChat({
     }
   };
 
+  /**
+   * Anexo do agente. A legenda vai junto quando o campo de texto tem algo
+   * escrito: e o comportamento que o agente espera de qualquer mensageiro.
+   */
+  const anexar = async (arquivo: File) => {
+    setErro(null);
+    setOcupado(true);
+    try {
+      const resp = await api.upload<{ mensagem: Mensagem; conversa: ConversaDetalhe }>(
+        `/conversas/${conversa.id}/anexos`,
+        arquivo,
+        'arquivo',
+        texto.trim() ? { legenda: texto.trim() } : undefined,
+      );
+      setTexto('');
+      onMudou(resp.conversa);
+    } catch (err) {
+      setErro(err instanceof ApiError ? err.message : 'Falha ao enviar o arquivo');
+    } finally {
+      setOcupado(false);
+    }
+  };
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-5 py-3">
@@ -220,6 +243,22 @@ export function PainelChat({
               placeholder="Escreva sua resposta... (Enter envia, Shift+Enter quebra linha)"
               className="max-h-32 min-h-[44px] flex-1 resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[var(--brand-primary)]"
             />
+            <label
+              title="Anexar arquivo"
+              className="flex h-[44px] cursor-pointer items-center rounded-lg border border-slate-300 px-3 text-sm text-slate-600 hover:bg-slate-50"
+            >
+              Anexar
+              <input
+                type="file"
+                className="hidden"
+                disabled={ocupado}
+                onChange={(e) => {
+                  const arquivo = e.target.files?.[0];
+                  e.target.value = '';
+                  if (arquivo) void anexar(arquivo);
+                }}
+              />
+            </label>
             <Button type="submit" disabled={ocupado || !texto.trim()}>
               Enviar
             </Button>

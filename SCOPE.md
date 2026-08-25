@@ -575,3 +575,24 @@ o estado da fila fica visível em `/health/fila`.
 
 **Não implementado:** worker como processo separado. Hoje roda dentro da API — suficiente para o MVP,
 e o mesmo módulo sobe sozinho depois sem mudar quem enfileira.
+### 29. Anexo do agente: três protocolos diferentes para a mesma ação
+"Enviar um arquivo" parece uma operação; na Graph API são três, e a diferença não é cosmética.
+
+- **WhatsApp**: sobe o binário em `/media`, recebe um id e manda a mensagem referenciando esse id.
+  Duas chamadas, nenhuma URL pública envolvida.
+- **Messenger**: aceita o binário direto no `/messages`, em multipart.
+- **Instagram Direct**: aceita **somente URL pública** — não existe upload de binário. Como a URL
+  assinada da plataforma pode estar num host privado, o envio é **recusado com 501 e explicação**, em
+  vez de mandar `http://localhost` para a Meta e devolver ao agente um erro que não ajuda ninguém.
+
+A ordem das operações repete a regra do envio de texto, agora com uma consequência a mais: fala com o
+canal **a partir do buffer** e só grava depois. Se a Meta recusar, não fica mensagem fantasma no
+histórico **nem arquivo órfão no disco** — o arquivo nem chega a ser salvo.
+
+A legenda usa o que estiver escrito no campo de texto no momento do anexo, que é o comportamento que
+qualquer mensageiro tem; sem legenda, o texto da mensagem passa a ser o nome do arquivo, para a lista
+de conversas não mostrar uma linha vazia.
+
+Verificado por `npm run smoke:midia` (29 checagens no total): no webchat o anexo entra como `IMAGEM`
+com a legenda como texto; no WhatsApp com token falso o upload volta 502 `ENVIO_RECUSADO`, o histórico
+fica do mesmo tamanho e a contagem de arquivos no disco não muda.

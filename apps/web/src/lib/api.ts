@@ -97,9 +97,10 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
 export const api = {
   /** Upload de arquivo (multipart). O campo tem de casar com o esperado na rota. */
-  upload: <T>(path: string, arquivo: File, campo = 'arquivo') => {
+  upload: <T>(path: string, arquivo: File, campo = 'arquivo', extras?: Record<string, string>) => {
     const corpo = new FormData();
     corpo.append(campo, arquivo);
+    for (const [chave, valor] of Object.entries(extras ?? {})) corpo.append(chave, valor);
     return enviar<T>(path, { method: 'POST', body: corpo });
   },
   get: <T>(path: string) => request<T>('GET', path),

@@ -184,6 +184,25 @@ export function WebchatPage() {
                       }`}
                       style={m.autor === 'CLIENTE' ? { backgroundColor: 'var(--brand-primary)' } : undefined}
                     >
+                      {/* Arquivo enviado pelo atendente: a URL vem assinada pela API. */}
+                      {m.anexoUrl && m.tipoAnexo === 'IMAGEM' && (
+                        <a href={m.anexoUrl} target="_blank" rel="noreferrer" className="mb-1.5 block">
+                          <img src={m.anexoUrl} alt={m.conteudo} className="max-h-56 w-auto rounded-lg" />
+                        </a>
+                      )}
+                      {m.anexoUrl && m.tipoAnexo === 'AUDIO' && (
+                        <audio controls src={m.anexoUrl} className="mb-1.5 w-full max-w-[240px]" />
+                      )}
+                      {m.anexoUrl && !['IMAGEM', 'AUDIO', 'TEXTO'].includes(m.tipoAnexo) && (
+                        <a
+                          href={m.anexoUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mb-1.5 block text-xs underline"
+                        >
+                          Abrir arquivo
+                        </a>
+                      )}
                       <p className="whitespace-pre-wrap break-words">{m.conteudo}</p>
                     </div>
                   </div>
