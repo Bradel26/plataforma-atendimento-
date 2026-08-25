@@ -1,6 +1,6 @@
 # Plataforma de Atendimento
 
-Plataforma de atendimento multicanal + call center + CRM. Escopo completo e roadmap em [SCOPE.md](SCOPE.md).
+Plataforma de atendimento multicanal + call center + CRM. Escopo completo e roadmap em [SCOPE.md](SCOPE.md). O que falta fazer, e de quem depende, em [PENDENCIAS.md](PENDENCIAS.md).
 
 **Estado atual:** Fases 0 a 3 concluídas. Fase 4 parcial — campanhas e chatbot prontos;
 **telefonia (PABX/voz, monitoria, transcrição) não foi construída** e o motivo está no
