@@ -507,12 +507,17 @@ verificado é o artefato compilado: `node dist/src/main.js` com `NODE_ENV=produc
 
 Checklist antes do primeiro deploy:
 
-1. `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` e `SECRETS_KEY` novos (`openssl rand -hex 32` cada).
+1. `npm run gerar:segredos` — escreve `apps/api/.env.production` (permissão 600, fora do git) com
+   `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `SECRETS_KEY` e a senha do admin, todos de
+   `randomBytes`. Ele **recusa sobrescrever** um arquivo existente sem `--forcar`: trocar a
+   `SECRETS_KEY` torna ilegível todo segredo de canal já cifrado.
 2. `WEB_ORIGIN` no domínio real (vale para CORS e para o cookie de refresh).
 3. `TRUST_PROXY=true` se houver proxy/balanceador na frente.
 4. `DATABASE_URL` (pooled) e `DIRECT_URL` (direta) do provedor; `REDIS_URL` com `rediss://`.
 5. Volume persistente em `apps/api/storage` — ou trocar o driver para S3/R2 antes de subir.
-6. Trocar a senha do admin do seed no primeiro acesso.
+6. Rodar o seed com `NODE_ENV=production`. Ele **se recusa** a rodar com a senha ou o domínio de
+   exemplo, cria **apenas o admin** (sem supervisor e agentes de demonstração, que teriam senha
+   conhecida) e nasce com o catálogo de preços vazio.
 7. Rotacionar as credenciais que passaram por qualquer canal de texto durante o desenvolvimento.
 
 ## O que não foi construído

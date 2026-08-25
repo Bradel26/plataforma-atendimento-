@@ -4,15 +4,45 @@ import 'dotenv/config';
 
 const prisma = new PrismaClient();
 
+const PRODUCAO = process.env.NODE_ENV === 'production';
+
 const ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL ?? 'admin@plataforma.local';
 const ADMIN_SENHA = process.env.SEED_ADMIN_PASSWORD ?? 'Admin@123';
 
-/** Usuarios de demonstracao — um por perfil, para validar as permissoes da Fase 0. */
+/**
+ * Em producao o seed nao inventa credencial. Senha fraca sobrevive a implantacao
+ * porque ninguem lembra de trocar depois — entao aqui ela nem chega a existir.
+ * Gere o arquivo de ambiente com `npm run gerar:segredos`.
+ */
+if (PRODUCAO) {
+  const problemas = [];
+  if (!process.env.SEED_ADMIN_PASSWORD) problemas.push('SEED_ADMIN_PASSWORD nao esta definida');
+  else if (process.env.SEED_ADMIN_PASSWORD === 'Admin@123') problemas.push('SEED_ADMIN_PASSWORD ainda e a senha de exemplo');
+  else if (process.env.SEED_ADMIN_PASSWORD.length < 12) problemas.push('SEED_ADMIN_PASSWORD tem menos de 12 caracteres');
+  if (!process.env.SEED_ADMIN_EMAIL) problemas.push('SEED_ADMIN_EMAIL nao esta definida');
+  else if (process.env.SEED_ADMIN_EMAIL.endsWith('@plataforma.local')) problemas.push('SEED_ADMIN_EMAIL e o dominio de exemplo');
+
+  if (problemas.length > 0) {
+    console.error('Seed de producao recusado:');
+    for (const p of problemas) console.error(`  - ${p}`);
+    console.error('\nGere um ambiente valido com: npm run gerar:segredos');
+    process.exit(1);
+  }
+}
+
+/**
+ * Usuarios. Em producao existe apenas o admin: supervisor e agentes de
+ * demonstracao teriam senha conhecida, e senha conhecida em producao e porta.
+ */
 const usuarios: Array<{ nome: string; email: string; senha: string; perfil: Role }> = [
   { nome: 'Administrador', email: ADMIN_EMAIL, senha: ADMIN_SENHA, perfil: 'ADMIN' },
-  { nome: 'Supervisor Demo', email: 'supervisor@plataforma.local', senha: 'Super@123', perfil: 'SUPERVISOR' },
-  { nome: 'Agente Um', email: 'agente1@plataforma.local', senha: 'Agente@123', perfil: 'AGENTE' },
-  { nome: 'Agente Dois', email: 'agente2@plataforma.local', senha: 'Agente@123', perfil: 'AGENTE' },
+  ...(PRODUCAO
+    ? []
+    : [
+        { nome: 'Supervisor Demo', email: 'supervisor@plataforma.local', senha: 'Super@123', perfil: 'SUPERVISOR' as Role },
+        { nome: 'Agente Um', email: 'agente1@plataforma.local', senha: 'Agente@123', perfil: 'AGENTE' as Role },
+        { nome: 'Agente Dois', email: 'agente2@plataforma.local', senha: 'Agente@123', perfil: 'AGENTE' as Role },
+      ]),
 ];
 
 async function main() {
@@ -48,9 +78,14 @@ async function main() {
   await semearCrm();
 
   console.log('Seed concluido.');
-  console.log(`  admin:      ${ADMIN_EMAIL} / ${ADMIN_SENHA}`);
-  console.log('  supervisor: supervisor@plataforma.local / Super@123');
-  console.log('  agente:     agente1@plataforma.local / Agente@123');
+  if (PRODUCAO) {
+    console.log(`  admin: ${ADMIN_EMAIL} (senha veio de SEED_ADMIN_PASSWORD, nao e impressa aqui)`);
+    console.log('  nenhum usuario de demonstracao foi criado');
+  } else {
+    console.log(`  admin:      ${ADMIN_EMAIL} / ${ADMIN_SENHA}`);
+    console.log('  supervisor: supervisor@plataforma.local / Super@123');
+    console.log('  agente:     agente1@plataforma.local / Agente@123');
+  }
 }
 
 /**
@@ -86,11 +121,15 @@ async function semearCrm() {
     create: { nome: 'Tabela Padrao', moeda: 'BRL' },
   });
 
-  const produtos = [
-    { sku: 'PLAT-BASIC', nome: 'Plataforma - Plano Basico', preco: 299.9 },
-    { sku: 'PLAT-PRO', nome: 'Plataforma - Plano Pro', preco: 799.9 },
-    { sku: 'AGENTE-ADD', nome: 'Licenca adicional de agente', preco: 89.9 },
-  ];
+  // Produto com preco e demonstracao: em producao o catalogo nasce vazio, para
+  // ninguem abrir oportunidade com "Plano Basico R$ 299,90" que nao existe.
+  const produtos = PRODUCAO
+    ? []
+    : [
+        { sku: 'PLAT-BASIC', nome: 'Plataforma - Plano Basico', preco: 299.9 },
+        { sku: 'PLAT-PRO', nome: 'Plataforma - Plano Pro', preco: 799.9 },
+        { sku: 'AGENTE-ADD', nome: 'Licenca adicional de agente', preco: 89.9 },
+      ];
 
   for (const p of produtos) {
     const produto = await prisma.product.upsert({

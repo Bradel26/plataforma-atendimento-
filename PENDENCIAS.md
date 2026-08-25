@@ -14,8 +14,8 @@ Legenda de responsável: **você** = depende de credencial, contrato ou decisão
 | # | O que falta | Quem | Se ficar assim |
 |---|---|---|---|
 | 1.1 | **Rotacionar as credenciais do Neon e do Upstash** | você | Elas passaram pelo chat. Quem tiver o histórico tem o banco e o Redis. |
-| 1.2 | Trocar os segredos de exemplo (`JWT_*`, `SECRETS_KEY`) por valores gerados | você | A API se recusa a subir em produção com os de exemplo — a proteção existe, mas o passo continua pendente. |
-| 1.3 | Trocar a senha do usuário admin do seed (`Admin@123`) | você | Mesma proteção de boot: bloqueia produção. |
+| 1.2 | ~~Trocar os segredos de exemplo por valores gerados~~ | **feito** | `npm run gerar:segredos` escreve `apps/api/.env.production` com tudo saído de `randomBytes`, permissão 600, fora do git. |
+| 1.3 | ~~Trocar a senha do admin do seed~~ | **feito** | O seed recusa senha ou domínio de exemplo em produção, cria só o admin (sem os três usuários de demonstração) e não imprime a senha. |
 | 1.4 | Definir o domínio e emitir o certificado (o `WEB_ORIGIN` não pode ser localhost) | você | Sem isso o cookie de sessão e o CORS não fecham. |
 | 1.5 | **Construir e subir a imagem Docker** | você | O `Dockerfile` e o compose existem e foram revisados, mas **nunca passaram por um build** — não há Docker/WSL2 nesta máquina. É o único artefato de deploy não verificado. |
 | 1.6 | Rodar as migrations no banco de produção (`prisma migrate deploy`) | você | 10 migrations aguardando. Nunca use `--shadow-database-url` apontando para banco com dados. |

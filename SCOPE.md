@@ -776,3 +776,34 @@ Três coisas que o teste fixou porque são semântica, não número:
 
 Quem atende, no teste, é o agente — não o admin. Testar com o perfil errado teria escondido que a
 conversa assumida por um ADMIN não aparece no painel, que é comportamento decidido, não defeito.
+
+### 36. Senha de produção não é escolhida, é sorteada — e o seed recusa a fraca
+
+"Troque os segredos antes de subir" é o passo que mais se esquece, e segredo escolhido a mão é
+fraco. `npm run gerar:segredos` escreve `apps/api/.env.production` com `JWT_ACCESS_SECRET`,
+`JWT_REFRESH_SECRET`, `SECRETS_KEY` e a senha do admin saídos de `randomBytes`, com permissão 600.
+
+Três detalhes que não são enfeite:
+
+- **Recusa sobrescrever** sem `--forcar`. Regenerar a `SECRETS_KEY` torna ilegível todo segredo de
+  canal e de voz já cifrado, e desloga todo mundo. Errar isso em produção é perder configuração.
+- **A senha do admin é impressa uma única vez**, no terminal de quem gerou. Depois dela só existe o
+  hash.
+- **Nenhuma URL de infraestrutura é inventada.** `DATABASE_URL`, `REDIS_URL` e `WEB_ORIGIN` ficam
+  como placeholder vazio: são do provedor, não deste script.
+
+Do outro lado, o seed passou a se recusar em produção. Antes ele criava, com senha fixa e conhecida,
+um supervisor e dois agentes de demonstração — três portas abertas em qualquer implantação que
+rodasse `db:seed` sem ler o código. Agora, com `NODE_ENV=production`:
+
+- exige `SEED_ADMIN_PASSWORD` com 12+ caracteres e diferente da de exemplo, e `SEED_ADMIN_EMAIL`
+  fora do domínio `plataforma.local` — e lista **todos** os problemas de uma vez, em vez de um por
+  execução;
+- cria **apenas o admin**;
+- não imprime a senha;
+- deixa o catálogo de preços vazio, porque "Plano Basico R$ 299,90" é dado de demonstração e
+  oportunidade aberta sobre produto inventado é número errado no relatório de vendas.
+
+Um efeito colateral achado no caminho: `.gitignore` cobria `.env` e `.env.*.local`, mas **não**
+`.env.production`. O arquivo que o gerador escreve seria commitado. Agora o padrão é `.env*` com
+exceção explícita para `.env.example`.
