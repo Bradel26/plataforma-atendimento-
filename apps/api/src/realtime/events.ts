@@ -13,6 +13,8 @@ export const EVENTOS = {
   agenteStatus: 'agente:status',
   /** Chamado criado ou alterado (status, comentario, anexo, agendamento). */
   protocoloAtualizado: 'protocolo:atualizado',
+  /** Chamada de voz criada ou com status alterado. */
+  chamadaAtualizada: 'chamada:atualizada',
 } as const;
 
 /** Salas: um agente escuta as filas dele e a propria caixa; gestao escuta tudo. */

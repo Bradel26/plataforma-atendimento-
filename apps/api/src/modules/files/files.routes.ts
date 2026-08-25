@@ -23,7 +23,11 @@ async function registroDe(url: string) {
   if (anexo) return { tipo: anexo.tipo, nome: anexo.nome };
 
   const mensagem = await prisma.message.findFirst({ where: { anexoUrl: url }, select: { id: true } });
-  return mensagem ? { tipo: null, nome: null } : null;
+  if (mensagem) return { tipo: null, nome: null };
+
+  // Gravacao de chamada tambem e arquivo servido por aqui.
+  const chamada = await prisma.call.findFirst({ where: { gravacaoUrl: url }, select: { id: true } });
+  return chamada ? { tipo: null, nome: null } : null;
 }
 
 arquivosRoutes.get(

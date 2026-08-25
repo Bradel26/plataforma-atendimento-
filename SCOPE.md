@@ -108,9 +108,12 @@ credencial real para testar.
 - [x] Escalas de trabalho (grade semanal por agente + horas efetivas pelo log de presença)
 
 ### Fase 4 — Avançado (parcial)
-- [ ] **PABX e voz** (softphone web, ramais, URA) — **não construído**, ver *Por que a telefonia ficou de fora*
-- [ ] **Monitoria de chamadas** (escuta, sussurro, espionagem) — **não construído**, depende da telefonia
-- [ ] **Transcrição automática de voz** — **não construído**, depende da telefonia (é o passo seguinte à gravação)
+- [x] **Voz como canal**: CDR completo, webhook assinado do provedor, clique-para-ligar, gravação
+  guardada no storage e indicadores (taxa de atendimento, TMA de voz) — driver trocável, ver decisão 33
+- [ ] **Softphone web, ramais e URA** — **não construído**: exige SDK e console do provedor
+- [ ] **Monitoria de chamadas** (escuta, sussurro, espionagem) — **não construído**, depende de
+  conferência no provedor, que não existe sem chamada real
+- [ ] **Transcrição automática de voz** — **não construído**, precisa de serviço de fala-para-texto
 - [x] Campanhas de contato ativo (multicanal, template, disparo em lote, reprocessamento) — voz depende da telefonia
 - [x] Chatbot por fluxo de palavras-chave (responder, transferir para fila, encerrar), integrado ao Webchat e aos canais Meta
 
@@ -680,3 +683,51 @@ compila é teste que não protege — e um `tsconfig.build.json` separado os man
 
 **Não implementado:** teste de integração com banco efêmero. Precisaria de Postgres descartável no
 pipeline, e esta máquina não tem Docker.
+### 33. Voz: a plataforma não fala SIP, fala com um provedor
+A telefonia estava fora por uma razão que continua válida — softphone, URA e monitoria não se validam
+sem tronco, credencial e aparelho de verdade. Mas isso não significa que **nada** de voz seja
+verificável. Dá para construir e provar o canal inteiro **em volta** da mídia:
+
+- **CDR** (`chamadas`): direção, números, contato ligado pelo telefone, fila, status, horários,
+  duração, custo e motivo da falha.
+- **Webhook assinado**: a assinatura do provedor é o que separa "evento da operadora" de "qualquer um
+  postando na rota pública". Conferida em toda requisição, com 401 e nada gravado quando falha.
+- **Clique-para-ligar**, gravação copiada para o storage, indicadores de voz.
+
+O que a construção deixou explícito:
+
+**A URL da conferência vem da configuração, não do request.** A assinatura cobre a URL completa, e
+atrás de proxy o host e o protocolo chegam reescritos — conferir com `req.host` faria toda assinatura
+legítima falhar. Erro sutil, que só aparece em produção com TLS terminando no proxy.
+
+**Idempotência com uma regra a mais que nos canais de texto.** Além de não duplicar chamada, evento
+que chega depois do encerramento é ignorado — *exceto* o da gravação, que por natureza chega depois do
+fim da chamada.
+
+**A gravação vai para a fila, não para dentro do webhook.** O provedor espera resposta rápida e
+reentrega se a rota demorar; baixar áudio ali causaria reentrega em loop. E a URL do provedor fica
+registrada de imediato como referência: se o download falhar, o operador ainda sabe onde a gravação
+está — melhor que perder a referência inteira.
+
+**Custo em valor positivo.** O provedor manda o preço como débito (`-0.0410`); relatório com custo
+negativo confunde quem lê. Converte na normalização, num lugar só.
+
+**O aviso de gravação está na TwiML de atendimento**, não como opção. É exigência legal, não
+preferência de produto.
+
+**Interface de quatro métodos, driver trocável.** `assinaturaValida`, `normalizarEvento`, `originar` e
+`headersDeDownload`. O driver escrito é compatível com a API do Twilio Programmable Voice; um provedor
+nacional (Zenvia, TotalVoice) entra como outro arquivo na mesma pasta, e nada fora dela muda. Foi
+assim que a decisão de contrato — que é sua, não minha — deixou de bloquear o resto.
+
+**O driver nunca foi exercitado contra conta real.** Foi escrito a partir do contrato documentado da
+API. O que dá para verificar sem conta está verificado por `npm run smoke:voz` (29 checagens): a
+assinatura é gerada aqui com o mesmo algoritmo e aceita/recusada corretamente, o ciclo
+chamando → atendida → encerrada grava duração e horários, a reentrega é ignorada, e a originação
+contra a API real com credencial falsa devolve 502 **sem gravar chamada nenhuma** no relatório. Mais 15
+testes de unidade cobrem a tradução de status, direção, custo e gravação.
+
+**Continua fora, e o motivo não mudou:** softphone (SDK WebRTC do provedor), ramais e URA (roteamento
+de áudio só se valida com tronco), monitoria (conferência no provedor) e transcrição (serviço de
+fala-para-texto contratado). Um softphone que nunca completou uma chamada aparenta estar pronto sem
+estar — e essa é a única coisa pior que não tê-lo.

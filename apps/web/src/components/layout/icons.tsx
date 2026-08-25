@@ -96,3 +96,9 @@ export const IconSair = (p: IconProps) => (
     <path d="M16 17l5-5-5-5M21 12H9" />
   </Svg>
 );
+
+export const IconTelefonia = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a1 1 0 0 1-1 1A16 16 0 0 1 4 5a1 1 0 0 1 1-1z" />
+  </Svg>
+);

@@ -8,6 +8,7 @@ import { iniciarWorker } from './lib/fila';
 // Importar registra os handlers da fila (efeito de modulo).
 import './modules/campaigns/campaigns.worker';
 import './modules/surveys/surveys.worker';
+import './modules/voice/voice.worker';
 import { agendarExpurgo } from './modules/lgpd/agendador';
 import { criarServidorRealtime } from './realtime/server';
 

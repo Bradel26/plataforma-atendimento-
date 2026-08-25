@@ -70,7 +70,7 @@ backend na mesma origem (necessário para o cookie de refresh).
 | `npm run dev` | API e web em modo watch |
 | `npm run dev:api` / `npm run dev:web` | apenas um dos dois |
 | `npm run typecheck` | TypeScript nos dois apps |
-| `npm test` | suíte de unidade (58 testes, sem infraestrutura) |
+| `npm test` | suíte de unidade (68 testes, sem infraestrutura) |
 | `npm run build` | build de produção |
 | `npm run db:studio` | Prisma Studio |
 | `npm run infra:up` / `infra:down` | containers de dados |
@@ -84,6 +84,7 @@ backend na mesma origem (necessário para o cookie de refresh).
 | `npm run smoke:fila` | disparo assíncrono, nova tentativa e estado da fila (12 checagens) |
 | `npm run smoke:paginacao` | cursor sem pular nem repetir registro (13 checagens) |
 | `npm run smoke:widget` | script do widget servido e coerente com o tema (9 checagens) |
+| `npm run smoke:voz` | assinatura, ciclo da chamada e recusa do provedor (29 checagens) |
 
 ## API (Fase 0)
 
@@ -167,6 +168,11 @@ Base: `/api`. Corpo e respostas em JSON. Erros no formato `{ error: { code, mess
 | GET | `/health/fila` | admin, supervisor — prontos, atrasados e descartados |
 | GET | `/conversas/:id/mensagens` | autenticado — histórico paginado por cursor |
 | GET | `/widget.js` | **público** — script do widget, gerado com as cores do tema |
+| GET/PUT | `/voz/config` | admin |
+| GET/POST | `/voz/chamadas` | autenticado — CDR paginado e clique-para-ligar |
+| GET | `/voz/indicadores` | admin, supervisor |
+| POST | `/webhooks/voz/eventos` | **público** — exige assinatura do provedor |
+| POST | `/webhooks/voz/instrucoes` | **público** — devolve TwiML, exige assinatura |
 | GET | `/lgpd/titulares/:id/exportar` | admin — portabilidade |
 | POST | `/lgpd/titulares/:id/anonimizar` | admin — eliminação |
 | GET/POST | `/campanhas`, `/campanhas/:id` | admin, supervisor |
@@ -355,6 +361,45 @@ Os testes ficam ao lado do código (`*.test.ts`). O `typecheck` os inclui; o bui
 npm run smoke:seguranca   # com a API de pé; verifica o que ficou gravado no Redis e no Postgres
 ```
 
+## Voz (Fase 4)
+
+A plataforma **não fala SIP**: fala com um provedor por HTTP. O driver fica em
+[apps/api/src/modules/voice](apps/api/src/modules/voice) e implementa uma interface de quatro métodos
+— trocar de provedor é escrever um arquivo.
+
+**O que funciona e está verificado:**
+
+- **CDR completo** (`chamadas`): direção, números, contato ligado pelo telefone, fila, status, horário
+  de atendimento e encerramento, duração, custo e motivo da falha.
+- **Webhook assinado**: a assinatura do provedor é conferida em toda requisição — sem ela, 401 e nada
+  registrado. A URL da conferência vem da configuração, não do request, porque proxy reescreve host.
+- **Idempotência**: reentrega do mesmo evento não duplica chamada nem reabre chamada encerrada.
+- **Clique-para-ligar** (`POST /voz/chamadas`) — fala com o provedor antes de gravar: chamada recusada
+  não entra no relatório.
+- **Gravação** copiada para o storage da plataforma pela fila de trabalho (a URL do provedor exige
+  credencial e expira). A URL do provedor fica registrada como referência até a cópia chegar.
+- **Indicadores**: total, entrantes/saintes, atendidas, taxa de atendimento e TMA de voz.
+- **Aviso legal de gravação** na TwiML de atendimento.
+
+**O que não está implementado**, e por quê:
+
+| Item | Por que não |
+|---|---|
+| Softphone no navegador | Exige o SDK WebRTC do provedor e credencial; um softphone que nunca completou chamada parece pronto sem estar |
+| Ramais e URA | O roteamento de áudio só se valida com tronco e aparelho de verdade; hoje a TwiML atende, avisa da gravação e grava |
+| Monitoria (escuta, sussurro, espionagem) | Depende de conferência no provedor, que não existe sem chamada real |
+| Transcrição automática | Precisa de serviço de fala-para-texto contratado |
+
+O driver foi escrito a partir do contrato documentado da API e **nunca exercitado contra conta real**.
+O que dá para verificar sem conta está coberto:
+
+```bash
+npm run smoke:voz   # 29 checagens: assinatura, ciclo da chamada, idempotência, recusa da originação
+```
+
+Configuração em **Configurações → Voz**: credenciais (token cifrado em repouso), número de saída, URL
+pública de webhook (HTTPS obrigatório) e fila das chamadas entrantes.
+
 ## Widget para o site do cliente
 
 Uma tag e o Webchat aparece como bolha flutuante:
@@ -466,11 +511,9 @@ Checklist antes do primeiro deploy:
 
 ## O que não foi construído
 
-**Telefonia: PABX, voz, monitoria de chamadas e transcrição.** Exige escolher provedor (Asterisk
-próprio x SIP gerenciado), credenciais e um tronco de voz, além de decisões regulatórias sobre
-gravação e discagem ativa. Nada disso é verificável sem contrato fechado, e um softphone que nunca
-completou uma chamada aparenta estar pronto sem estar. O raciocínio completo, o que já está
-preparado para receber voz e a recomendação de caminho estão em *Fase 4* no [SCOPE.md](SCOPE.md).
+**Softphone, ramais, URA, monitoria e transcrição.** O canal de voz existe (CDR, webhooks assinados,
+clique-para-ligar, gravação); o que falta depende de credencial de provedor, tronco e SDK — ver a
+tabela em *Voz (Fase 4)* acima.
 
 **Integrações da Meta em produção.** O código está pronto e testado com payloads assinados
 localmente, mas nenhuma credencial real da Meta foi exercitada — depende de conta verificada.

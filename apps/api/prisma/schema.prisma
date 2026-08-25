@@ -55,6 +55,7 @@ model User {
   anexos            TicketAttachment[]
   agendamentos      TicketSchedule[]
   registrosLgpd     LgpdLog[]
+  chamadas          Call[]
 
   @@index([perfil])
   @@map("usuarios")
@@ -85,6 +86,8 @@ model Queue {
   canais     ChannelConfig[]
   campanhas  Campaign[]
   botPassos  BotStep[]
+  chamadas   Call[]
+  vozConfig  VoiceConfig[]
 
   @@map("filas")
 }
@@ -168,6 +171,7 @@ model Contact {
   leads          Lead[]
   protocolos     Ticket[]
   itensCampanha  CampaignItem[]
+  chamadas       Call[]
 
   @@index([email])
   @@index([telefone])
@@ -197,6 +201,7 @@ model Conversation {
   mensagens  Message[]
   protocolos Ticket[]
   pesquisa   Survey?
+  chamadas   Call[]
 
   @@index([status, ultimaMensagemEm])
   @@index([agenteId, status])
@@ -761,4 +766,87 @@ model LgpdLog {
 
   @@index([criadoEm])
   @@map("lgpd_registros")
+}
+
+// ---------------------------------------------------------------------------
+// Fase 4 — Voz
+// ---------------------------------------------------------------------------
+
+enum CallDirecao {
+  ENTRANTE
+  SAINTE
+}
+
+/// Ciclo de vida da chamada, no vocabulario comum aos provedores SIP.
+enum CallStatus {
+  INICIANDO
+  CHAMANDO
+  EM_ANDAMENTO
+  COMPLETADA
+  NAO_ATENDIDA
+  OCUPADA
+  FALHOU
+  CANCELADA
+}
+
+/// Credenciais do provedor de voz. Registro unico, id "default".
+model VoiceConfig {
+  id            String   @id @default("default")
+  ativo         Boolean  @default(false)
+  /// Identificador do driver em modules/voice (ex.: "twilio").
+  provedor      String   @default("twilio")
+  contaSid      String?  @map("conta_sid")
+  /// Cifrado em repouso, como os segredos dos canais da Meta.
+  authToken     String?  @map("auth_token")
+  numeroPadrao  String?  @map("numero_padrao")
+  /// URL publica que o provedor chama nos eventos (precisa ser HTTPS).
+  urlWebhook    String?  @map("url_webhook")
+  /// Fila que recebe as chamadas entrantes.
+  filaId        String?  @map("fila_id")
+  /// Baixa a gravacao para o storage proprio quando o provedor avisa que existe.
+  guardarGravacao Boolean @default(true) @map("guardar_gravacao")
+  atualizadoEm  DateTime @updatedAt @map("atualizado_em")
+
+  fila Queue? @relation(fields: [filaId], references: [id], onDelete: SetNull)
+
+  @@map("voz_config")
+}
+
+/// Registro de chamada (CDR). Uma linha por chamada, entrante ou sainte.
+model Call {
+  id        String      @id @default(uuid())
+  /// Id da chamada no provedor. Unico: o webhook reentrega o mesmo evento.
+  idExterno String      @unique @map("id_externo")
+  direcao   CallDirecao
+  status    CallStatus  @default(INICIANDO)
+
+  numeroOrigem  String  @map("numero_origem")
+  numeroDestino String  @map("numero_destino")
+
+  contatoId  String? @map("contato_id")
+  conversaId String? @map("conversa_id")
+  agenteId   String? @map("agente_id")
+  filaId     String? @map("fila_id")
+
+  iniciadoEm  DateTime  @default(now()) @map("iniciado_em")
+  atendidoEm  DateTime? @map("atendido_em")
+  encerradoEm DateTime? @map("encerrado_em")
+  /// Duracao da conversa em segundos, informada pelo provedor no encerramento.
+  duracao     Int?
+
+  gravacaoUrl      String?  @map("gravacao_url")
+  gravacaoDuracao  Int?     @map("gravacao_duracao")
+  transcricao      String?
+  custo            Decimal? @db.Decimal(10, 4)
+  motivoFalha      String?  @map("motivo_falha")
+
+  contato  Contact?      @relation(fields: [contatoId], references: [id], onDelete: SetNull)
+  conversa Conversation? @relation(fields: [conversaId], references: [id], onDelete: SetNull)
+  agente   User?         @relation(fields: [agenteId], references: [id], onDelete: SetNull)
+  fila     Queue?        @relation(fields: [filaId], references: [id], onDelete: SetNull)
+
+  @@index([iniciadoEm])
+  @@index([agenteId, iniciadoEm])
+  @@index([status])
+  @@map("chamadas")
 }

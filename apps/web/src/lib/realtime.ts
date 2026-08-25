@@ -7,6 +7,7 @@ export const EVENTOS = {
   mensagemNova: 'mensagem:nova',
   agenteStatus: 'agente:status',
   protocoloAtualizado: 'protocolo:atualizado',
+  chamadaAtualizada: 'chamada:atualizada',
 } as const;
 
 /**

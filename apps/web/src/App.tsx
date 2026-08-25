@@ -12,6 +12,7 @@ import { GestaoPage } from './pages/GestaoPage';
 import { LoginPage } from './pages/LoginPage';
 import { MonitoramentoPage } from './pages/MonitoramentoPage';
 import { RelatoriosPage } from './pages/RelatoriosPage';
+import { TelefoniaPage } from './pages/TelefoniaPage';
 import { WebchatPage } from './pages/WebchatPage';
 import { ConfiguracoesPage } from './pages/configuracoes/ConfiguracoesPage';
 import { CrmPage } from './pages/crm/CrmPage';
@@ -30,6 +31,7 @@ const PAGINAS: Record<string, ComponentType> = {
   '/campanhas': CampanhasPage,
   '/relatorios': RelatoriosPage,
   '/escalas': EscalasPage,
+  '/telefonia': TelefoniaPage,
   '/crm': CrmPage,
   '/configuracoes': ConfiguracoesPage,
 };

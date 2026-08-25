@@ -546,3 +546,74 @@ export type RegistroLgpd = {
   autor: string;
   criadoEm: string;
 };
+
+// --------------------------------------------------------------------------
+// Fase 4 — Voz
+// --------------------------------------------------------------------------
+
+export type CallStatus =
+  | 'INICIANDO'
+  | 'CHAMANDO'
+  | 'EM_ANDAMENTO'
+  | 'COMPLETADA'
+  | 'NAO_ATENDIDA'
+  | 'OCUPADA'
+  | 'FALHOU'
+  | 'CANCELADA';
+
+export type Chamada = {
+  id: string;
+  idExterno: string;
+  direcao: 'ENTRANTE' | 'SAINTE';
+  status: CallStatus;
+  numeroOrigem: string;
+  numeroDestino: string;
+  iniciadoEm: string;
+  atendidoEm: string | null;
+  encerradoEm: string | null;
+  duracao: number | null;
+  gravacaoUrl: string | null;
+  gravacaoDuracao: number | null;
+  transcricao: string | null;
+  custo: number | null;
+  motivoFalha: string | null;
+  contato: { id: string; nome: string } | null;
+  agente: { id: string; nome: string } | null;
+  fila: { id: string; nome: string } | null;
+};
+
+export type IndicadoresVoz = {
+  total: number;
+  entrantes: number;
+  saintes: number;
+  atendidas: number;
+  naoAtendidas: number;
+  taxaAtendimento: number | null;
+  tma: number | null;
+};
+
+export type ConfigVoz = {
+  id: string;
+  ativo: boolean;
+  provedor: string;
+  contaSid: string | null;
+  numeroPadrao: string | null;
+  urlWebhook: string | null;
+  filaId: string | null;
+  guardarGravacao: boolean;
+  fila: { id: string; nome: string } | null;
+  authTokenMascarado: string | null;
+  configurado: boolean;
+  provedoresDisponiveis: string[];
+};
+
+export const LABEL_CHAMADA_STATUS: Record<CallStatus, string> = {
+  INICIANDO: 'Iniciando',
+  CHAMANDO: 'Chamando',
+  EM_ANDAMENTO: 'Em andamento',
+  COMPLETADA: 'Completada',
+  NAO_ATENDIDA: 'Nao atendida',
+  OCUPADA: 'Ocupada',
+  FALHOU: 'Falhou',
+  CANCELADA: 'Cancelada',
+};

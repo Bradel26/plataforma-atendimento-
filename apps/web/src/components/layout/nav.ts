@@ -11,6 +11,7 @@ import {
   IconMonitoramento,
   IconProtocolo,
   IconRelatorios,
+  IconTelefonia,
 } from './icons';
 
 export type NavItem = {
@@ -31,6 +32,7 @@ export const NAV: NavItem[] = [
   { rota: '/campanhas', label: 'Campanhas', icone: IconCampanhas, perfis: ['ADMIN', 'SUPERVISOR'], fase: 4 },
   { rota: '/relatorios', label: 'Relatorios', icone: IconRelatorios, perfis: ['ADMIN', 'SUPERVISOR'], fase: 3 },
   { rota: '/escalas', label: 'Escalas', icone: IconEscalas, perfis: ['ADMIN', 'SUPERVISOR'], fase: 3 },
+  { rota: '/telefonia', label: 'Telefonia', icone: IconTelefonia, perfis: ['ADMIN', 'SUPERVISOR', 'AGENTE'], fase: 4 },
   { rota: '/crm', label: 'CRM', icone: IconCrm, perfis: ['ADMIN', 'SUPERVISOR', 'AGENTE'], fase: 1 },
   { rota: '/configuracoes', label: 'Configuracoes', icone: IconConfiguracoes, perfis: ['ADMIN'], fase: 0 },
 ];

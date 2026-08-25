@@ -4,6 +4,7 @@ import { CanaisTab } from './CanaisTab';
 import { FilasTab } from './FilasTab';
 import { LgpdTab } from './LgpdTab';
 import { UsuariosTab } from './UsuariosTab';
+import { VozTab } from './VozTab';
 import { WhiteLabelTab } from './WhiteLabelTab';
 
 const ABAS = [
@@ -12,6 +13,7 @@ const ABAS = [
   { id: 'canais', label: 'Canais' },
   { id: 'bots', label: 'Chatbot' },
   { id: 'whitelabel', label: 'White Label' },
+  { id: 'voz', label: 'Voz' },
   { id: 'lgpd', label: 'LGPD e retencao' },
 ] as const;
 
@@ -44,6 +46,7 @@ export function ConfiguracoesPage() {
       {aba === 'canais' && <CanaisTab />}
       {aba === 'bots' && <BotsTab />}
       {aba === 'whitelabel' && <WhiteLabelTab />}
+      {aba === 'voz' && <VozTab />}
       {aba === 'lgpd' && <LgpdTab />}
     </div>
   );

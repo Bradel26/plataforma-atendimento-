@@ -30,7 +30,8 @@
     "smoke:lgpd": "node scripts/smoke-lgpd.mjs",
     "smoke:fila": "node scripts/smoke-fila.mjs",
     "smoke:paginacao": "node scripts/smoke-paginacao.mjs",
-    "smoke:widget": "node scripts/smoke-widget.mjs"
+    "smoke:widget": "node scripts/smoke-widget.mjs",
+    "smoke:voz": "node scripts/smoke-voz.mjs"
   },
   "engines": {
     "node": ">=20"

@@ -51,6 +51,12 @@ export const notificarProtocolo = (
   destinos: { responsavelId?: string | null; filaId?: string | null },
 ) => emitir(EVENTOS.protocoloAtualizado, protocolo, { agenteId: destinos.responsavelId, filaId: destinos.filaId });
 
+/** Chamada de voz: interessa ao agente envolvido, a fila dela e a supervisao. */
+export const notificarChamada = (
+  chamada: unknown,
+  destinos: { agenteId?: string | null; filaId?: string | null },
+) => emitir(EVENTOS.chamadaAtualizada, chamada, destinos);
+
 export const notificarStatusAgente = (payload: unknown) => {
   io?.to(salas.supervisao).emit(EVENTOS.agenteStatus, payload);
 };

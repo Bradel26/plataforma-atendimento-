@@ -12,6 +12,7 @@ import { botsRoutes } from './modules/bots/bots.routes';
 import { campanhasRoutes } from './modules/campaigns/campaigns.routes';
 import { channelsRoutes } from './modules/channels/channels.routes';
 import { webhooksRoutes } from './modules/channels/webhooks.routes';
+import { vozRoutes, vozWebhookRoutes } from './modules/voice/voice.routes';
 import { conversationsRoutes } from './modules/conversations/conversations.routes';
 import { accountsRoutes } from './modules/crm/accounts.routes';
 import { dadosRoutes } from './modules/dados/dados.routes';
@@ -43,6 +44,10 @@ export function createApp() {
   // O webhook da Meta valida assinatura sobre o corpo BRUTO — precisa vir antes
   // do express.json, que consumiria o stream e reserializaria o payload.
   app.use('/api/webhooks', webhooksRoutes);
+  // A assinatura do provedor de voz e sobre os parametros do formulario, nao
+  // sobre o corpo bruto — mas a rota fica aqui junto dos outros webhooks para o
+  // express.json nao consumir o stream antes do urlencoded do proprio router.
+  app.use('/api/webhooks/voz', vozWebhookRoutes);
 
   app.use(express.json({ limit: '1mb' }));
   app.use(cookieParser());
@@ -75,6 +80,7 @@ export function createApp() {
   // Publico: o cliente responde a pesquisa por link, sem conta na plataforma.
   app.use('/api/avaliacao', pesquisasPublicasRoutes);
   app.use('/api/lgpd', lgpdRoutes);
+  app.use('/api/voz', vozRoutes);
   app.use('/api/campanhas', campanhasRoutes);
   app.use('/api/bots', botsRoutes);
 
