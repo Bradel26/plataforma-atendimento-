@@ -374,6 +374,7 @@ export type Indicadores = {
   tempos: { tmeSegundos: number | null; tmaSegundos: number | null };
   agentes: { total: number; porStatus: Record<string, number> };
   protocolos: { porStatus: Record<string, number>; slaVencidos: number };
+  voz: IndicadoresVoz;
   satisfacao: {
     csat: number | null;
     csatRespostas: number;

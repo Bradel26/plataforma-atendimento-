@@ -258,8 +258,9 @@ reentrega e a garantia de que uma resposta recusada pela Graph API não entra no
 
 ## Gestão e relatórios (Fase 3)
 
-- **Dashboards** — em espera, TME, TMA, CSAT, NPS, SLA vencido, volume por canal e agentes por
-  status. Atualiza por evento do WebSocket, não por polling.
+- **Dashboards** — em espera, TME, TMA, CSAT, NPS, SLA vencido, volume por canal, agentes por
+  status e voz (chamadas por direção, taxa de atendimento com alvo, TMA falado,
+  perdidas). Atualiza por evento do WebSocket, não por polling.
 - **Monitoramento** — cada agente com status, tempo no status, conversas ativas e filas.
 - **Área da Gestão** — resultado das pesquisas de satisfação por agente, com taxa de resposta e
   comentários dos clientes.

@@ -4,7 +4,7 @@ import { BarList } from '../components/viz/BarList';
 import { StatTile } from '../components/viz/StatTile';
 import { ApiError, api, getAccessToken } from '../lib/api';
 import { EVENTOS, conectar } from '../lib/realtime';
-import { COR_CANAL, COR_STATUS_AGENTE, ESTADO, duracao } from '../lib/viz';
+import { COR_CANAL, COR_STATUS_AGENTE, ESTADO, SERIES, duracao } from '../lib/viz';
 import { LABEL_STATUS, LABEL_STATUS_PROTOCOLO, type Indicadores } from '../lib/types';
 
 const JANELAS = [
@@ -13,6 +13,17 @@ const JANELAS = [
   { valor: '168', label: 'Ultimos 7 dias' },
   { valor: '720', label: 'Ultimos 30 dias' },
 ] as const;
+
+/** Abaixo disto a operacao esta perdendo chamada — o numero vira estado, nao dado. */
+const TAXA_ATENDIMENTO_ALVO = 90;
+const TAXA_ATENDIMENTO_CRITICA = 80;
+
+function estadoDaTaxa(taxa: number | null) {
+  if (taxa === null) return undefined;
+  if (taxa < TAXA_ATENDIMENTO_CRITICA) return ESTADO.grave;
+  if (taxa < TAXA_ATENDIMENTO_ALVO) return ESTADO.atencao;
+  return ESTADO.bom;
+}
 
 export function DashboardsPage() {
   const [dados, setDados] = useState<Indicadores | null>(null);
@@ -46,6 +57,7 @@ export function DashboardsPage() {
       EVENTOS.conversaAtualizada,
       EVENTOS.agenteStatus,
       EVENTOS.protocoloAtualizado,
+      EVENTOS.chamadaAtualizada,
     ]) {
       socket.on(evento, recarregar);
     }
@@ -70,9 +82,16 @@ export function DashboardsPage() {
     .map(([status, valor]) => ({
       rotulo: LABEL_STATUS_PROTOCOLO[status as keyof typeof LABEL_STATUS_PROTOCOLO] ?? status,
       valor,
-      cor: '#2a78d6',
+      cor: SERIES[0],
     }))
     .sort((a, b) => b.valor - a.valor);
+
+  // Direcao e identidade (categorica), por isso paleta de serie. "Nao atendida"
+  // fica de fora: e falha, e vai como estado no bloco de indicadores.
+  const chamadas = [
+    { rotulo: 'Entrantes', valor: dados?.voz.entrantes ?? 0, cor: SERIES[0] },
+    { rotulo: 'Saintes', valor: dados?.voz.saintes ?? 0, cor: SERIES[1] },
+  ];
 
   return (
     <div className="space-y-5">
@@ -113,7 +132,7 @@ export function DashboardsPage() {
         />
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-3">
+      <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-4">
         <Card titulo="Conversas por canal" descricao={`${dados?.conversas.novasNoPeriodo ?? 0} nova(s) no periodo`}>
           <BarList itens={canais} vazio="Nenhuma conversa no periodo" />
         </Card>
@@ -122,6 +141,9 @@ export function DashboardsPage() {
         </Card>
         <Card titulo="Protocolos por status" descricao="Chamados abertos e encerrados">
           <BarList itens={protocolos} vazio="Nenhum chamado registrado" />
+        </Card>
+        <Card titulo="Chamadas por direcao" descricao={`${dados?.voz.total ?? 0} chamada(s) no periodo`}>
+          <BarList itens={chamadas} vazio="Nenhuma chamada no periodo" />
         </Card>
       </div>
 
@@ -134,6 +156,20 @@ export function DashboardsPage() {
           valor={dados?.satisfacao.nps ?? '—'}
           detalhe={`${dados?.satisfacao.npsRespostas ?? 0} resposta(s)`}
         />
+        <StatTile
+          rotulo="Atendimento de voz"
+          valor={dados && dados.voz.taxaAtendimento !== null ? `${dados.voz.taxaAtendimento}%` : '—'}
+          detalhe={`alvo ${TAXA_ATENDIMENTO_ALVO}% — ${dados?.voz.atendidas ?? 0} atendida(s)`}
+          estado={estadoDaTaxa(dados?.voz.taxaAtendimento ?? null)}
+        />
+        <StatTile rotulo="TMA de voz" valor={duracao(dados?.voz.tma ?? null)} detalhe="tempo medio falado" />
+        <StatTile
+          rotulo="Chamadas perdidas"
+          valor={dados?.voz.naoAtendidas ?? '—'}
+          detalhe="nao atendidas ou ocupadas"
+          estado={dados && dados.voz.naoAtendidas > 0 ? ESTADO.grave : undefined}
+        />
+        <StatTile rotulo="Chamadas entrantes" valor={dados?.voz.entrantes ?? '—'} detalhe="recebidas no periodo" />
       </div>
     </div>
   );

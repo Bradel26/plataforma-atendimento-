@@ -283,9 +283,9 @@ function serializar(c: ChamadaDb) {
 }
 
 /** Indicadores de voz para o painel da gestao. */
-export async function indicadoresVoz(desde: Date) {
+export async function indicadoresVoz(desde: Date, ate: Date = new Date()) {
   const chamadas = await prisma.call.findMany({
-    where: { iniciadoEm: { gte: desde } },
+    where: { iniciadoEm: { gte: desde, lte: ate } },
     select: { direcao: true, status: true, duracao: true },
   });
 

@@ -1,4 +1,5 @@
 import { prisma } from '../../lib/prisma';
+import { indicadoresVoz } from '../voice/voice.service';
 
 const ABERTOS_TICKET = ['ABERTO', 'EM_ANDAMENTO', 'AGUARDANDO_CLIENTE'] as const;
 
@@ -37,6 +38,7 @@ export async function indicadores(periodo: Periodo) {
     pesquisas,
     novasConversas,
     mensagens,
+    voz,
   ] = await Promise.all([
     prisma.conversation.groupBy({ by: ['status'], _count: { _all: true } }),
     prisma.conversation.groupBy({
@@ -57,6 +59,7 @@ export async function indicadores(periodo: Periodo) {
     }),
     prisma.conversation.count({ where: { criadoEm: { gte: periodo.desde, lte: periodo.ate } } }),
     prisma.message.count({ where: { criadoEm: { gte: periodo.desde, lte: periodo.ate } } }),
+    indicadoresVoz(periodo.desde, periodo.ate),
   ]);
 
   const contar = <T extends string>(
@@ -89,6 +92,7 @@ export async function indicadores(periodo: Periodo) {
       porStatus: contar(agentes, 'status'),
     },
     protocolos: { porStatus: contar(ticketsPorStatus, 'status'), slaVencidos },
+    voz,
     satisfacao: {
       csat: media(csat),
       csatRespostas: csat.length,

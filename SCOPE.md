@@ -731,3 +731,25 @@ testes de unidade cobrem a tradução de status, direção, custo e gravação.
 de áudio só se valida com tronco), monitoria (conferência no provedor) e transcrição (serviço de
 fala-para-texto contratado). Um softphone que nunca completou uma chamada aparenta estar pronto sem
 estar — e essa é a única coisa pior que não tê-lo.
+
+### 34. Voz entra no dashboard da gestão, não fica só na tela de Telefonia
+
+A tela de Telefonia mostra o CDR e os indicadores de voz. Só que quem abre o dashboard da gestão
+quer saber se a **operação** está bem, e voz é canal de atendimento como qualquer outro: uma
+chamada perdida é um cliente perdido do mesmo jeito que uma conversa parada na fila.
+
+Então `/metricas/indicadores` passou a devolver um bloco `voz`, alimentado pela mesma função que
+serve `/voz/indicadores` — sem consulta duplicada e sem chance de os dois painéis divergirem.
+Para isso `indicadoresVoz` ganhou o fim do período (`ate`), que antes ignorava: o dashboard tem
+seletor de janela, e uma janela sem limite superior mostraria chamada de fora dela.
+
+No painel, três decisões seguem a regra de cor por função:
+
+- **Direção (entrante/sainte) é identidade**, então usa a paleta de séries.
+- **"Não atendida" ficou fora do gráfico de direção** e virou indicador com cor de estado. Ela é
+  falha, não categoria — misturada às outras, some no meio da magnitude.
+- **Taxa de atendimento tem alvo explícito** (90%, crítico abaixo de 80%) e o número recebe cor de
+  estado. Um percentual sem alvo não informa nada: 87% é bom ou ruim?
+
+O dashboard também passou a escutar `chamada:atualizada`, senão os números de voz só mudariam
+quando alguma conversa mexesse.
