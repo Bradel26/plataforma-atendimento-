@@ -547,11 +547,29 @@ valor impresso. Stack trace também passa pela redação: mensagem de erro carre
 **Anexo do agente no Instagram Direct.** O canal só aceita URL pública; o envio é recusado com
 explicação em vez de falhar com erro da Meta.
 
+### Tema claro e escuro
+
+Botão na barra superior. O padrão é seguir o sistema — inclusive a troca automática por horário,
+sem recarregar. A preferência explícita fica em `localStorage` e ganha do sistema.
+
+A implementação é uma classe no `<html>` que redefine as variáveis de cor do Tailwind
+(`--color-white`, `--color-slate-*`). No Tailwind v4 `bg-white` compila para
+`var(--color-white)`, então o app inteiro vira de uma vez e nada fica de fora por esquecimento —
+ao contrário de anotar 146 classes com `dark:`.
+
+A paleta de dados do modo escuro é própria, não a clara com filtro: cada cor foi recolocada na
+faixa de luminosidade do modo escuro (OKLCH L 0.62) e o conjunto foi validado contra a superfície
+escura. Os valores vivem no CSS, e um teste de unidade compara CSS e TypeScript para não
+divergirem.
+
+Todo gráfico de barras tem um botão **Ver como tabela** — leitor de tela não lê comprimento de
+barra, e quem quer o número exato também prefere a tabela.
+
 ### Teste de navegador (Playwright)
 
 ```bash
 npm run dev            # em outro terminal: API, web, Postgres e Redis de pé
-npm run test:e2e       # 10 testes em Chromium
+npm run test:e2e       # 18 testes em Chromium
 npm run test:e2e:ui    # modo interativo, para depurar
 ```
 

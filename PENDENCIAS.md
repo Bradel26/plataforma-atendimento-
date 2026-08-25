@@ -53,8 +53,8 @@ Em ordem de risco que remove, do maior para o menor.
 | 4.2 | ~~Worker em processo separado~~ | **feito** — `src/worker.ts`, mesma imagem, outro processo; `WORKER_EMBUTIDO` controla o embutido. | — |
 | 4.3 | ~~Anonimização de backup e de log~~ | **feito** — `npm run lgpd:reaplicar` reanonimiza a partir da trilha depois de restaurar; log redige dado pessoal antes de imprimir. | — |
 | 4.4 | Testes de integração com banco efêmero | Os smokes usam o banco de dev; um teste destrutivo não tem onde rodar em segurança. Precisa de Docker. | médio |
-| 4.5 | Modo escuro | O app não tem. A paleta de dados foi validada só sobre fundo claro. | pequeno |
-| 4.6 | Tabela acessível nos gráficos do dashboard | Quem usa leitor de tela não lê barra. Hoje há rótulo e valor visíveis, o que atende o mínimo, mas não substitui a tabela. | pequeno |
+| 4.5 | ~~Modo escuro~~ | **feito** — remapeamento das variáveis do Tailwind, paleta de dados própria validada no fundo escuro. | — |
+| 4.6 | ~~Tabela acessível nos gráficos~~ | **feito** — botão `Ver como tabela` em toda barra, com caption, scope e total. | — |
 | 4.7 | ~~Reprocessar dead-letter pela interface~~ | **feito** — aba Configurações › Fila de trabalho, restrita a ADMIN. | — |
 
 ## 5. Fora do escopo, mas os concorrentes têm

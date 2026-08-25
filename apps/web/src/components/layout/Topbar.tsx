@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../../features/auth/AuthProvider';
 import { COR_STATUS, LABEL_PERFIL, LABEL_STATUS, type AgentStatus } from '../../lib/types';
+import { BotaoTema } from '../../features/tema/BotaoTema';
 import { IconSair } from './icons';
 
 const STATUS_DISPONIVEIS: AgentStatus[] = ['DISPONIVEL', 'EM_ATENDIMENTO', 'PAUSA', 'OFFLINE'];
@@ -54,6 +55,8 @@ export function Topbar({ titulo }: { titulo: string }) {
         >
           {usuario.nome.charAt(0).toUpperCase()}
         </span>
+
+        <BotaoTema />
 
         <button
           type="button"

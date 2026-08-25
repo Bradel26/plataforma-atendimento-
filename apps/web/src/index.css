@@ -21,3 +21,91 @@ body,
 body {
   @apply bg-slate-100 text-slate-800 antialiased;
 }
+
+/*
+ * Cores de dados. Ficam aqui, e nao no TypeScript, porque assim trocam junto
+ * com o tema sem nenhum componente saber que existe tema. A fonte da verdade
+ * dos valores e src/lib/viz.ts, e um teste de unidade compara os dois para
+ * eles nao divergirem.
+ */
+:root {
+  --serie-1: #2a78d6;
+  --serie-2: #eb6834;
+  --serie-3: #1baf7a;
+  --serie-4: #eda100;
+  --serie-5: #e87ba4;
+  --serie-6: #008300;
+
+  --estado-bom: #1baf7a;
+  --estado-atencao: #eda100;
+  --estado-grave: #e34948;
+  --estado-neutro: #94a3b8;
+  --estado-info: #2a78d6;
+}
+
+/*
+ * Modo escuro por remapeamento das variaveis do Tailwind, nao por 146 classes
+ * `dark:` espalhadas. No Tailwind v4 `bg-white` compila para
+ * `background-color: var(--color-white)`, entao redefinir a escala aqui vira o
+ * app inteiro de uma vez — e nada pode ficar de fora por esquecimento.
+ *
+ * A escala e invertida porque o app usa numero baixo para fundo e alto para
+ * texto, sem excecao. Onde isso nao valesse, a inversao apareceria como texto
+ * ilegivel na primeira olhada.
+ */
+html.tema-escuro {
+  color-scheme: dark;
+
+  --color-white: #151d2b;
+  --color-slate-50: #111827;
+  --color-slate-100: #0d1420;
+  --color-slate-200: #26303f;
+  --color-slate-300: #334052;
+  --color-slate-400: #7c8ba1;
+  --color-slate-500: #94a3b8;
+  --color-slate-600: #b5c0cf;
+  --color-slate-700: #cbd5e1;
+  --color-slate-800: #e2e8f0;
+  --color-slate-900: #f1f5f9;
+
+  /* Avisos: fundo tenue vira tinta escura da mesma familia, texto clareia. */
+  --color-red-50: #2a1518;
+  --color-red-200: #4b2126;
+  --color-red-500: #f15653;
+  --color-red-600: #f98b88;
+  --color-red-700: #fca5a1;
+  --color-emerald-50: #0f241d;
+  --color-emerald-200: #1d3d33;
+  --color-emerald-500: #14ac77;
+  --color-emerald-700: #6ee7b7;
+  --color-amber-50: #271c0c;
+  --color-amber-200: #43310f;
+  --color-amber-500: #ca8000;
+  --color-amber-600: #f0b429;
+  --color-amber-700: #fcd34d;
+  --color-blue-50: #10203a;
+  --color-blue-500: #4693f3;
+  --color-blue-700: #93c5fd;
+
+  /* Mistura com a superficie escura; com white daria um borrao claro. */
+  --brand-primary-soft: color-mix(in srgb, var(--brand-primary) 26%, #151d2b);
+
+  /*
+   * Paleta de dados propria, nao a clara com filtro. Recalculada na faixa de
+   * luminosidade do modo escuro (OKLCH L 0.62), preservando matiz e croma, e
+   * validada contra a superficie #151d2b: banda de luminosidade, piso de croma,
+   * separacao para daltonismo e contraste, todos passando.
+   */
+  --serie-1: #3986e5;
+  --serie-2: #d95821;
+  --serie-3: #009f6c;
+  --serie-4: #bd7400;
+  --serie-5: #c75d87;
+  --serie-6: #33a02e;
+
+  --estado-bom: #14ac77;
+  --estado-atencao: #ca8000;
+  --estado-grave: #f15653;
+  --estado-neutro: #8593a8;
+  --estado-info: #4693f3;
+}

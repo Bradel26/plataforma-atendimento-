@@ -6,27 +6,62 @@
  * que alguem escolhesse um tom proximo do vizinho. A marca fica no cromo da
  * interface (botoes, menu ativo); os dados usam esta paleta validada.
  *
- * Ordem fixa, nunca ciclada. Validada para daltonismo na lista de pares
- * adjacentes (pior par CVD dE 9.1, visao normal 19.6) sobre superficie branca.
- * Tres tons ficam abaixo de 3:1 de contraste, o que obriga rotulo visivel em
- * cada barra — e por isso que BarList sempre mostra nome e valor.
+ * Os componentes usam SERIES e ESTADO, que sao *referencias* a variaveis CSS.
+ * Assim a cor troca com o tema sem nenhum componente saber que existe tema. Os
+ * valores concretos de cada tema estao em index.css, e um teste compara os dois
+ * arquivos para nao divergirem.
  */
-export const SERIES = [
-  '#2a78d6', // azul
-  '#eb6834', // laranja
-  '#1baf7a', // agua
-  '#eda100', // amarelo
-  '#e87ba4', // magenta
-  '#008300', // verde
-] as const;
 
-/** Cores de estado — reservadas, nunca usadas como serie. */
-export const ESTADO = {
+/**
+ * Modo claro. Ordem fixa, nunca ciclada. Validada para daltonismo na lista de
+ * pares adjacentes (pior par CVD dE 9.1, visao normal 19.6) sobre superficie
+ * branca. Tres tons ficam abaixo de 3:1 de contraste, o que obriga rotulo
+ * visivel em cada barra — e por isso que BarList sempre mostra nome e valor.
+ */
+export const SERIES_CLARO = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300'] as const;
+
+/**
+ * Modo escuro. Nao e a paleta clara com filtro: cada cor foi recolocada na faixa
+ * de luminosidade do modo escuro (OKLCH L 0.62) preservando matiz e croma, e o
+ * conjunto foi validado contra a superficie escura (#151d2b) — banda de
+ * luminosidade, piso de croma, separacao para daltonismo e contraste, todos
+ * passando.
+ */
+export const SERIES_ESCURO = ['#3986e5', '#d95821', '#009f6c', '#bd7400', '#c75d87', '#33a02e'] as const;
+
+export const ESTADO_CLARO = {
   bom: '#1baf7a',
   atencao: '#eda100',
   grave: '#e34948',
   neutro: '#94a3b8',
   info: '#2a78d6',
+} as const;
+
+export const ESTADO_ESCURO = {
+  bom: '#14ac77',
+  atencao: '#ca8000',
+  grave: '#f15653',
+  neutro: '#8593a8',
+  info: '#4693f3',
+} as const;
+
+/** O que os componentes usam: troca de valor com o tema. */
+export const SERIES = [
+  'var(--serie-1)',
+  'var(--serie-2)',
+  'var(--serie-3)',
+  'var(--serie-4)',
+  'var(--serie-5)',
+  'var(--serie-6)',
+] as const;
+
+/** Cores de estado — reservadas, nunca usadas como serie. */
+export const ESTADO = {
+  bom: 'var(--estado-bom)',
+  atencao: 'var(--estado-atencao)',
+  grave: 'var(--estado-grave)',
+  neutro: 'var(--estado-neutro)',
+  info: 'var(--estado-info)',
 } as const;
 
 /** Cor por canal, na ordem fixa da paleta. */

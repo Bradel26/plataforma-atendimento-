@@ -868,3 +868,41 @@ Três decisões sobre a redação:
 13 testes de unidade cobrem os formatos, e o smoke da LGPD passou a simular uma restauração de
 backup: desfaz a anonimização de um contato como um snapshot antigo faria, e confere que o comando
 o anonimiza de novo — inclusive que a simulação não altera nada.
+
+### 39. Modo escuro por remapeamento, não por 146 classes `dark:`
+
+O app usava cor clara em 146 lugares. A saída óbvia — anotar cada um com `dark:` — é a que erra:
+basta esquecer um e ele fica branco no meio do escuro, e ninguém revisa 146 classes.
+
+No Tailwind v4 `bg-white` compila para `background-color: var(--color-white)`. Então uma classe no
+`<html>` que redefine a escala vira o app inteiro de uma vez, e nada pode ficar de fora por
+esquecimento. A inversão funciona porque o app usa número baixo para fundo e alto para texto **sem
+exceção** — se não usasse, apareceria como texto ilegível na primeira olhada.
+
+**A paleta de dados não é a clara com filtro.** Cada cor foi recolocada na faixa de luminosidade do
+modo escuro (OKLCH L 0.62) preservando matiz e croma, e o conjunto foi validado contra a superfície
+escura: banda de luminosidade, piso de croma, separação para daltonismo e contraste — todos
+passando. Filtro em cima da paleta clara teria estourado a banda de luminosidade nas seis cores.
+
+Duas decisões estruturais:
+
+- **Os valores vivem no CSS, a documentação no TypeScript.** `viz.ts` exporta `SERIES` como
+  `var(--serie-1)`, então nenhum componente sabe que existe tema. Os hex de cada tema também estão
+  em `viz.ts`, e um teste de unidade compara TypeScript e CSS: divergir daria uma paleta validada no
+  papel e outra na tela.
+- **Três estados, não dois.** "Sistema" é o padrão e respeita quem já configurou o sistema
+  operacional no escuro, e acompanha a troca por horário sem recarregar. O botão alterna claro e
+  escuro: quem clicou uma vez quer decidir, não voltar a depender do sistema.
+
+Verificado no navegador: o fundo muda, a preferência sobrevive à recarga, `--serie-1` passa de
+`#2a78d6` para `#3986e5`, e no escuro o texto do cartão continua mais claro que a superfície por
+margem larga.
+
+### 40. Toda barra tem tabela
+
+O método de dataviz pede alternativa em tabela, e a razão é simples: leitor de tela não lê
+comprimento de barra. `BarList` ganhou um botão que troca as barras por uma `<table>` de verdade —
+com `<caption>`, `scope` nas células de cabeçalho e linha de total. A barra passou a ser
+`aria-hidden`: o número ao lado dela já foi lido, e a barra só dá a escala.
+
+Serve para mais gente do que parece: quem quer conferir o número exato também prefere a tabela.
