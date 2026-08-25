@@ -587,6 +587,10 @@ quando não há o que renovar).
 
 Não roda no CI: precisa de Postgres, Redis e API de pé — as mesmas dependências dos smokes.
 
+O login tem limite de 30 tentativas por IP em 5 minutos. Rodar as 12 suítes de smoke e o e2e em
+sequência estoura esse limite, e o teste falha com a mensagem dizendo exatamente isso — espere a
+janela e rode de novo. O limite está fazendo o trabalho dele; é o teste que faz muitos logins.
+
 ### Worker em processo separado
 
 A fila roda embutida na API por padrão, que é o cômodo em desenvolvimento. Em produção, separe:
