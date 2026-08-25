@@ -1,4 +1,5 @@
 import type { Channel } from '@prisma/client';
+import { baixarAnexo } from './media.service';
 import { prisma } from '../../lib/prisma';
 import { notificarConversaAtualizada, notificarConversaNova, notificarMensagem } from '../../realtime/hub';
 import { responderAutomaticamente } from '../bots/bots.service';
@@ -54,13 +55,21 @@ export async function registrarMensagemEntrante(dados: MensagemNormalizada) {
       },
     }));
 
+  // Traz a midia para o storage proprio. Se falhar, guarda a URL da Meta como
+  // ela veio: expira em pouco tempo, mas e melhor que anexo nenhum, e o motivo
+  // fica no log para quem for investigar.
+  const anexo = await baixarAnexo(dados.canal, dados);
+  if (anexo.motivo) {
+    console.warn(`[anexo] ${dados.canal} ${dados.idExterno}: ${anexo.motivo}`);
+  }
+
   const mensagem = await prisma.message.create({
     data: {
       conversaId: conversa.id,
       autor: 'CLIENTE',
       conteudo: dados.conteudo,
       tipoAnexo: dados.tipoAnexo,
-      anexoUrl: dados.anexoUrl,
+      anexoUrl: anexo.url ?? dados.anexoUrl,
       idExterno: dados.idExterno,
     },
   });

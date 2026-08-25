@@ -39,3 +39,6 @@ apps/api/prisma/*.db-journal
 
 # Vite
 apps/web/.vite/
+
+# Arquivos enviados (driver local de storage)
+apps/api/storage/

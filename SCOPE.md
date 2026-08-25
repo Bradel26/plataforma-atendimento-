@@ -416,3 +416,35 @@ API devolve 401, a finalização continua respondendo 200 e o histórico registr
 
 **Não implementado:** reenvio automático de convite que falhou. Hoje a falha fica registrada e para
 ali. O lugar certo é a mesma fila de trabalho no Redis que as campanhas pedem (decisão 22).
+### 24. Mídia: storage próprio, lista fechada de tipos e URL assinada
+Anexo de protocolo era só um registro de URL, e a mídia do WhatsApp chegava como `media id` que
+ninguém trocava pelo binário — o agente via "[imagem recebida]" e nada mais. Agora o arquivo entra no
+storage da plataforma, e a decisão tem três partes que valem registro:
+
+**Driver local por padrão.** É o único que funciona sem conta em nuvem, então o MVP roda como está.
+`salvar`, `caminhoDe` e `remover` em `lib/storage.ts` são a fronteira: o resto do sistema conhece só a
+chave (`2026/08/<uuid>.<ext>`) e a URL `/api/arquivos/<chave>`. Trocar por S3/MinIO/R2 é reescrever
+essas três funções, sem tocar em rota, serializer ou tela.
+
+**Lista fechada de tipos, não lista de bloqueio.** SVG e HTML servidos de volta ao navegador executam
+script no domínio da aplicação — sessão do agente comprometida por um "print" que o cliente mandou.
+Só passam imagem, áudio, vídeo, PDF, Office, CSV, TXT e ZIP; o `Content-Type` de resposta vem do tipo
+validado na entrada (mais `nosniff`), nunca de adivinhação sobre o conteúdo.
+
+**URL assinada em vez de header.** A imagem do chat é carregada pelo `<img src>`, que não manda
+`Authorization` — o token precisa viajar na URL. A assinatura é HMAC sobre a chave mais a expiração
+(1 h), então link vazado não vira acesso permanente e não serve para outro arquivo. A alternativa
+seria servir anexo de cliente sem autenticação, apostando que ninguém adivinha o UUID; com dado de
+cliente e LGPD no escopo, aposta não serve.
+
+**Mídia que não baixa não impede a mensagem de existir.** `baixarAnexo` nunca lança: o texto do
+cliente é o que mais importa, e a Meta reentrega qualquer webhook que não responda 200. Quando o
+download falha, a mensagem entra com `anexoUrl` nulo, o motivo vai para o log e o agente vê o
+marcador "[imagem recebida]".
+
+Verificado por `npm run smoke:midia` (21 checagens): upload real de PNG, download byte a byte,
+recusa sem assinatura, com assinatura adulterada e com travessia de diretório, recusa de SVG, imagem
+do Instagram copiada para o storage e imagem do WhatsApp com download recusado — mensagem preservada.
+
+**Não implementado:** agente enviar arquivo ao cliente (exige upload da mídia para a Graph API antes
+do envio) e política de retenção. O escopo sugere 90 dias; hoje nada apaga arquivo.

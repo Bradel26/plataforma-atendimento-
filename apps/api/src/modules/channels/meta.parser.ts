@@ -34,6 +34,8 @@ export function normalizarWebhook(corpo: MetaWebhook): MensagemNormalizada[] {
         const tipoAnexo = TIPO_ANEXO[mensagem.type] ?? 'TEXTO';
         const legenda =
           mensagem.text?.body ?? mensagem.image?.caption ?? mensagem.video?.caption ?? null;
+        const midia =
+          mensagem.image ?? mensagem.audio ?? mensagem.video ?? mensagem.document ?? mensagem.sticker;
 
         mensagens.push({
           canal: 'WHATSAPP',
@@ -43,9 +45,11 @@ export function normalizarWebhook(corpo: MetaWebhook): MensagemNormalizada[] {
           idExterno: mensagem.id,
           conteudo: legenda ?? RESUMO_ANEXO[tipoAnexo] ?? '[mensagem sem texto]',
           tipoAnexo,
-          // A Cloud API entrega apenas o media id; baixar o binario exige uma
-          // segunda chamada autenticada, que fica para o storage de midia.
+          // A Cloud API entrega apenas o media id; quem troca o id pelo binario
+          // e o media.service, no inbound.
           anexoUrl: null,
+          anexoIdExterno: midia?.id ?? null,
+          anexoNome: mensagem.document?.filename ?? null,
         });
       }
     }
@@ -66,7 +70,11 @@ export function normalizarWebhook(corpo: MetaWebhook): MensagemNormalizada[] {
         idExterno: mensagem.mid,
         conteudo: mensagem.text ?? RESUMO_ANEXO[tipoAnexo] ?? '[mensagem sem texto]',
         tipoAnexo,
+        // Messenger e Instagram entregam URL pronta, porem temporaria: o
+        // inbound baixa e guarda o arquivo antes de o link expirar.
         anexoUrl: anexo?.payload?.url ?? null,
+        anexoIdExterno: null,
+        anexoNome: null,
       });
     }
   }

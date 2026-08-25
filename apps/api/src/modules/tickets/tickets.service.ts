@@ -1,5 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
+import { urlAssinada } from '../../lib/storage';
 import { badRequest, notFound } from '../../lib/errors';
 import { notificarProtocolo } from '../../realtime/hub';
 import type {
@@ -54,7 +55,7 @@ function serialize(t: TicketDb) {
       criadoEm: c.criadoEm,
       autor: c.autor,
     })),
-    anexos: t.anexos,
+    anexos: t.anexos.map((a) => ({ ...a, url: urlAssinada(a.url) })),
     agendamentos: t.agendamentos,
     /** SLA estourado e chamado ainda em aberto. */
     slaVencido: Boolean(

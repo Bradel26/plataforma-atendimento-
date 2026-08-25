@@ -1,10 +1,12 @@
 import { Router } from 'express';
+import multer from 'multer';
 import { asyncHandler } from '../../http/async-handler';
 import { requireAuth, requireRole } from '../../http/middleware/auth';
 import { validateBody, validateQuery } from '../../http/middleware/validate';
 import { param } from '../../http/params';
 import { notFound } from '../../lib/errors';
 import { prisma } from '../../lib/prisma';
+import { limiteBytes, salvar } from '../../lib/storage';
 import {
   agendamentoSchema,
   anexoSchema,
@@ -26,6 +28,12 @@ import {
 } from './tickets.service';
 
 export const ticketsRoutes = Router();
+
+/**
+ * Arquivo em memoria: o limite de tamanho ja barra o abuso e o destino final
+ * pode nao ser disco (S3/R2), entao gravar em temporario seria trabalho perdido.
+ */
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: limiteBytes, files: 1 } });
 
 ticketsRoutes.use(requireAuth);
 
@@ -90,11 +98,27 @@ ticketsRoutes.post(
   }),
 );
 
+/**
+ * Aceita o arquivo em si (multipart, campo `arquivo`) ou apenas uma URL externa
+ * (JSON). Os dois casos existem na pratica: o print que o cliente mandou e o
+ * link de um documento que ja vive em outro sistema.
+ */
 ticketsRoutes.post(
   '/:id/anexos',
-  validateBody(anexoSchema),
+  upload.single('arquivo'),
   asyncHandler(async (req, res) => {
-    res.status(201).json({ protocolo: await anexar(param(req, 'id'), req.user!.sub, req.body) });
+    const dados = req.file
+      ? await (async () => {
+          const salvo = await salvar({
+            buffer: req.file!.buffer,
+            nome: req.file!.originalname,
+            tipo: req.file!.mimetype,
+          });
+          return { nome: salvo.nome, url: salvo.url, tipo: salvo.tipo, tamanho: salvo.tamanho };
+        })()
+      : anexoSchema.parse(req.body);
+
+    res.status(201).json({ protocolo: await anexar(param(req, 'id'), req.user!.sub, dados) });
   }),
 );
 

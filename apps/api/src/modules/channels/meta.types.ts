@@ -14,6 +14,7 @@ export type MetaTextoWhatsApp = {
   audio?: { id: string; mime_type?: string };
   video?: { id: string; mime_type?: string; caption?: string };
   document?: { id: string; filename?: string; mime_type?: string };
+  sticker?: { id: string; mime_type?: string };
 };
 
 export type MetaWebhook = {
@@ -54,5 +55,10 @@ export type MensagemNormalizada = {
   idExterno: string;
   conteudo: string;
   tipoAnexo: 'TEXTO' | 'IMAGEM' | 'AUDIO' | 'VIDEO' | 'ARQUIVO';
+  /** URL do anexo. Na Cloud API nao existe; no Messenger/Instagram e temporaria. */
   anexoUrl: string | null;
+  /** Media id da Cloud API: o binario exige uma segunda chamada autenticada. */
+  anexoIdExterno: string | null;
+  /** Nome original quando o canal informa (documento do WhatsApp). */
+  anexoNome: string | null;
 };

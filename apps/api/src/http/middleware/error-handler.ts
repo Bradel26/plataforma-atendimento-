@@ -1,6 +1,8 @@
 import type { NextFunction, Request, Response } from 'express';
+import { MulterError } from 'multer';
 import { ZodError } from 'zod';
 import { AppError } from '../../lib/errors';
+import { limiteBytes } from '../../lib/storage';
 
 export function notFoundHandler(req: Request, res: Response) {
   res.status(404).json({ error: { code: 'NOT_FOUND', message: `Rota ${req.method} ${req.path} nao existe` } });
@@ -21,6 +23,15 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
         details: err.issues.map((i) => ({ campo: i.path.join('.'), mensagem: i.message })),
       },
     });
+  }
+
+  // Upload recusado pelo multer (tamanho, campo inesperado) e erro do cliente.
+  if (err instanceof MulterError) {
+    const mensagem =
+      err.code === 'LIMIT_FILE_SIZE'
+        ? `Arquivo acima do limite de ${Math.round(limiteBytes / 1024 / 1024)} MB`
+        : `Envio de arquivo invalido: ${err.message}`;
+    return res.status(400).json({ error: { code: 'UPLOAD_INVALIDO', message: mensagem } });
   }
 
   console.error('[erro nao tratado]', err);

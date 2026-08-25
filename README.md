@@ -130,7 +130,7 @@ Base: `/api`. Corpo e respostas em JSON. Erros no formato `{ error: { code, mess
 | GET | `/protocolos/:id`, `/protocolos/numero/:numero` | autenticado |
 | POST/PATCH | `/protocolos`, `/protocolos/:id` | autenticado |
 | POST | `/protocolos/:id/comentarios` | autenticado (`interno` true/false) |
-| POST | `/protocolos/:id/anexos` | autenticado (registro por URL) |
+| POST | `/protocolos/:id/anexos` | autenticado (arquivo em `multipart/form-data`, campo `arquivo`, ou JSON com URL externa) |
 | POST | `/protocolos/:id/agendamentos` | autenticado |
 | POST | `/protocolos/:id/agendamentos/:agId/concluir` | autenticado |
 | DELETE | `/protocolos/:id` | admin, supervisor |
@@ -149,6 +149,7 @@ Base: `/api`. Corpo e respostas em JSON. Erros no formato `{ error: { code, mess
 | GET | `/escalas/jornada` | admin, supervisor |
 | GET | `/pesquisas/resultados` | admin, supervisor |
 | GET/POST | `/avaliacao/:token` | **público** — cliente responde por link |
+| GET | `/arquivos/:ano/:mes/:nome` | **URL assinada** — `?t=` obrigatório, validade de 1 h |
 | GET/POST | `/campanhas`, `/campanhas/:id` | admin, supervisor |
 | POST | `/campanhas/:id/contatos` | admin, supervisor |
 | PATCH | `/campanhas/:id/status` | admin, supervisor |
@@ -253,6 +254,29 @@ calculada sobre as entregues:
 ```bash
 npm run smoke:pesquisa   # com a API de pé; cobre a entrega e a recusa do canal
 ```
+
+## Arquivos e mídia
+
+Anexo de protocolo aceita **o arquivo em si** (campo `arquivo`, `multipart/form-data`) ou apenas um
+link de outro sistema. A mídia que o cliente manda pelos canais da Meta é **copiada para o storage da
+plataforma** no momento em que o webhook chega — no WhatsApp trocando o `media id` pelo binário, no
+Messenger/Instagram baixando a URL temporária antes que ela expire.
+
+- Driver padrão: **disco local** (`STORAGE_DIR`, `apps/api/storage`, fora do Git). Trocar por
+  S3/MinIO/R2 é substituir `salvar`, `caminhoDe` e `remover` em
+  [apps/api/src/lib/storage.ts](apps/api/src/lib/storage.ts) — o resto do sistema só conhece a chave.
+- Limite por arquivo: `UPLOAD_MAX_MB` (padrão 10 MB), recusado pelo servidor.
+- Lista fechada de tipos: imagem, áudio, vídeo, PDF, Office, CSV, TXT e ZIP. **SVG e HTML ficam de
+  fora** — servidos de volta ao navegador, executariam script no domínio da aplicação.
+- Leitura por **URL assinada** (`?t=<expiração>.<hmac>`, 1 h): o `<img src>` do chat não manda header
+  `Authorization`, e servir anexo de cliente sem autenticação nenhuma não passa na LGPD.
+
+```bash
+npm run smoke:midia    # com a API de pé; 21 checagens de upload, assinatura e download dos canais
+```
+
+**Não implementado:** o agente enviar arquivo para o cliente. Exige subir a mídia para a Graph API
+antes de mandar a mensagem; hoje a resposta do agente é texto.
 
 ## Campanhas e chatbot (Fase 4)
 

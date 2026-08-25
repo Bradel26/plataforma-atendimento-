@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client';
+import { urlAssinada } from '../../lib/storage';
 
 export const inclusaoResumo = {
   contato: true,
@@ -26,7 +27,7 @@ export function toMensagem(m: MensagemDb) {
     autorId: m.autorId,
     conteudo: m.conteudo,
     tipoAnexo: m.tipoAnexo,
-    anexoUrl: m.anexoUrl,
+    anexoUrl: m.anexoUrl ? urlAssinada(m.anexoUrl) : null,
     criadoEm: m.criadoEm,
   };
 }

@@ -6,6 +6,36 @@ import { LABEL_CONVERSA_STATUS, type ConversaDetalhe, type Mensagem, type Usuari
 const hora = (iso: string) =>
   new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
+/**
+ * Midia recebida do cliente. A URL vem assinada pela API e expira; imagem
+ * quebrada aqui quer dizer conversa aberta ha mais de uma hora — recarregar
+ * resolve. Anexo que a plataforma nao conseguiu baixar fica sem `anexoUrl` e a
+ * bolha mostra apenas o texto ("[imagem recebida]").
+ */
+function Anexo({ mensagem }: { mensagem: Mensagem }) {
+  const { tipoAnexo, anexoUrl, conteudo } = mensagem;
+  if (!anexoUrl || tipoAnexo === 'TEXTO') return null;
+
+  if (tipoAnexo === 'IMAGEM') {
+    return (
+      <a href={anexoUrl} target="_blank" rel="noreferrer" className="mb-1.5 block">
+        <img src={anexoUrl} alt={conteudo} className="max-h-64 w-auto rounded-lg" />
+      </a>
+    );
+  }
+  if (tipoAnexo === 'AUDIO') {
+    return <audio controls src={anexoUrl} className="mb-1.5 w-full max-w-[260px]" />;
+  }
+  if (tipoAnexo === 'VIDEO') {
+    return <video controls src={anexoUrl} className="mb-1.5 max-h-64 w-auto rounded-lg" />;
+  }
+  return (
+    <a href={anexoUrl} target="_blank" rel="noreferrer" className="mb-1.5 block text-xs underline">
+      Abrir arquivo recebido
+    </a>
+  );
+}
+
 function Bolha({ mensagem }: { mensagem: Mensagem }) {
   if (mensagem.autor === 'SISTEMA') {
     return (
@@ -24,6 +54,7 @@ function Bolha({ mensagem }: { mensagem: Mensagem }) {
         }`}
         style={doAgente ? { backgroundColor: 'var(--brand-primary)' } : undefined}
       >
+        <Anexo mensagem={mensagem} />
         <p className="whitespace-pre-wrap break-words">{mensagem.conteudo}</p>
         <p className={`mt-1 text-right text-[10px] ${doAgente ? 'text-white/70' : 'text-slate-400'}`}>
           {hora(mensagem.criadoEm)}

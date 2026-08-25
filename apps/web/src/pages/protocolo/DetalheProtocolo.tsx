@@ -14,6 +14,12 @@ import {
 
 const dataHora = (iso: string) => new Date(iso).toLocaleString('pt-BR');
 
+/** Espelha UPLOAD_MAX_MB da API; quem recusa de fato e o servidor. */
+const LIMITE_MB = 10;
+
+const tamanhoLegivel = (bytes: number) =>
+  bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+
 export function DetalheProtocolo({
   protocolo,
   agentes,
@@ -176,7 +182,7 @@ export function DetalheProtocolo({
       </Card>
 
       <div className="grid gap-5 lg:grid-cols-2">
-        <Card titulo="Anexos" descricao="Registro por URL — upload direto depende do storage de midia">
+        <Card titulo="Anexos" descricao={`Arquivo de até ${LIMITE_MB} MB ou link de outro sistema`}>
           {protocolo.anexos.length === 0 ? (
             <p className="text-sm text-slate-500">Nenhum anexo.</p>
           ) : (
@@ -191,14 +197,37 @@ export function DetalheProtocolo({
                   >
                     {a.nome}
                   </a>
-                  <p className="text-xs text-slate-400">{dataHora(a.criadoEm)}</p>
+                  <p className="text-xs text-slate-400">
+                    {dataHora(a.criadoEm)}
+                    {a.tamanho ? ` · ${tamanhoLegivel(a.tamanho)}` : ''}
+                  </p>
                 </li>
               ))}
             </ul>
           )}
 
+          <label className="mt-3 flex flex-col gap-1">
+            <span className="text-xs font-medium text-slate-500">Enviar arquivo do computador</span>
+            <input
+              type="file"
+              disabled={ocupado}
+              onChange={(e) => {
+                const arquivo = e.target.files?.[0];
+                // Limpa o input antes de enviar: sem isso, escolher o mesmo
+                // arquivo de novo nao dispara change e o reenvio parece travado.
+                e.target.value = '';
+                if (arquivo) {
+                  void executar(() =>
+                    api.upload<{ protocolo: Protocolo }>(`/protocolos/${protocolo.id}/anexos`, arquivo),
+                  );
+                }
+              }}
+              className="text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm file:text-slate-700 hover:file:bg-slate-200"
+            />
+          </label>
+
           <form
-            className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
+            className="mt-3 grid gap-2 border-t border-slate-100 pt-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
             onSubmit={(e) => {
               e.preventDefault();
               void executar(async () => {

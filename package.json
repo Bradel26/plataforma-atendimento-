@@ -22,7 +22,8 @@
     "setup": "npm install && npm run infra:up && npm run db:migrate && npm run db:seed",
     "smoke": "node scripts/smoke-atendimento.mjs",
     "smoke:canais": "node scripts/smoke-canais.mjs",
-    "smoke:pesquisa": "node scripts/smoke-pesquisa.mjs"
+    "smoke:pesquisa": "node scripts/smoke-pesquisa.mjs",
+    "smoke:midia": "node scripts/smoke-midia.mjs"
   },
   "engines": {
     "node": ">=20"

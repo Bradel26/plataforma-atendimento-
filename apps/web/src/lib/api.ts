@@ -36,7 +36,8 @@ async function raw(path: string, init: RequestInit): Promise<Response> {
     ...init,
     credentials: 'include',
     headers: {
-      ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+      // FormData define o proprio Content-Type, com boundary — nao sobrescrever.
+      ...(init.body && !(init.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
       ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       ...init.headers,
     },
@@ -74,9 +75,7 @@ async function renovarSessao(): Promise<boolean> {
   return renovacaoEmCurso;
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const init: RequestInit = { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) };
-
+async function enviar<T>(path: string, init: RequestInit): Promise<T> {
   let res = await raw(path, init);
 
   const podeRenovar = res.status === 401 && !path.startsWith('/auth/');
@@ -92,7 +91,17 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return parse<T>(res);
 }
 
+async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  return enviar<T>(path, { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+}
+
 export const api = {
+  /** Upload de arquivo (multipart). O campo tem de casar com o esperado na rota. */
+  upload: <T>(path: string, arquivo: File, campo = 'arquivo') => {
+    const corpo = new FormData();
+    corpo.append(campo, arquivo);
+    return enviar<T>(path, { method: 'POST', body: corpo });
+  },
   get: <T>(path: string) => request<T>('GET', path),
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body),
   put: <T>(path: string, body?: unknown) => request<T>('PUT', path, body),
