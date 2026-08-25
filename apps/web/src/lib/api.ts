@@ -19,7 +19,6 @@ export class ApiError extends Error {
 }
 
 let accessToken: string | null = null;
-let renovacaoEmCurso: Promise<boolean> | null = null;
 
 export const setAccessToken = (token: string | null) => {
   accessToken = token;
@@ -55,24 +54,59 @@ async function parse<T>(res: Response): Promise<T> {
   return corpo as T;
 }
 
-async function renovarSessao(): Promise<boolean> {
-  renovacaoEmCurso ??= (async () => {
-    try {
-      const res = await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' });
-      if (!res.ok) return false;
-      const { accessToken: novo } = (await res.json()) as { accessToken: string };
-      setAccessToken(novo);
-      return true;
-    } catch {
-      return false;
-    } finally {
-      // libera na proxima microtask para que chamadas concorrentes reaproveitem o resultado
+type Sessao = { accessToken: string; usuario: import('./types').Usuario };
+
+/** Espera curta antes da segunda tentativa, para o cookie novo chegar. */
+const espera = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
+
+async function chamarRefresh(): Promise<{ sessao: Sessao | null; codigo: string | null }> {
+  try {
+    const res = await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' });
+    if (res.ok) return { sessao: (await res.json()) as Sessao, codigo: null };
+    const corpo = (await res.json().catch(() => null)) as { error?: { code?: string } } | null;
+    return { sessao: null, codigo: corpo?.error?.code ?? 'DESCONHECIDO' };
+  } catch {
+    return { sessao: null, codigo: 'REDE' };
+  }
+}
+
+/**
+ * Renovacao de sessao, uma por vez.
+ *
+ * O refresh token e de uso unico: duas chamadas simultaneas fazem a segunda
+ * receber 401 com a sessao ainda valida. Isso acontecia de verdade — o
+ * StrictMode do React invoca o efeito de boot duas vezes, e recarregar a pagina
+ * deslogava o usuario. Por isso: a chamada em curso e compartilhada, e um
+ * cookie invalido (diferente de "sem cookie") ganha uma segunda tentativa, que
+ * cobre o caso de outra aba ter rotacionado primeiro.
+ */
+let refreshEmCurso: Promise<Sessao | null> | null = null;
+
+export function refreshRequest(): Promise<Sessao | null> {
+  if (!refreshEmCurso) {
+    refreshEmCurso = (async () => {
+      const primeira = await chamarRefresh();
+      let sessao = primeira.sessao;
+      if (!sessao && primeira.codigo !== 'SEM_SESSAO') {
+        await espera(150);
+        sessao = (await chamarRefresh()).sessao;
+      }
+      if (sessao) setAccessToken(sessao.accessToken);
+      return sessao;
+    })();
+    // Libera na proxima microtask, para chamadas concorrentes compartilharem
+    // o resultado desta.
+    void refreshEmCurso.finally(() => {
       setTimeout(() => {
-        renovacaoEmCurso = null;
+        refreshEmCurso = null;
       }, 0);
-    }
-  })();
-  return renovacaoEmCurso;
+    });
+  }
+  return refreshEmCurso;
+}
+
+async function renovarSessao(): Promise<boolean> {
+  return (await refreshRequest()) !== null;
 }
 
 async function enviar<T>(path: string, init: RequestInit): Promise<T> {
@@ -143,8 +177,3 @@ export async function loginRequest(email: string, senha: string) {
   return parse<{ accessToken: string; usuario: import('./types').Usuario }>(res);
 }
 
-export async function refreshRequest() {
-  const res = await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' });
-  if (!res.ok) return null;
-  return (await res.json()) as { accessToken: string; usuario: import('./types').Usuario };
-}

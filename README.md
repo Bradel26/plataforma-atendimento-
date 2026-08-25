@@ -540,3 +540,25 @@ banco e log de aplicação seguem a retenção deles.
 
 **Anexo do agente no Instagram Direct.** O canal só aceita URL pública; o envio é recusado com
 explicação em vez de falhar com erro da Meta.
+
+### Teste de navegador (Playwright)
+
+```bash
+npm run dev            # em outro terminal: API, web, Postgres e Redis de pé
+npm run test:e2e       # 10 testes em Chromium
+npm run test:e2e:ui    # modo interativo, para depurar
+```
+
+Cobre o que nenhum outro teste alcança: o que o usuário vê depois que o React montou. Login com
+senha errada, menu por perfil, rota de admin digitada na barra pelo agente, logout, e sessão
+atravessando recarga de página nos três perfis.
+
+**Achou um bug de verdade na primeira execução.** O refresh token é de uso único; o StrictMode do
+React chamava a renovação duas vezes no arranque; a segunda chamada voltava 401 com a sessão ainda
+válida e o usuário caía na tela de login ao recarregar. O sintoma do StrictMode é de
+desenvolvimento, mas a corrida é real em produção com duas abas. Corrigido no cliente
+(`refreshRequest` compartilha a chamada em curso e tenta de novo uma vez quando o cookie existia) e
+na API (`SEM_SESSAO` distingue "não há cookie" de "cookie inválido", para o cliente não insistir
+quando não há o que renovar).
+
+Não roda no CI: precisa de Postgres, Redis e API de pé — as mesmas dependências dos smokes.

@@ -807,3 +807,31 @@ rodasse `db:seed` sem ler o código. Agora, com `NODE_ENV=production`:
 Um efeito colateral achado no caminho: `.gitignore` cobria `.env` e `.env.*.local`, mas **não**
 `.env.production`. O arquivo que o gerador escreve seria commitado. Agora o padrão é `.env*` com
 exceção explícita para `.env.example`.
+
+### 37. O teste de navegador achou um bug que nenhuma outra camada podia achar
+
+68 testes de unidade e 11 suítes de smoke passavam, e recarregar a página deslogava o usuário.
+Nenhuma das duas camadas podia ver isso: a unidade não monta React, e o smoke fala HTTP direto,
+sem StrictMode e sem ciclo de vida de efeito.
+
+O mecanismo: o refresh token é de **uso único** — `consumeRefreshToken` faz `redis.del` e emite um
+par novo. O StrictMode do React invoca o efeito de arranque duas vezes, então a restauração de
+sessão disparava duas renovações simultâneas. A primeira consumia o token; a segunda recebia 401
+com a sessão perfeitamente válida. Como o resultado que chegava por último ganhava, o usuário caía
+na tela de login.
+
+Honestidade sobre o alcance: **o gatilho do StrictMode é de desenvolvimento** (em produção o efeito
+roda uma vez). A corrida, não — duas abas recarregando juntas, ou um 401 em duas requisições
+paralelas, produzem o mesmo em produção.
+
+A correção tem dois lados, e nenhum deles enfraquece a rotação de uso único, que é defesa contra
+roubo de token:
+
+- **Cliente:** `refreshRequest` compartilha a chamada em curso, então N chamadas simultâneas viram
+  uma. Se o cookie existia e ainda assim falhou, tenta **uma** segunda vez depois de 150 ms — que é
+  o caso de outra aba ter rotacionado primeiro.
+- **API:** `SEM_SESSAO` distingue "não veio cookie" de "cookie inválido". Sem isso o cliente teria
+  que tentar de novo sempre, dobrando o tráfego de renovação em toda visita anônima.
+
+O arquivo `tests/e2e/sessao.spec.ts` guarda o bug: recarga nos três perfis, cinco renovações
+simultâneas, e o código `SEM_SESSAO`.

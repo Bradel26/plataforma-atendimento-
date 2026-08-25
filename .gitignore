@@ -44,3 +44,9 @@ apps/api/storage/
 
 # Storage usado pelos testes de unidade
 apps/api/storage-teste/
+
+# Playwright
+test-results/
+playwright-report/
+/blob-report/
+.playwright/

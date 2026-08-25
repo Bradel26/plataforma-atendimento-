@@ -49,7 +49,7 @@ Em ordem de risco que remove, do maior para o menor.
 
 | # | O que falta | Por que importa | Tamanho |
 |---|---|---|---|
-| 4.1 | **Teste de navegador (Playwright)** | É a única camada que ninguém verificou. Toda a cobertura é de API: 68 testes de unidade e 11 suítes de smoke, e **nenhum** abre a interface. Um erro de render passa. | médio |
+| 4.1 | ~~Teste de navegador (Playwright)~~ | **feito** — 10 testes em Chromium que cobrem login, menu por perfil, rota proibida, logout e sessão atravessando recarga. Achou um bug real na primeira execução (ver decisão 37). | — |
 | 4.2 | **Worker em processo separado** | Hoje a fila roda dentro da API. Um lote grande de campanha disputa CPU com o atendimento, e reiniciar a API mata o worker no meio. | médio |
 | 4.3 | **Anonimização de backup e de log** | A LGPD hoje cobre banco e disco. O dado que já saiu em backup continua identificável — pedido de exclusão não alcança ele. | médio |
 | 4.4 | Testes de integração com banco efêmero | Os smokes usam o banco de dev; um teste destrutivo não tem onde rodar em segurança. Precisa de Docker. | médio |

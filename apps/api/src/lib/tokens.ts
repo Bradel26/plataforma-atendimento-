@@ -3,7 +3,7 @@ import jwt, { type SignOptions } from 'jsonwebtoken';
 import type { Role } from '@prisma/client';
 import { env } from '../env';
 import { redis } from './redis';
-import { unauthorized } from './errors';
+import { AppError, unauthorized } from './errors';
 
 export type AccessPayload = {
   sub: string;
@@ -77,8 +77,16 @@ export async function issueRefreshToken(userId: string): Promise<string> {
   });
 }
 
-/** Consome o refresh token (rotacao de uso unico) e devolve o userId. */
-export async function consumeRefreshToken(token: string): Promise<string> {
+/**
+ * Consome o refresh token (rotacao de uso unico) e devolve o userId.
+ *
+ * Distingue 'nao ha cookie' de 'cookie invalido' de proposito: o cliente usa o
+ * codigo para decidir se vale tentar de novo. Sem sessao nao ha corrida a
+ * recuperar; com cookie invalido pode ser outra aba que acabou de rotacionar.
+ */
+export async function consumeRefreshToken(token: string | undefined): Promise<string> {
+  if (!token) throw new AppError(401, 'SEM_SESSAO', 'Nenhuma sessao para renovar');
+
   let payload: RefreshPayload;
   try {
     payload = jwt.verify(token, env.JWT_REFRESH_SECRET) as RefreshPayload;
