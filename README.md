@@ -82,6 +82,7 @@ backend na mesma origem (necessário para o cookie de refresh).
 | `npm run smoke:lgpd` | retenção, anonimização e trilha de auditoria (25 checagens) |
 | `npm run smoke:fila` | disparo assíncrono, nova tentativa e estado da fila (12 checagens) |
 | `npm run smoke:paginacao` | cursor sem pular nem repetir registro (13 checagens) |
+| `npm run smoke:widget` | script do widget servido e coerente com o tema (9 checagens) |
 
 ## API (Fase 0)
 
@@ -164,6 +165,7 @@ Base: `/api`. Corpo e respostas em JSON. Erros no formato `{ error: { code, mess
 | GET | `/lgpd/registros` | admin — trilha de auditoria |
 | GET | `/health/fila` | admin, supervisor — prontos, atrasados e descartados |
 | GET | `/conversas/:id/mensagens` | autenticado — histórico paginado por cursor |
+| GET | `/widget.js` | **público** — script do widget, gerado com as cores do tema |
 | GET | `/lgpd/titulares/:id/exportar` | admin — portabilidade |
 | POST | `/lgpd/titulares/:id/anonimizar` | admin — eliminação |
 | GET/POST | `/campanhas`, `/campanhas/:id` | admin, supervisor |
@@ -335,6 +337,29 @@ tentativas sem entender, deixando a conversa na fila.
 
 ```bash
 npm run smoke:seguranca   # com a API de pé; verifica o que ficou gravado no Redis e no Postgres
+```
+
+## Widget para o site do cliente
+
+Uma tag e o Webchat aparece como bolha flutuante:
+
+```html
+<script src="https://SUA-PLATAFORMA/api/widget.js" defer></script>
+```
+
+Opcionais: `data-fila="<id>"` direciona para uma fila específica, `data-titulo="..."` troca o texto do
+botão. A tag pronta fica em **Configurações → Canais**.
+
+- O widget monta um **iframe** apontando para `/webchat?embed=1` — não injeta interface na página. O
+  CSS do site não quebra o chat e o chat não quebra o site.
+- O script é **gerado**, não estático: a cor da bolha vem do White Label e muda em até 5 minutos
+  (cache) depois de trocada nas configurações.
+- Mensagens entre iframe e página são validadas por origem.
+- Se houver proxy na frente, **não** aplique `X-Frame-Options: DENY` em `/webchat` — é a única rota que
+  precisa ser enquadrável. Ver [apps/web/nginx.conf](apps/web/nginx.conf).
+
+```bash
+npm run smoke:widget
 ```
 
 ## Paginação

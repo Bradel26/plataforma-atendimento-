@@ -23,6 +23,7 @@ import { catalogsRoutes, productsRoutes } from './modules/crm/catalog.routes';
 import { leadsRoutes } from './modules/crm/leads.routes';
 import { funnelsRoutes, opportunitiesRoutes } from './modules/crm/opportunities.routes';
 import { arquivosRoutes } from './modules/files/files.routes';
+import { widgetRoutes } from './modules/widget/widget.routes';
 import { lgpdRoutes } from './modules/lgpd/lgpd.routes';
 import { healthRoutes } from './modules/health/health.routes';
 import { queuesRoutes } from './modules/queues/queues.routes';
@@ -47,6 +48,8 @@ export function createApp() {
   app.use(cookieParser());
   if (env.NODE_ENV !== 'test') app.use(morgan('dev'));
 
+  // Servido em /api para caber numa unica tag <script> no site do cliente.
+  app.use('/api', widgetRoutes);
   app.use('/api/arquivos', arquivosRoutes);
   app.use('/api/health', healthRoutes);
   app.use('/api/auth', authRoutes);

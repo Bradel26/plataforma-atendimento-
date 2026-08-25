@@ -15,6 +15,15 @@ export function WebchatPage() {
   const [conversa, setConversa] = useState<ConversaDetalhe | null>(null);
   const [form, setForm] = useState({ nome: '', email: '', assunto: '' });
   const [aceite, setAceite] = useState(false);
+
+  /**
+   * Parametros do widget embutido. Lidos uma vez: a pagina nao muda de modo
+   * durante a sessao.
+   */
+  const [{ embutido, filaId }] = useState(() => {
+    const parametros = new URLSearchParams(window.location.search);
+    return { embutido: parametros.get('embed') === '1', filaId: parametros.get('fila') };
+  });
   const [texto, setTexto] = useState('');
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -73,6 +82,7 @@ export function WebchatPage() {
         nome: form.nome,
         ...(form.email ? { email: form.email } : {}),
         ...(form.assunto ? { assunto: form.assunto } : {}),
+        ...(filaId ? { filaId } : {}),
         aceiteLgpd: true,
       });
       setSessao(resp.sessaoToken);
@@ -113,11 +123,40 @@ export function WebchatPage() {
         : `Em atendimento${conversa.agente ? ` com ${conversa.agente.nome}` : ''}`;
 
   return (
-    <div className="flex h-full items-center justify-center bg-slate-100 p-4">
-      <div className="flex h-[600px] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
-        <header className="px-5 py-4 text-white" style={{ backgroundColor: 'var(--brand-primary)' }}>
-          <p className="font-semibold">Fale com a gente</p>
-          <p className="text-xs text-white/80">{legenda}</p>
+    <div
+      className={
+        embutido
+          ? 'flex h-full w-full flex-col bg-white'
+          : 'flex h-full items-center justify-center bg-slate-100 p-4'
+      }
+    >
+      <div
+        className={
+          embutido
+            ? 'flex h-full w-full flex-col overflow-hidden bg-white'
+            : 'flex h-[600px] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-xl'
+        }
+      >
+        <header
+          className="flex items-start justify-between gap-2 px-5 py-4 text-white"
+          style={{ backgroundColor: 'var(--brand-primary)' }}
+        >
+          <div>
+            <p className="font-semibold">Fale com a gente</p>
+            <p className="text-xs text-white/80">{legenda}</p>
+          </div>
+          {embutido && (
+            <button
+              type="button"
+              aria-label="Fechar"
+              // Quem controla a visibilidade e o widget na pagina do cliente;
+              // o iframe apenas avisa que o visitante quer fechar.
+              onClick={() => window.parent?.postMessage('atendimento:fechar', '*')}
+              className="rounded px-1 text-white/80 hover:text-white"
+            >
+              ✕
+            </button>
+          )}
         </header>
 
         {!conversa ? (

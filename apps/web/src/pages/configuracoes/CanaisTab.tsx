@@ -197,6 +197,38 @@ export function CanaisTab() {
           </div>
         </div>
       </Card>
+
+      <Card
+        titulo="Widget do site"
+        descricao="Uma tag no site do cliente abre o Webchat como bolha flutuante"
+      >
+        <p className="text-xs text-slate-500">
+          O widget carrega o Webchat dentro de um iframe: o CSS do site nao afeta o chat e o chat nao
+          afeta o site. As cores vem do White Label.
+        </p>
+
+        <pre className="mt-3 overflow-x-auto rounded-lg bg-slate-900 px-3 py-2 text-xs text-slate-100">
+{`<script src="${window.location.origin}/api/widget.js" defer></script>`}
+        </pre>
+
+        <Button
+          className="mt-3"
+          variante="neutro"
+          onClick={() => {
+            void navigator.clipboard
+              ?.writeText(`<script src="${window.location.origin}/api/widget.js" defer></script>`)
+              .then(() => setOk('Tag copiada.'))
+              .catch(() => setErro('Nao foi possivel copiar — selecione o texto acima.'));
+          }}
+        >
+          Copiar tag
+        </Button>
+
+        <p className="mt-3 text-xs text-slate-400">
+          Opcionais: <code>data-fila="&lt;id&gt;"</code> direciona para uma fila especifica e{' '}
+          <code>data-titulo="..."</code> troca o texto do botao.
+        </p>
+      </Card>
     </div>
   );
 }

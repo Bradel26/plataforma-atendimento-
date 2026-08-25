@@ -623,3 +623,29 @@ itens": é percorrer todas as páginas de duas em duas e comparar com a leitura 
 `Set(ids).size === ids.length` prova que nada repetiu, e a igualdade dos totais prova que nada foi
 pulado. Numa conversa preparada com 71 mensagens, o detalhe traz 50 e as páginas do histórico
 recuperam exatamente as 21 restantes.
+### 31. Widget: iframe, não interface injetada
+O Webchat existia como página em `/webchat`, o que serve para teste e não serve para o cliente: ele
+precisa do chat **no site dele**. Agora uma tag basta.
+
+**Iframe, não injeção de DOM.** As duas abordagens existem no mercado e a escolha aqui é a
+conservadora: o iframe isola CSS e JavaScript **nos dois sentidos**. O Tailwind da plataforma não
+vaza para o site do cliente, o CSS do cliente não desmonta o chat, e um erro de JavaScript de um lado
+não derruba o outro. O custo é não poder animar a transição entre bolha e janela com a página — preço
+baixo pelo isolamento.
+
+**O script é gerado pela API, não um arquivo estático.** Assim a cor da bolha sai do White Label sem o
+cliente editar nada; trocar a cor nas configurações reflete no site dele em até cinco minutos (o
+`Cache-Control` é curto de propósito).
+
+**A origem das mensagens é validada.** O iframe pede para fechar via `postMessage`, e o widget só
+aceita mensagem vinda da origem da plataforma — sem isso, qualquer script na página do cliente
+conseguiria manipular o chat.
+
+Um detalhe de operação que vale registrar: `/webchat` é a única rota que precisa ser **enquadrável**.
+Um `X-Frame-Options: DENY` aplicado globalmente no proxy mata o widget sem erro visível — a bolha abre
+e o quadro fica branco. O `nginx.conf` do repositório já traz o aviso no lugar onde o erro seria
+cometido.
+
+Verificado por `npm run smoke:widget` (9 checagens): a rota é pública e serve JavaScript, o script
+monta iframe apontando para `/webchat?embed=1`, carrega a cor do tema, não contém `undefined` (falha
+clássica de template) e valida a origem; trocar a cor da marca muda o script servido.
