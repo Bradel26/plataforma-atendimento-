@@ -41,7 +41,7 @@ ticketsRoutes.get(
   '/',
   validateQuery(listarTicketsSchema),
   asyncHandler(async (_req, res) => {
-    res.json({ protocolos: await listarTickets(res.locals.query) });
+    res.json(await listarTickets(res.locals.query));
   }),
 );
 

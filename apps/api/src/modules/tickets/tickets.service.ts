@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { urlAssinada } from '../../lib/storage';
+import { apos, decodificarCursor, fatiar } from '../../lib/paginacao';
 import { badRequest, notFound } from '../../lib/errors';
 import { notificarProtocolo } from '../../realtime/hub';
 import type {
@@ -100,13 +101,18 @@ export async function listarTickets(query: ListarTicketsQuery) {
     });
   }
 
-  const tickets = await prisma.ticket.findMany({
+  const depois = apos('atualizadoEm', decodificarCursor(query.cursor));
+  if (depois) filtros.push(depois);
+
+  const registros = await prisma.ticket.findMany({
     where: filtros.length > 0 ? { AND: filtros } : {},
     include: inclusao,
-    orderBy: { atualizadoEm: 'desc' },
-    take: query.limite,
+    orderBy: [{ atualizadoEm: 'desc' }, { id: 'desc' }],
+    take: query.limite + 1,
   });
-  return tickets.map(serialize);
+
+  const { itens, proximoCursor } = fatiar(registros, query.limite, (t) => t.atualizadoEm);
+  return { protocolos: itens.map(serialize), proximoCursor };
 }
 
 export async function obterTicket(id: string) {
@@ -184,7 +190,7 @@ export async function concluirAgendamento(id: string, agendamentoId: string) {
 
 /** Kanban por status, com contagem de SLA vencido por coluna. */
 export async function ticketsKanban(query: ListarTicketsQuery) {
-  const tickets = await listarTickets({ ...query, limite: 200 });
+  const { protocolos: tickets } = await listarTickets({ ...query, limite: 200, cursor: undefined });
   return {
     ABERTO: tickets.filter((t) => t.status === 'ABERTO'),
     EM_ANDAMENTO: tickets.filter((t) => t.status === 'EM_ANDAMENTO'),

@@ -34,6 +34,7 @@ export function useConversas(aba: ConversaStatus) {
   const [conversas, setConversas] = useState<ConversaResumo[]>([]);
   const [contadores, setContadores] = useState<Contadores>(CONTADORES_ZERADOS);
   const [carregando, setCarregando] = useState(true);
+  const [cursor, setCursor] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   // Estado (nao ref) de proposito: consumidores precisam reinscrever quando a
   // instancia do socket trocar.
@@ -49,10 +50,12 @@ export function useConversas(aba: ConversaStatus) {
   const carregarLista = useCallback(async (status: ConversaStatus) => {
     setCarregando(true);
     try {
-      const { conversas: lista } = await api.get<{ conversas: ConversaResumo[] }>(
-        `/conversas?status=${status}`,
-      );
+      const { conversas: lista, proximoCursor: proximo } = await api.get<{
+        conversas: ConversaResumo[];
+        proximoCursor: string | null;
+      }>(`/conversas?status=${status}`);
       setConversas(lista.sort(porAtividade));
+      setCursor(proximo);
       setErro(null);
     } catch {
       setErro('Nao foi possivel carregar as conversas');
@@ -60,6 +63,28 @@ export function useConversas(aba: ConversaStatus) {
       setCarregando(false);
     }
   }, []);
+
+  /**
+   * Proxima pagina da aba. Concatena em vez de substituir, e descarta repetido
+   * pelo id: entre uma pagina e outra chega mensagem nova, e a mesma conversa
+   * pode aparecer nas duas.
+   */
+  const carregarMais = useCallback(async () => {
+    if (!cursor) return;
+    try {
+      const { conversas: lista, proximoCursor: proximo } = await api.get<{
+        conversas: ConversaResumo[];
+        proximoCursor: string | null;
+      }>(`/conversas?status=${abaRef.current}&cursor=${encodeURIComponent(cursor)}`);
+      setConversas((atual) => {
+        const vistos = new Set(atual.map((c) => c.id));
+        return [...atual, ...lista.filter((c) => !vistos.has(c.id))].sort(porAtividade);
+      });
+      setCursor(proximo);
+    } catch {
+      setErro('Nao foi possivel carregar mais conversas');
+    }
+  }, [cursor]);
 
   useEffect(() => {
     void carregarLista(aba);
@@ -127,12 +152,14 @@ export function useConversas(aba: ConversaStatus) {
       contadores,
       carregando,
       erro,
+      temMais: cursor !== null,
+      carregarMais,
       recarregar: () => carregarLista(abaRef.current),
       recarregarContadores: carregarContadores,
       aplicarEvento,
       inscreverMensagens,
       focarConversa,
     }),
-    [conversas, contadores, carregando, erro, carregarLista, carregarContadores, aplicarEvento, inscreverMensagens, focarConversa],
+    [conversas, contadores, carregando, erro, cursor, carregarMais, carregarLista, carregarContadores, aplicarEvento, inscreverMensagens, focarConversa],
   );
 }

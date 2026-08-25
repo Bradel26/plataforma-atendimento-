@@ -9,6 +9,7 @@ import { validateBody, validateQuery } from '../../http/middleware/validate';
 import {
   enviarMensagemSchema,
   listarConversasSchema,
+  listarMensagensSchema,
   transferirSchema,
 } from './conversations.schemas';
 import {
@@ -18,6 +19,7 @@ import {
   enviarMensagem,
   finalizarConversa,
   listarConversas,
+  listarMensagens,
   marcarComoLida,
   obterConversa,
   transferirConversa,
@@ -41,7 +43,15 @@ conversationsRoutes.get(
   '/',
   validateQuery(listarConversasSchema),
   asyncHandler(async (req, res) => {
-    res.json({ conversas: await listarConversas(quem(req), res.locals.query) });
+    res.json(await listarConversas(quem(req), res.locals.query));
+  }),
+);
+
+conversationsRoutes.get(
+  '/:id/mensagens',
+  validateQuery(listarMensagensSchema),
+  asyncHandler(async (req, res) => {
+    res.json(await listarMensagens(quem(req), param(req, 'id'), res.locals.query));
   }),
 );
 

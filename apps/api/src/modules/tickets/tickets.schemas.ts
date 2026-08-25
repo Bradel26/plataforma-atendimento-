@@ -50,6 +50,7 @@ export const listarTicketsSchema = z.object({
   slaVencido: z.enum(['true', 'false']).optional(),
   busca: z.string().trim().min(1).optional(),
   limite: z.coerce.number().int().min(1).max(200).default(100),
+  cursor: z.string().optional(),
 });
 
 export const comentarioSchema = z.object({

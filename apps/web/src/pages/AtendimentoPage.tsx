@@ -27,6 +27,8 @@ export function AtendimentoPage() {
     contadores,
     carregando,
     erro,
+    temMais,
+    carregarMais,
     aplicarEvento,
     inscreverMensagens,
     focarConversa,
@@ -130,6 +132,8 @@ export function AtendimentoPage() {
               selecionadaId={aberta?.id ?? null}
               onSelecionar={(id) => void abrir(id)}
               carregando={carregando}
+              temMais={temMais}
+              onCarregarMais={() => void carregarMais()}
             />
           )}
         </div>

@@ -81,6 +81,7 @@ backend na mesma origem (necessário para o cookie de refresh).
 | `npm run smoke:seguranca` | bloqueio de login, limite por IP e segredo cifrado (16 checagens) |
 | `npm run smoke:lgpd` | retenção, anonimização e trilha de auditoria (25 checagens) |
 | `npm run smoke:fila` | disparo assíncrono, nova tentativa e estado da fila (12 checagens) |
+| `npm run smoke:paginacao` | cursor sem pular nem repetir registro (13 checagens) |
 
 ## API (Fase 0)
 
@@ -162,6 +163,7 @@ Base: `/api`. Corpo e respostas em JSON. Erros no formato `{ error: { code, mess
 | POST | `/lgpd/expurgo` | admin — simulação por padrão |
 | GET | `/lgpd/registros` | admin — trilha de auditoria |
 | GET | `/health/fila` | admin, supervisor — prontos, atrasados e descartados |
+| GET | `/conversas/:id/mensagens` | autenticado — histórico paginado por cursor |
 | GET | `/lgpd/titulares/:id/exportar` | admin — portabilidade |
 | POST | `/lgpd/titulares/:id/anonimizar` | admin — eliminação |
 | GET/POST | `/campanhas`, `/campanhas/:id` | admin, supervisor |
@@ -333,6 +335,22 @@ tentativas sem entender, deixando a conversa na fila.
 
 ```bash
 npm run smoke:seguranca   # com a API de pé; verifica o que ficou gravado no Redis e no Postgres
+```
+
+## Paginação
+
+Listagens grandes usam **cursor** (keyset), não `offset`: `conversas`, `contatos`, `protocolos` e o
+histórico de mensagens aceitam `?limite=&cursor=` e devolvem `proximoCursor` (`null` na última
+página). O cursor é opaco.
+
+- O detalhe da conversa traz as **últimas 50 mensagens** mais `temHistoricoAnterior` e
+  `cursorAnterior`; o painel carrega o resto sob demanda. Um atendimento de WhatsApp com dois anos de
+  histórico não chega inteiro a cada abertura.
+- A ordenação sempre desempata por `id`. Sem isso, dois registros no mesmo milissegundo fazem a
+  paginação pular um deles.
+
+```bash
+npm run smoke:paginacao   # percorre as páginas e prova que nada é pulado ou repetido
 ```
 
 ## Fila de trabalho

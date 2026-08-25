@@ -596,3 +596,30 @@ de conversas não mostrar uma linha vazia.
 Verificado por `npm run smoke:midia` (29 checagens no total): no webchat o anexo entra como `IMAGEM`
 com a legenda como texto; no WhatsApp com token falso o upload volta 502 `ENVIO_RECUSADO`, o histórico
 fica do mesmo tamanho e a contagem de arquivos no disco não muda.
+### 30. Paginação por cursor, e o desempate que quase todo mundo esquece
+As listagens tinham limite fixo (50 a 200) e nada além disso: passado esse número, o registro
+simplesmente não existia para a interface.
+
+**Cursor (keyset), não `offset`.** Dois motivos, e o segundo é o que pesa aqui: `offset` faz o banco
+varrer e descartar tudo o que vem antes, e — pior — **pula ou repete registro quando a lista muda
+entre duas páginas**. Num painel de atendimento a lista muda a cada mensagem recebida, então o
+problema não é hipotético: com `offset`, rolar a lista perderia conversas.
+
+**O desempate por id é obrigatório, não um detalhe de estilo.** Ordenar só por
+`ultimaMensagemEm desc` e cursorar por esse campo perde qualquer registro que compartilhe o
+milissegundo com a borda da página. Toda ordenação virou `[{ campo: 'desc' }, { id: 'desc' }]`, e o
+cursor carrega os dois valores.
+
+**`limite + 1` em vez de `COUNT`.** Busca-se um registro além da página: se ele veio, existe próxima
+página. Uma consulta em vez de duas, e sem o custo de contar uma tabela grande a cada requisição.
+
+**O detalhe da conversa deixou de trazer o histórico inteiro** — vêm as últimas 50, mais
+`temHistoricoAnterior` e `cursorAnterior`. O cursor vai pronto no detalhe de propósito: ele é opaco,
+então o cliente não conseguiria montá-lo, e sem isso a tela precisaria de uma requisição extra só
+para descobrir onde continuar.
+
+Verificado por `npm run smoke:paginacao` (13 checagens). A asserção que importa não é "vieram N
+itens": é percorrer todas as páginas de duas em duas e comparar com a leitura em página única —
+`Set(ids).size === ids.length` prova que nada repetiu, e a igualdade dos totais prova que nada foi
+pulado. Numa conversa preparada com 71 mensagens, o detalhe traz 50 e as páginas do histórico
+recuperam exatamente as 21 restantes.

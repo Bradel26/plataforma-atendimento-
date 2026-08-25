@@ -1,6 +1,7 @@
 import type { AttachmentType, Prisma, Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { salvar } from '../../lib/storage';
+import { apos, decodificarCursor, fatiar } from '../../lib/paginacao';
 import { badRequest, forbidden, notFound } from '../../lib/errors';
 import { notificarConversaAtualizada, notificarMensagem } from '../../realtime/hub';
 import { enviarArquivoParaCanal, enviarParaCanal, exigeEnvioExterno } from '../channels/outbound.service';
@@ -53,14 +54,47 @@ export async function listarConversas(solicitante: Solicitante, query: ListarCon
     });
   }
 
-  const conversas = await prisma.conversation.findMany({
+  const cursor = decodificarCursor(query.cursor);
+  const limiteCursor = apos('ultimaMensagemEm', cursor);
+  if (limiteCursor) filtros.push(limiteCursor);
+
+  const registros = await prisma.conversation.findMany({
     where: { AND: filtros },
     include: inclusaoResumo,
-    orderBy: { ultimaMensagemEm: 'desc' },
-    take: query.limite,
+    // O id entra na ordenacao junto com a data: sem o desempate, duas conversas
+    // no mesmo milissegundo fariam a paginacao pular uma delas.
+    orderBy: [{ ultimaMensagemEm: 'desc' }, { id: 'desc' }],
+    take: query.limite + 1,
   });
 
-  return conversas.map(toConversaResumo);
+  const { itens, proximoCursor } = fatiar(registros, query.limite, (c) => c.ultimaMensagemEm);
+  return { conversas: itens.map(toConversaResumo), proximoCursor };
+}
+
+/**
+ * Mensagens de uma conversa, da mais recente para a mais antiga.
+ *
+ * O detalhe da conversa devolve apenas as ultimas; um atendimento de WhatsApp
+ * com dois anos de historico nao pode chegar inteiro em cada abertura do painel.
+ */
+export async function listarMensagens(
+  solicitante: Solicitante,
+  id: string,
+  query: { limite: number; cursor?: string },
+) {
+  const conversa = await carregarOuFalhar(id);
+  await garantirAcesso(solicitante, conversa);
+
+  const cursor = decodificarCursor(query.cursor);
+  const registros = await prisma.message.findMany({
+    where: { conversaId: id, ...(apos('criadoEm', cursor) ?? {}) },
+    orderBy: [{ criadoEm: 'desc' }, { id: 'desc' }],
+    take: query.limite + 1,
+  });
+
+  const { itens, proximoCursor } = fatiar(registros, query.limite, (m) => m.criadoEm);
+  // Devolve em ordem cronologica: quem consome so precisa colar no inicio da lista.
+  return { mensagens: itens.reverse().map(toMensagem), proximoCursor };
 }
 
 /** Contadores por aba do painel. */

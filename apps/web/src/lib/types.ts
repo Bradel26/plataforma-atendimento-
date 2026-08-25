@@ -103,7 +103,12 @@ type ConversaBase = {
 
 export type ConversaResumo = ConversaBase & { ultimaMensagem: Mensagem | null };
 
-export type ConversaDetalhe = ConversaBase & { mensagens: Mensagem[] };
+export type ConversaDetalhe = ConversaBase & {
+  mensagens: Mensagem[];
+  /** O detalhe traz as ultimas 50; o resto vem por /conversas/:id/mensagens. */
+  temHistoricoAnterior?: boolean;
+  cursorAnterior?: string | null;
+};
 
 export type Contadores = Record<ConversaStatus, number>;
 

@@ -5,7 +5,9 @@ import { requireAuth } from '../../http/middleware/auth';
 import { param } from '../../http/params';
 import { validateBody, validateQuery } from '../../http/middleware/validate';
 import { notFound } from '../../lib/errors';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
+import { apos, decodificarCursor, fatiar } from '../../lib/paginacao';
 import { inclusaoResumo, toConversaResumo } from '../conversations/conversations.serializer';
 
 export const contactsRoutes = Router();
@@ -15,6 +17,7 @@ contactsRoutes.use(requireAuth);
 const listarSchema = z.object({
   busca: z.string().trim().min(1).optional(),
   limite: z.coerce.number().int().min(1).max(100).default(50),
+  cursor: z.string().optional(),
 });
 
 const atualizarSchema = z
@@ -31,24 +34,32 @@ contactsRoutes.get(
   '/',
   validateQuery(listarSchema),
   asyncHandler(async (_req, res) => {
-    const { busca, limite } = res.locals.query as z.infer<typeof listarSchema>;
-    const contatos = await prisma.contact.findMany({
-      where: busca
-        ? {
-            OR: [
-              { nome: { contains: busca, mode: 'insensitive' } },
-              { email: { contains: busca, mode: 'insensitive' } },
-              { telefone: { contains: busca } },
-            ],
-          }
-        : undefined,
-      orderBy: { atualizadoEm: 'desc' },
-      take: limite,
+    const { busca, limite, cursor } = res.locals.query as z.infer<typeof listarSchema>;
+    const filtros: Prisma.ContactWhereInput[] = [];
+
+    if (busca) {
+      filtros.push({
+        OR: [
+          { nome: { contains: busca, mode: 'insensitive' } },
+          { email: { contains: busca, mode: 'insensitive' } },
+          { telefone: { contains: busca } },
+        ],
+      });
+    }
+    const depois = apos('atualizadoEm', decodificarCursor(cursor));
+    if (depois) filtros.push(depois);
+
+    const registros = await prisma.contact.findMany({
+      where: filtros.length > 0 ? { AND: filtros } : undefined,
+      orderBy: [{ atualizadoEm: 'desc' }, { id: 'desc' }],
+      take: limite + 1,
       include: { _count: { select: { conversas: true } } },
     });
 
+    const { itens, proximoCursor } = fatiar(registros, limite, (c) => c.atualizadoEm);
     res.json({
-      contatos: contatos.map(({ _count, ...c }) => ({ ...c, totalConversas: _count.conversas })),
+      contatos: itens.map(({ _count, ...c }) => ({ ...c, totalConversas: _count.conversas })),
+      proximoCursor,
     });
   }),
 );

@@ -6,6 +6,13 @@ export const listarConversasSchema = z.object({
   minhas: z.enum(['true', 'false']).optional(),
   busca: z.string().trim().min(1).optional(),
   limite: z.coerce.number().int().min(1).max(100).default(50),
+  /** Cursor opaco devolvido pela pagina anterior. */
+  cursor: z.string().optional(),
+});
+
+export const listarMensagensSchema = z.object({
+  limite: z.coerce.number().int().min(1).max(200).default(50),
+  cursor: z.string().optional(),
 });
 
 export const enviarMensagemSchema = z.object({

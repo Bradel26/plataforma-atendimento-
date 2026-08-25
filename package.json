@@ -26,7 +26,8 @@
     "smoke:midia": "node scripts/smoke-midia.mjs",
     "smoke:seguranca": "node scripts/smoke-seguranca.mjs",
     "smoke:lgpd": "node scripts/smoke-lgpd.mjs",
-    "smoke:fila": "node scripts/smoke-fila.mjs"
+    "smoke:fila": "node scripts/smoke-fila.mjs",
+    "smoke:paginacao": "node scripts/smoke-paginacao.mjs"
   },
   "engines": {
     "node": ">=20"

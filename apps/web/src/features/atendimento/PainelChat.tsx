@@ -76,11 +76,22 @@ export function PainelChat({
   const [texto, setTexto] = useState('');
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  const [anteriores, setAnteriores] = useState<Mensagem[]>([]);
+  const [cursorHistorico, setCursorHistorico] = useState<string | null>(null);
+  const [fimDoHistorico, setFimDoHistorico] = useState(false);
   const fim = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fim.current?.scrollIntoView({ block: 'end' });
   }, [conversa.mensagens.length, conversa.id]);
+
+  // Trocar de conversa zera o historico carregado: sem isto, as mensagens
+  // antigas de uma conversa apareceriam no topo da proxima.
+  useEffect(() => {
+    setAnteriores([]);
+    setCursorHistorico(null);
+    setFimDoHistorico(false);
+  }, [conversa.id]);
 
   const finalizada = conversa.status === 'FINALIZADO';
 
@@ -112,6 +123,28 @@ export function PainelChat({
       onMudou(resp.conversa);
     } catch (err) {
       setErro(err instanceof ApiError ? err.message : 'Falha ao enviar');
+    } finally {
+      setOcupado(false);
+    }
+  };
+
+  /**
+   * Historico anterior sob demanda. A conversa abre com as ultimas mensagens; o
+   * resto vem por pagina, da mais recente para a mais antiga.
+   */
+  const carregarAnteriores = async () => {
+    const cursor = cursorHistorico ?? conversa.cursorAnterior;
+    if (!cursor) return;
+    setOcupado(true);
+    try {
+      const resp = await api.get<{ mensagens: Mensagem[]; proximoCursor: string | null }>(
+        `/conversas/${conversa.id}/mensagens?cursor=${encodeURIComponent(cursor)}`,
+      );
+      setAnteriores((atual) => [...resp.mensagens, ...atual]);
+      setCursorHistorico(resp.proximoCursor);
+      setFimDoHistorico(resp.proximoCursor === null);
+    } catch (err) {
+      setErro(err instanceof ApiError ? err.message : 'Falha ao carregar o historico');
     } finally {
       setOcupado(false);
     }
@@ -214,8 +247,19 @@ export function PainelChat({
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50 px-5 py-4">
+        {(conversa.temHistoricoAnterior ?? false) && !fimDoHistorico && (
+          <button
+            type="button"
+            onClick={() => void carregarAnteriores()}
+            disabled={ocupado}
+            className="mx-auto mb-3 block rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+          >
+            Carregar mensagens anteriores
+          </button>
+        )}
+
         <ul className="space-y-2">
-          {conversa.mensagens.map((m) => (
+          {[...anteriores, ...conversa.mensagens].map((m) => (
             <Bolha key={m.id} mensagem={m} />
           ))}
         </ul>

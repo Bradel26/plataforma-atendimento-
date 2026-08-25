@@ -22,11 +22,15 @@ export function ListaConversas({
   selecionadaId,
   onSelecionar,
   carregando,
+  temMais = false,
+  onCarregarMais,
 }: {
   conversas: ConversaResumo[];
   selecionadaId: string | null;
   onSelecionar: (id: string) => void;
   carregando: boolean;
+  temMais?: boolean;
+  onCarregarMais?: () => void;
 }) {
   if (carregando && conversas.length === 0) {
     return <p className="p-4 text-sm text-slate-500">Carregando conversas...</p>;
@@ -69,6 +73,18 @@ export function ListaConversas({
           </li>
         );
       })}
+
+      {temMais && onCarregarMais && (
+        <li className="p-3">
+          <button
+            type="button"
+            onClick={onCarregarMais}
+            className="w-full rounded-lg border border-slate-200 py-2 text-xs text-slate-600 hover:bg-slate-50"
+          >
+            Carregar conversas anteriores
+          </button>
+        </li>
+      )}
     </ul>
   );
 }
