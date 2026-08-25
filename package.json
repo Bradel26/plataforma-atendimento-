@@ -38,7 +38,9 @@
     "test:e2e:ui": "playwright test --ui",
     "worker": "npm run worker -w @plataforma/api",
     "start:worker": "npm run start:worker -w @plataforma/api",
-    "smoke:worker": "node scripts/smoke-worker.mjs"
+    "smoke:worker": "node scripts/smoke-worker.mjs",
+    "lgpd:reaplicar": "npm run lgpd:reaplicar -w @plataforma/api",
+    "lgpd:reaplicar:executar": "npm run lgpd:reaplicar:executar -w @plataforma/api"
   },
   "engines": {
     "node": ">=20"

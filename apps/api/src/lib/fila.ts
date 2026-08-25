@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { redis } from './redis';
+import { redigir, redigirTexto } from './redacao';
 
 /**
  * Fila de trabalho em Redis.
@@ -84,7 +85,7 @@ async function processar(trabalho: Trabalho) {
     }
 
     const espera = ESPERAS_MS[trabalho.tentativa]!;
-    console.warn(`[fila] ${trabalho.tipo} falhou (${motivo}); nova tentativa em ${espera / 1000}s`);
+    console.warn(`[fila] ${trabalho.tipo} falhou (${redigirTexto(motivo)}); nova tentativa em ${espera / 1000}s`);
     await guardar({ ...trabalho, tentativa: trabalho.tentativa + 1 }, espera);
   }
 }
@@ -107,7 +108,7 @@ export function iniciarWorker() {
         await processar(JSON.parse(item[1]) as Trabalho);
       } catch (err) {
         if (parando) return;
-        console.error('[fila] erro no laco:', err instanceof Error ? err.message : err);
+        console.error('[fila] erro no laco:', redigir(err));
         await new Promise((r) => setTimeout(r, 1000));
       }
     }

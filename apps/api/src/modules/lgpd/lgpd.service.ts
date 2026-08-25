@@ -223,3 +223,62 @@ export async function anonimizarTitular(
 
   return { contato: { id: anonimizado.id, nome: anonimizado.nome }, ...detalhe };
 }
+
+/**
+ * Reaplica a anonimizacao registrada na trilha de auditoria.
+ *
+ * Restaurar um backup ressuscita o dado que o titular pediu para apagar: o
+ * snapshot foi tirado antes do pedido, e o provedor de banco nao sabe da LGPD.
+ * A trilha de auditoria e o que sobra — ela guarda quais contatos foram
+ * anonimizados, e sem chave estrangeira de proposito, justamente para sobreviver
+ * ao titular.
+ *
+ * Entao o procedimento de restauracao tem dois passos: restaure, e rode isto.
+ * Roda em simulacao por padrao — ninguem devia descobrir o alcance da operacao
+ * depois de executa-la.
+ */
+export async function reaplicarAnonimizacoes(opcoes: { simulacao?: boolean } = {}) {
+  const simulacao = opcoes.simulacao ?? true;
+
+  const registros = await prisma.lgpdLog.findMany({
+    where: { acao: 'ANONIMIZACAO', contatoId: { not: null } },
+    select: { contatoId: true },
+    distinct: ['contatoId'],
+  });
+  const ids = registros.map((r) => r.contatoId!).filter(Boolean);
+
+  // Quem ja esta anonimizado nao entra: a operacao apaga mensagem, e repetir
+  // gastaria escrita sem mudar nada.
+  const pendentes = await prisma.contact.findMany({
+    where: { id: { in: ids }, anonimizadoEm: null },
+    select: { id: true, nome: true },
+  });
+
+  // Registro cujo contato nao existe mais: o expurgo levou a linha inteira, que
+  // e um resultado melhor que a anonimizacao. Nao e pendencia.
+  const ausentes = ids.length - (await prisma.contact.count({ where: { id: { in: ids } } }));
+
+  if (simulacao) {
+    return { simulacao: true, registrados: ids.length, ausentes, reaplicados: 0, pendentes: pendentes.length };
+  }
+
+  let reaplicados = 0;
+  const falhas: string[] = [];
+  for (const contato of pendentes) {
+    try {
+      await anonimizarTitular(contato.id, { motivo: 'reaplicacao apos restauracao de backup' });
+      reaplicados++;
+    } catch {
+      falhas.push(contato.id);
+    }
+  }
+
+  return {
+    simulacao: false,
+    registrados: ids.length,
+    ausentes,
+    reaplicados,
+    pendentes: pendentes.length - reaplicados,
+    falhas,
+  };
+}

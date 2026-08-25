@@ -50,12 +50,12 @@ Em ordem de risco que remove, do maior para o menor.
 | # | O que falta | Por que importa | Tamanho |
 |---|---|---|---|
 | 4.1 | ~~Teste de navegador (Playwright)~~ | **feito** — 10 testes em Chromium que cobrem login, menu por perfil, rota proibida, logout e sessão atravessando recarga. Achou um bug real na primeira execução (ver decisão 37). | — |
-| 4.2 | **Worker em processo separado** | Hoje a fila roda dentro da API. Um lote grande de campanha disputa CPU com o atendimento, e reiniciar a API mata o worker no meio. | médio |
-| 4.3 | **Anonimização de backup e de log** | A LGPD hoje cobre banco e disco. O dado que já saiu em backup continua identificável — pedido de exclusão não alcança ele. | médio |
+| 4.2 | ~~Worker em processo separado~~ | **feito** — `src/worker.ts`, mesma imagem, outro processo; `WORKER_EMBUTIDO` controla o embutido. | — |
+| 4.3 | ~~Anonimização de backup e de log~~ | **feito** — `npm run lgpd:reaplicar` reanonimiza a partir da trilha depois de restaurar; log redige dado pessoal antes de imprimir. | — |
 | 4.4 | Testes de integração com banco efêmero | Os smokes usam o banco de dev; um teste destrutivo não tem onde rodar em segurança. Precisa de Docker. | médio |
 | 4.5 | Modo escuro | O app não tem. A paleta de dados foi validada só sobre fundo claro. | pequeno |
 | 4.6 | Tabela acessível nos gráficos do dashboard | Quem usa leitor de tela não lê barra. Hoje há rótulo e valor visíveis, o que atende o mínimo, mas não substitui a tabela. | pequeno |
-| 4.7 | Reprocessar dead-letter pela interface | A fila move o item para a lista de mortos, e só dá para reprocessar por script. | pequeno |
+| 4.7 | ~~Reprocessar dead-letter pela interface~~ | **feito** — aba Configurações › Fila de trabalho, restrita a ADMIN. | — |
 
 ## 5. Fora do escopo, mas os concorrentes têm
 

@@ -534,8 +534,13 @@ localmente, mas nenhuma credencial real da Meta foi exercitada — depende de co
 Postgres e Redis de pé — sem Docker nesta máquina, não há como subir instância descartável no
 pipeline.
 
-**Backup e log com dado pessoal.** O expurgo alcança Postgres e storage; snapshot do provedor de
-banco e log de aplicação seguem a retenção deles.
+**Backup: restaure e rode `npm run lgpd:reaplicar`.** Snapshot é tirado antes do pedido de
+exclusão, então restaurar ressuscita o dado apagado. A trilha de auditoria sobrevive ao titular de
+propósito e é ela que diz quem anonimizar de novo — o comando roda em simulação por padrão.
+
+**Log:** dado pessoal é redigido antes de imprimir (`src/lib/redacao.ts`). E-mail vira `j***@dominio`,
+telefone e CPF saem, JWT e chave hex viram rótulo, e campos como `senha` e `accessToken` nunca têm o
+valor impresso. Stack trace também passa pela redação: mensagem de erro carrega parâmetro.
 
 **Worker em processo separado.** A fila existe e funciona, mas o consumidor roda dentro da API.
 

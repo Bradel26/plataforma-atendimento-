@@ -3,6 +3,7 @@ import { MulterError } from 'multer';
 import { ZodError } from 'zod';
 import { AppError } from '../../lib/errors';
 import { limiteBytes } from '../../lib/storage';
+import { registrarErro } from '../../lib/redacao';
 
 export function notFoundHandler(req: Request, res: Response) {
   res.status(404).json({ error: { code: 'NOT_FOUND', message: `Rota ${req.method} ${req.path} nao existe` } });
@@ -34,6 +35,8 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
     return res.status(400).json({ error: { code: 'UPLOAD_INVALIDO', message: mensagem } });
   }
 
-  console.error('[erro nao tratado]', err);
+  // Redigido: stack de erro carrega o corpo da requisicao, e corpo de webhook
+  // tem telefone e nome do cliente dentro.
+  registrarErro('[erro nao tratado]', err);
   return res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'Erro interno do servidor' } });
 }

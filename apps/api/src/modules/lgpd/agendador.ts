@@ -1,4 +1,5 @@
 import { redis } from '../../lib/redis';
+import { registrarErro } from '../../lib/redacao';
 import { executarExpurgo } from './expurgo.service';
 import { obterPolitica } from './lgpd.service';
 
@@ -26,7 +27,7 @@ export function agendarExpurgo() {
         `[lgpd] expurgo automatico: ${resumo.mensagens} mensagens, ${resumo.titulares} titulares anonimizados`,
       );
     } catch (err) {
-      console.error('[lgpd] expurgo automatico falhou:', err instanceof Error ? err.message : err);
+      registrarErro('[lgpd] expurgo automatico falhou:', err);
     }
   };
 

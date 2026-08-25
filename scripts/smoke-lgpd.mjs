@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process';
 /**
  * Smoke test da politica de retencao e dos direitos do titular (LGPD).
  *
@@ -196,6 +197,53 @@ checar(
   '9. auditoria registra exportacao, anonimizacao e expurgo',
   [...acoes].join(','),
 );
+
+
+// 10. Reaplicacao apos restauracao de backup.
+//
+// Restaurar um snapshot ressuscita o dado que o titular pediu para apagar. O
+// teste simula exatamente isso: desfaz a anonimizacao de um contato como um
+// backup antigo faria, e confere que o comando a reaplica a partir da trilha
+// de auditoria. Roda o CLI de verdade, em subprocesso, porque e assim que ele
+// vai ser usado depois de uma restauracao.
+const reaplicar = (executar) =>
+  execSync(`npm run ${executar ? 'lgpd:reaplicar:executar' : 'lgpd:reaplicar'}`, { cwd: raiz, encoding: 'utf8' });
+/** Le o numero que o CLI imprime ao lado do rotulo. Sem regex de proposito:
+ *  escapar barra dentro de template gerou bug bobo aqui antes. */
+const numeroDe = (saida, rotulo) => {
+  const linha = saida.split(String.fromCharCode(10)).find((l) => l.includes(rotulo + ":"));
+  return linha ? Number(linha.split(":").pop().trim()) : -1;
+};
+
+const registroAnon = await prisma.lgpdLog.findFirst({
+  where: { acao: 'ANONIMIZACAO', contatoId: { not: null } },
+  orderBy: { criadoEm: 'desc' },
+});
+checar(Boolean(registroAnon?.contatoId), '10. ha anonimizacao registrada na trilha');
+
+if (registroAnon?.contatoId) {
+  const telefoneRessuscitado = `5511${Date.now().toString().slice(-9)}`;
+  await prisma.contact.update({
+    where: { id: registroAnon.contatoId },
+    data: { nome: 'Nome que voltou do backup', telefone: telefoneRessuscitado, anonimizadoEm: null },
+  });
+
+  const saidaSimulacao = reaplicar(false);
+  checar(numeroDe(saidaSimulacao, 'a reanonimizar') >= 1, '11. simulacao encontra o titular ressuscitado', `${numeroDe(saidaSimulacao, 'a reanonimizar')} pendente(s)`);
+  const aindaComNome = await prisma.contact.findUnique({ where: { id: registroAnon.contatoId } });
+  checar(aindaComNome?.telefone === telefoneRessuscitado, '12. simulacao nao alterou nada');
+
+  const saidaAplicada = reaplicar(true);
+  checar(numeroDe(saidaAplicada, 'reanonimizados agora') >= 1, '13. reaplicacao anonimiza de novo', `${numeroDe(saidaAplicada, 'reanonimizados agora')} reaplicado(s)`);
+
+  const depois = await prisma.contact.findUnique({ where: { id: registroAnon.contatoId } });
+  checar(depois?.telefone === null, '14. telefone que voltou do backup saiu outra vez');
+  checar(depois?.nome?.startsWith('Titular anonimizado') === true, '15. nome volta ao rotulo anonimo', depois?.nome ?? '');
+  checar(Boolean(depois?.anonimizadoEm), '16. data de anonimizacao remarcada');
+
+  const denovo = reaplicar(true);
+  checar(numeroDe(denovo, 'reanonimizados agora') === 0, '17. rodar de novo nao faz nada (idempotente)');
+}
 
 // Devolve a politica ao padrao para nao deixar prazo curto configurado.
 await req('PUT', '/lgpd/politica', {

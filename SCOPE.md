@@ -835,3 +835,36 @@ roubo de token:
 
 O arquivo `tests/e2e/sessao.spec.ts` guarda o bug: recarga nos três perfis, cinco renovações
 simultâneas, e o código `SEM_SESSAO`.
+
+### 38. Backup e log: os dois lugares onde o dado apagado continuava vivo
+
+O expurgo e a anonimização alcançavam Postgres e disco. Sobravam duas fugas.
+
+**Backup.** O snapshot foi tirado antes do pedido de exclusão, e o provedor de banco não sabe da
+LGPD. Restaurar ressuscita exatamente o dado que o titular pediu para apagar. Não dá para editar
+snapshot alheio — o que dá é tornar a restauração um procedimento de dois passos: restaure, e rode
+`npm run lgpd:reaplicar`.
+
+A peça que faz isso funcionar já existia por outro motivo: `LgpdLog` guarda o `contatoId` **sem
+chave estrangeira**, de propósito, para o registro sobreviver ao titular que ele documenta. É essa
+lista que diz quem anonimizar de novo. Roda em simulação por padrão — ninguém devia descobrir o
+alcance de uma operação irreversível depois de executá-la — e é idempotente: quem já está anonimizado
+não entra, e contato que o expurgo levou por inteiro não é pendência, é um resultado melhor.
+
+**Log.** Um stack trace com o corpo do webhook dentro guarda telefone e nome do cliente em texto
+plano, num arquivo fora de qualquer política de retenção. `src/lib/redacao.ts` redige antes de
+imprimir: e-mail vira `j***@dominio`, telefone e CPF saem, JWT e chave hex viram rótulo, e campos
+como `senha`, `accessToken` e `appSecret` nunca têm o valor impresso — por nome de campo, em
+qualquer caixa, em qualquer nível de aninhamento.
+
+Três decisões sobre a redação:
+
+- **Conservadora.** Prefere mascarar demais. Log serve para diagnosticar, e diagnóstico raramente
+  precisa do dado em si.
+- **CPF sem pontuação tem 11 dígitos, igual a celular com DDD.** Os dois são dado pessoal e os dois
+  somem; o rótulo aposta em telefone, que é o que aparece num contact center.
+- **Corta profundidade, tamanho de lista e ciclo.** Redigir não pode ser o motivo de o log travar.
+
+13 testes de unidade cobrem os formatos, e o smoke da LGPD passou a simular uma restauração de
+backup: desfaz a anonimização de um contato como um snapshot antigo faria, e confere que o comando
+o anonimiza de novo — inclusive que a simulação não altera nada.

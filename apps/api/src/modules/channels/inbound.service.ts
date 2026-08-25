@@ -1,6 +1,7 @@
 import type { Channel } from '@prisma/client';
 import { baixarAnexo } from './media.service';
 import { prisma } from '../../lib/prisma';
+import { redigirTexto } from '../../lib/redacao';
 import { notificarConversaAtualizada, notificarConversaNova, notificarMensagem } from '../../realtime/hub';
 import { responderAutomaticamente } from '../bots/bots.service';
 import { inclusaoDetalhe, toConversaDetalhe, toMensagem } from '../conversations/conversations.serializer';
@@ -60,7 +61,7 @@ export async function registrarMensagemEntrante(dados: MensagemNormalizada) {
   // fica no log para quem for investigar.
   const anexo = await baixarAnexo(dados.canal, dados);
   if (anexo.motivo) {
-    console.warn(`[anexo] ${dados.canal} ${dados.idExterno}: ${anexo.motivo}`);
+    console.warn(`[anexo] ${dados.canal} ${dados.idExterno}: ${redigirTexto(anexo.motivo)}`);
   }
 
   const mensagem = await prisma.message.create({
