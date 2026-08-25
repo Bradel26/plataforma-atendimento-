@@ -17,8 +17,13 @@ const server = createServer(createApp());
 const io = criarServidorRealtime(server);
 
 avisarChaveDerivada();
-agendarExpurgo();
-const pararWorker = iniciarWorker();
+
+// Worker embutido: comodo em desenvolvimento, indesejado em producao. Quando
+// desligado, quem consome a fila e dist/src/worker.js, e o expurgo da LGPD vai
+// com ele — sao os dois trabalhos de fundo.
+const pararWorker = env.WORKER_EMBUTIDO ? (agendarExpurgo(), iniciarWorker()) : async () => {};
+
+if (!env.WORKER_EMBUTIDO) console.log('Worker embutido desligado: suba o processo do worker separadamente.');
 
 server.listen(env.PORT, () => {
   console.log(`API ouvindo em http://localhost:${env.PORT} (${env.NODE_ENV})`);

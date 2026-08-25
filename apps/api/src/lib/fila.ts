@@ -148,3 +148,42 @@ export async function aguardarVaga(canal: string, porSegundo: number) {
     await new Promise((r) => setTimeout(r, 1000 - (Date.now() % 1000) + 10));
   }
 }
+
+/**
+ * Devolve trabalhos da lista de mortos para a fila de prontos.
+ *
+ * Trabalho morto por causa passageira (token expirado que ja foi renovado,
+ * provedor que voltou do ar) so precisa de outra chance. Sem isso a unica saida
+ * era script no servidor — e o dado fica parado justamente quando alguem esta
+ * olhando o painel querendo resolver.
+ *
+ * A tentativa volta a zero de proposito: e uma decisao humana de tentar de novo,
+ * nao a continuacao do backoff anterior.
+ */
+export async function reprocessarMortos(quantidade = 50) {
+  let devolvidos = 0;
+  let descartados = 0;
+
+  for (let i = 0; i < quantidade; i++) {
+    const corpo = await redis.rpop(MORTOS);
+    if (!corpo) break;
+
+    try {
+      const { erro: _erro, ...trabalho } = JSON.parse(corpo) as Trabalho & { erro?: string };
+      // Sem handler registrado nao ha o que reprocessar: voltaria para os mortos
+      // no mesmo instante, num laco.
+      if (!handlers.has(trabalho.tipo)) {
+        await redis.lpush(MORTOS, corpo);
+        descartados++;
+        continue;
+      }
+      await guardar({ ...trabalho, tentativa: 0 }, 0);
+      devolvidos++;
+    } catch {
+      // Item corrompido nao volta para a fila nem fica bloqueando a lista.
+      descartados++;
+    }
+  }
+
+  return { devolvidos, descartados };
+}

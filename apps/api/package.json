@@ -13,7 +13,9 @@
     "db:deploy": "prisma migrate deploy",
     "db:generate": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "worker": "tsx watch src/worker.ts",
+    "start:worker": "node dist/src/worker.js"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

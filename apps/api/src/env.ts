@@ -19,6 +19,15 @@ const schema = z.object({
     .enum(['true', 'false'])
     .default('false')
     .transform((v) => v === 'true'),
+  /**
+   * Worker da fila dentro do processo da API. Deixe ligado em desenvolvimento;
+   * em producao desligue e suba `node dist/src/worker.js` como processo proprio,
+   * senao um lote de campanha disputa CPU com quem esta sendo atendido.
+   */
+  WORKER_EMBUTIDO: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
   /** Chave de 32 bytes em hex para cifrar segredos de canal em repouso. */
   SECRETS_KEY: z.string().regex(/^[0-9a-f]{64}$/, 'SECRETS_KEY precisa ser 64 caracteres hex').optional(),
   SEED_ADMIN_EMAIL: z.string().email().default('admin@plataforma.local'),

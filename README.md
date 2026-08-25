@@ -86,6 +86,7 @@ backend na mesma origem (necessário para o cookie de refresh).
 | `npm run smoke:widget` | script do widget servido e coerente com o tema (9 checagens) |
 | `npm run smoke:voz` | assinatura, ciclo da chamada e recusa do provedor (29 checagens) |
 | `npm run smoke:metricas` | indicadores do dashboard conferidos por delta (36 checagens) |
+| `npm run smoke:worker` | volta dos trabalhos mortos para a fila (12 checagens) |
 
 ## API (Fase 0)
 
@@ -562,3 +563,28 @@ na API (`SEM_SESSAO` distingue "não há cookie" de "cookie inválido", para o c
 quando não há o que renovar).
 
 Não roda no CI: precisa de Postgres, Redis e API de pé — as mesmas dependências dos smokes.
+
+### Worker em processo separado
+
+A fila roda embutida na API por padrão, que é o cômodo em desenvolvimento. Em produção, separe:
+
+```bash
+# API sem worker
+WORKER_EMBUTIDO=false node dist/src/main.js
+
+# worker, mesma imagem, outro processo
+node dist/src/worker.js
+```
+
+Por que separar: um lote grande de campanha disputa CPU com quem está sendo atendido, e reiniciar a
+API mata o worker no meio do trabalho. O expurgo da LGPD acompanha o worker — é trabalho de fundo, e
+o lock em Redis garante uma execução só mesmo com vários workers.
+
+Verificado com os dois processos de pé ao mesmo tempo: dos 8 trabalhos enfileirados, o worker
+separado consumiu 4 e a API embutida 4 — nenhum processado em dobro. Com `WORKER_EMBUTIDO=false` a
+API sobe, responde `/api/health` e avisa no arranque que o worker é externo.
+
+**Trabalhos que desistiram** aparecem em *Configurações → Fila de trabalho*, com tipo, tentativas e
+motivo, e voltam para a fila pelo botão de reprocessar (até 50 por vez, contagem de tentativas
+zerada). Trabalho sem handler registrado não é devolvido — voltaria para a lista no mesmo instante,
+em laço.

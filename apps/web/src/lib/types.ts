@@ -618,3 +618,18 @@ export const LABEL_CHAMADA_STATUS: Record<CallStatus, string> = {
   FALHOU: 'Falhou',
   CANCELADA: 'Cancelada',
 };
+
+export type TrabalhoMorto = {
+  id: string;
+  tipo: string;
+  tentativa: number;
+  dados: unknown;
+  erro: string;
+};
+
+export type EstadoFila = {
+  prontos: number;
+  atrasados: number;
+  mortos: number;
+  ultimosMortos: TrabalhoMorto[];
+};

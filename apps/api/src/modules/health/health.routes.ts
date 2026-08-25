@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { asyncHandler } from '../../http/async-handler';
 import { requireAuth, requireRole } from '../../http/middleware/auth';
-import { estadoDaFila } from '../../lib/fila';
+import { estadoDaFila, reprocessarMortos } from '../../lib/fila';
 import { prisma } from '../../lib/prisma';
 import { redis } from '../../lib/redis';
 
@@ -31,5 +31,19 @@ healthRoutes.get(
   requireRole('ADMIN', 'SUPERVISOR'),
   asyncHandler(async (_req, res) => {
     res.json({ fila: await estadoDaFila() });
+  }),
+);
+
+/**
+ * Devolve os trabalhos mortos para a fila. Restrito a ADMIN: reprocessar envio
+ * de campanha manda mensagem para cliente de novo, o que nao e acao de leitura.
+ */
+healthRoutes.post(
+  '/fila/reprocessar',
+  requireAuth,
+  requireRole('ADMIN'),
+  asyncHandler(async (_req, res) => {
+    const resultado = await reprocessarMortos();
+    res.json({ ...resultado, fila: await estadoDaFila() });
   }),
 );
