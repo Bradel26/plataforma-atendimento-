@@ -52,8 +52,14 @@ const admin = login.accessToken;
 const { PrismaClient } = await import('@prisma/client');
 const prisma = new PrismaClient();
 
-/** Percorre todas as paginas de uma listagem e devolve os ids na ordem. */
-async function percorrer(rota, chave, limite) {
+/**
+ * Percorre todas as paginas de uma listagem e devolve os ids na ordem.
+ *
+ * `truncado` existe para nao mentir: se o teto de paginas for atingido, a
+ * comparacao de totais falharia por causa do teto e nao por defeito do cursor —
+ * e a mensagem tem de deixar isso claro.
+ */
+async function percorrer(rota, chave, limite, tetoPaginas = 500) {
   const ids = [];
   let cursor = null;
   let paginas = 0;
@@ -64,9 +70,9 @@ async function percorrer(rota, chave, limite) {
     ids.push(...(dados[chave] ?? []).map((i) => i.id));
     cursor = dados.proximoCursor;
     paginas++;
-  } while (cursor && paginas < 40);
+  } while (cursor && paginas < tetoPaginas);
 
-  return { ids, paginas };
+  return { ids, paginas, truncado: cursor !== null };
 }
 
 // 1. Conversa longa: 70 mensagens gravadas direto no banco (o limite por IP do
@@ -120,8 +126,9 @@ checar(idsVistos.size === total, '   e nao pulam nenhuma', `${idsVistos.size} de
 checar(paginas >= 2, '   historico veio em mais de uma pagina', `${paginas} paginas`);
 
 // 4. Lista de conversas paginada de duas em duas
-const { ids: idsConversas } = await percorrer('/conversas', 'conversas', 2);
-checar(new Set(idsConversas).size === idsConversas.length, '4. lista de conversas nao repete item', `${idsConversas.length} itens`);
+const { ids: idsConversas, paginas: paginasConversas, truncado } = await percorrer('/conversas', 'conversas', 2);
+checar(!truncado, '4. varredura completou sem bater no teto de paginas', `${paginasConversas} paginas`);
+checar(new Set(idsConversas).size === idsConversas.length, '   lista de conversas nao repete item', `${idsConversas.length} itens`);
 const { ids: idsUmaPagina } = await percorrer('/conversas', 'conversas', 100);
 checar(
   idsUmaPagina.length === idsConversas.length,
