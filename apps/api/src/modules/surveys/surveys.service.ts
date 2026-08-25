@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import type { Channel } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
-import { badRequest, notFound } from '../../lib/errors';
+import { AppError, badRequest, notFound } from '../../lib/errors';
 import { env } from '../../env';
 import { notificarMensagem } from '../../realtime/hub';
 import { enviarParaCanal, exigeEnvioExterno } from '../channels/outbound.service';
@@ -22,6 +22,9 @@ export async function criarPesquisa(conversaId: string, tipo: 'CSAT' | 'NPS' = '
     data: { conversaId, tipo, token: randomBytes(16).toString('hex') },
   });
 }
+
+/** Tipo do trabalho na fila (declarado aqui para o worker nao virar dependencia do service). */
+export const TIPO_CONVITE_PESQUISA = 'pesquisa:convite';
 
 /** Canais em que a plataforma consegue devolver uma mensagem ao cliente. */
 const CANAIS_COM_RETORNO: Channel[] = ['WEBCHAT', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK'];
@@ -64,7 +67,11 @@ async function registrarMensagem(
  * ver, e `entregueEm` fica nulo — e essa a diferenca entre pesquisa criada e
  * pesquisa que o cliente realmente recebeu.
  */
-export async function entregarPesquisa(conversaId: string): Promise<{ entregue: boolean; motivo?: string }> {
+export async function entregarPesquisa(
+  conversaId: string,
+  opcoes: { anotarFalha?: boolean } = {},
+): Promise<{ entregue: boolean; motivo?: string; permanente?: boolean }> {
+  const anotarFalha = opcoes.anotarFalha ?? true;
   const pesquisa = await prisma.survey.findUnique({ where: { conversaId } });
   if (!pesquisa) return { entregue: false, motivo: 'Pesquisa nao encontrada' };
   if (pesquisa.entregueEm) return { entregue: true };
@@ -79,8 +86,11 @@ export async function entregarPesquisa(conversaId: string): Promise<{ entregue: 
 
   if (!CANAIS_COM_RETORNO.includes(conversa.canal)) {
     const motivo = `o canal ${conversa.canal} nao tem caminho de volta para o cliente`;
-    await registrarMensagem(conversaId, `Pesquisa de satisfacao nao enviada: ${motivo}.`, null, destinos);
-    return { entregue: false, motivo };
+    if (anotarFalha) {
+      await registrarMensagem(conversaId, `Pesquisa de satisfacao nao enviada: ${motivo}.`, null, destinos);
+    }
+    // Nao adianta tentar de novo: o canal nao vai passar a ter caminho de volta.
+    return { entregue: false, motivo, permanente: true };
   }
 
   // Mesma regra do envio do agente: fala com o canal ANTES de gravar, para nao
@@ -93,8 +103,16 @@ export async function entregarPesquisa(conversaId: string): Promise<{ entregue: 
     }
   } catch (err) {
     const motivo = err instanceof Error ? err.message : 'erro desconhecido';
-    await registrarMensagem(conversaId, `Pesquisa de satisfacao nao enviada: ${motivo}`, null, destinos);
-    return { entregue: false, motivo };
+    if (anotarFalha) {
+      await registrarMensagem(conversaId, `Pesquisa de satisfacao nao enviada: ${motivo}`, null, destinos);
+    }
+    /**
+     * Recusa da Meta e definitiva (token invalido, cliente fora da janela de 24h):
+     * a mesma mensagem nao passa a ser aceita na terceira tentativa. Erro de rede
+     * ou canal ainda sem configuracao merece nova tentativa.
+     */
+    const permanente = err instanceof AppError && err.code === 'ENVIO_RECUSADO';
+    return { entregue: false, motivo, permanente };
   }
 
   await registrarMensagem(conversaId, texto, idExterno, destinos);

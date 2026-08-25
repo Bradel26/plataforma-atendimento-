@@ -80,6 +80,7 @@ backend na mesma origem (necessário para o cookie de refresh).
 | `npm run smoke:midia` | upload, URL assinada e mídia dos canais (21 checagens) |
 | `npm run smoke:seguranca` | bloqueio de login, limite por IP e segredo cifrado (16 checagens) |
 | `npm run smoke:lgpd` | retenção, anonimização e trilha de auditoria (25 checagens) |
+| `npm run smoke:fila` | disparo assíncrono, nova tentativa e estado da fila (12 checagens) |
 
 ## API (Fase 0)
 
@@ -159,6 +160,7 @@ Base: `/api`. Corpo e respostas em JSON. Erros no formato `{ error: { code, mess
 | GET/PUT | `/lgpd/politica` | admin |
 | POST | `/lgpd/expurgo` | admin — simulação por padrão |
 | GET | `/lgpd/registros` | admin — trilha de auditoria |
+| GET | `/health/fila` | admin, supervisor — prontos, atrasados e descartados |
 | GET | `/lgpd/titulares/:id/exportar` | admin — portabilidade |
 | POST | `/lgpd/titulares/:id/anonimizar` | admin — eliminação |
 | GET/POST | `/campanhas`, `/campanhas/:id` | admin, supervisor |
@@ -323,6 +325,30 @@ tentativas sem entender, deixando a conversa na fila.
 npm run smoke:seguranca   # com a API de pé; verifica o que ficou gravado no Redis e no Postgres
 ```
 
+## Fila de trabalho
+
+Envio em lote não acontece na requisição HTTP. `POST /campanhas/:id/disparar` **enfileira** um trabalho
+por contato e responde na hora; o worker envia no seu ritmo (10 por segundo por canal) e cada item
+grava o próprio desfecho — `ENVIADO`, `FALHOU` ou `IGNORADO`. A tela da campanha se atualiza sozinha
+enquanto houver item pendente.
+
+- **Nova tentativa só para o que pode passar.** Recusa da Meta (token inválido, cliente fora da janela
+  de 24 h) é definitiva e vira `FALHOU` na primeira vez. Erro de rede ou canal fora do ar volta para a
+  fila com espera de 5 s, 30 s e 2 min; depois disso, `FALHOU` com a contagem de tentativas.
+- **Pausar a campanha para o que já está na fila** — o worker verifica o status antes de cada envio.
+- **Convite de pesquisa que falhou** entra na mesma fila, e a nota no histórico do agente sai uma vez
+  só, não uma por tentativa.
+- Implementação em [apps/api/src/lib/fila.ts](apps/api/src/lib/fila.ts): lista de prontos consumida com
+  `BRPOP` em conexão própria, ZSET para as tentativas agendadas e lista de descartados. Sem Bull nem
+  BullMQ — o que a plataforma precisa cabe em cem linhas.
+
+```bash
+npm run smoke:fila   # com a API de pé; confere que o disparo volta na hora e o worker conclui
+```
+
+**Não implementado:** worker em processo separado. Hoje ele roda dentro da API, o que é suficiente para
+o MVP; para volume, o mesmo módulo sobe como processo próprio sem mudar o código de quem enfileira.
+
 ## LGPD
 
 Aba **Configurações → LGPD e retenção** (só admin).
@@ -387,8 +413,7 @@ integração com banco efêmero, que é o que permitiria rodar tudo no CI.
 **Backup e log com dado pessoal.** O expurgo alcança Postgres e storage; snapshot do provedor de
 banco e log de aplicação seguem a retenção deles.
 
-**Fila de trabalho.** Disparo de campanha e reenvio de convite de pesquisa são síncronos. Para volume,
-o certo é fila no Redis com retry e controle de taxa.
+**Worker em processo separado.** A fila existe e funciona, mas o consumidor roda dentro da API.
 
 **Envio de arquivo pelo agente.** Exige subir a mídia para a Graph API antes da mensagem; hoje a
 resposta do agente é texto.

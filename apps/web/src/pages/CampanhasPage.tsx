@@ -34,6 +34,7 @@ export function CampanhasPage() {
   const [nova, setNova] = useState({ nome: '', canal: 'WHATSAPP' as Canal, mensagem: '' });
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  const [aviso, setAviso] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
     try {
@@ -53,17 +54,31 @@ export function CampanhasPage() {
       .catch(() => undefined);
   }, [carregar]);
 
-  const abrir = async (id: string) => {
+  const abrir = useCallback(async (id: string) => {
     try {
       setAberta(await api.get<{ campanha: Campanha; itens: CampanhaItem[] }>(`/campanhas/${id}`));
       setErro(null);
     } catch (e) {
       setErro(e instanceof ApiError ? e.message : 'Falha ao abrir a campanha');
     }
-  };
+  }, []);
+
+  /**
+   * O disparo agora so enfileira: o envio acontece no worker. Enquanto houver
+   * item pendente, a tela se atualiza sozinha — sem isso o usuario ficaria
+   * olhando uma lista congelada sem saber se a fila andou.
+   */
+  useEffect(() => {
+    if (!aberta || aberta.campanha.status !== 'ATIVA') return;
+    if (!aberta.itens.some((i) => i.status === 'PENDENTE')) return;
+
+    const t = setTimeout(() => void abrir(aberta.campanha.id), 3000);
+    return () => clearTimeout(t);
+  }, [aberta, abrir]);
 
   const agir = async (acao: () => Promise<unknown>, idParaReabrir?: string) => {
     setErro(null);
+    setAviso(null);
     setOcupado(true);
     try {
       await acao();
@@ -100,6 +115,7 @@ export function CampanhasPage() {
       <div className="space-y-5">
         <Card titulo="Campanhas" descricao={`${campanhas.length} cadastrada(s)`}>
           {erro && <div className="mb-3"><Alerta>{erro}</Alerta></div>}
+          {aviso && <div className="mb-3"><Alerta tipo="sucesso">{aviso}</Alerta></div>}
           {campanhas.length === 0 ? (
             <p className="text-sm text-slate-500">Nenhuma campanha criada.</p>
           ) : (
@@ -203,7 +219,16 @@ export function CampanhasPage() {
                     disabled={ocupado}
                     onClick={() =>
                       void agir(
-                        () => api.post(`/campanhas/${aberta.campanha.id}/disparar`, { limite: 100 }),
+                        async () => {
+                          const r = await api.post<{ enfileirados: number; foraDoLote: number }>(
+                            `/campanhas/${aberta.campanha.id}/disparar`,
+                            { limite: 500 },
+                          );
+                          setAviso(
+                            `${r.enfileirados} envio(s) na fila.` +
+                              (r.foraDoLote > 0 ? ` ${r.foraDoLote} fora deste lote — dispare de novo depois.` : ''),
+                          );
+                        },
                         aberta.campanha.id,
                       )
                     }

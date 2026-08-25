@@ -3,7 +3,8 @@ import { prisma } from '../../lib/prisma';
 import { badRequest, forbidden, notFound } from '../../lib/errors';
 import { notificarConversaAtualizada, notificarMensagem } from '../../realtime/hub';
 import { enviarParaCanal, exigeEnvioExterno } from '../channels/outbound.service';
-import { criarPesquisa, entregarPesquisa } from '../surveys/surveys.service';
+import { TIPO_CONVITE_PESQUISA, criarPesquisa, entregarPesquisa } from '../surveys/surveys.service';
+import { enfileirar } from '../../lib/fila';
 import {
   inclusaoDetalhe,
   inclusaoResumo,
@@ -211,7 +212,19 @@ export async function finalizarConversa(solicitante: Solicitante, id: string) {
   // cliente. entregarPesquisa nao lanca — finalizar o atendimento nao pode
   // falhar porque o canal recusou o convite.
   await criarPesquisa(id);
-  await entregarPesquisa(id);
+  const convite = await entregarPesquisa(id, { anotarFalha: false });
+
+  if (!convite.entregue) {
+    // Falha que pode passar (rede, canal ainda sem configuracao) vai para a
+    // fila; recusa definitiva fica registrada na hora e para ali.
+    const texto = convite.permanente
+      ? `Pesquisa de satisfacao nao enviada: ${convite.motivo}`
+      : `Pesquisa de satisfacao nao enviada (${convite.motivo}). Nova tentativa automatica em instantes.`;
+    await registrarEventoSistema(id, texto);
+    if (!convite.permanente) {
+      await enfileirar(TIPO_CONVITE_PESQUISA, { conversaId: id }, { atrasoMs: 5_000 });
+    }
+  }
 
   return publicar(id, { agenteAnteriorId: conversa.agenteId, filaAnteriorId: conversa.filaId });
 }

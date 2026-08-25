@@ -1,7 +1,8 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { badRequest, notFound } from '../../lib/errors';
-import { enviarParaCanal, exigeEnvioExterno } from '../channels/outbound.service';
+import { exigeEnvioExterno } from '../channels/outbound.service';
+import { enfileirar } from '../../lib/fila';
 
 const inclusao = {
   fila: { select: { id: true, nome: true } },
@@ -118,6 +119,10 @@ export async function alterarStatus(id: string, status: 'RASCUNHO' | 'ATIVA' | '
   return serialize(await carregar(id));
 }
 
+/** Tipo do trabalho na fila. Fica aqui, e nao no worker, para o service nao
+ * precisar importar o worker e criar dependencia circular. */
+export const TIPO_ITEM_CAMPANHA = 'campanha:item';
+
 /** Substitui {{nome}}, {{email}} e {{telefone}} no template. */
 export function renderizar(template: string, contato: { nome: string; email: string | null; telefone: string | null }) {
   return template
@@ -135,7 +140,12 @@ export function renderizar(template: string, contato: { nome: string; email: str
  *
  * Canal de VOZ nao dispara: exige integracao de telefonia, que nao existe.
  */
-export async function dispararCampanha(id: string, limite = 100) {
+/**
+ * Enfileira o disparo. O envio em si acontece no worker (campaigns.worker.ts):
+ * mil contatos nao podem manter uma requisicao HTTP aberta, e erro no meio do
+ * lote nao pode levar o resto embora.
+ */
+export async function dispararCampanha(id: string, limite = 500) {
   const campanha = await carregar(id);
   if (campanha.status !== 'ATIVA') throw badRequest('Ative a campanha antes de disparar');
 
@@ -150,47 +160,16 @@ export async function dispararCampanha(id: string, limite = 100) {
 
   const pendentes = await prisma.campaignItem.findMany({
     where: { campanhaId: id, status: 'PENDENTE' },
-    include: { contato: true },
+    select: { id: true },
     take: limite,
   });
 
-  let enviados = 0;
-  let falhas = 0;
-
   for (const item of pendentes) {
-    const destino = item.contato.telefone;
-    const texto = renderizar(campanha.mensagem, item.contato);
-
-    if (!destino) {
-      await prisma.campaignItem.update({
-        where: { id: item.id },
-        data: { status: 'IGNORADO', erro: 'Contato sem telefone' },
-      });
-      continue;
-    }
-
-    try {
-      await enviarParaCanal(campanha.canal, destino, texto);
-      await prisma.campaignItem.update({
-        where: { id: item.id },
-        data: { status: 'ENVIADO', enviadoEm: new Date(), erro: null },
-      });
-      enviados += 1;
-    } catch (err) {
-      await prisma.campaignItem.update({
-        where: { id: item.id },
-        data: { status: 'FALHOU', erro: err instanceof Error ? err.message : 'Erro desconhecido' },
-      });
-      falhas += 1;
-    }
+    await enfileirar(TIPO_ITEM_CAMPANHA, { itemId: item.id });
   }
 
-  const restantes = await prisma.campaignItem.count({ where: { campanhaId: id, status: 'PENDENTE' } });
-  if (restantes === 0) {
-    await prisma.campaign.update({ where: { id }, data: { status: 'CONCLUIDA', concluidaEm: new Date() } });
-  }
-
-  return { processados: pendentes.length, enviados, falhas, restantes };
+  const total = await prisma.campaignItem.count({ where: { campanhaId: id, status: 'PENDENTE' } });
+  return { enfileirados: pendentes.length, pendentes: total, foraDoLote: Math.max(0, total - pendentes.length) };
 }
 
 /** Reenfileira os itens que falharam, para tentar de novo depois de corrigir. */

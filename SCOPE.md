@@ -541,3 +541,37 @@ aceite, exportação traz as mensagens e entra na auditoria, a anonimização re
 apaga mensagens **e o arquivo do disco** e preserva a conversa, o expurgo sem a palavra de
 confirmação não apaga nada mas conta o que apagaria, o expurgo real limpa a conversa vencida e a
 trilha registra as três ações.
+### 28. Fila de trabalho: cem linhas em Redis, e nova tentativa só para o que pode passar
+O disparo de campanha era síncrono. Mil contatos mantinham uma requisição HTTP aberta por minutos, e
+qualquer erro no meio do lote levava o resto embora. Agora `disparar` enfileira um trabalho por
+contato e responde na hora.
+
+**Nem Bull nem BullMQ.** O que a plataforma precisa — lista de prontos, tentativa agendada, descarte —
+cabe em cem linhas de Redis: `BRPOP` numa conexão própria (o comando bloqueia o cliente, e o resto da
+aplicação precisa do dele livre), ZSET com o horário da próxima tentativa e uma lista para o que
+desistiu. Uma dependência a menos é uma superfície a menos.
+
+**A distinção que faz a fila valer:** recusa da Meta é definitiva, erro de rede não é. Token inválido
+ou cliente fora da janela de 24 h não passa a ser aceito na terceira tentativa — insistir só gasta
+tempo e polui o relatório com "falhou após 3 tentativas" onde a primeira já era conclusiva. Então
+`ENVIO_RECUSADO` vira `FALHOU` na hora; `CANAL_INACESSIVEL` e canal fora do ar voltam para a fila com
+5 s, 30 s e 2 min de espera.
+
+**O item no banco é a fonte da verdade, a fila só decide quando tentar.** O handler grava o desfecho
+no item antes de decidir se relança para reagendar. Consequência prática: um trabalho perdido não
+perde o registro, e reprocessar é seguro porque item que não está `PENDENTE` é ignorado.
+
+**Pausar a campanha para o que já está na fila** — o worker confere o status antes de cada envio. Sem
+isso o botão "Pausar" não significaria nada para os mil trabalhos já enfileirados.
+
+O convite de pesquisa que falha entra na mesma fila, com um cuidado de interface: a nota no histórico
+sai uma vez só. Uma linha por tentativa transformaria a conversa num log de infraestrutura para o
+agente ler.
+
+Verificado por `npm run smoke:fila` (12 checagens): o disparo volta em menos de 400 ms, contato sem
+telefone fica `IGNORADO`, recusa da Meta fica `FALHOU` **sem** contagem de tentativas, a campanha
+conclui sozinha quando a fila esvazia, o convite de pesquisa que falhou aparece na fila de atrasados e
+o estado da fila fica visível em `/health/fila`.
+
+**Não implementado:** worker como processo separado. Hoje roda dentro da API — suficiente para o MVP,
+e o mesmo módulo sobe sozinho depois sem mudar quem enfileira.
