@@ -42,6 +42,20 @@ Guarde as quatro coisas: `DATABASE_URL` (pooled), `DIRECT_URL` (direta), `REDIS_
 
 ## 2. Gere o arquivo de segredos (na sua máquina)
 
+> **PowerShell bloqueando o npm?** A mensagem *"npm.ps1 não pode ser carregado porque a execução
+> de scripts foi desabilitada"* é política do Windows, não erro do projeto. Duas saídas:
+>
+> ```powershell
+> npm.cmd run gerar:segredos          # contorna, sem mudar nada no sistema
+> ```
+>
+> ou libere de uma vez, só para o seu usuário (não precisa de administrador):
+>
+> ```powershell
+> Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+> ```
+
+
 ```bash
 npm run gerar:segredos
 ```
@@ -72,6 +86,11 @@ WORKER_EMBUTIDO=false       # vamos rodar o worker como servico separado
 ---
 
 ## 3. Prepare o servidor
+
+> **Tudo deste passo em diante roda no servidor, não na sua máquina.** Os scripts `.sh` são de
+> Linux: no PowerShell eles dão *"não é reconhecido como nome de cmdlet"*, que é o Windows dizendo
+> que não sabe o que fazer com eles. Entre por SSH primeiro.
+
 
 Entre por SSH (a Hostinger mostra a senha do root no painel; troque-a no primeiro acesso):
 

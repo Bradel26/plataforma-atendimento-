@@ -75,6 +75,10 @@ SEED_ADMIN_PASSWORD="${segredos.SEED_ADMIN_PASSWORD}"
 # Proxy reverso na frente: ligue para o limite por IP ver o IP real do cliente.
 TRUST_PROXY=true
 
+# Worker da fila num processo proprio (systemd plataforma-worker). Deixe false
+# quando o servico existir; true faz a API consumir a fila junto com o HTTP.
+WORKER_EMBUTIDO=false
+
 STORAGE_DIR="./storage"
 UPLOAD_MAX_MB=10
 
