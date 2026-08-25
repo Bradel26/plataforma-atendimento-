@@ -40,7 +40,8 @@
     "start:worker": "npm run start:worker -w @plataforma/api",
     "smoke:worker": "node scripts/smoke-worker.mjs",
     "lgpd:reaplicar": "npm run lgpd:reaplicar -w @plataforma/api",
-    "lgpd:reaplicar:executar": "npm run lgpd:reaplicar:executar -w @plataforma/api"
+    "lgpd:reaplicar:executar": "npm run lgpd:reaplicar:executar -w @plataforma/api",
+    "env:coolify": "node scripts/env-para-coolify.mjs"
   },
   "engines": {
     "node": ">=20"

@@ -84,29 +84,29 @@ O Coolify pede o certificado ao Let's Encrypt pelo Traefik automaticamente. Nada
 
 ## 3. Variáveis de ambiente
 
-Em **Environment Variables**, cole o conteúdo do seu `apps/api/.env.production` — o Coolify aceita
-colar tudo de uma vez no modo *Developer view*. São estas as que importam:
+Na sua máquina, gere o bloco pronto para colar:
 
-| Variável | Valor |
-|---|---|
-| `NODE_ENV` | `production` |
-| `PORT` | `3333` |
-| `DATABASE_URL` | a string **pooled** do Neon, banco `producao` |
-| `DIRECT_URL` | a string **direta** do Neon, banco `producao` |
-| `REDIS_URL` | a URL `rediss://` do Upstash |
-| `WEB_ORIGIN` | `https://atendimento.bradel.com.br` |
-| `JWT_ACCESS_SECRET` | o gerado |
-| `JWT_REFRESH_SECRET` | o gerado |
-| `SECRETS_KEY` | o gerado |
-| `TRUST_PROXY` | `true` — tem Traefik na frente |
-| `WORKER_EMBUTIDO` | `true` — **aqui sim**, veja abaixo |
-| `STORAGE_DIR` | `./storage` |
-| `SEED_ADMIN_EMAIL` | seu e-mail |
-| `SEED_ADMIN_PASSWORD` | a senha gerada |
+```bash
+npm run env:coolify
+```
 
-**`WORKER_EMBUTIDO=true` neste caminho**, ao contrário do deploy com systemd. Um container = um
-processo; para separar o worker você criaria um segundo recurso no Coolify com o mesmo repositório e
-comando `node dist/src/worker.js`. Comece embutido; separe quando o volume de campanha justificar.
+Isso escreve `apps/api/.env.coolify` — o mesmo conteúdo do `.env.production`, sem comentários e sem
+aspas (o Coolify engasga com os dois), já com os três ajustes de container:
+
+| Variável | Valor no container | Por quê |
+|---|---|---|
+| `PORT` | `3333` | a porta que o Traefik espera |
+| `WORKER_EMBUTIDO` | `true` | um container é um processo; o worker vai junto |
+| `STATIC_DIR` | `../web/dist` | o front compilado dentro da imagem |
+
+No Coolify, em **Environment Variables**, abra o **Developer view** (o modo de colar em bloco), e
+cole o arquivo inteiro.
+
+> `WORKER_EMBUTIDO=true` **aqui**, ao contrário do deploy com systemd. Para separar o worker depois,
+> crie um segundo recurso no Coolify com o mesmo repositório e o comando
+> `node dist/src/worker.js`. Comece embutido; separe quando o volume de campanha justificar.
+
+O arquivo gerado **não vai para o git** — o `.gitignore` cobre `.env*`.
 
 ## 4. Volume para os anexos
 
