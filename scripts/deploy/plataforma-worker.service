@@ -1,0 +1,28 @@
+# Worker da fila, processo separado. Instale em
+# /etc/systemd/system/plataforma-worker.service
+#
+# Com este servico ativo, ponha WORKER_EMBUTIDO=false no .env.production —
+# senao a fila e consumida em dobro (nao processa o mesmo trabalho duas vezes,
+# mas gasta o dobro de conexao e confunde o diagnostico).
+[Unit]
+Description=Plataforma de Atendimento - Worker da fila
+After=network-online.target plataforma-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=plataforma
+WorkingDirectory=/opt/plataforma/apps/api
+Environment=NODE_ENV=production
+EnvironmentFile=/opt/plataforma/apps/api/.env.production
+ExecStart=/usr/bin/node dist/src/worker.js
+Restart=always
+RestartSec=5
+# Tempo para o trabalho em andamento terminar antes do SIGKILL.
+TimeoutStopSec=30
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=plataforma-worker
+
+[Install]
+WantedBy=multi-user.target

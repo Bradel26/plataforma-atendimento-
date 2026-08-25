@@ -1,0 +1,27 @@
+# API. Instale em /etc/systemd/system/plataforma-api.service
+[Unit]
+Description=Plataforma de Atendimento - API
+# Sobe depois da rede: sem isso a primeira conexao com o banco falha no boot.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=plataforma
+WorkingDirectory=/opt/plataforma/apps/api
+# O .env.production e lido pelo dotenv; o EnvironmentFile garante NODE_ENV antes
+# de o processo comecar, para o guarda de arranque valer.
+Environment=NODE_ENV=production
+EnvironmentFile=/opt/plataforma/apps/api/.env.production
+ExecStart=/usr/bin/node dist/src/main.js
+Restart=always
+RestartSec=5
+# Se cair em laco, o systemd para de insistir e o alerta aparece no status.
+StartLimitBurst=5
+StartLimitIntervalSec=120
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=plataforma-api
+
+[Install]
+WantedBy=multi-user.target
