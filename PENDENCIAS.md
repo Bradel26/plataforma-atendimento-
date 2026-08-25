@@ -74,9 +74,18 @@ Nada disso está no `SCOPE.md`. Só entra se você decidir.
 
 ## Ordem que eu recomendo
 
-1. **1.1 a 1.6** — sem isso não existe produção. O item 1.5 (build da imagem) é o único que pode
-   revelar surpresa, porque nunca rodou.
-2. **2.1** — credencial Meta é o que prova que a plataforma atende cliente de verdade.
-3. **4.1** — teste de navegador, o maior risco não coberto do que está pronto.
-4. **2.3 e o grupo 3** — voz completa, depois que houver provedor.
-5. **4.2 e 4.3** — antes do primeiro volume real de campanha e do primeiro pedido de exclusão.
+Atualizado em 25/08/2026. **Todo o grupo 4 está feito, exceto 4.4** (precisa de Docker) — não há
+mais nada nesta lista que eu consiga fazer sozinho nesta máquina.
+
+1. **1.1** — rotacionar Neon e Upstash. É o único item urgente por segurança, não por prazo: as
+   credenciais atuais passaram por conversa de texto.
+2. **1.4 e 1.6** — domínio com certificado e migrations no banco de produção. Depois disso a
+   plataforma sobe.
+3. **1.5** — build da imagem Docker. É o único artefato de deploy que nunca rodou, então é o único
+   que pode revelar surpresa. Faça antes de marcar data.
+4. **2.1 e 2.2** — credencial Meta e templates aprovados: é o que prova que a plataforma atende
+   cliente de verdade.
+5. **2.3 e o grupo 3** — contratar provedor de voz e, com ele, softphone, ramais, URA, monitoria e
+   transcrição passam a ser construíveis e testáveis.
+6. **Grupo 5** — só depois de a operação estar rodando. A lista muda quando você vê o que o time
+   pede no dia a dia; hoje ela é palpite informado, não necessidade observada.
