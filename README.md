@@ -1,6 +1,6 @@
 # Plataforma de Atendimento
 
-Plataforma de atendimento multicanal + call center + CRM. Escopo completo e roadmap em [SCOPE.md](SCOPE.md). O que falta fazer, e de quem depende, em [PENDENCIAS.md](PENDENCIAS.md).
+Plataforma de atendimento multicanal + call center + CRM. Escopo completo e roadmap em [SCOPE.md](SCOPE.md). O que falta fazer, e de quem depende, em [PENDENCIAS.md](PENDENCIAS.md). Manual de uso em [MANUAL.md](MANUAL.md).
 
 **Estado atual:** Fases 0 a 3 concluídas. Fase 4 parcial — campanhas e chatbot prontos;
 **telefonia (PABX/voz, monitoria, transcrição) não foi construída** e o motivo está no
@@ -325,7 +325,9 @@ Se o canal recusar, **nada é gravado**: nem mensagem no histórico nem arquivo 
 dispara em lote. A mensagem aceita `{{nome}}`, `{{email}}` e `{{telefone}}`. Cada contato falha por
 conta própria com o motivo gravado — contato sem telefone fica *Ignorado*, envio recusado pela API
 fica *Falhou* com a mensagem do provedor — e "Reprocessar falhas" devolve todos para a fila depois
-de corrigir os dados. Campanha de **voz é recusada**: depende de telefonia, que não existe.
+de corrigir os dados. Campanha de **voz é recusada**. A telefonia existe desde a Fase 4, mas o disparo em lote nunca foi
+ligado a ela: campanha de voz é discagem automática, que precisa de ritmo, horário permitido e
+desistência por número — não é o mesmo trabalho que enviar texto. Está listado em PENDENCIAS.md.
 
 **Chatbot** (Configurações → Chatbot): fluxo por palavra-chave, não LLM. Cada passo tem gatilhos,
 resposta e uma ação (responder, transferir para fila, encerrar). O bot responde só enquanto a

@@ -67,7 +67,7 @@ Nada disso está no `SCOPE.md`. Só entra se você decidir.
 | 5.2 | Etiquetas em conversa | Hoje não há como classificar assunto para relatório |
 | 5.3 | SLA de atendimento por fila | O SLA existe em protocolo, não em conversa |
 | 5.4 | Chat interno entre agentes | Pedir ajuda ao supervisor hoje é fora da plataforma |
-| 5.5 | Discador preditivo / power dialer | Campanha de voz hoje é chamada por chamada |
+| 5.5 | Discador preditivo / power dialer | Campanha por voz é recusada hoje: a telefonia existe, mas o disparo em lote nunca foi ligado a ela. Discagem automática precisa de ritmo, janela de horário permitido e desistência por número. |
 | 5.6 | Base de conhecimento / FAQ | O bot responde por passos fixos, sem busca em conteúdo |
 
 ---
