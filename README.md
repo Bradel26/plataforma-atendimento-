@@ -85,6 +85,7 @@ backend na mesma origem (necessário para o cookie de refresh).
 | `npm run smoke:paginacao` | cursor sem pular nem repetir registro (13 checagens) |
 | `npm run smoke:widget` | script do widget servido e coerente com o tema (9 checagens) |
 | `npm run smoke:voz` | assinatura, ciclo da chamada e recusa do provedor (29 checagens) |
+| `npm run smoke:metricas` | indicadores do dashboard conferidos por delta (36 checagens) |
 
 ## API (Fase 0)
 
@@ -268,6 +269,10 @@ reentrega e a garantia de que uma resposta recusada pela Graph API não entra no
   período e exportação **CSV e PDF**. O PDF sai com o nome e a cor configurados no White Label.
 - **Escalas** — grade semanal por agente e as **horas efetivas** apuradas pelo log de presença.
 
+Cobertura ponta a ponta em `npm run smoke:metricas` (36 checagens): autorização por perfil,
+recorte por período, coerência entre o dashboard e a tela de Telefonia, e delta exato ao criar,
+assumir e finalizar uma conversa de verdade — os números são conferidos por diferença, não a olho.
+
 A pesquisa de satisfação é criada ao finalizar o atendimento e o **link é entregue ao cliente como
 última mensagem da conversa**, pelo canal em que ele falou. O cliente responde em
 `/avaliacao/<token>`, sem login. CSAT aceita 1-5, NPS 0-10.
@@ -333,7 +338,7 @@ Duas camadas, com divisão de trabalho explícita:
 | | O que cobre | Precisa de |
 |---|---|---|
 | `npm test` | funções puras: cursor, cifragem, assinatura de URL, assinatura do webhook, parser da Meta, CSV, paleta | nada — roda em ~0,5 s |
-| `npm run smoke:*` | fluxo completo contra a API de pé: tempo real, canais, pesquisa, mídia, segurança, LGPD, fila, paginação, widget | Postgres, Redis e API rodando |
+| `npm run smoke:*` | fluxo completo contra a API de pé: tempo real, canais, pesquisa, mídia, segurança, LGPD, fila, paginação, widget, voz, métricas | Postgres, Redis e API rodando |
 
 A suíte de unidade roda no CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)); os smokes rodam
 no ambiente de desenvolvimento, porque exigem banco e Redis.

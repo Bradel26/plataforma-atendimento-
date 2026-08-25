@@ -753,3 +753,26 @@ No painel, três decisões seguem a regra de cor por função:
 
 O dashboard também passou a escutar `chamada:atualizada`, senão os números de voz só mudariam
 quando alguma conversa mexesse.
+
+### 35. Indicador se confere por diferença, não por valor absoluto
+
+O dashboard era a única área sem teste ponta a ponta — os números eram olhados, não verificados.
+O problema de testar métrica é que o valor absoluto não serve de referência: cada execução de smoke
+deixa conversa, mensagem e chamada no banco, então `emEspera === 34` passa hoje e falha amanhã.
+
+`smoke:metricas` mede **delta**: lê o indicador, cria uma conversa de webchat de verdade, e exige
+que o número tenha andado exatamente 1 — nem 0 (não contou) nem 2 (contou duas vezes). O mesmo
+vale para assumir (a fila volta ao valor anterior, a carga do agente sobe 1) e finalizar
+(finalizadas sobe 1, TME e TMA deixam de ser nulos).
+
+Três coisas que o teste fixou porque são semântica, não número:
+
+- **Período e estado atual convivem no mesmo payload.** `novasNoPeriodo` respeita a janela;
+  `emEspera` é a fila agora e não muda com ela. Uma janela de 2020 prova as duas coisas de uma vez.
+- **O dashboard e a tela de Telefonia têm que dar o mesmo número** para a mesma janela. Comparados
+  campo a campo, senão a duplicação de consulta volta pela porta dos fundos.
+- **O painel de monitoramento é de quem atende** — só AGENTE e SUPERVISOR. ADMIN fica fora de
+  propósito: quem não pega conversa dilui a média de carga da equipe.
+
+Quem atende, no teste, é o agente — não o admin. Testar com o perfil errado teria escondido que a
+conversa assumida por um ADMIN não aparece no painel, que é comportamento decidido, não defeito.

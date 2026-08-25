@@ -31,7 +31,8 @@
     "smoke:fila": "node scripts/smoke-fila.mjs",
     "smoke:paginacao": "node scripts/smoke-paginacao.mjs",
     "smoke:widget": "node scripts/smoke-widget.mjs",
-    "smoke:voz": "node scripts/smoke-voz.mjs"
+    "smoke:voz": "node scripts/smoke-voz.mjs",
+    "smoke:metricas": "node scripts/smoke-metricas.mjs"
   },
   "engines": {
     "node": ">=20"
