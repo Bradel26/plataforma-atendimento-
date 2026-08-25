@@ -24,8 +24,10 @@ jobs:
 
       - run: npm run typecheck
 
+      - run: npm test
+
       - run: npm run build
 
-      # Os smoke tests exigem Postgres, Redis e API de pe. Ficam de fora do CI
-      # ate existir suite automatizada com banco efemero — ver "O que falta"
-      # no README.
+      # Os smoke tests (`npm run smoke:*`) exigem Postgres, Redis e a API de pe,
+      # entao ficam fora do CI: rodam no ambiente de desenvolvimento. O que roda
+      # aqui e a suite de unidade, que nao precisa de infraestrutura.

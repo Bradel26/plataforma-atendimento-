@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "//": "Build de producao: os testes ficam fora do dist, mas o typecheck (tsconfig.json) continua verificando-os.",
+  "exclude": ["node_modules", "dist", "src/**/*.test.ts"]
+}

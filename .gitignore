@@ -42,3 +42,6 @@ apps/web/.vite/
 
 # Arquivos enviados (driver local de storage)
 apps/api/storage/
+
+# Storage usado pelos testes de unidade
+apps/api/storage-teste/

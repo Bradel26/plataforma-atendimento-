@@ -70,6 +70,7 @@ backend na mesma origem (necessário para o cookie de refresh).
 | `npm run dev` | API e web em modo watch |
 | `npm run dev:api` / `npm run dev:web` | apenas um dos dois |
 | `npm run typecheck` | TypeScript nos dois apps |
+| `npm test` | suíte de unidade (58 testes, sem infraestrutura) |
 | `npm run build` | build de produção |
 | `npm run db:studio` | Prisma Studio |
 | `npm run infra:up` / `infra:down` | containers de dados |
@@ -318,6 +319,21 @@ resposta e uma ação (responder, transferir para fila, encerrar). O bot respond
 conversa está em espera e sem agente — assim que alguém assume, ele cala — e desiste depois de N
 tentativas sem entender, deixando a conversa na fila.
 
+## Testes
+
+Duas camadas, com divisão de trabalho explícita:
+
+| | O que cobre | Precisa de |
+|---|---|---|
+| `npm test` | funções puras: cursor, cifragem, assinatura de URL, assinatura do webhook, parser da Meta, CSV, paleta | nada — roda em ~0,5 s |
+| `npm run smoke:*` | fluxo completo contra a API de pé: tempo real, canais, pesquisa, mídia, segurança, LGPD, fila, paginação, widget | Postgres, Redis e API rodando |
+
+A suíte de unidade roda no CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)); os smokes rodam
+no ambiente de desenvolvimento, porque exigem banco e Redis.
+
+Os testes ficam ao lado do código (`*.test.ts`). O `typecheck` os inclui; o build de produção não
+([apps/api/tsconfig.build.json](apps/api/tsconfig.build.json)).
+
 ## Segurança
 
 - **Senha**: hash com bcrypt; `senhaHash` nunca sai da API.
@@ -459,9 +475,9 @@ preparado para receber voz e a recomendação de caminho estão em *Fase 4* no [
 **Integrações da Meta em produção.** O código está pronto e testado com payloads assinados
 localmente, mas nenhuma credencial real da Meta foi exercitada — depende de conta verificada.
 
-**Suíte de testes automatizada.** O que existe são cinco scripts de smoke que exercitam a API de pé
-contra o banco real — foram eles que acharam os bugs deste projeto. Falta teste unitário e de
-integração com banco efêmero, que é o que permitiria rodar tudo no CI.
+**Teste de integração com banco efêmero.** A suíte de unidade roda no CI, mas os smokes precisam de
+Postgres e Redis de pé — sem Docker nesta máquina, não há como subir instância descartável no
+pipeline.
 
 **Backup e log com dado pessoal.** O expurgo alcança Postgres e storage; snapshot do provedor de
 banco e log de aplicação seguem a retenção deles.

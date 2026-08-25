@@ -649,3 +649,34 @@ cometido.
 Verificado por `npm run smoke:widget` (9 checagens): a rota é pública e serve JavaScript, o script
 monta iframe apontando para `/webchat?embed=1`, carrega a cor do tema, não contém `undefined` (falha
 clássica de template) e valida a origem; trocar a cor da marca muda o script servido.
+### 32. Testes: duas camadas com divisão de trabalho explícita
+Até aqui o projeto tinha smoke tests — e foram eles que acharam todos os bugs reais desta base
+(pesquisa que não era entregue, `resolvidoEm` apagado, `dryRun` mentindo, jornada subcontada, rota sem
+filtro de perfil). O que faltava era a camada que roda **sem infraestrutura**, em segundos, e que pode
+morar no CI.
+
+A divisão é deliberada:
+
+- **`npm test` (unidade, 58 testes, ~0,5 s):** só função pura — cursor, cifragem AES-GCM, assinatura de
+  URL, assinatura do webhook, parser da Meta, CSV, paleta de dados. Nenhum acesso a Postgres, Redis ou
+  Graph API. Roda no CI a cada push.
+- **`npm run smoke:*` (fluxo, 9 suítes):** exercita a API de pé contra o banco real. Fica fora do CI
+  porque exige Postgres e Redis — e é justamente por falar com a infraestrutura de verdade que
+  encontrou o que encontrou.
+
+O que os testes de unidade foram escritos para **impedir**, não apenas para verificar:
+
+- SVG e HTML voltarem para a lista de tipos aceitos (XSS armazenado);
+- o desempate por id sair da paginação (registro pulado no mesmo milissegundo);
+- a verificação da assinatura do webhook afrouxar numa refatoração;
+- cor de estado (grave/atenção) virar cor de série no dataviz;
+- o parser lançar exceção em payload desconhecido — o que causaria loop de reentrega da Meta.
+
+Cada um desses testes tem no comentário o motivo de existir, porque teste sem motivo declarado é o
+primeiro a ser apagado quando incomoda.
+
+Os arquivos ficam ao lado do código (`*.test.ts`). O `typecheck` os inclui de propósito — teste que não
+compila é teste que não protege — e um `tsconfig.build.json` separado os mantém fora do `dist`.
+
+**Não implementado:** teste de integração com banco efêmero. Precisaria de Postgres descartável no
+pipeline, e esta máquina não tem Docker.
