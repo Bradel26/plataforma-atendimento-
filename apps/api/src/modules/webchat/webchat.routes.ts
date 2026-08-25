@@ -15,6 +15,12 @@ const iniciarSchema = z.object({
   telefone: z.string().trim().min(8).max(20).optional(),
   assunto: z.string().trim().max(140).optional(),
   filaId: z.string().uuid().optional(),
+  /**
+   * Aceite do aviso de privacidade. Obrigatorio: o visitante digita nome,
+   * telefone e o problema dele antes de existir qualquer relacao — sem aviso na
+   * entrada, a coleta comeca sem o titular saber para que.
+   */
+  aceiteLgpd: z.literal(true, { message: 'E necessario aceitar o aviso de privacidade' }),
 });
 
 const mensagemSchema = z.object({

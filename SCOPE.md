@@ -45,6 +45,7 @@ Construir uma aplicação web própria no formato de plataforma de atendimento o
 - **Chamado/Protocolo**: id, conversa_id, status, anexos, comentarios, agendamentos — Fase 2
 - **Escala**: id, agente_id, dia_semana, horario_inicio, horario_fim ✅ implementado
 - **Pesquisa (CSAT/NPS)** e **Log de presença** ✅ implementados
+- **Política de retenção**, **trilha de auditoria de LGPD** e consentimento no webchat ✅ implementados
 
 ## Módulos (visão completa do produto)
 
@@ -500,3 +501,43 @@ desenvolvimento"). O que foi verificado é o artefato compilado: `node dist/src/
 os segredos de exemplo. Nesse teste apareceu um bug real: o script `start` apontava para
 `dist/main.js`, mas o `tsc` emite em `dist/src/main.js` — como o desenvolvimento usa `tsx`, ninguém
 tinha executado esse caminho. Corrigido.
+### 27. LGPD: anonimizar em vez de excluir, e nunca apagar sem simular
+O risco de LGPD estava no escopo desde o começo e nada tinha sido feito: conversa, mídia e histórico
+ficavam para sempre. Quatro decisões desenham a solução.
+
+**Anonimizar em vez de excluir a linha.** Apagar a conversa levaria embora o tempo de espera e o
+volume por canal daquele mês. Somem o conteúdo e a identidade — mensagens, arquivos, comentários,
+descrição de protocolo, observação de lead, nome, email, telefone —, ficam canal, fila, agente, datas
+e a nota da pesquisa. Métrica de operação não é dado pessoal e não precisa ser destruída junto. O
+comentário da pesquisa, que é texto livre, sai; a nota fica.
+
+**Automático desligado por padrão.** Instalar o sistema não pode ser o gesto que apaga o histórico de
+alguém. O prazo vem preenchido (90/365/365 dias) e inerte até um administrador ligar.
+
+**Duas travas para o expurgo.** Ele responde em modo simulação a menos que o pedido traga
+`simulacao: false` **e** a palavra `EXPURGAR`; na tela, o botão de executar só libera depois de uma
+simulação. O número que o administrador vê é o que vai ser apagado. Operação irreversível merece
+atrito.
+
+**Arquivo apagado junto com o registro.** Apagar a mensagem e deixar a imagem no disco entrega dado
+pessoal que o banco jura ter esquecido. Além disso há varredura de órfãos: arquivo que nenhum
+registro referencia sai também.
+
+Uma coisa que ficou fora do alcance da anonimização por decisão consciente: quem não tem atividade
+recente é anonimizado pelo expurgo, mas **cliente com conversa, protocolo ou lead recente nunca é**,
+mesmo que o cadastro seja antigo — anonimizar quem está sendo atendido quebraria o atendimento em
+andamento.
+
+O aceite do aviso de privacidade passou a ser obrigatório para abrir o webchat. O visitante digita
+nome, telefone e o problema dele antes de existir qualquer relação: sem aviso na entrada, a coleta
+começa sem o titular saber para quê.
+
+O agendador roda no próprio processo da API, com lock no Redis para que duas instâncias não expurguem
+em paralelo. Não é cron do sistema operacional porque a plataforma já depende de Redis e não depende
+de agendador do SO. Para volume grande, o certo é tirar isso do processo web.
+
+Verificado por `npm run smoke:lgpd` (25 checagens): supervisor recebe 403, webchat recusa sessão sem
+aceite, exportação traz as mensagens e entra na auditoria, a anonimização remove nome/email/telefone,
+apaga mensagens **e o arquivo do disco** e preserva a conversa, o expurgo sem a palavra de
+confirmação não apaga nada mas conta o que apagaria, o expurgo real limpa a conversa vencida e a
+trilha registra as três ações.

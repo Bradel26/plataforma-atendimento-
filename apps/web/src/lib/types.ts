@@ -507,3 +507,37 @@ export const LABEL_ITEM_STATUS: Record<CampanhaItemStatus, string> = {
   RESPONDIDO: 'Respondido',
   IGNORADO: 'Ignorado',
 };
+
+export type PoliticaRetencao = {
+  id: string;
+  ativa: boolean;
+  diasConversas: number;
+  diasProtocolos: number;
+  diasPresenca: number;
+  ultimoExpurgoEm: string | null;
+  atualizadoEm: string;
+};
+
+export type ResumoExpurgo = {
+  simulacao: boolean;
+  politica: { diasConversas: number; diasProtocolos: number; diasPresenca: number };
+  corte: { conversas: string; protocolos: string; presenca: string };
+  conversas: number;
+  mensagens: number;
+  protocolos: number;
+  comentarios: number;
+  anexos: number;
+  presenca: number;
+  titulares: number;
+  arquivosOrfaos: number;
+  arquivosApagados: number;
+};
+
+export type RegistroLgpd = {
+  id: string;
+  acao: 'EXPURGO' | 'ANONIMIZACAO' | 'EXPORTACAO';
+  contatoId: string | null;
+  detalhe: unknown;
+  autor: string;
+  criadoEm: string;
+};

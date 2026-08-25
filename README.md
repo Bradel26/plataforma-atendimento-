@@ -79,6 +79,7 @@ backend na mesma origem (necessário para o cookie de refresh).
 | `npm run smoke:pesquisa` | entrega da pesquisa de satisfação (16 checagens) |
 | `npm run smoke:midia` | upload, URL assinada e mídia dos canais (21 checagens) |
 | `npm run smoke:seguranca` | bloqueio de login, limite por IP e segredo cifrado (16 checagens) |
+| `npm run smoke:lgpd` | retenção, anonimização e trilha de auditoria (25 checagens) |
 
 ## API (Fase 0)
 
@@ -155,6 +156,11 @@ Base: `/api`. Corpo e respostas em JSON. Erros no formato `{ error: { code, mess
 | GET | `/pesquisas/resultados` | admin, supervisor |
 | GET/POST | `/avaliacao/:token` | **público** — cliente responde por link |
 | GET | `/arquivos/:ano/:mes/:nome` | **URL assinada** — `?t=` obrigatório, validade de 1 h |
+| GET/PUT | `/lgpd/politica` | admin |
+| POST | `/lgpd/expurgo` | admin — simulação por padrão |
+| GET | `/lgpd/registros` | admin — trilha de auditoria |
+| GET | `/lgpd/titulares/:id/exportar` | admin — portabilidade |
+| POST | `/lgpd/titulares/:id/anonimizar` | admin — eliminação |
 | GET/POST | `/campanhas`, `/campanhas/:id` | admin, supervisor |
 | POST | `/campanhas/:id/contatos` | admin, supervisor |
 | PATCH | `/campanhas/:id/status` | admin, supervisor |
@@ -317,6 +323,31 @@ tentativas sem entender, deixando a conversa na fila.
 npm run smoke:seguranca   # com a API de pé; verifica o que ficou gravado no Redis e no Postgres
 ```
 
+## LGPD
+
+Aba **Configurações → LGPD e retenção** (só admin).
+
+- **Política de retenção** em dias, por tipo de dado: conversas finalizadas (padrão 90), protocolos
+  encerrados (365) e log de presença (365). O expurgo automático diário vem **desligado** — apagar
+  dado de cliente é decisão do responsável, não efeito colateral de instalar o sistema.
+- **Expurgo** sempre simulável: a tela mostra quantos registros o prazo atinge antes de confirmar, e
+  executar de verdade exige `simulacao: false` **mais** a palavra `EXPURGAR`.
+- **Anonimizar em vez de excluir a linha.** Somem conteúdo e identidade — mensagens, arquivos,
+  comentários, descrição de protocolo, observação de lead, nome, email, telefone. Ficam canal, fila,
+  agente, datas e a nota da pesquisa: métrica de operação não é dado pessoal e não precisa ser
+  destruída junto.
+- **Direitos do titular**: exportar tudo em JSON (portabilidade) e anonimizar a pedido (eliminação).
+- **Trilha de auditoria**: toda exportação, anonimização e expurgo fica registrada com autor e data.
+- **Aviso de privacidade no webchat**: o aceite é obrigatório para abrir a conversa e a data fica no
+  contato.
+
+```bash
+npm run smoke:lgpd   # com a API de pé; envelhece uma conversa e confere o que sai do disco
+```
+
+**Não implementado:** anonimização de dado pessoal em log de aplicação e backup do banco. O expurgo
+alcança o que está no Postgres e no storage; o histórico do provedor de banco segue a política dele.
+
 ## Deploy
 
 Imagens em [apps/api/Dockerfile](apps/api/Dockerfile) (Node 22, usuário `node`, roda
@@ -353,8 +384,8 @@ localmente, mas nenhuma credencial real da Meta foi exercitada — depende de co
 contra o banco real — foram eles que acharam os bugs deste projeto. Falta teste unitário e de
 integração com banco efêmero, que é o que permitiria rodar tudo no CI.
 
-**Retenção e anonimização (LGPD).** Nada apaga conversa, gravação de mídia ou histórico. O escopo
-sugere 90 dias; a decisão de prazo e o direito de eliminação são do responsável pelo dado.
+**Backup e log com dado pessoal.** O expurgo alcança Postgres e storage; snapshot do provedor de
+banco e log de aplicação seguem a retenção deles.
 
 **Fila de trabalho.** Disparo de campanha e reenvio de convite de pesquisa são síncronos. Para volume,
 o certo é fila no Redis com retry e controle de taxa.

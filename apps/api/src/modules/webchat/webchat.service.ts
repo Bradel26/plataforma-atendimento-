@@ -5,7 +5,15 @@ import { notificarConversaAtualizada, notificarConversaNova, notificarMensagem }
 import { responderAutomaticamente } from '../bots/bots.service';
 import { inclusaoDetalhe, toConversaDetalhe, toMensagem } from '../conversations/conversations.serializer';
 
-type IniciarInput = { nome: string; email?: string; telefone?: string; filaId?: string; assunto?: string };
+type IniciarInput = {
+  nome: string;
+  email?: string;
+  telefone?: string;
+  filaId?: string;
+  assunto?: string;
+  /** Aceite do aviso de privacidade, exigido na entrada do canal. */
+  aceiteLgpd: true;
+};
 
 /** Fila de destino: a informada, ou a primeira fila ativa de Webchat. */
 async function resolverFila(filaId?: string) {
@@ -37,16 +45,19 @@ export async function iniciarSessao(input: IniciarInput) {
       ? await prisma.contact.findFirst({ where: { telefone: input.telefone } })
       : null;
 
-  const contato =
-    existente ??
-    (await prisma.contact.create({
-      data: {
-        nome: input.nome,
-        email: input.email ?? null,
-        telefone: input.telefone ?? null,
-        canalOrigem: 'WEBCHAT',
-      },
-    }));
+  // O aceite e por sessao: quem volta seis meses depois aceita de novo, e a
+  // data guardada e sempre a do contato mais recente.
+  const contato = existente
+    ? await prisma.contact.update({ where: { id: existente.id }, data: { consentimentoEm: new Date() } })
+    : await prisma.contact.create({
+        data: {
+          nome: input.nome,
+          email: input.email ?? null,
+          telefone: input.telefone ?? null,
+          canalOrigem: 'WEBCHAT',
+          consentimentoEm: new Date(),
+        },
+      });
 
   const conversa = await prisma.conversation.create({
     data: {

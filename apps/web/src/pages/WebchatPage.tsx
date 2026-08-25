@@ -14,6 +14,7 @@ export function WebchatPage() {
   const [sessao, setSessao] = useState<string | null>(null);
   const [conversa, setConversa] = useState<ConversaDetalhe | null>(null);
   const [form, setForm] = useState({ nome: '', email: '', assunto: '' });
+  const [aceite, setAceite] = useState(false);
   const [texto, setTexto] = useState('');
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -72,6 +73,7 @@ export function WebchatPage() {
         nome: form.nome,
         ...(form.email ? { email: form.email } : {}),
         ...(form.assunto ? { assunto: form.assunto } : {}),
+        aceiteLgpd: true,
       });
       setSessao(resp.sessaoToken);
       setConversa(resp.conversa);
@@ -143,10 +145,24 @@ export function WebchatPage() {
               onChange={(e) => setForm({ ...form, assunto: e.target.value })}
               className={CAMPO}
             />
+            <label className="mt-auto flex items-start gap-2 text-xs text-slate-500">
+              <input
+                required
+                type="checkbox"
+                checked={aceite}
+                onChange={(e) => setAceite(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                Autorizo o uso dos meus dados para este atendimento. A conversa e os arquivos ficam
+                guardados pelo prazo da politica de retencao e posso pedir copia ou eliminacao a
+                qualquer momento.
+              </span>
+            </label>
             <button
               type="submit"
-              disabled={enviando}
-              className="mt-auto rounded-lg px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"
+              disabled={enviando || !aceite}
+              className="rounded-lg px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"
               style={{ backgroundColor: 'var(--brand-primary)' }}
             >
               {enviando ? 'Abrindo...' : 'Iniciar atendimento'}

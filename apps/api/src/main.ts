@@ -4,6 +4,7 @@ import { env } from './env';
 import { avisarChaveDerivada } from './lib/crypto-box';
 import { prisma } from './lib/prisma';
 import { redis } from './lib/redis';
+import { agendarExpurgo } from './modules/lgpd/agendador';
 import { criarServidorRealtime } from './realtime/server';
 
 // O Socket.IO precisa do servidor HTTP cru, por isso nao usamos app.listen().
@@ -11,6 +12,7 @@ const server = createServer(createApp());
 const io = criarServidorRealtime(server);
 
 avisarChaveDerivada();
+agendarExpurgo();
 
 server.listen(env.PORT, () => {
   console.log(`API ouvindo em http://localhost:${env.PORT} (${env.NODE_ENV})`);

@@ -54,6 +54,7 @@ model User {
   comentarios       TicketComment[]
   anexos            TicketAttachment[]
   agendamentos      TicketSchedule[]
+  registrosLgpd     LgpdLog[]
 
   @@index([perfil])
   @@map("usuarios")
@@ -153,6 +154,10 @@ model Contact {
   canalOrigem  Channel  @default(WEBCHAT) @map("canal_origem")
   tags         String[] @default([])
   observacoes  String?
+  /// Momento em que o titular aceitou o aviso de privacidade (LGPD art. 8).
+  consentimentoEm DateTime? @map("consentimento_em")
+  /// Preenchido quando os dados pessoais foram substituidos por placeholders.
+  anonimizadoEm   DateTime? @map("anonimizado_em")
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
@@ -716,4 +721,44 @@ model BotStep {
 
   @@unique([botId, ordem])
   @@map("bot_passos")
+}
+
+/// Politica de retencao de dados (LGPD). Registro unico, id "default".
+model RetentionPolicy {
+  id             String   @id @default("default")
+  /// Expurgo automatico diario. Desligado por padrao: apagar dado de cliente
+  /// e decisao do responsavel, nao efeito colateral de instalar o sistema.
+  ativa          Boolean  @default(false)
+  diasConversas  Int      @default(90) @map("dias_conversas")
+  diasProtocolos Int      @default(365) @map("dias_protocolos")
+  diasPresenca   Int      @default(365) @map("dias_presenca")
+  ultimoExpurgoEm DateTime? @map("ultimo_expurgo_em")
+  atualizadoEm   DateTime @updatedAt @map("atualizado_em")
+
+  @@map("politica_retencao")
+}
+
+enum AcaoLgpd {
+  EXPURGO
+  ANONIMIZACAO
+  EXPORTACAO
+}
+
+/// Trilha de auditoria das operacoes de LGPD — a plataforma tem de conseguir
+/// provar o que apagou, quando e a pedido de quem (principio da prestacao de contas).
+model LgpdLog {
+  id        String   @id @default(uuid())
+  acao      AcaoLgpd
+  /// Nulo quando a acao foi o expurgo automatico.
+  autorId   String?  @map("autor_id")
+  /// Sem chave estrangeira de proposito: o registro precisa sobreviver ao
+  /// titular que ele documenta.
+  contatoId String?  @map("contato_id")
+  detalhe   Json
+  criadoEm  DateTime @default(now()) @map("criado_em")
+
+  autor User? @relation(fields: [autorId], references: [id], onDelete: SetNull)
+
+  @@index([criadoEm])
+  @@map("lgpd_registros")
 }

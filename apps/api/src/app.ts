@@ -23,6 +23,7 @@ import { catalogsRoutes, productsRoutes } from './modules/crm/catalog.routes';
 import { leadsRoutes } from './modules/crm/leads.routes';
 import { funnelsRoutes, opportunitiesRoutes } from './modules/crm/opportunities.routes';
 import { arquivosRoutes } from './modules/files/files.routes';
+import { lgpdRoutes } from './modules/lgpd/lgpd.routes';
 import { healthRoutes } from './modules/health/health.routes';
 import { queuesRoutes } from './modules/queues/queues.routes';
 import { usersRoutes } from './modules/users/users.routes';
@@ -70,6 +71,7 @@ export function createApp() {
   app.use('/api/pesquisas', pesquisasRoutes);
   // Publico: o cliente responde a pesquisa por link, sem conta na plataforma.
   app.use('/api/avaliacao', pesquisasPublicasRoutes);
+  app.use('/api/lgpd', lgpdRoutes);
   app.use('/api/campanhas', campanhasRoutes);
   app.use('/api/bots', botsRoutes);
 

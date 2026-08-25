@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { BotsTab } from './BotsTab';
 import { CanaisTab } from './CanaisTab';
 import { FilasTab } from './FilasTab';
+import { LgpdTab } from './LgpdTab';
 import { UsuariosTab } from './UsuariosTab';
 import { WhiteLabelTab } from './WhiteLabelTab';
 
@@ -11,6 +12,7 @@ const ABAS = [
   { id: 'canais', label: 'Canais' },
   { id: 'bots', label: 'Chatbot' },
   { id: 'whitelabel', label: 'White Label' },
+  { id: 'lgpd', label: 'LGPD e retencao' },
 ] as const;
 
 type AbaId = (typeof ABAS)[number]['id'];
@@ -42,6 +44,7 @@ export function ConfiguracoesPage() {
       {aba === 'canais' && <CanaisTab />}
       {aba === 'bots' && <BotsTab />}
       {aba === 'whitelabel' && <WhiteLabelTab />}
+      {aba === 'lgpd' && <LgpdTab />}
     </div>
   );
 }

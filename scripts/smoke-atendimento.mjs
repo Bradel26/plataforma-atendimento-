@@ -69,7 +69,11 @@ try {
 }
 
 // Visitante abre o webchat -> agente da fila deve receber conversa:nova
-const sessao = await post('/webchat/sessoes', { nome: 'Ana Realtime', email: 'ana@cliente.com' });
+const sessao = await post('/webchat/sessoes', {
+  nome: 'Ana Realtime',
+  email: 'ana@cliente.com',
+  aceiteLgpd: true,
+});
 const conversaId = sessao.conversa.id;
 await espera(700);
 const nova = recebidos.agente.find((e) => e.evento === 'conversa:nova' && e.payload.id === conversaId);

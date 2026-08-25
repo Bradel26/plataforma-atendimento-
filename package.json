@@ -24,7 +24,8 @@
     "smoke:canais": "node scripts/smoke-canais.mjs",
     "smoke:pesquisa": "node scripts/smoke-pesquisa.mjs",
     "smoke:midia": "node scripts/smoke-midia.mjs",
-    "smoke:seguranca": "node scripts/smoke-seguranca.mjs"
+    "smoke:seguranca": "node scripts/smoke-seguranca.mjs",
+    "smoke:lgpd": "node scripts/smoke-lgpd.mjs"
   },
   "engines": {
     "node": ">=20"

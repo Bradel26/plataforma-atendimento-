@@ -48,7 +48,7 @@ const ultimaMensagem = async (id) => {
 
 // ---- Caminho 1: webchat, onde a plataforma entrega pelo proprio socket -------
 const { status: statusSessao, dados: sessao } = await req('POST', '/webchat/sessoes', {
-  corpo: { nome: `Cliente Pesquisa ${EXECUCAO}`, assunto: 'Smoke da pesquisa' },
+  corpo: { nome: `Cliente Pesquisa ${EXECUCAO}`, assunto: 'Smoke da pesquisa', aceiteLgpd: true },
 });
 checar(statusSessao === 201, '1. visitante abre o webchat', `status ${statusSessao}`);
 const conversaId = sessao.conversa?.id ?? sessao.conversaId;
