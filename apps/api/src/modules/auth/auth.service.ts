@@ -5,16 +5,28 @@ import { issueRefreshToken, signAccessToken } from '../../lib/tokens';
 import { registrarPresenca } from '../metrics/metrics.service';
 import { toPublicUser } from '../users/users.serializer';
 import type { LoginInput } from './auth.schemas';
+import { garantirNaoBloqueado, limparFalhas, registrarFalha } from './tentativas';
 
 const CREDENCIAIS_INVALIDAS = new AppError(401, 'INVALID_CREDENTIALS', 'Email ou senha incorretos');
 
 export async function login({ email, senha }: LoginInput) {
+  await garantirNaoBloqueado(email);
+
   const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
-  if (!user) throw CREDENCIAIS_INVALIDAS;
+  if (!user) {
+    // Conta o erro mesmo sem usuario: sem isso, varrer emails sai de graca.
+    await registrarFalha(email);
+    throw CREDENCIAIS_INVALIDAS;
+  }
 
   const senhaOk = await verifyPassword(senha, user.senhaHash);
-  if (!senhaOk) throw CREDENCIAIS_INVALIDAS;
+  if (!senhaOk) {
+    await registrarFalha(email);
+    throw CREDENCIAIS_INVALIDAS;
+  }
   if (!user.ativo) throw new AppError(403, 'USER_INACTIVE', 'Usuario desativado — procure um administrador');
+
+  await limparFalhas(email);
 
   const atualizado = await prisma.user.update({
     where: { id: user.id },

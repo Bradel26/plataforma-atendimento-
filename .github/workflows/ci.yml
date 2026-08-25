@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # O client do Prisma e gerado, nao versionado: sem isto o typecheck nao
+      # encontra os tipos dos modelos.
+      - run: npm run db:generate --workspace @plataforma/api
+
+      - run: npm run typecheck
+
+      - run: npm run build
+
+      # Os smoke tests exigem Postgres, Redis e API de pe. Ficam de fora do CI
+      # ate existir suite automatizada com banco efemero — ver "O que falta"
+      # no README.

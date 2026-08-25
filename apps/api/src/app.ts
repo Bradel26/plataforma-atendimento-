@@ -32,6 +32,10 @@ import { webchatRoutes } from './modules/webchat/webchat.routes';
 export function createApp() {
   const app = express();
 
+  // Atras de proxy reverso o IP real vem no X-Forwarded-For; sem isto, o limite
+  // por IP contaria todo mundo como o mesmo cliente (o proprio proxy).
+  if (env.TRUST_PROXY) app.set('trust proxy', true);
+
   app.use(helmet());
   app.use(cors({ origin: env.WEB_ORIGIN, credentials: true }));
   // O webhook da Meta valida assinatura sobre o corpo BRUTO — precisa vir antes

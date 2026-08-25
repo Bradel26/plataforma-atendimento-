@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { asyncHandler } from '../../http/async-handler';
 import { requireAuth } from '../../http/middleware/auth';
+import { limitar } from '../../http/middleware/rate-limit';
 import { validateBody } from '../../http/middleware/validate';
 import { prisma } from '../../lib/prisma';
 import { notFound } from '../../lib/errors';
@@ -16,8 +17,14 @@ import { login, marcarOffline, sessionForUserId } from './auth.service';
 
 export const authRoutes = Router();
 
+/**
+ * Limite por IP no login e no refresh. O numero e generoso para nao atrapalhar
+ * um call center inteiro atras do mesmo IP de saida, e o bloqueio por conta
+ * (tentativas.ts) e que segura forca bruta contra um usuario especifico.
+ */
 authRoutes.post(
   '/login',
+  limitar({ nome: 'login', janelaSegundos: 300, maximo: 30 }),
   validateBody(loginSchema),
   asyncHandler(async (req, res) => {
     const { accessToken, refreshToken, usuario } = await login(req.body);
@@ -28,6 +35,7 @@ authRoutes.post(
 
 authRoutes.post(
   '/refresh',
+  limitar({ nome: 'refresh', janelaSegundos: 300, maximo: 120 }),
   asyncHandler(async (req, res) => {
     const userId = await consumeRefreshToken(req.cookies?.[REFRESH_COOKIE]);
     const { accessToken, refreshToken, usuario } = await sessionForUserId(userId);

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../../http/async-handler';
+import { limitar } from '../../http/middleware/rate-limit';
 import { validateBody } from '../../http/middleware/validate';
 import { unauthorized } from '../../lib/errors';
 import { verifyWebchatToken } from '../../lib/tokens';
@@ -30,6 +31,9 @@ function sessao(req: { headers: { authorization?: string } }) {
 /** Publico: o visitante nao tem conta na plataforma. */
 webchatRoutes.post(
   '/sessoes',
+  // Rota publica que cria contato e conversa: sem limite, um script enche a
+  // fila de atendimento com lixo.
+  limitar({ nome: 'webchat-sessao', janelaSegundos: 600, maximo: 20 }),
   validateBody(iniciarSchema),
   asyncHandler(async (req, res) => {
     res.status(201).json(await iniciarSessao(req.body));
@@ -45,6 +49,7 @@ webchatRoutes.get(
 
 webchatRoutes.post(
   '/mensagens',
+  limitar({ nome: 'webchat-mensagem', janelaSegundos: 60, maximo: 60 }),
   validateBody(mensagemSchema),
   asyncHandler(async (req, res) => {
     const { conversaId } = sessao(req);

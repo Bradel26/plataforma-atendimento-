@@ -1,0 +1,9 @@
+node_modules
+**/node_modules
+**/dist
+apps/api/storage
+.git
+.github
+*.log
+.env
+**/.env

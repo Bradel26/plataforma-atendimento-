@@ -448,3 +448,55 @@ do Instagram copiada para o storage e imagem do WhatsApp com download recusado �
 
 **Não implementado:** agente enviar arquivo ao cliente (exige upload da mídia para a Graph API antes
 do envio) e política de retenção. O escopo sugere 90 dias; hoje nada apaga arquivo.
+### 25. Duas contas de limite, porque uma não cobre o ataque da outra
+Login tinha validação de senha e nada mais: qualquer script podia tentar senha à vontade.
+
+- **Por conta** (5 erros → 15 min): segura força bruta contra um usuário específico, mesmo vindo de
+  mil IPs diferentes. Email inexistente também conta — sem isso, varrer emails para descobrir quem
+  existe sai de graça.
+- **Por IP** (30 logins / 5 min): segura varredura de muitas contas a partir de um lugar, que o limite
+  por conta não vê.
+
+Contrapartida assumida e registrada no código: quem souber o email de alguém consegue travar aquele
+login por 15 minutos. É o preço conhecido do bloqueio por conta, e o oposto — não bloquear — deixa
+senha fraca exposta a milhares de tentativas por hora.
+
+Três decisões de implementação que mudam o resultado:
+- **Contador no Redis, não em memória.** Com duas instâncias atrás de um balanceador, limite em
+  memória é o dobro do limite anunciado.
+- **Falha aberta.** Redis fora do ar faz a plataforma atender sem limite, não recusar todo mundo.
+  Perder o limite por alguns minutos é menos grave que ficar fora do ar.
+- **`req.ip`, nunca `X-Forwarded-For` na mão.** O header é do cliente e pode ser inventado: ler
+  direto entrega ao atacante o direito de trocar de identidade a cada requisição. Atrás de proxy,
+  `TRUST_PROXY=true` faz o Express resolver o header com a cadeia certa.
+
+**Segredos de canal cifrados em repouso** (AES-256-GCM, `SECRETS_KEY`). O banco e o backup dele saem
+da máquina — dump em BI, cópia em notebook, provedor gerenciado — e token da Meta em claro nesse
+caminho basta para alguém mandar mensagem no nome da empresa. O GCM detecta alteração no texto
+cifrado; valor sem o prefixo `v1:` é lido como texto claro de versão anterior e volta cifrado na
+próxima gravação, então não houve migração de dados.
+
+**Produção recusa arranque com valor de exemplo.** Segredo de JWT do `.env.example` publicado no
+repositório permite forjar token de administrador; melhor não subir do que subir assim.
+
+Verificado por `npm run smoke:seguranca` (16 checagens, incluindo leitura direta do Redis e do
+Postgres): a sexta senha errada vira 429, login correto zera o contador, a varredura de emails é
+cortada por IP, o `Retry-After` vem na resposta, o token gravado começa com `v1:` e não contém o
+texto em claro, a API devolve a máscara do valor decifrado e nenhum `senhaHash` aparece.
+
+### 26. Deploy: imagem que migra no arranque, e o que não foi possível verificar
+`apps/api/Dockerfile` roda `prisma migrate deploy` antes de subir o processo. Deploy sem migrar põe
+código novo em banco velho, que é a forma mais rápida de derrubar a produção. O container não roda
+como root — container comprometido não vira dono do volume de anexos.
+
+O frontend sai como build estático servido por nginx, com proxy de `/api` e `/socket.io` (o WebSocket
+precisa do `Upgrade` explícito, senão o tempo real cai no polling). O `index.html` vai com
+`no-store` e os assets com cache de um ano: eles têm hash no nome, o index não pode ficar preso numa
+versão antiga.
+
+**As imagens não foram construídas aqui** — esta máquina não tem Docker (sem WSL2, ver "Ambiente de
+desenvolvimento"). O que foi verificado é o artefato compilado: `node dist/src/main.js` com
+`NODE_ENV=production` sobe, responde `/api/health` com Postgres e Redis ok, e recusa o arranque com
+os segredos de exemplo. Nesse teste apareceu um bug real: o script `start` apontava para
+`dist/main.js`, mas o `tsc` emite em `dist/src/main.js` — como o desenvolvimento usa `tsx`, ninguém
+tinha executado esse caminho. Corrigido.

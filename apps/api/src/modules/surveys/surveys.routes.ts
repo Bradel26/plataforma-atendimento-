@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../../http/async-handler';
 import { requireAuth, requireRole } from '../../http/middleware/auth';
+import { limitar } from '../../http/middleware/rate-limit';
 import { validateBody, validateQuery } from '../../http/middleware/validate';
 import { param } from '../../http/params';
 import { obterPorToken, responder, resultados } from './surveys.service';
@@ -30,6 +31,8 @@ pesquisasPublicasRoutes.get(
 
 pesquisasPublicasRoutes.post(
   '/:token',
+  // O token e opaco, mas sem limite ele fica sujeito a tentativa em massa.
+  limitar({ nome: 'pesquisa-resposta', janelaSegundos: 600, maximo: 30 }),
   validateBody(responderSchema),
   asyncHandler(async (req, res) => {
     res.json(await responder(param(req, 'token'), req.body.nota, req.body.comentario));

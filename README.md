@@ -74,6 +74,11 @@ backend na mesma origem (necessário para o cookie de refresh).
 | `npm run db:studio` | Prisma Studio |
 | `npm run infra:up` / `infra:down` | containers de dados |
 | `npm run infra:reset` | derruba os containers **e apaga os volumes** |
+| `npm run smoke` | tempo real do atendimento (9 checagens) |
+| `npm run smoke:canais` | webhooks e envio da Meta (17 checagens) |
+| `npm run smoke:pesquisa` | entrega da pesquisa de satisfação (16 checagens) |
+| `npm run smoke:midia` | upload, URL assinada e mídia dos canais (21 checagens) |
+| `npm run smoke:seguranca` | bloqueio de login, limite por IP e segredo cifrado (16 checagens) |
 
 ## API (Fase 0)
 
@@ -291,6 +296,48 @@ resposta e uma ação (responder, transferir para fila, encerrar). O bot respond
 conversa está em espera e sem agente — assim que alguém assume, ele cala — e desiste depois de N
 tentativas sem entender, deixando a conversa na fila.
 
+## Segurança
+
+- **Senha**: hash com bcrypt; `senhaHash` nunca sai da API.
+- **Tokens**: access token de 15 min só em memória no cliente; refresh token em cookie `httpOnly`
+  com `jti` no Redis, uso único e revogação no servidor.
+- **Bloqueio por tentativas**: 5 senhas erradas travam aquele login por 15 min — inclusive para email
+  inexistente, senão varrer emails sai de graça.
+- **Limite por IP** (contado no Redis, vale para o serviço inteiro): login, refresh, abertura de
+  webchat e resposta de pesquisa. Atrás de proxy reverso, ligue `TRUST_PROXY=true` para o limite ver o
+  IP real.
+- **Segredos dos canais cifrados em repouso** com AES-256-GCM (`SECRETS_KEY`); a API só devolve valor
+  mascarado. Registro anterior em texto claro continua funcionando e volta cifrado na próxima
+  gravação.
+- **Produção não sobe com valores de exemplo**: segredo de JWT, senha do seed ou `WEB_ORIGIN` em
+  localhost fazem o processo recusar o arranque.
+- **Anexos** por URL assinada, lista fechada de tipos e `nosniff` — ver *Arquivos e mídia*.
+
+```bash
+npm run smoke:seguranca   # com a API de pé; verifica o que ficou gravado no Redis e no Postgres
+```
+
+## Deploy
+
+Imagens em [apps/api/Dockerfile](apps/api/Dockerfile) (Node 22, usuário `node`, roda
+`prisma migrate deploy` no arranque) e [apps/web/Dockerfile](apps/web/Dockerfile) (build Vite servido
+por nginx, com proxy de `/api` e `/socket.io` — ver [apps/web/nginx.conf](apps/web/nginx.conf)).
+CI em [.github/workflows/ci.yml](.github/workflows/ci.yml): `typecheck` + `build` a cada push e PR.
+
+**As imagens não foram construídas nesta máquina** (Docker indisponível — sem WSL2). O que *foi*
+verificado é o artefato compilado: `node dist/src/main.js` com `NODE_ENV=production` sobe, responde
+`/api/health` com Postgres e Redis ok, e recusa o arranque com os segredos de exemplo.
+
+Checklist antes do primeiro deploy:
+
+1. `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` e `SECRETS_KEY` novos (`openssl rand -hex 32` cada).
+2. `WEB_ORIGIN` no domínio real (vale para CORS e para o cookie de refresh).
+3. `TRUST_PROXY=true` se houver proxy/balanceador na frente.
+4. `DATABASE_URL` (pooled) e `DIRECT_URL` (direta) do provedor; `REDIS_URL` com `rediss://`.
+5. Volume persistente em `apps/api/storage` — ou trocar o driver para S3/R2 antes de subir.
+6. Trocar a senha do admin do seed no primeiro acesso.
+7. Rotacionar as credenciais que passaram por qualquer canal de texto durante o desenvolvimento.
+
 ## O que não foi construído
 
 **Telefonia: PABX, voz, monitoria de chamadas e transcrição.** Exige escolher provedor (Asterisk
@@ -301,3 +348,16 @@ preparado para receber voz e a recomendação de caminho estão em *Fase 4* no [
 
 **Integrações da Meta em produção.** O código está pronto e testado com payloads assinados
 localmente, mas nenhuma credencial real da Meta foi exercitada — depende de conta verificada.
+
+**Suíte de testes automatizada.** O que existe são cinco scripts de smoke que exercitam a API de pé
+contra o banco real — foram eles que acharam os bugs deste projeto. Falta teste unitário e de
+integração com banco efêmero, que é o que permitiria rodar tudo no CI.
+
+**Retenção e anonimização (LGPD).** Nada apaga conversa, gravação de mídia ou histórico. O escopo
+sugere 90 dias; a decisão de prazo e o direito de eliminação são do responsável pelo dado.
+
+**Fila de trabalho.** Disparo de campanha e reenvio de convite de pesquisa são síncronos. Para volume,
+o certo é fila no Redis com retry e controle de taxa.
+
+**Envio de arquivo pelo agente.** Exige subir a mídia para a Graph API antes da mensagem; hoje a
+resposta do agente é texto.

@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { Channel } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { badRequest, notFound } from '../../lib/errors';
+import { cifrar, decifrar } from '../../lib/crypto-box';
 
 export const CANAIS_EXTERNOS = ['WHATSAPP', 'INSTAGRAM', 'FACEBOOK'] as const;
 export type CanalExterno = (typeof CANAIS_EXTERNOS)[number];
@@ -10,13 +11,31 @@ export type CanalExterno = (typeof CANAIS_EXTERNOS)[number];
 const mascarar = (valor: string | null) =>
   valor ? `${valor.slice(0, 4)}${'*'.repeat(Math.max(4, valor.length - 8))}${valor.slice(-4)}` : null;
 
+/**
+ * Campos cifrados em repouso. `verifyToken` entra na lista porque quem o tem
+ * consegue passar pela verificacao do webhook e assinar o canal em outro lugar.
+ */
+const SEGREDOS = ['accessToken', 'appSecret', 'verifyToken'] as const;
+
+type ComSegredos = { accessToken: string | null; appSecret: string | null; verifyToken: string | null };
+
+/** Decifra os segredos de um registro lido do banco. */
+function aberto<T extends ComSegredos>(config: T): T {
+  const copia = { ...config };
+  for (const campo of SEGREDOS) {
+    const valor = copia[campo];
+    if (valor) copia[campo] = decifrar(valor) as T[typeof campo];
+  }
+  return copia;
+}
+
 export async function listarCanais() {
   const canais = await prisma.channelConfig.findMany({
     include: { fila: { select: { id: true, nome: true } } },
     orderBy: { canal: 'asc' },
   });
 
-  return canais.map((c) => ({
+  return canais.map(aberto).map((c) => ({
     id: c.id,
     canal: c.canal,
     ativo: c.ativo,
@@ -51,25 +70,36 @@ export async function salvarCanal(canal: CanalExterno, input: SalvarCanalInput) 
     if (!fila) throw notFound('Fila nao encontrada');
   }
 
-  const atual = await prisma.channelConfig.findUnique({ where: { canal } });
+  const gravado = await prisma.channelConfig.findUnique({ where: { canal } });
+  const atual = gravado ? aberto(gravado) : null;
   const futuro = { ...atual, ...input };
 
   if (futuro.ativo && !(futuro.accessToken && futuro.appSecret && futuro.verifyToken)) {
     throw badRequest('Para ativar o canal informe accessToken, appSecret e verifyToken');
   }
 
+  // Cifra so o que veio nesta requisicao; campo ausente nao e reescrito, e
+  // campo enviado como null continua sendo limpeza explicita.
+  const paraGravar = { ...input };
+  for (const campo of SEGREDOS) {
+    const valor = paraGravar[campo];
+    if (valor) paraGravar[campo] = cifrar(valor);
+  }
+
   await prisma.channelConfig.upsert({
     where: { canal },
-    update: input,
-    create: { canal, ...input },
+    update: paraGravar,
+    create: { canal, ...paraGravar },
   });
 
   const canais = await listarCanais();
   return canais.find((c) => c.canal === canal)!;
 }
 
+/** Sempre devolve os segredos em claro — o resto do sistema nao sabe da cifra. */
 export async function obterConfig(canal: Channel) {
-  return prisma.channelConfig.findUnique({ where: { canal } });
+  const config = await prisma.channelConfig.findUnique({ where: { canal } });
+  return config ? aberto(config) : null;
 }
 
 /**

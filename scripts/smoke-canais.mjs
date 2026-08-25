@@ -68,7 +68,14 @@ console.log('2. token mascarado na leitura:', ok(!JSON.stringify(lista).includes
   `(${wa.accessTokenMascarado})`);
 console.log('   canal marcado como configurado:', ok(wa.configurado));
 
-// 3. Ativar sem credenciais deve ser recusado
+// 3. Ativar sem credenciais deve ser recusado.
+// Limpa o Facebook antes: se outro teste tiver deixado credencial ali, ativar
+// daria 200 com razao e a falha seria do teste, nao do sistema.
+await json('/canais/facebook', {
+  method: 'PUT',
+  headers: admin,
+  body: JSON.stringify({ ativo: false, accessToken: null, appSecret: null, verifyToken: null }),
+});
 const { status: statusSemCred } = await json('/canais/facebook', {
   method: 'PUT',
   headers: admin,
