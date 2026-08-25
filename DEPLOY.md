@@ -15,7 +15,7 @@ Docker não entra — nesta VPS a aplicação roda direto com Node, que é o cam
 O hostname que a Hostinger te deu **já resolve para o seu IP** — conferi:
 
 ```
-srv1783216.hstgr.cloud → 187.127.32.153
+atendimento.bradel.com.br → 187.127.32.153
 ```
 
 Isso é suficiente para emitir certificado gratuito e ter HTTPS funcionando hoje, inclusive para o
@@ -69,7 +69,7 @@ Abra o arquivo e preencha as cinco linhas que faltam:
 DATABASE_URL="postgresql://...pooler..."      # do Neon, pooled
 DIRECT_URL="postgresql://...direct..."        # do Neon, direta
 REDIS_URL="rediss://...upstash.io:6379"       # do Upstash
-WEB_ORIGIN="https://srv1783216.hstgr.cloud"   # com https, sem barra no fim
+WEB_ORIGIN="https://atendimento.bradel.com.br"   # com https, sem barra no fim
 SEED_ADMIN_EMAIL="voce@suaempresa.com.br"     # nao pode ser @plataforma.local
 ```
 
@@ -190,7 +190,7 @@ Em produção o seed **exige** senha forte e domínio real, cria **apenas o admi
 demonstração) e não imprime a senha. Se ele recusar, a mensagem diz exatamente qual variável
 corrigir.
 
-Entre em `https://srv1783216.hstgr.cloud` com o e-mail e a senha que você anotou no passo 2, e crie
+Entre em `https://atendimento.bradel.com.br` com o e-mail e a senha que você anotou no passo 2, e crie
 supervisores e agentes pela tela de *Configurações → Usuários*.
 
 ---
@@ -199,7 +199,7 @@ supervisores e agentes pela tela de *Configurações → Usuários*.
 
 ```bash
 # A API responde e alcanca banco e Redis?
-curl -s https://srv1783216.hstgr.cloud/api/health
+curl -s https://atendimento.bradel.com.br/api/health
 
 # Esperado:
 # {"status":"ok","dependencias":{"postgres":"ok","redis":"ok"},"versao":"0.1.0"}
@@ -209,7 +209,7 @@ Depois, no navegador:
 
 | Confira | Por que importa |
 |---|---|
-| `https://srv1783216.hstgr.cloud` abre com cadeado | certificado válido e nginx servindo o front |
+| `https://atendimento.bradel.com.br` abre com cadeado | certificado válido e nginx servindo o front |
 | Login funciona | JWT e banco de produção conversando |
 | Recarregar a página mantém você dentro | cookie de sessão com `secure` funcionando em HTTPS |
 | Abrir `/webchat` em janela anônima e mandar mensagem | WebSocket atravessando o proxy |
@@ -250,9 +250,9 @@ Meta** exige exatamente isso — um endereço HTTPS público e alcançável. A U
 Meta será:
 
 ```
-https://srv1783216.hstgr.cloud/api/webhooks/whatsapp
-https://srv1783216.hstgr.cloud/api/webhooks/instagram
-https://srv1783216.hstgr.cloud/api/webhooks/facebook
+https://atendimento.bradel.com.br/api/webhooks/whatsapp
+https://atendimento.bradel.com.br/api/webhooks/instagram
+https://atendimento.bradel.com.br/api/webhooks/facebook
 ```
 
 Uma URL por canal — cada um tem token de verificação e segredo próprios, configurados em

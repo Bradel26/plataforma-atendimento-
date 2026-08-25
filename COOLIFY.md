@@ -11,25 +11,47 @@ instalado** e o Traefik dele é o dono das portas 80 e 443.
 
 ## Por que muda o desenho
 
-O Traefik ocupa 80 e 443, e o hostname `srv1783216.hstgr.cloud` é da Hostinger — você não controla o
-DNS dele, então **não pode criar subdomínios** como `api.srv1783216...`. Sem subdomínio, não dá para
-publicar front e API em dois endereços.
+O Traefik do Coolify ocupa as portas 80 e 443 da VPS. Instalar um nginx nosso ali brigaria por elas
+— por isso este caminho, e nao o do DEPLOY.md.
 
-A solução é um **container único**: a própria API serve o front compilado. Um endereço, um serviço,
-nada de roteamento por caminho no proxy.
+O padrao da casa ja esta estabelecido: **um subdominio por aplicacao**, todos apontando para a
+mesma VPS (`coolify.bradel.com.br`, `nexus.bradel.com.br`). A plataforma entra como
+`atendimento.bradel.com.br`, sem conflito com o Nexus.
 
-Isso está pronto no repositório: o `Dockerfile` da **raiz** compila os dois e sobe um container só.
-Os Dockerfiles de `apps/api` e `apps/web` continuam existindo para o caminho com nginx.
+Ainda assim, um **container unico** — a propria API serve o front compilado. Poderiam ser dois
+recursos (front e API em subdominios diferentes), mas um so significa um deploy, um log, um
+certificado, e nenhum `proxy_pass` entre containers. O `Dockerfile` da raiz compila os dois; os de
+`apps/api` e `apps/web` continuam para o caminho com nginx.
 
-Dois defeitos foram encontrados ao montar isso — nenhum aparecia antes porque a imagem nunca havia
-sido construída:
+Dois defeitos reais apareceram ao montar isso, nenhum visivel antes porque a imagem nunca havia
+sido construida:
 
-- O `CMD` roda `prisma migrate deploy`, mas o `prisma` era dependência de desenvolvimento e a imagem
-  final é instalada sem elas. A cada arranque ele tentaria baixar o CLI da internet. Corrigido:
+- O `CMD` roda `prisma migrate deploy`, mas o `prisma` era dependencia de desenvolvimento e a imagem
+  final e instalada sem elas. A cada arranque ele tentaria baixar o CLI da internet. Corrigido:
   `prisma` passou para `dependencies`.
-- Servido por nginx, o front não passava pelo helmet. Servido pela API, passa — e o helmet proibia
-  enquadrar a página, o que **mataria o widget** no site do cliente. Corrigido com exceção para
+- Servido por nginx, o front nao passava pelo helmet. Servido pela API, passa — e o helmet proibia
+  enquadrar a pagina, o que **mataria o widget** no site do cliente. Corrigido com excecao para
   `/webchat`, e travado por teste.
+
+---
+
+## 0. DNS: criar o subdominio
+
+Antes de mexer no Coolify, crie o registro onde o DNS de `bradel.com.br` e gerenciado (o mesmo lugar
+onde `nexus` e `coolify` foram criados):
+
+| Tipo | Nome | Valor | TTL |
+|---|---|---|---|
+| A | `atendimento` | `187.127.32.153` | o padrao |
+
+Confira antes de seguir — o Let's Encrypt falha se o nome ainda nao apontar para a maquina:
+
+```bash
+nslookup atendimento.bradel.com.br
+```
+
+Tem que responder `187.127.32.153`. Se responder outra coisa (ou um IP de resolvedor, tipo
+`208.67.222.222`), o registro ainda nao propagou.
 
 ---
 
@@ -53,15 +75,12 @@ sido construída:
 No campo de domínio do recurso, coloque:
 
 ```
-https://srv1783216.hstgr.cloud
+https://atendimento.bradel.com.br
 ```
 
 O Coolify pede o certificado ao Let's Encrypt pelo Traefik automaticamente. Nada de certbot aqui.
 
-> **Cuidado:** se o Nexus já usa esse mesmo hostname, os dois vão brigar pelo endereço. Nesse caso
-> você precisa de um domínio próprio (um registro **A** para `187.127.32.153`), ou publicar a
-> plataforma num caminho — e caminho traz complicação com o WebSocket. Confira antes o que o Nexus
-> está usando.
+> O Nexus usa o subdomínio dele (), então não há conflito de endereço.
 
 ## 3. Variáveis de ambiente
 
@@ -75,7 +94,7 @@ colar tudo de uma vez no modo *Developer view*. São estas as que importam:
 | `DATABASE_URL` | a string **pooled** do Neon, banco `producao` |
 | `DIRECT_URL` | a string **direta** do Neon, banco `producao` |
 | `REDIS_URL` | a URL `rediss://` do Upstash |
-| `WEB_ORIGIN` | `https://srv1783216.hstgr.cloud` |
+| `WEB_ORIGIN` | `https://atendimento.bradel.com.br` |
 | `JWT_ACCESS_SECRET` | o gerado |
 | `JWT_REFRESH_SECRET` | o gerado |
 | `SECRETS_KEY` | o gerado |
@@ -119,7 +138,7 @@ As migrations vão dizer `No pending migrations to apply` — porque eu já as a
 
 ## Conferindo
 
-Abra `https://srv1783216.hstgr.cloud`:
+Abra `https://atendimento.bradel.com.br`:
 
 | Confira | Se falhar, olhe |
 |---|---|
