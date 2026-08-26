@@ -15,10 +15,14 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
-RUN npm ci
+# --include=dev de proposito: o Coolify injeta NODE_ENV=production como build
+# arg, e com ele o npm ci pula typescript, tsx e vite -- que sao exatamente as
+# ferramentas que compilam esta imagem.
+RUN npm ci --include=dev
 
 COPY . .
-RUN npm run db:generate \
+# db:generate existe so no workspace da API; o build da raiz cobre API e front.
+RUN npm run db:generate --workspace @plataforma/api \
  && npm run build
 
 # ---- runtime ----
