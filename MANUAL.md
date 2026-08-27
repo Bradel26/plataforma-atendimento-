@@ -88,13 +88,41 @@ vermelho no dashboard — é o número que o supervisor olha primeiro.
 
 Cinco abas:
 
-- **Contatos** — a pessoa, com histórico de conversas. Criado automaticamente quando alguém fala
-  pela primeira vez por qualquer canal.
+- **Contatos** — a pessoa, e a **ficha com a vida dela** (abaixo). Criado automaticamente quando
+  alguém fala pela primeira vez por qualquer canal.
 - **Contas** — a empresa, com CNPJ e visão 360: contatos, leads e oportunidades ligados a ela.
 - **Leads** — quadro por fase, arrastando o cartão. Mover para *Perdido* exige dizer o motivo.
 - **Oportunidades** — quadro pelos estágios do funil, com total em aberto e **previsão ponderada**
   pela probabilidade de cada estágio.
 - **Produtos e preços** — SKU e tabela de preços, que alimentam os itens da oportunidade.
+
+#### A ficha do cliente
+
+Clique num contato e a direita mostra tudo sobre ele numa tela só.
+
+**Os seis números no topo** são conversas, ligações, protocolos abertos, oportunidades em aberto,
+quanto o cliente já comprou e tarefas em aberto. *Já comprou* e *oportunidades* vêm da **empresa**
+do contato, não só dele: proposta e negócio vivem na conta, e uma ficha que para no atendimento não
+responde quanto aquele cliente vale.
+
+**A linha do tempo** junta oito coisas em ordem, da mais recente para a mais antiga: conversa,
+ligação, atividade, protocolo, oportunidade, mudança de etapa do funil, lead e pesquisa de
+satisfação. Os botões redondos em cima filtram por tipo — clique em *Ligação* para ver só o
+telefone, clique em vários para combinar, e em *Tudo* para voltar. Eventos marcados **Da empresa**
+aconteceram com a conta, não com esta pessoa.
+
+A conversa aparece como **uma** linha por atendimento, não uma por mensagem. Uma conversa de
+quarenta mensagens viraria quarenta linhas e enterraria a proposta que veio depois; para ler as
+mensagens, abra o atendimento.
+
+**Registrar** é o campo que faz a ficha valer algo amanhã. Escreva o que aconteceu e clique
+*Registrar*: aparece na linha do tempo na hora. Se preencher o **prazo**, o botão vira *Criar
+tarefa* e o item passa a aparecer em **Tarefas marcadas**, com o prazo em destaque e a palavra
+*Atrasada* quando a data passa. Sem responsável escolhido, o responsável é quem registrou — tarefa
+sem dono não aparece em lista nenhuma e morre.
+
+Concluir uma tarefa a tira das abertas e **não** apaga nada: ela continua na linha do tempo, porque
+o que aconteceu aconteceu.
 
 ---
 

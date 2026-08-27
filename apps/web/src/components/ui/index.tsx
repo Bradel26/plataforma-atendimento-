@@ -1,4 +1,10 @@
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react';
+import type {
+  ButtonHTMLAttributes,
+  InputHTMLAttributes,
+  ReactNode,
+  SelectHTMLAttributes,
+  TextareaHTMLAttributes,
+} from 'react';
 
 export function Card({ titulo, descricao, acao, children }: {
   titulo?: string;
@@ -53,6 +59,10 @@ export function Field({ label, hint, children }: { label: string; hint?: string;
 
 export const Input = ({ className = '', ...props }: InputHTMLAttributes<HTMLInputElement>) => (
   <input {...props} className={`${campo} ${className}`} />
+);
+
+export const Textarea = ({ className = '', ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) => (
+  <textarea {...props} className={`${campo} resize-y ${className}`} />
 );
 
 export const Select = ({ className = '', ...props }: SelectHTMLAttributes<HTMLSelectElement>) => (

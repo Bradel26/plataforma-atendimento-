@@ -88,6 +88,8 @@ Construir uma aplicação web própria no formato de plataforma de atendimento o
 - [x] Contas, Oportunidades (funil customizável), Catálogo de Preços, Produtos
 - [x] Importação/exportação (CSV) de leads e relatórios
 - [x] Módulo de Protocolo/Chamados (Kanban, anexos, agendamentos, comentários internos/externos)
+- [x] **Ficha 360 do cliente** — a vida do contato e da empresa dele numa tela: seis indicadores,
+  linha do tempo de oito fontes com filtro por tipo, registro e tarefa — ver decisões 41 e 42
 
 **Ordem adotada:** o CRM veio antes das integrações Meta porque WhatsApp/Instagram dependem de
 verificação da conta pela Meta (dias/semanas); o CRM é utilizável no mesmo dia.
@@ -944,3 +946,38 @@ Cinco decisões que o desenho da ponte forçou:
 Verificado com `npm run smoke:ia`: 41 checagens com um webhook de verdade no lugar do whatsbot,
 conferindo a assinatura recebida byte a byte, o `acionarIa` nos quatro estados e as três recusas com
 código próprio. Do lado do plugin, 126 testes.
+
+### 42. A ficha é uma tela só, e a conversa entra como uma linha
+
+A API da ficha existia desde a Fase 2 e ninguém conseguia ver: o painel de contatos mostrava dados
+cadastrais e uma lista de conversas. A tela agora é o produto — cabeçalho com seis números, tarefas
+em aberto, campo para registrar e a linha do tempo das oito fontes.
+
+Quatro decisões:
+
+- **Um formulário para registro e tarefa, não dois.** A diferença é ter prazo ou não, e o botão muda
+  de *Registrar* para *Criar tarefa* quando a data é preenchida. Duas telas obrigariam a pessoa a
+  classificar antes de escrever, e o resultado costuma ser não escrever nada.
+- **A união das oito fontes fica no banco.** Já era assim na API; a tela apenas pagina o conjunto.
+  Juntar no navegador faria o "carregar mais" trazer a segunda página *de cada fonte* em vez da
+  continuação da lista, e a ordem se desfaria no meio da rolagem.
+- **`<time dateTime>` em vez de `<span>` no horário.** O texto mostra hora e minuto; o atributo
+  guarda o instante completo. Leitor de tela anuncia a data inteira, e o teste confere a ordenação
+  pelo valor real — dois eventos do mesmo minuto empatariam no texto exibido.
+- **O filtro guarda o que está selecionado, não os oito.** Lista vazia significa "tudo", então a
+  requisição sem filtro não carrega uma query string três vezes maior para dizer o padrão.
+
+Verificado com 6 testes de navegador (`npx playwright test ficha.spec.ts`): indicadores com número e
+moeda, ordenação conferida pelos instantes reais, filtro recortando e voltando, registro aparecendo
+na linha do tempo sem recarregar, e o ciclo da tarefa até concluída — que sai das abertas e
+permanece no histórico.
+
+Três falhas na primeira execução, todas do teste e não da tela: um localizador ambíguo porque
+"Oportunidades" também é nome de aba, uma asserção que dependia do que o banco de desenvolvimento
+tinha, e um `count()` rodando antes de a lista pintar — este último se auto-pulava como *skipped*
+com a tela perfeita, que é o pior tipo de falha de teste: silenciosa.
+
+O que ficou de fora e vale registrar: a ficha **não tem URL própria**. Hoje nenhuma aba do CRM tem —
+o estado é do componente. Mandar o link da ficha de um cliente para o supervisor exige tratar o
+roteamento do módulo inteiro, e meia solução (só a ficha na query string) deixaria o CRM
+inconsistente consigo mesmo.

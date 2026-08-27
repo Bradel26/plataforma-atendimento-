@@ -633,3 +633,94 @@ export type EstadoFila = {
   mortos: number;
   ultimosMortos: TrabalhoMorto[];
 };
+
+/* ── Ficha 360 ─────────────────────────────────────────────────────────── */
+
+export const TIPOS_EVENTO = [
+  'CONVERSA',
+  'CHAMADA',
+  'ATIVIDADE',
+  'PROTOCOLO',
+  'OPORTUNIDADE',
+  'ETAPA',
+  'LEAD',
+  'PESQUISA',
+] as const;
+
+export type TipoEvento = (typeof TIPOS_EVENTO)[number];
+
+export const LABEL_TIPO_EVENTO: Record<TipoEvento, string> = {
+  CONVERSA: 'Conversa',
+  CHAMADA: 'Ligacao',
+  ATIVIDADE: 'Atividade',
+  PROTOCOLO: 'Protocolo',
+  OPORTUNIDADE: 'Oportunidade',
+  ETAPA: 'Etapa do funil',
+  LEAD: 'Lead',
+  PESQUISA: 'Pesquisa',
+};
+
+/**
+ * Um evento da linha do tempo. As oito fontes projetam a mesma forma, entao a
+ * tela renderiza um tipo so — e um tipo novo no back nao exige componente novo
+ * aqui, apenas um rotulo.
+ */
+export type EventoFicha = {
+  tipo: TipoEvento;
+  id: string;
+  ocorridoEm: string;
+  titulo: string;
+  detalhe: string | null;
+  canal: Canal | null;
+  situacao: string | null;
+  valor: number | null;
+  referencia: string | null;
+  /** De quem e o evento: do proprio contato ou da empresa dele. */
+  escopo: 'CONTATO' | 'CONTA';
+  usuario: string | null;
+};
+
+export type Timeline = { eventos: EventoFicha[]; proximoCursor: string | null };
+
+export const TIPOS_ATIVIDADE = ['NOTA', 'LIGACAO', 'WHATSAPP', 'EMAIL', 'REUNIAO', 'VISITA', 'PROPOSTA'] as const;
+
+export type TipoAtividade = (typeof TIPOS_ATIVIDADE)[number];
+
+export const LABEL_TIPO_ATIVIDADE: Record<TipoAtividade, string> = {
+  NOTA: 'Nota',
+  LIGACAO: 'Ligacao',
+  WHATSAPP: 'WhatsApp',
+  EMAIL: 'E-mail',
+  REUNIAO: 'Reuniao',
+  VISITA: 'Visita',
+  PROPOSTA: 'Proposta',
+};
+
+export type Atividade = {
+  id: string;
+  tipo: TipoAtividade;
+  titulo: string;
+  descricao: string | null;
+  /** Nulo = registro do que aconteceu. Preenchido = tarefa com prazo. */
+  prazo: string | null;
+  concluidoEm: string | null;
+  criadoEm: string;
+  responsavel: { id: string; nome: string } | null;
+  criadoPor?: { id: string; nome: string } | null;
+};
+
+export type IndicadoresFicha = {
+  conversas: number;
+  chamadas: number;
+  protocolosAbertos: number;
+  oportunidadesAbertas: number;
+  oportunidadesGanhas: number;
+  valorGanho: number;
+  atividadesAbertas: number;
+};
+
+export type FichaContato = {
+  contato: Contato & { conta: { id: string; nome: string } | null };
+  indicadores: IndicadoresFicha;
+  atividadesAbertas: Atividade[];
+};

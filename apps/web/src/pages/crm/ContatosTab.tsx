@@ -1,13 +1,19 @@
 import { useEffect, useState } from 'react';
-import { Alerta, Badge, Card, EmptyState, Input } from '../../components/ui';
+import { Alerta, Card, EmptyState, Input } from '../../components/ui';
 import { ApiError, api } from '../../lib/api';
-import { LABEL_CONVERSA_STATUS, type Contato, type ConversaResumo } from '../../lib/types';
+import type { Contato } from '../../lib/types';
+import { FichaContato, FichaVazia } from './ficha/FichaContato';
 
-/** Aba de contatos: ficha e historico de conversas (base do CRM, Fase 1). */
+/**
+ * Aba de contatos: lista a esquerda, a vida do cliente a direita.
+ *
+ * A lista carrega so o resumo e o painel busca a ficha ao abrir. Trazer tudo de
+ * uma vez seria oito consultas por contato listado para mostrar uma.
+ */
 export function ContatosTab() {
   const [contatos, setContatos] = useState<Contato[]>([]);
   const [busca, setBusca] = useState('');
-  const [selecionado, setSelecionado] = useState<{ contato: Contato; conversas: ConversaResumo[] } | null>(null);
+  const [selecionado, setSelecionado] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
@@ -21,25 +27,20 @@ export function ContatosTab() {
     return () => clearTimeout(t);
   }, [busca]);
 
-  const abrir = async (id: string) => {
-    setErro(null);
-    try {
-      setSelecionado(await api.get<{ contato: Contato; conversas: ConversaResumo[] }>(`/contatos/${id}`));
-    } catch (e) {
-      setErro(e instanceof ApiError ? e.message : 'Falha ao abrir contato');
-    }
-  };
-
   return (
-    <div className="grid gap-5 lg:grid-cols-[360px_1fr]">
+    <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
       <Card titulo="Contatos" descricao={`${contatos.length} encontrado(s)`}>
         <Input
           placeholder="Buscar por nome, e-mail ou telefone"
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
         />
-        {erro && <div className="mt-3"><Alerta>{erro}</Alerta></div>}
-        <div className="mt-3 max-h-[60vh] overflow-y-auto">
+        {erro && (
+          <div className="mt-3">
+            <Alerta>{erro}</Alerta>
+          </div>
+        )}
+        <div className="mt-3 max-h-[70vh] overflow-y-auto">
           {contatos.length === 0 ? (
             <EmptyState
               titulo="Nenhum contato"
@@ -51,9 +52,9 @@ export function ContatosTab() {
                 <li key={c.id}>
                   <button
                     type="button"
-                    onClick={() => void abrir(c.id)}
+                    onClick={() => setSelecionado(c.id)}
                     className={`w-full px-1 py-2.5 text-left transition hover:bg-slate-50 ${
-                      selecionado?.contato.id === c.id ? 'bg-slate-50' : ''
+                      selecionado === c.id ? 'bg-slate-50' : ''
                     }`}
                   >
                     <p className="text-sm font-medium text-slate-800">{c.nome}</p>
@@ -71,64 +72,10 @@ export function ContatosTab() {
         </div>
       </Card>
 
-      {selecionado ? (
-        <div className="space-y-5">
-          <Card titulo={selecionado.contato.nome} descricao="Ficha do contato">
-            <dl className="grid gap-3 text-sm sm:grid-cols-2">
-              <div>
-                <dt className="text-xs text-slate-500">E-mail</dt>
-                <dd className="text-slate-800">{selecionado.contato.email ?? '—'}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-slate-500">Telefone</dt>
-                <dd className="text-slate-800">{selecionado.contato.telefone ?? '—'}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-slate-500">Canal de origem</dt>
-                <dd className="text-slate-800">{selecionado.contato.canalOrigem ?? '—'}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-slate-500">Cliente desde</dt>
-                <dd className="text-slate-800">
-                  {selecionado.contato.criadoEm
-                    ? new Date(selecionado.contato.criadoEm).toLocaleDateString('pt-BR')
-                    : '—'}
-                </dd>
-              </div>
-            </dl>
-          </Card>
-
-          <Card titulo="Historico de conversas" descricao={`${selecionado.conversas.length} registro(s)`}>
-            {selecionado.conversas.length === 0 ? (
-              <EmptyState titulo="Sem conversas" descricao="Este contato ainda nao teve atendimentos." />
-            ) : (
-              <ul className="divide-y divide-slate-100">
-                {selecionado.conversas.map((c) => (
-                  <li key={c.id} className="flex items-start justify-between gap-4 py-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm text-slate-800">
-                        {c.ultimaMensagem?.conteudo ?? 'Sem mensagens'}
-                      </p>
-                      <p className="mt-0.5 text-xs text-slate-500">
-                        {new Date(c.criadoEm).toLocaleString('pt-BR')}
-                        {c.agente ? ` · ${c.agente.nome}` : ''}
-                        {c.fila ? ` · ${c.fila.nome}` : ''}
-                      </p>
-                    </div>
-                    <Badge tom={c.status === 'FINALIZADO' ? 'neutro' : 'sucesso'}>
-                      {LABEL_CONVERSA_STATUS[c.status]}
-                    </Badge>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-        </div>
-      ) : (
-        <Card titulo="Ficha do contato">
-          <EmptyState titulo="Selecione um contato" descricao="A ficha e o historico de conversas aparecem aqui." />
-        </Card>
-      )}
+      {/* `key` no id: trocar de contato remonta a ficha e zera o cursor da linha
+          do tempo. Sem isso, a primeira pagina do contato novo viria depois dos
+          eventos do anterior. */}
+      {selecionado ? <FichaContato key={selecionado} contatoId={selecionado} /> : <FichaVazia />}
     </div>
   );
 }
