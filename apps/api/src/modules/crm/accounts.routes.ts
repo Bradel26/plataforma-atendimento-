@@ -4,7 +4,7 @@ import { asyncHandler } from '../../http/async-handler';
 import { requireAuth, requireRole } from '../../http/middleware/auth';
 import { validateBody, validateQuery } from '../../http/middleware/validate';
 import { param } from '../../http/params';
-import { conflict, notFound } from '../../lib/errors';
+import { badRequest, conflict, notFound } from '../../lib/errors';
 import { prisma } from '../../lib/prisma';
 import { inclusaoLead, inclusaoOportunidade, toLead, toOportunidade } from './crm.serializers';
 
@@ -142,6 +142,31 @@ accountsRoutes.post(
     res.json({
       contato: await prisma.contact.update({ where: { id: contato.id }, data: { contaId: id } }),
     });
+  }),
+);
+
+/**
+ * Desvincula um contato da conta.
+ *
+ * Existe porque vincular e um clique e errar tambem: sem desfazer, um contato
+ * ligado a empresa errada leva as oportunidades daquela empresa para a ficha
+ * dele — e a unica saida seria mexer no banco.
+ *
+ * Nao apaga o contato. So solta o vinculo.
+ */
+accountsRoutes.delete(
+  '/:id/contatos/:contatoId',
+  asyncHandler(async (req, res) => {
+    const id = param(req, 'id');
+    const contatoId = param(req, 'contatoId');
+
+    const contato = await prisma.contact.findUnique({ where: { id: contatoId } });
+    if (!contato) throw notFound('Contato nao encontrado');
+    // Confere o par: `DELETE /contas/<outra>/contatos/<id>` nao pode soltar um
+    // vinculo que nao e daquela conta.
+    if (contato.contaId !== id) throw badRequest('Este contato nao esta vinculado a esta conta');
+
+    res.json({ contato: await prisma.contact.update({ where: { id: contatoId }, data: { contaId: null } }) });
   }),
 );
 

@@ -2,6 +2,7 @@ import type { Channel } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { notFound } from '../../lib/errors';
 import { notificarConversaAtualizada, notificarMensagem } from '../../realtime/hub';
+import { enviarParaCanal, exigeEnvioExterno } from '../channels/outbound.service';
 import { inclusaoDetalhe, toConversaDetalhe, toMensagem } from '../conversations/conversations.serializer';
 
 /** Compara sem acento e sem caixa: "duvida" casa com "Dúvida". */
@@ -102,10 +103,35 @@ export async function responderAutomaticamente(conversaId: string, textoCliente:
   if (!jaFalou) partes.push(bot.mensagemBoasVindas);
   partes.push(passo ? passo.resposta : bot.fallback);
 
+  const externo = exigeEnvioExterno(conversa.canal);
+
   const criadas = [];
   for (const conteudo of partes) {
-    criadas.push(await prisma.message.create({ data: { conversaId, autor: 'BOT', conteudo } }));
+    // Envia ao canal ANTES de gravar, como no caminho do atendente humano: se a
+    // Meta recusar, a mensagem nao entra no historico. Sem isto, a resposta do
+    // bot aparecia no painel e o cliente do WhatsApp nunca recebia nada.
+    let idExterno: string | null = null;
+    if (externo) {
+      try {
+        idExterno = (await enviarParaCanal(conversa.canal, conversa.enderecoExterno, conteudo)).idExterno;
+      } catch (err) {
+        // Nao propaga: quem chama e o webhook do canal, e um 500 nosso faria a
+        // Meta reentregar a mensagem do cliente e duplica-la. O bot desiste
+        // deste turno e a conversa segue para o humano na fila.
+        console.warn(
+          `[bot] envio recusado pelo canal ${conversa.canal} na conversa ${conversaId}: ` +
+            (err instanceof Error ? err.message : 'erro desconhecido'),
+        );
+        break;
+      }
+    }
+
+    criadas.push(await prisma.message.create({ data: { conversaId, autor: 'BOT', conteudo, idExterno } }));
   }
+
+  // Nada saiu: nao mexe no status nem avisa o painel. Devolver `respondeu:
+  // false` tambem deixa o motor de IA externo ser tentado pelo chamador.
+  if (criadas.length === 0) return { respondeu: false };
 
   const acao = passo?.acao ?? 'RESPONDER';
 

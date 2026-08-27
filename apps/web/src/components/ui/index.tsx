@@ -1,6 +1,8 @@
+import { cloneElement, isValidElement, useId } from 'react';
 import type {
   ButtonHTMLAttributes,
   InputHTMLAttributes,
+  ReactElement,
   ReactNode,
   SelectHTMLAttributes,
   TextareaHTMLAttributes,
@@ -47,13 +49,51 @@ export function Button({ variante = 'primario', className = '', ...props }: Butt
 const campo =
   'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-primary)]/20';
 
+/**
+ * Rotulo, controle e dica.
+ *
+ * O rotulo aponta para o controle por `htmlFor`, e a dica entra por
+ * `aria-describedby` — nao aninhada dentro do `<label>`. Aninhada, ela virava
+ * parte do *nome* do campo: o leitor de tela anunciava "Webhook do motor de IA A
+ * URL que o painel do WhatsBot mostra depois de criar o canal la" como se fosse
+ * o nome, e no `<select>` o nome incluia todas as opcoes.
+ *
+ * A injecao de `id` e `aria-describedby` acontece por clonagem do filho unico.
+ * Filho que nao seja elemento (ou mais de um) cai no comportamento antigo, de
+ * rotulo envolvente — que funciona, so nomeia pior.
+ */
 export function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+  const base = useId();
+  const idCampo = `${base}-campo`;
+  const idDica = `${base}-dica`;
+
+  const unico = isValidElement(children) ? (children as ReactElement<Record<string, unknown>>) : null;
+  const controle = unico
+    ? cloneElement(unico, {
+        id: (unico.props.id as string | undefined) ?? idCampo,
+        ...(hint ? { 'aria-describedby': idDica } : {}),
+      })
+    : children;
+
+  const rotulo = <span className="mb-1.5 block text-xs font-medium text-slate-600">{label}</span>;
+
   return (
-    <label className="block">
-      <span className="mb-1.5 block text-xs font-medium text-slate-600">{label}</span>
-      {children}
-      {hint && <span className="mt-1 block text-xs text-slate-400">{hint}</span>}
-    </label>
+    <div className="block">
+      {unico ? (
+        <label htmlFor={(unico.props.id as string | undefined) ?? idCampo}>{rotulo}</label>
+      ) : (
+        <label className="block">
+          {rotulo}
+          {controle}
+        </label>
+      )}
+      {unico && controle}
+      {hint && (
+        <span id={idDica} className="mt-1 block text-xs text-slate-400">
+          {hint}
+        </span>
+      )}
+    </div>
   );
 }
 

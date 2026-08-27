@@ -981,3 +981,50 @@ O que ficou de fora e vale registrar: a ficha **não tem URL própria**. Hoje ne
 o estado é do componente. Mandar o link da ficha de um cliente para o supervisor exige tratar o
 roteamento do módulo inteiro, e meia solução (só a ficha na query string) deixaria o CRM
 inconsistente consigo mesmo.
+
+### 43. Três defeitos que a tela expôs
+
+Fechar a ponte de IA pela interface obrigou a olhar o caminho todo, e apareceram três coisas
+quebradas que nenhum teste pegava porque nenhum teste chegava ali.
+
+**O bot de árvore nunca falava com o canal.** Ele criava a mensagem `BOT` no banco e pronto. No
+webchat funcionava (a entrega é por WebSocket); no WhatsApp, a resposta aparecia no painel e o
+cliente nunca recebia nada — e o painel não tem como mostrar essa diferença. Agora ele envia antes de
+gravar, como o atendente humano, e engole a falha em vez de propagar: quem o chama é o webhook da
+Meta, e um 500 nosso faria a Meta reentregar a mensagem do cliente e duplicá-la.
+
+O guarda ficou no `smoke:canais`, com token falso: a Graph API recusa e nenhuma mensagem `BOT` pode
+existir. **Verifiquei que o teste tem dentes** desligando o envio — ele falha e imprime exatamente o
+defeito antigo (`gravou 2: "Ola! Sou o atendente virtual."`). Sem essa conferência ele poderia estar
+passando por vazio, se o bot simplesmente não tivesse disparado.
+
+**Não havia como vincular um contato a uma empresa pela interface.** O vazio da aba Contas dizia
+"vincule pelo endpoint /contas/:id/contatos" — mensagem de desenvolvedor numa tela de usuário. E o
+efeito era grave, não cosmético: sem vínculo, *Já comprou* e *Oportunidades* na ficha da pessoa são
+sempre zero, porque proposta e negócio vivem na conta. Agora vincula no cabeçalho da ficha, onde a
+falta aparece. Junto veio `DELETE /contas/:id/contatos/:contatoId`, que não existia: vincular é um
+clique e errar também, e sem desfazer a única saída seria mexer no banco.
+
+**O `Field` do kit nomeava os campos errado para leitor de tela.** A dica ficava aninhada dentro do
+`<label>`, então o nome acessível do campo era o rótulo *mais a dica inteira* — e num `<select>`,
+mais todas as opções: "Canal WEBCHAT WHATSAPP INSTAGRAM FACEBOOK EMAIL". Agora o rótulo aponta por
+`htmlFor` e a dica entra por `aria-describedby`. Descobri porque um localizador de teste ficou
+ambíguo; o teste estava certo em reclamar.
+
+### 44. A aba de IA junta as duas metades
+
+Token e ponte moram na mesma tela porque nenhuma funciona sozinha: o token é como o motor entra, a
+ponte é para onde a plataforma manda. Três decisões:
+
+- **O botão de ligar fica desabilitado sem webhook e segredo.** Ligada pela metade, a ponte
+  entregaria mensagem sem assinatura para um endereço vazio, e a falha apareceria como "o agente não
+  responde" — o sintoma mais difícil de rastrear.
+- **Revogados escondidos atrás de um contador.** Revogar não apaga, porque o registro é a trilha de
+  que aquele token existiu; mas em meses de uso os revogados passam os ativos, e a pergunta de todo
+  dia é quais estão valendo. Vi a lista com sete revogados de teste antes de decidir isso.
+- **O valor do token sai num campo `readOnly` que se seleciona com um clique**, e não como texto
+  solto: é a única vez que ele existe fora do hash, e o risco real é a pessoa copiar pela metade.
+
+Verificado com 5 testes de navegador, incluindo um que confere que o segredo não está em lugar
+nenhum do HTML depois de salvar — nem no atributo do input — e que recarregar traz o webhook de volta
+sem trazer o segredo.

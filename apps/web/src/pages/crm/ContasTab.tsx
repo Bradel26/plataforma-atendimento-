@@ -1,7 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alerta, Badge, Button, Card, EmptyState, Field, Input } from '../../components/ui';
 import { ApiError, api } from '../../lib/api';
-import { LABEL_FASE_LEAD, moeda, type Conta, type Lead, type Oportunidade } from '../../lib/types';
+import {
+  LABEL_FASE_LEAD,
+  moeda,
+  type Conta,
+  type IndicadoresFicha,
+  type Lead,
+  type Oportunidade,
+} from '../../lib/types';
+import { Indicadores } from './ficha/Indicadores';
+import { LinhaDoTempo } from './ficha/LinhaDoTempo';
+import { RegistrarAtividade } from './ficha/RegistrarAtividade';
 
 type Ficha = { conta: Conta; leads: Lead[]; oportunidades: Oportunidade[] };
 
@@ -16,6 +26,9 @@ export function ContasTab() {
   const [ficha, setFicha] = useState<Ficha | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [nova, setNova] = useState({ nome: '', cnpj: '', segmento: '' });
+  const [indicadores, setIndicadores] = useState<IndicadoresFicha | null>(null);
+  /** Sinal para a linha do tempo rebuscar depois de um registro novo. */
+  const [versao, setVersao] = useState(0);
 
   const carregar = useCallback(async () => {
     const qs = busca.trim() ? `?busca=${encodeURIComponent(busca.trim())}` : '';
@@ -33,13 +46,26 @@ export function ContasTab() {
     return () => clearTimeout(t);
   }, [carregar]);
 
-  const abrir = async (id: string) => {
+  const abrir = useCallback(async (id: string) => {
     try {
-      setFicha(await api.get<Ficha>(`/contas/${id}`));
+      // Duas chamadas em paralelo: `/contas/:id` traz contatos, leads e
+      // oportunidades; `/ficha/conta/:id` traz os contadores, que somam coisas
+      // que aquela rota nao conta.
+      const [detalhe, resumo] = await Promise.all([
+        api.get<Ficha>(`/contas/${id}`),
+        api.get<{ indicadores: IndicadoresFicha }>(`/ficha/conta/${id}`),
+      ]);
+      setFicha(detalhe);
+      setIndicadores(resumo.indicadores);
       setErro(null);
     } catch (e) {
       setErro(e instanceof ApiError ? e.message : 'Falha ao abrir a conta');
     }
+  }, []);
+
+  const atualizarFicha = () => {
+    if (ficha) void abrir(ficha.conta.id);
+    setVersao((v) => v + 1);
   };
 
   const criar = async (e: React.FormEvent) => {
@@ -128,11 +154,22 @@ export function ContasTab() {
                 <dd className="text-slate-800">{ficha.conta.telefone ?? '—'}</dd>
               </div>
             </dl>
+
+            {/* Conversa e ligacao pertencem a pessoa, nao a empresa: por isso a
+                ficha da conta mostra quatro cartoes, e nao seis. */}
+            {indicadores && (
+              <div className="mt-4">
+                <Indicadores dados={indicadores} escopo="CONTA" />
+              </div>
+            )}
           </Card>
 
           <Card titulo="Contatos vinculados" descricao={`${ficha.conta.contatos?.length ?? 0} contato(s)`}>
             {!ficha.conta.contatos || ficha.conta.contatos.length === 0 ? (
-              <EmptyState titulo="Sem contatos" descricao="Vincule contatos a esta conta pelo endpoint /contas/:id/contatos." />
+              <EmptyState
+                titulo="Sem contatos"
+                descricao="Abra o contato na aba Contatos e use Vincular empresa."
+              />
             ) : (
               <ul className="divide-y divide-slate-100">
                 {ficha.conta.contatos.map((c) => (
@@ -186,10 +223,26 @@ export function ContasTab() {
               </ul>
             )}
           </Card>
+
+          <Card titulo="Registrar" descricao="Fica na linha do tempo na hora">
+            <RegistrarAtividade contaId={ficha.conta.id} aoRegistrar={atualizarFicha} />
+          </Card>
+
+          <Card titulo="Linha do tempo" descricao="Tudo que aconteceu com esta empresa">
+            {/* `raizId` na conta: trocar de empresa zera a lista e o cursor. */}
+            <LinhaDoTempo
+              base={`/ficha/conta/${ficha.conta.id}`}
+              raizId={ficha.conta.id}
+              recarregar={versao}
+            />
+          </Card>
         </div>
       ) : (
         <Card titulo="Ficha da conta">
-          <EmptyState titulo="Selecione uma conta" descricao="Contatos, leads e oportunidades aparecem aqui." />
+          <EmptyState
+            titulo="Selecione uma conta"
+            descricao="Contatos, leads, oportunidades e a linha do tempo da empresa aparecem aqui."
+          />
         </Card>
       )}
     </div>

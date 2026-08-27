@@ -96,7 +96,9 @@ const errado = await fetch(
 console.log('   GET com token errado recusado:', ok(errado.status === 403));
 
 // 5. POST com assinatura valida
-const payloadWhatsApp = (idMensagem, texto) => JSON.stringify({
+// `de` e opcional: o teste do bot usa outro numero para nao cair na conversa
+// que os passos anteriores ja criaram.
+const payloadWhatsApp = (idMensagem, texto, de = '5511977776666') => JSON.stringify({
   object: 'whatsapp_business_account',
   entry: [{
     id: 'WABA-1',
@@ -104,8 +106,8 @@ const payloadWhatsApp = (idMensagem, texto) => JSON.stringify({
       field: 'messages',
       value: {
         metadata: { phone_number_id: '111222333444', display_phone_number: '+5511999998888' },
-        contacts: [{ wa_id: '5511977776666', profile: { name: 'Carlos WhatsApp' } }],
-        messages: [{ id: idMensagem, from: '5511977776666', timestamp: '1787577000', type: 'text', text: { body: texto } }],
+        contacts: [{ wa_id: de, profile: { name: 'Carlos WhatsApp' } }],
+        messages: [{ id: idMensagem, from: de, timestamp: '1787577000', type: 'text', text: { body: texto } }],
       },
     }],
   }],
@@ -172,6 +174,58 @@ const depois = (await json(`/conversas/${doWhats.id}`, { headers: admin })).corp
 console.log('10. envio recusado pela Graph API:', ok(tentativa.status === 502),
   `HTTP ${tentativa.status} ${tentativa.corpo?.error?.code ?? ''}`);
 console.log('    mensagem NAO entrou no historico:', ok(antes === depois), `(${antes} -> ${depois})`);
+
+/*
+ * 10b. O bot de arvore tambem nao grava o que o canal recusou.
+ *
+ * Este caso existe por um defeito real: o bot criava a mensagem e nunca
+ * chamava o canal. No WhatsApp, a resposta aparecia no painel e o cliente
+ * nunca recebia nada — e o painel nao tem como mostrar essa diferenca. Com
+ * token falso, o envio falha; a mensagem BOT nao pode existir.
+ */
+const botWhats = await json('/bots', {
+  method: 'PUT',
+  headers: admin,
+  body: JSON.stringify({
+    nome: `Bot WhatsApp smoke ${EXECUCAO}`,
+    ativo: true,
+    canal: 'WHATSAPP',
+    mensagemBoasVindas: 'Ola! Sou o atendente virtual.',
+    fallback: 'Nao entendi, vou chamar um atendente.',
+    limiteSemResposta: 2,
+    passos: [{ gatilhos: ['preco'], resposta: 'Nossos precos estao no site.', acao: 'RESPONDER' }],
+  }),
+});
+console.log('10b. bot de WhatsApp criado para o teste:', ok(botWhats.status === 200));
+
+/*
+ * Numero novo por execucao. Com numero fixo, a plataforma reaproveita a conversa
+ * aberta da rodada anterior e a contagem de mensagens BOT inclui as de antes —
+ * o teste passaria a acusar falha por causa do proprio historico. Foi o que
+ * aconteceu aqui na primeira versao.
+ */
+const telefoneBot = `5562${String(Date.now()).slice(-9)}`;
+const idBot = `wamid.${EXECUCAO}-bot`;
+const rBot = await enviarWebhook('whatsapp', payloadWhatsApp(idBot, 'quero saber o preco', telefoneBot));
+const dBot = await rBot.json();
+console.log('     mensagem do cliente processada:', ok(rBot.status === 200 && dBot.processadas === 1));
+
+const { corpo: comBot } = await json('/conversas?status=EM_ESPERA&limite=50', { headers: admin });
+const conversaBot = comBot.conversas.find((c) => c.contato?.telefone === telefoneBot);
+const mensagensBot = conversaBot
+  ? (await json(`/conversas/${conversaBot.id}`, { headers: admin })).corpo.conversa.mensagens
+  : [];
+const doBot = mensagensBot.filter((m) => m.autor === 'BOT');
+console.log(
+  '     resposta do bot NAO entrou no historico:',
+  ok(doBot.length === 0),
+  doBot.length ? `gravou ${doBot.length}: "${doBot[0].conteudo}"` : '(canal recusou, nada gravado)',
+);
+// E a mensagem do cliente continua la: a falha do bot nao pode engolir o que o
+// cliente disse.
+console.log('     mensagem do cliente preservada:', ok(mensagensBot.some((m) => m.autor === 'CLIENTE')));
+
+await json(`/bots/${botWhats.corpo.bot.id}`, { method: 'DELETE', headers: admin });
 
 // 11. Canal desativado recusa o webhook
 await json('/canais/whatsapp', { method: 'PUT', headers: admin, body: JSON.stringify({ ativo: false }) });

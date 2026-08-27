@@ -4,6 +4,7 @@ import { ApiError, api } from '../../../lib/api';
 import {
   LABEL_TIPO_EVENTO,
   TIPOS_EVENTO,
+  moeda,
   type EventoFicha,
   type Timeline,
   type TipoEvento,
@@ -34,9 +35,6 @@ const COR: Record<TipoEvento, string> = {
 };
 
 const LIMITE = 30;
-
-const moeda = (valor: number) =>
-  valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 
 const hora = (iso: string) =>
   new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });

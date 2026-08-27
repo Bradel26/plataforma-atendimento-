@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alerta, Badge, Button, Card, EmptyState } from '../../../components/ui';
+import { Alerta, Badge, Button, Card, EmptyState, Select } from '../../../components/ui';
 import { ApiError, api } from '../../../lib/api';
-import { LABEL_TIPO_ATIVIDADE, type Atividade, type FichaContato as Ficha } from '../../../lib/types';
+import {
+  LABEL_TIPO_ATIVIDADE,
+  type Atividade,
+  type Conta,
+  type FichaContato as Ficha,
+} from '../../../lib/types';
+import { Indicadores } from './Indicadores';
 import { LinhaDoTempo } from './LinhaDoTempo';
 import { RegistrarAtividade } from './RegistrarAtividade';
 
@@ -14,22 +20,8 @@ import { RegistrarAtividade } from './RegistrarAtividade';
  * atendimento nao responde "quanto esse cliente ja comprou".
  */
 
-const moeda = (valor: number) =>
-  valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
-
 const dataHora = (iso: string) =>
   new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-
-/** Numero grande com rotulo. Sem grafico: sao seis valores, nao uma serie. */
-function Indicador({ rotulo, valor, detalhe }: { rotulo: string; valor: string; detalhe?: string }) {
-  return (
-    <div className="rounded-lg border border-slate-200 px-3 py-2.5">
-      <p className="text-xs text-slate-500">{rotulo}</p>
-      <p className="mt-0.5 text-xl font-semibold tabular-nums text-slate-800">{valor}</p>
-      {detalhe && <p className="text-xs text-slate-400">{detalhe}</p>}
-    </div>
-  );
-}
 
 export function FichaContato({ contatoId }: { contatoId: string }) {
   const [ficha, setFicha] = useState<Ficha | null>(null);
@@ -38,6 +30,12 @@ export function FichaContato({ contatoId }: { contatoId: string }) {
   // buscar de novo. Guardar a lista aqui para repassar seria duplicar o estado
   // dela — e a paginacao por cursor mora la dentro.
   const [versao, setVersao] = useState(0);
+  /**
+   * Contas para vincular. Carregadas so quando alguem abre o seletor: e uma
+   * lista que a maioria das visitas a ficha nao usa.
+   */
+  const [contas, setContas] = useState<Conta[] | null>(null);
+  const [vinculando, setVinculando] = useState(false);
 
   const carregar = useCallback(async () => {
     setErro(null);
@@ -55,6 +53,39 @@ export function FichaContato({ contatoId }: { contatoId: string }) {
   const atualizar = () => {
     void carregar();
     setVersao((v) => v + 1);
+  };
+
+  const abrirSeletor = async () => {
+    setVinculando(true);
+    if (contas) return;
+    try {
+      const { contas: lista } = await api.get<{ contas: Conta[] }>('/contas?limite=200');
+      setContas(lista);
+    } catch (e) {
+      setErro(e instanceof ApiError ? e.message : 'Falha ao carregar as empresas');
+    }
+  };
+
+  const vincular = async (contaId: string) => {
+    if (!contaId) return;
+    try {
+      // O vinculo mora do lado da conta: e ela que ganha um contato, e a rota
+      // confere que as duas pontas existem antes de gravar.
+      await api.post(`/contas/${contaId}/contatos`, { contatoId });
+      setVinculando(false);
+      atualizar();
+    } catch (e) {
+      setErro(e instanceof ApiError ? e.message : 'Falha ao vincular');
+    }
+  };
+
+  const desvincular = async (contaId: string) => {
+    try {
+      await api.del(`/contas/${contaId}/contatos/${contatoId}`);
+      atualizar();
+    } catch (e) {
+      setErro(e instanceof ApiError ? e.message : 'Falha ao desvincular');
+    }
   };
 
   const concluir = async (atividade: Atividade) => {
@@ -77,6 +108,36 @@ export function FichaContato({ contatoId }: { contatoId: string }) {
       <Card
         titulo={contato.nome}
         descricao={contato.conta ? `Empresa: ${contato.conta.nome}` : 'Sem empresa vinculada'}
+        acao={
+          /* Vincular fica no cabecalho porque e onde a falta aparece: sem
+             empresa, metade dos numeros abaixo e sempre zero — proposta e
+             oportunidade vivem na conta, nao na pessoa. */
+          contato.conta ? (
+            <Button variante="neutro" onClick={() => void desvincular(contato.conta!.id)}>
+              Desvincular empresa
+            </Button>
+          ) : vinculando ? (
+            <Select
+              autoFocus
+              defaultValue=""
+              onChange={(e) => void vincular(e.target.value)}
+              onBlur={() => setVinculando(false)}
+              className="max-w-[260px]"
+              aria-label="Empresa"
+            >
+              <option value="">{contas ? 'Escolha a empresa...' : 'Carregando...'}</option>
+              {(contas ?? []).map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nome}
+                </option>
+              ))}
+            </Select>
+          ) : (
+            <Button variante="neutro" onClick={() => void abrirSeletor()}>
+              Vincular empresa
+            </Button>
+          )
+        }
       >
         <dl className="grid gap-3 text-sm sm:grid-cols-4">
           <div>
@@ -99,19 +160,8 @@ export function FichaContato({ contatoId }: { contatoId: string }) {
           </div>
         </dl>
 
-        <div className="mt-4 grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
-          <Indicador rotulo="Conversas" valor={String(i.conversas)} />
-          <Indicador rotulo="Ligacoes" valor={String(i.chamadas)} />
-          {/* Rotulo curto e a qualificacao no detalhe: "Protocolos abertos" em
-              duas linhas desalinha a altura dos seis cartoes. */}
-          <Indicador rotulo="Protocolos" valor={String(i.protocolosAbertos)} detalhe="abertos" />
-          <Indicador rotulo="Oportunidades" valor={String(i.oportunidadesAbertas)} detalhe="em aberto" />
-          <Indicador
-            rotulo="Ja comprou"
-            valor={moeda(i.valorGanho)}
-            detalhe={`${i.oportunidadesGanhas} ganha(s)`}
-          />
-          <Indicador rotulo="Tarefas" valor={String(i.atividadesAbertas)} detalhe="em aberto" />
+        <div className="mt-4">
+          <Indicadores dados={i} escopo="CONTATO" />
         </div>
 
         {contato.observacoes && (

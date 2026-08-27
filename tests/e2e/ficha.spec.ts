@@ -151,6 +151,69 @@ test.describe('Ficha 360 do contato', () => {
     await expect(cartao(page, 'Linha do tempo').getByText(marca)).toBeVisible();
   });
 
+  test('a ficha da empresa tem os quatro indicadores e a linha do tempo dela', async ({ page }) => {
+    await page.goto('/crm');
+    await page.getByRole('button', { name: 'Contas' }).click();
+
+    const lista = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Contas' }) });
+    const primeira = lista.locator('li button').first();
+    await expect(primeira).toBeVisible();
+    await primeira.click();
+
+    // Conversa e ligacao pertencem a pessoa, nao a empresa: a ficha da conta
+    // mostra quatro cartoes. Mostrar "Conversas: 0" numa empresa que fala com a
+    // gente todo dia seria mentira.
+    await expect(page.getByText('Ja comprou', { exact: true })).toBeVisible();
+    await expect(page.getByText('Protocolos', { exact: true })).toBeVisible();
+    await expect(page.getByText('Conversas', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('Ligacoes', { exact: true })).toHaveCount(0);
+
+    // E registrar aqui vincula a atividade a empresa, nao a um contato dela.
+    const marca = `Reuniao com a diretoria ${Date.now().toString(36)}`;
+    const registrar = cartao(page, 'Registrar');
+    await registrar.getByLabel('Tipo').selectOption('REUNIAO');
+    await registrar.getByLabel('O que aconteceu').fill(marca);
+    await registrar.getByRole('button', { name: 'Registrar' }).click();
+
+    await expect(cartao(page, 'Linha do tempo').getByText(marca)).toBeVisible();
+  });
+
+  test('vincular e desvincular a empresa do contato', async ({ page }) => {
+    const nome = await abrirPrimeiroContato(page);
+    const cabecalho = cartao(page, nome);
+
+    // O estado inicial do contato varia entre execucoes: se ja tem empresa,
+    // desvincula primeiro para o teste comecar sempre do mesmo lugar.
+    const desvincular = cabecalho.getByRole('button', { name: 'Desvincular empresa' });
+    if (await desvincular.isVisible().catch(() => false)) {
+      await desvincular.click();
+      await expect(cabecalho.getByText('Sem empresa vinculada')).toBeVisible();
+    }
+
+    await cabecalho.getByRole('button', { name: 'Vincular empresa' }).click();
+    const seletor = cabecalho.getByLabel('Empresa');
+    await expect(seletor).toBeVisible();
+
+    // As contas chegam por uma segunda chamada: o seletor abre dizendo
+    // "Carregando...". Ler as opcoes antes disso encontra so o placeholder.
+    await expect(seletor.locator('option').first()).toHaveText('Escolha a empresa...');
+
+    // Escolhe a primeira empresa de verdade da lista, nao o placeholder.
+    const opcoes = await seletor.locator('option').all();
+    const empresa = await opcoes[1]!.getAttribute('value');
+    const nomeEmpresa = (await opcoes[1]!.innerText()).trim();
+    await seletor.selectOption(empresa!);
+
+    await expect(cabecalho.getByText(`Empresa: ${nomeEmpresa}`)).toBeVisible();
+
+    // Vinculado, os numeros da empresa entram na ficha da pessoa — e por isso
+    // que vincular importa: sem empresa, "Ja comprou" e sempre zero.
+    await expect(cabecalho.getByText('Ja comprou', { exact: true })).toBeVisible();
+
+    await cabecalho.getByRole('button', { name: 'Desvincular empresa' }).click();
+    await expect(cabecalho.getByText('Sem empresa vinculada')).toBeVisible();
+  });
+
   test('trocar de contato troca a ficha inteira', async ({ page }) => {
     await page.goto('/crm');
     const lista = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Contatos' }) });

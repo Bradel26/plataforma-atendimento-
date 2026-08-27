@@ -3,6 +3,7 @@ import { BotsTab } from './BotsTab';
 import { CanaisTab } from './CanaisTab';
 import { FilaTab } from './FilaTab';
 import { FilasTab } from './FilasTab';
+import { IaTab } from './IaTab';
 import { LgpdTab } from './LgpdTab';
 import { UsuariosTab } from './UsuariosTab';
 import { VozTab } from './VozTab';
@@ -13,6 +14,7 @@ const ABAS = [
   { id: 'filas', label: 'Filas' },
   { id: 'canais', label: 'Canais' },
   { id: 'bots', label: 'Chatbot' },
+  { id: 'ia', label: 'IA (motor externo)' },
   { id: 'whitelabel', label: 'White Label' },
   { id: 'voz', label: 'Voz' },
   { id: 'lgpd', label: 'LGPD e retencao' },
@@ -26,7 +28,7 @@ export function ConfiguracoesPage() {
 
   return (
     <div className="space-y-5">
-      <nav className="flex gap-1 border-b border-slate-200">
+      <nav className="flex flex-wrap gap-1 border-b border-slate-200">
         {ABAS.map(({ id, label }) => (
           <button
             key={id}
@@ -47,6 +49,7 @@ export function ConfiguracoesPage() {
       {aba === 'filas' && <FilasTab />}
       {aba === 'canais' && <CanaisTab />}
       {aba === 'bots' && <BotsTab />}
+      {aba === 'ia' && <IaTab />}
       {aba === 'whitelabel' && <WhiteLabelTab />}
       {aba === 'voz' && <VozTab />}
       {aba === 'lgpd' && <LgpdTab />}

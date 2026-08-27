@@ -90,7 +90,9 @@ Cinco abas:
 
 - **Contatos** — a pessoa, e a **ficha com a vida dela** (abaixo). Criado automaticamente quando
   alguém fala pela primeira vez por qualquer canal.
-- **Contas** — a empresa, com CNPJ e visão 360: contatos, leads e oportunidades ligados a ela.
+- **Contas** — a empresa, com CNPJ, indicadores, contatos, leads, oportunidades e a **linha do
+  tempo dela**. São quatro indicadores e não seis: conversa e ligação pertencem à pessoa, não à
+  empresa, e mostrar zero ali seria mentira.
 - **Leads** — quadro por fase, arrastando o cartão. Mover para *Perdido* exige dizer o motivo.
 - **Oportunidades** — quadro pelos estágios do funil, com total em aberto e **previsão ponderada**
   pela probabilidade de cada estágio.
@@ -114,6 +116,10 @@ aconteceram com a conta, não com esta pessoa.
 A conversa aparece como **uma** linha por atendimento, não uma por mensagem. Uma conversa de
 quarenta mensagens viraria quarenta linhas e enterraria a proposta que veio depois; para ler as
 mensagens, abra o atendimento.
+
+**Vincular empresa**, no canto do cabeçalho, é o que liga a pessoa à conta dela. Vale insistir
+nisso: sem empresa vinculada, *Já comprou* e *Oportunidades* são sempre zero, porque proposta e
+negócio vivem na conta. *Desvincular empresa* desfaz — solta o vínculo, não apaga o contato.
 
 **Registrar** é o campo que faz a ficha valer algo amanhã. Escreva o que aconteceu e clique
 *Registrar*: aparece na linha do tempo na hora. Se preencher o **prazo**, o botão vira *Criar
@@ -213,6 +219,32 @@ Duas regras que evitam o problema clássico de bot:
   o bot cala.
 - Depois de algumas tentativas sem entender, ele **desiste e deixa a conversa na fila** para uma
   pessoa — em vez de insistir com o cliente.
+
+---
+
+## IA: usar um motor externo
+
+Em **Configurações › IA (motor externo)**. Serve para ligar a plataforma a um motor de IA de fora
+(hoje, o WhatsBot) sem tirar dela o canal, a fila, a conversa nem o CRM: o motor pensa, a plataforma
+continua dona do atendimento.
+
+São duas metades, e nenhuma funciona sozinha:
+
+1. **Token de integração** — como o motor entra na plataforma. Dê um nome e clique *Criar token*. O
+   valor aparece **uma vez**: copie na hora. Se perder, revogue e crie outro. *Revogar* corta o
+   acesso na próxima chamada e mantém o registro na lista, atrás de *Mostrar revogados*.
+2. **Ponte por canal** — escolha o canal, cole o webhook que o painel do WhatsBot mostra, e o mesmo
+   segredo configurado lá. Só então *Ligar a IA*.
+
+O selo do canal diz três coisas: se a IA está ligada, se a entrega vai assinada, e qual a janela do
+canal. **Janela de 24h** no WhatsApp é regra da Meta: passadas 24 horas da última mensagem do
+cliente, o canal só aceita template aprovado, e o agente não manda texto livre.
+
+Com a IA ligada e entregando, o **Chatbot** por palavras-chave cala naquele canal — dois bots
+respondendo a mesma mensagem é pior que nenhum. E a IA nunca fala em cima de atendente humano: assim
+que alguém assume a conversa, ela para.
+
+O segredo nunca volta da plataforma para a tela. Campo vazio significa "manter o que está gravado".
 
 ---
 

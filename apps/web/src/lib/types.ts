@@ -724,3 +724,30 @@ export type FichaContato = {
   indicadores: IndicadoresFicha;
   atividadesAbertas: Atividade[];
 };
+
+/* ── Ponte com o motor de IA externo ──────────────────────────────────── */
+
+export type TokenIntegracao = {
+  id: string;
+  nome: string;
+  /** Primeiros caracteres, para identificar qual token esta na configuracao. */
+  prefixo: string;
+  escopo: 'IA';
+  ativo: boolean;
+  criadoEm: string;
+  ultimoUsoEm: string | null;
+  revogadoEm: string | null;
+};
+
+export type EstadoIa = {
+  canal: Canal;
+  ativa: boolean;
+  webhook: string | null;
+  /** Se ha segredo gravado. O valor nunca volta da API. */
+  assinado: boolean;
+  /** Janela em que o canal aceita texto livre. Zero = sem janela. */
+  janelaHoras: number;
+};
+
+/** Canais em que a ponte de IA pode ser ligada (voz fica de fora). */
+export const CANAIS_IA = ['WEBCHAT', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'EMAIL'] as const;
