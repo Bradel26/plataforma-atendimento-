@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { CONTAS, entrar, menu } from './helpers';
+import { CONTAS, entrarPeloFormulario, esquecerSessao, menu } from './helpers';
 
 test.describe('Login e permissao no menu', () => {
   test('senha errada mostra erro e nao entra', async ({ page }) => {
@@ -14,7 +14,7 @@ test.describe('Login e permissao no menu', () => {
   });
 
   test('admin entra e ve o menu completo', async ({ page }) => {
-    await entrar(page, 'admin');
+    await entrarPeloFormulario(page, 'admin');
     const rotulos = await menu(page).allInnerTexts();
     for (const esperado of ['Dashboards', 'Atendimento', 'Telefonia', 'CRM', 'Configuracoes']) {
       expect(rotulos.join('|')).toContain(esperado);
@@ -22,7 +22,7 @@ test.describe('Login e permissao no menu', () => {
   });
 
   test('agente nao ve dashboards nem configuracoes', async ({ page }) => {
-    await entrar(page, 'agente');
+    await entrarPeloFormulario(page, 'agente');
     const rotulos = (await menu(page).allInnerTexts()).join('|');
 
     expect(rotulos).toContain('Atendimento');
@@ -34,7 +34,7 @@ test.describe('Login e permissao no menu', () => {
   });
 
   test('rota de admin digitada na barra nao vaza para o agente', async ({ page }) => {
-    await entrar(page, 'agente');
+    await entrarPeloFormulario(page, 'agente');
     await page.goto('/configuracoes');
 
     // Nao basta esconder o item do menu: a rota redireciona para a primeira
@@ -44,7 +44,10 @@ test.describe('Login e permissao no menu', () => {
   });
 
   test('sair encerra a sessao e recarregar nao volta para dentro', async ({ page }) => {
-    await entrar(page, 'admin');
+    await entrarPeloFormulario(page, 'admin');
+    // O logout invalida o refresh guardado; sem avisar o cache, o proximo teste
+    // tentaria restaurar com um cookie morto e gastaria um login a mais.
+    esquecerSessao('admin');
     await page.getByRole('button', { name: /sair/i }).click();
     await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible();
 

@@ -573,13 +573,23 @@ barra, e quem quer o número exato também prefere a tabela.
 
 ```bash
 npm run dev            # em outro terminal: API, web, Postgres e Redis de pé
-npm run test:e2e       # 33 testes em Chromium
+npm run test:e2e       # 34 testes em Chromium
 npm run test:e2e:ui    # modo interativo, para depurar
 ```
 
 Cobre o que nenhum outro teste alcança: o que o usuário vê depois que o React montou. Login com
-senha errada, menu por perfil, rota de admin digitada na barra pelo agente, logout, e sessão
-atravessando recarga de página nos três perfis.
+senha errada, menu por perfil, rota de admin digitada na barra pelo agente, logout, sessão
+atravessando recarga nos três perfis, a ficha 360 do cliente (linha do tempo, filtro, atividade,
+tarefa, vínculo com a empresa, cadastro de contato) e a ponte de IA (token que aparece uma vez,
+segredo que nunca volta, ponte que não liga pela metade).
+
+**A suíte reaproveita a sessão entre os testes.** O `/auth/login` aceita 30 tentativas por IP a cada
+5 minutos, e a suíte passou de 33 testes: logando em cada um, ela estouraria o próprio limite e
+falharia com 429 no meio — sem defeito nenhum na aplicação. O `login.spec` continua sempre passando
+pelo formulário, porque é ele que testa o login.
+
+Como o refresh token é de uso único, o cache guarda o cookie **rotacionado** depois de cada
+restauração, e volta ao login de verdade se o cookie não servir mais.
 
 **Achou um bug de verdade na primeira execução.** O refresh token é de uso único; o StrictMode do
 React chamava a renovação duas vezes no arranque; a segunda chamada voltava 401 com a sessão ainda

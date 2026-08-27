@@ -3,8 +3,7 @@ import { entrar } from './helpers';
 
 test.describe('Dashboards da gestao', () => {
   test.beforeEach(async ({ page }) => {
-    await entrar(page, 'admin');
-    await page.goto('/dashboards');
+    await entrar(page, 'admin', '/dashboards');
   });
 
   test('mostra os indicadores com numero, nao com travessao', async ({ page }) => {

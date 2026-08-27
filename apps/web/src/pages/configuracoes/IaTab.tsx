@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alerta, Badge, Button, Card, EmptyState, Field, Input, Select } from '../../components/ui';
 import { ApiError, api } from '../../lib/api';
 import { CANAIS_IA, type Canal, type EstadoIa, type TokenIntegracao } from '../../lib/types';
@@ -28,6 +28,12 @@ export function IaTab() {
   const [ok, setOk] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
   /**
+   * Trocar o canal dispara uma busca, e a resposta reescreve webhook e segredo.
+   * Sem travar os campos, quem comeca a digitar durante a troca perde o que
+   * escreveu quando ela volta — e nao ha aviso nenhum de que isso aconteceu.
+   */
+  const [carregandoCanal, setCarregandoCanal] = useState(true);
+  /**
    * Revogados ficam escondidos.
    *
    * Revogar nao apaga — o registro e a trilha de que aquele token existiu. Mas
@@ -45,15 +51,36 @@ export function IaTab() {
     }
   }, []);
 
+  /**
+   * Espelho do canal selecionado, para a resposta saber se ainda interessa.
+   *
+   * Duas buscas em voo voltam fora de ordem, e a ultima a chegar escreve na
+   * tela: sem guarda, a tela mostrava o estado de OUTRO canal — "IA ligada" num
+   * canal desligado, com o webhook errado no campo.
+   *
+   * A comparacao e com o canal *selecionado*, e nao com a ultima busca
+   * iniciada. Guardando a ultima busca, o efeito dobrado do StrictMode inverte
+   * a ordem — a montagem dispara a busca do canal inicial depois da troca — e a
+   * guarda passa a descartar justamente a resposta certa. Foi um teste de
+   * navegador que expos isso, comparando o que a tela dizia com o banco.
+   */
+  const canalNaTela = useRef(canal);
+  canalNaTela.current = canal;
+
   const carregarCanal = useCallback(async (qual: Canal) => {
+    setCarregandoCanal(true);
     try {
       const { ia } = await api.get<{ ia: EstadoIa }>(`/canais/${qual}/ia`);
+      if (canalNaTela.current !== qual) return;
       setEstado(ia);
       setWebhook(ia.webhook ?? '');
       // Segredo nunca volta da API: campo vazio significa "manter o atual".
       setSegredo('');
     } catch (e) {
+      if (canalNaTela.current !== qual) return;
       setErro(e instanceof ApiError ? e.message : 'Falha ao carregar a ponte deste canal');
+    } finally {
+      if (canalNaTela.current === qual) setCarregandoCanal(false);
     }
   }, []);
 
@@ -130,7 +157,16 @@ export function IaTab() {
       >
         <div className="grid gap-4 lg:grid-cols-[200px_1fr]">
           <Field label="Canal">
-            <Select value={canal} onChange={(e) => setCanal(e.target.value as Canal)}>
+            <Select
+              value={canal}
+              onChange={(e) => {
+                // Trava no mesmo render da troca. Deixar para o efeito ligar a
+                // trava abre uma janela de um render em que os campos ainda
+                // aceitam texto — e esse texto e apagado quando a busca volta.
+                setCarregandoCanal(true);
+                setCanal(e.target.value as Canal);
+              }}
+            >
               {CANAIS_IA.map((c) => (
                 <option key={c} value={c}>
                   {c}
@@ -161,6 +197,7 @@ export function IaTab() {
               <Input
                 value={webhook}
                 onChange={(e) => setWebhook(e.target.value)}
+                disabled={carregandoCanal}
                 placeholder="https://whatsbot.suaempresa.com.br/api/webhook/plataforma/<id-do-canal>"
               />
             </Field>
@@ -177,6 +214,7 @@ export function IaTab() {
                 type="password"
                 value={segredo}
                 onChange={(e) => setSegredo(e.target.value)}
+                disabled={carregandoCanal}
                 placeholder={estado?.assinado ? '••••••••' : 'openssl rand -hex 24'}
                 autoComplete="new-password"
               />
@@ -184,11 +222,15 @@ export function IaTab() {
 
             <div className="flex flex-wrap justify-end gap-2">
               {estado?.ativa && (
-                <Button variante="neutro" disabled={ocupado} onClick={() => void salvarPonte(false)}>
+                <Button
+                  variante="neutro"
+                  disabled={ocupado || carregandoCanal}
+                  onClick={() => void salvarPonte(false)}
+                >
                   Desligar a IA
                 </Button>
               )}
-              <Button disabled={ocupado || !podeLigar} onClick={() => void salvarPonte(true)}>
+              <Button disabled={ocupado || carregandoCanal || !podeLigar} onClick={() => void salvarPonte(true)}>
                 {estado?.ativa ? 'Salvar' : 'Ligar a IA'}
               </Button>
             </div>
@@ -228,7 +270,7 @@ export function IaTab() {
 
         {novoToken && (
           <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3">
-            <p className="text-xs font-medium text-amber-800">
+            <p className="text-xs font-medium text-amber-700">
               Copie agora. Este valor nao aparece de novo — se perder, revogue e crie outro.
             </p>
             {/* `readOnly` e nao texto solto: o campo permite selecionar tudo com
@@ -243,7 +285,7 @@ export function IaTab() {
             <button
               type="button"
               onClick={() => setNovoToken(null)}
-              className="mt-2 text-xs font-medium text-amber-800 hover:underline"
+              className="mt-2 text-xs font-medium text-amber-700 hover:underline"
             >
               Ja copiei, esconder
             </button>

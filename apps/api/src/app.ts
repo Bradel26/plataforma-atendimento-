@@ -58,6 +58,22 @@ export function createApp() {
   app.use(cookieParser());
   if (env.NODE_ENV !== 'test') app.use(morgan('dev'));
 
+  /*
+   * Nada da API entra em cache por padrao.
+   *
+   * O Express manda ETag e nenhum Cache-Control, e sem Cache-Control o
+   * navegador aplica frescor heuristico: depois de gravar algo e recarregar a
+   * pagina, o GET podia ser servido do cache com o valor de ANTES. Quem mexeu na
+   * configuracao via a alteracao desaparecer.
+   *
+   * As rotas que se beneficiam de cache definem o proprio cabecalho depois desta
+   * linha e vencem: o anexo assinado (`/api/arquivos`) e o script do widget.
+   */
+  app.use('/api', (_req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store');
+    next();
+  });
+
   // Servido em /api para caber numa unica tag <script> no site do cliente.
   app.use('/api', widgetRoutes);
   app.use('/api/arquivos', arquivosRoutes);

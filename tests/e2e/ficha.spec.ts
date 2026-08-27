@@ -10,8 +10,8 @@ import { entrar } from './helpers';
  * O smoke cobre a API; nada nele garante que o componente montou.
  */
 
-const abrirPrimeiroContato = async (page: import('@playwright/test').Page) => {
-  await page.goto('/crm');
+const abrirPrimeiroContato = async (page: import('@playwright/test').Page, ja = false) => {
+  if (!ja) await page.goto('/crm');
   const lista = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Contatos' }) });
   const primeiro = lista.locator('li button').first();
   await expect(primeiro).toBeVisible();
@@ -25,11 +25,12 @@ const cartao = (page: import('@playwright/test').Page, titulo: string) =>
 
 test.describe('Ficha 360 do contato', () => {
   test.beforeEach(async ({ page }) => {
-    await entrar(page, 'admin');
+    // Entra direto no CRM: cada navegacao custa uma restauracao de sessao.
+    await entrar(page, 'admin', '/crm');
   });
 
   test('abre a ficha com os seis indicadores preenchidos', async ({ page }) => {
-    const nome = await abrirPrimeiroContato(page);
+    const nome = await abrirPrimeiroContato(page, true);
 
     // O cabecalho e o nome do contato: confirma que a ficha e do que foi clicado.
     const cabecalho = cartao(page, nome);
@@ -49,7 +50,7 @@ test.describe('Ficha 360 do contato', () => {
   });
 
   test('a linha do tempo monta e vem em ordem decrescente', async ({ page }) => {
-    await abrirPrimeiroContato(page);
+    await abrirPrimeiroContato(page, true);
     const tempo = cartao(page, 'Linha do tempo');
     await expect(tempo).toBeVisible();
 
@@ -79,7 +80,7 @@ test.describe('Ficha 360 do contato', () => {
   });
 
   test('o filtro por tipo recorta o fluxo, e "Tudo" volta atras', async ({ page }) => {
-    await abrirPrimeiroContato(page);
+    await abrirPrimeiroContato(page, true);
     const tempo = cartao(page, 'Linha do tempo');
     const eventos = tempo.locator('ol > li');
     await expect(eventos.first()).toBeVisible();
@@ -97,7 +98,7 @@ test.describe('Ficha 360 do contato', () => {
   });
 
   test('registrar uma atividade a coloca na linha do tempo na hora', async ({ page }) => {
-    await abrirPrimeiroContato(page);
+    await abrirPrimeiroContato(page, true);
 
     const marca = `Visita tecnica ${Date.now().toString(36)}`;
     const registrar = cartao(page, 'Registrar');
@@ -123,7 +124,7 @@ test.describe('Ficha 360 do contato', () => {
   });
 
   test('preencher prazo cria tarefa, que aparece em aberto e pode ser concluida', async ({ page }) => {
-    await abrirPrimeiroContato(page);
+    await abrirPrimeiroContato(page, true);
 
     const marca = `Retornar orcamento ${Date.now().toString(36)}`;
     const registrar = cartao(page, 'Registrar');
@@ -152,7 +153,6 @@ test.describe('Ficha 360 do contato', () => {
   });
 
   test('a ficha da empresa tem os quatro indicadores e a linha do tempo dela', async ({ page }) => {
-    await page.goto('/crm');
     await page.getByRole('button', { name: 'Contas' }).click();
 
     const lista = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Contas' }) });
@@ -179,7 +179,7 @@ test.describe('Ficha 360 do contato', () => {
   });
 
   test('vincular e desvincular a empresa do contato', async ({ page }) => {
-    const nome = await abrirPrimeiroContato(page);
+    const nome = await abrirPrimeiroContato(page, true);
     const cabecalho = cartao(page, nome);
 
     // O estado inicial do contato varia entre execucoes: se ja tem empresa,
@@ -215,7 +215,6 @@ test.describe('Ficha 360 do contato', () => {
   });
 
   test('cadastrar um contato abre a ficha dele ja pronta para registrar', async ({ page }) => {
-    await page.goto('/crm');
     // O cadastro comeca fechado: a acao comum na lista e achar alguem.
     const cadastro = cartao(page, 'Contatos');
     await cadastro.getByRole('button', { name: 'Novo contato' }).click();
@@ -239,7 +238,6 @@ test.describe('Ficha 360 do contato', () => {
   });
 
   test('cadastro com telefone repetido avisa e nao bloqueia', async ({ page }) => {
-    await page.goto('/crm');
     const cadastro = cartao(page, 'Contatos');
     const telefone = `629${String(Date.now()).slice(-8)}`;
 
@@ -264,7 +262,6 @@ test.describe('Ficha 360 do contato', () => {
   });
 
   test('trocar de contato troca a ficha inteira', async ({ page }) => {
-    await page.goto('/crm');
     const lista = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Contatos' }) });
     const botoes = lista.locator('li button');
     // Espera a lista pintar antes de contar. Sem isto o `count()` roda no

@@ -1048,3 +1048,45 @@ Duas decisões de comportamento:
   telefone do escritório.
 - **Cadastrar abre a ficha do contato novo.** Quem cadastrou quer registrar algo nele em seguida —
   não procurar o nome de volta numa lista de cinquenta.
+
+### 46. O que a aba de IA quebrou, e o que isso revelou
+
+A tela de IA é simples e custou caro, porque cada teste de navegador que eu escrevi encontrou um
+defeito diferente — e três deles eram da aplicação, não do teste.
+
+**Toda resposta da API ia sem `Cache-Control`.** O Express manda `ETag` e nada mais; sem
+`Cache-Control` o navegador aplica frescor heurístico e pode servir um GET do próprio cache. Efeito
+prático: mudar uma configuração, apertar F5 e ver o valor de antes. Agora `/api` responde `no-store`,
+e as duas rotas que se beneficiam de cache — anexo assinado e script do widget — continuam definindo
+o próprio cabeçalho depois dessa linha.
+
+**Duas buscas de canal em voo voltavam fora de ordem** e a última a chegar escrevia na tela: a aba
+podia mostrar "IA ligada" para um canal desligado, com o webhook de outro canal no campo. A guarda
+compara com o canal *selecionado* — não com a última busca iniciada, porque o efeito dobrado do
+StrictMode inverte essa ordem e a guarda descartaria justamente a resposta certa.
+
+**Trocar de canal apagava o que a pessoa estava digitando.** A resposta da busca reescreve webhook e
+segredo; quem começasse a escrever durante a troca perdia o texto sem aviso. Os campos agora ficam
+travados enquanto carregam, e a trava liga no mesmo render da troca — deixá-la para o efeito abre uma
+janela de um render em que o campo ainda aceita texto.
+
+E dois erros meus, no teste, que valem registro porque são armadilhas repetíveis:
+
+- **`getByRole` casa substring.** `{ name: 'Ligar a IA' }` casa com **"Desligar a IA"**, então o
+  teste clicava em desligar acreditando que ligava — e a gravação de desligar chegava depois da de
+  ligar, deixando o canal no estado oposto ao que o teste afirmava. `exact: true` nos dois botões.
+- **Esperar o selo mudar não é esperar a gravação terminar.** O selo pode virar por outro motivo (uma
+  busca que voltou nesse instante). Os cliques que gravam agora esperam a resposta do `PUT`.
+
+### 47. A suíte de navegador reaproveita a sessão
+
+Com 34 testes, logar em cada um estoura o limite de 30 tentativas por IP a cada 5 minutos: a suíte
+falhava com 429 no meio, sem defeito nenhum na aplicação. Agora a sessão é guardada por conta e
+restaurada por cookie; o `login.spec` continua sempre passando pelo formulário, porque é ele que
+testa o login.
+
+O refresh token é de uso único, então o cache guarda o cookie **rotacionado** depois de cada
+restauração. E o cookie só é lido depois de a tela estar logada: o `goto` resolve no evento de load,
+com a renovação ainda em voo, e ler ali guardava justamente o token que estava sendo gasto — a
+restauração seguinte falhava, esperava o timeout e caía no login, deixando cada teste quatro vezes
+mais lento. Com isso a suíte inteira roda em 1min20 com **um** login.
