@@ -214,6 +214,49 @@ test.describe('Ficha 360 do contato', () => {
     await expect(cabecalho.getByText('Sem empresa vinculada')).toBeVisible();
   });
 
+  test('cadastrar um contato abre a ficha dele ja pronta para registrar', async ({ page }) => {
+    await page.goto('/crm');
+    // O cadastro comeca fechado: a acao comum na lista e achar alguem.
+    const cadastro = cartao(page, 'Contatos');
+    await cadastro.getByRole('button', { name: 'Novo contato' }).click();
+
+    const nome = `Feira ${Date.now().toString(36)}`;
+    await cadastro.getByLabel('Nome').fill(nome);
+    await cadastro.getByLabel('Telefone').fill('62999990000');
+    await cadastro.getByLabel('Origem').selectOption('WHATSAPP');
+    await cadastro.getByRole('button', { name: 'Cadastrar contato' }).click();
+
+    // A ficha do contato novo abre sozinha: quem cadastrou quer registrar algo
+    // nele em seguida, nao procurar o nome de volta na lista.
+    await expect(page.getByRole('heading', { name: nome, exact: true })).toBeVisible();
+    await expect(cartao(page, 'Registrar')).toBeVisible();
+
+    // E o formulario fecha: quem cadastrou um contato nao esta cadastrando dez.
+    await expect(cadastro.getByLabel('Nome')).toHaveCount(0);
+
+    // Aparece na lista.
+    await expect(cadastro.getByText(nome)).toBeVisible();
+  });
+
+  test('cadastro com telefone repetido avisa e nao bloqueia', async ({ page }) => {
+    await page.goto('/crm');
+    const cadastro = cartao(page, 'Contatos');
+    const telefone = `629${String(Date.now()).slice(-8)}`;
+
+    for (const sufixo of ['primeiro', 'segundo']) {
+      await cadastro.getByRole('button', { name: 'Novo contato' }).click();
+      await cadastro.getByLabel('Nome').fill(`Duplicado ${sufixo} ${telefone.slice(-4)}`);
+      await cadastro.getByLabel('Telefone').fill(telefone);
+      await cadastro.getByRole('button', { name: 'Cadastrar contato' }).click();
+      await expect(cadastro.getByLabel('Nome')).toHaveCount(0);
+    }
+
+    // O segundo entrou — dois contatos da mesma empresa podem dividir o telefone
+    // do escritorio — mas a tela avisa para conferir.
+    await expect(page.getByText(/Ja existe "Duplicado primeiro/)).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Duplicado segundo/ })).toBeVisible();
+  });
+
   test('trocar de contato troca a ficha inteira', async ({ page }) => {
     await page.goto('/crm');
     const lista = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Contatos' }) });

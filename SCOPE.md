@@ -1028,3 +1028,23 @@ ponte é para onde a plataforma manda. Três decisões:
 Verificado com 5 testes de navegador, incluindo um que confere que o segredo não está em lugar
 nenhum do HTML depois de salvar — nem no atributo do input — e que recarregar traz o webhook de volta
 sem trazer o segredo.
+
+### 45. Faltava cadastrar contato
+
+A aba Contas tinha formulário de criação; a aba Contatos, não — o vazio dizia que contato nasce
+sozinho quando alguém fala pela primeira vez, o que é verdade e não é suficiente: o vendedor volta da
+feira com cartão na mão, e a única forma de registrar aquela pessoa seria pedir que ela mandasse
+mensagem primeiro.
+
+O formulário fica atrás do botão **Novo contato**, no cabeçalho da lista, e não como cartão próprio
+abaixo dela — ali caía fora da tela, porque a lista ocupa 70% da altura. Vi na captura de tela, como
+nas outras duas vezes desta sessão.
+
+Duas decisões de comportamento:
+
+- **Duplicidade avisa, não bloqueia.** A API já era assim (não há `unique` em e-mail nem telefone,
+  porque o mesmo número aparece em canais diferentes na importação) e a tela mostra o aviso com o
+  nome de quem já existe. Bloquear travaria o cadastro legítimo de dois contatos que dividem o
+  telefone do escritório.
+- **Cadastrar abre a ficha do contato novo.** Quem cadastrou quer registrar algo nele em seguida —
+  não procurar o nome de volta numa lista de cinquenta.

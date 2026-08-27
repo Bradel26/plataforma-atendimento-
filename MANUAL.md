@@ -88,8 +88,10 @@ vermelho no dashboard — é o número que o supervisor olha primeiro.
 
 Cinco abas:
 
-- **Contatos** — a pessoa, e a **ficha com a vida dela** (abaixo). Criado automaticamente quando
-  alguém fala pela primeira vez por qualquer canal.
+- **Contatos** — a pessoa, e a **ficha com a vida dela** (abaixo). Nasce sozinho quando alguém fala
+  pela primeira vez por qualquer canal; o botão **Novo contato**, no cabeçalho da lista, cadastra à
+  mão — o cartão de visita que voltou da feira. Telefone ou e-mail repetido **avisa e não bloqueia**:
+  dois contatos da mesma empresa podem dividir o telefone do escritório.
 - **Contas** — a empresa, com CNPJ, indicadores, contatos, leads, oportunidades e a **linha do
   tempo dela**. São quatro indicadores e não seis: conversa e ligação pertencem à pessoa, não à
   empresa, e mostrar zero ali seria mentira.
@@ -322,6 +324,10 @@ Coisas que a plataforma **não** faz hoje, para não haver surpresa:
   cliente funciona.
 - **Canais da Meta e telefonia em produção** — o código está pronto e testado, mas dependem de
   credencial real da Meta e de provedor de voz contratado.
+- **Link direto para a ficha de um cliente** — não existe. As abas do CRM não têm endereço próprio,
+  então não há URL para mandar ao supervisor; abra o CRM e busque a pessoa.
+- **Motor de IA externo em produção** — os dois lados estão prontos e testados, mas nunca
+  conversaram: falta instalar o plugin na instância do WhatsBot e criar o canal lá.
 
 ---
 
