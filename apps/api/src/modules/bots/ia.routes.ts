@@ -22,6 +22,28 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: lim
 
 iaRoutes.use(requireIntegration('IA'));
 
+/**
+ * Confere o token sem efeito nenhum.
+ *
+ * Existe porque o diagnostico do plugin conferia a ponte pelo `/api/health`, que
+ * e publico: ele respondia igual com token certo, errado ou vazio, e a tela
+ * dizia "ponte operante" com um token que a plataforma recusaria na primeira
+ * mensagem. Um endereco que exige o token transforma esse verde em verdade.
+ *
+ * Devolve o nome da integracao, e nao o token: serve para quem le a tela
+ * descobrir QUAL token esta configurado ali, sem que a tela possa vazar o valor.
+ */
+iaRoutes.get(
+  '/ping',
+  asyncHandler(async (req, res) => {
+    res.json({
+      ok: true,
+      integracao: req.integracao?.nome ?? null,
+      escopo: req.integracao?.escopo ?? null,
+    });
+  }),
+);
+
 const anexoSchema = z.object({
   tipo: z.string().trim().max(20).optional(),
   url: z.string().trim().url(),

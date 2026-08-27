@@ -943,7 +943,7 @@ Cinco decisões que o desenho da ponte forçou:
   era exatamente esse o defeito do bot de árvore local, cuja resposta nunca saía do painel nos
   canais externos.
 
-Verificado com `npm run smoke:ia`: 40 checagens com um webhook de verdade no lugar do whatsbot,
+Verificado com `npm run smoke:ia`: 46 checagens com um webhook de verdade no lugar do whatsbot,
 conferindo a assinatura recebida byte a byte, o `acionarIa` nos quatro estados e as três recusas com
 código próprio. Do lado do plugin, 126 testes.
 
@@ -1090,3 +1090,40 @@ restauração. E o cookie só é lido depois de a tela estar logada: o `goto` re
 com a renovação ainda em voo, e ler ali guardava justamente o token que estava sendo gasto — a
 restauração seguinte falhava, esperava o timeout e caía no login, deixando cada teste quatro vezes
 mais lento. Com isso a suíte inteira roda em 1min20 com **um** login.
+
+### 48. Um diagnóstico que mentia de verde
+
+A tela de diagnóstico do plugin `plataforma` (no whatsbot) conferia a ponte chamando
+`GET /api/health` desta plataforma. Esse endereço é **público**: responde `status: ok` com token
+certo, errado ou vazio. Então a tela acendia "Ponte operante" e "Token" sem nunca ter perguntado à
+plataforma se o token era aceito.
+
+Apareceu na instalação real, e da pior forma: o campo *Token de integração* do canal estava com o
+**segredo do webhook** colado dentro (as duas máscaras terminavam nos mesmos quatro caracteres), e
+o diagnóstico deu tudo verde. Quem confiasse nele iria descobrir o erro pelo silêncio — a primeira
+mensagem do cliente sendo respondida por ninguém.
+
+Duas correções, uma de cada lado:
+
+**Nesta plataforma**, `GET /api/bots/ia/ping` atrás do `requireIntegration('IA')`. Sem efeito
+nenhum, para poder ser chamado à vontade; devolve o **nome** da integração e nunca o valor do
+token, para que a tela de suporte não se transforme em vazamento. O nome importa: com vários
+tokens, saber *qual* deles está no canal é metade do diagnóstico.
+
+**No plugin**, o diagnóstico chama os dois — `/health` primeiro, `ping` depois. A ordem é o que dá
+o diagnóstico: `/health` falhando é "plataforma fora do ar"; `/health` ok e `ping` 401 é "token
+errado". Fundir os dois numa chamada só devolveria "não funciona" sem dizer de quem é a culpa, que
+é exatamente o que essa tela existe para responder.
+
+O selo mudou de "Token" para **"Token aceito"** — o rótulo antigo era honesto sobre o que o código
+fazia (`token_preenchido`) e desonesto sobre o que o leitor entendia.
+
+Verificado por seis checagens novas no `smoke:ia` (46 no total): o ping aceita o token, diz qual
+integração reconheceu, não devolve o valor, e recusa chamada sem token, com token inventado e com
+token de sessão de usuário — esse último porque, se a sessão servisse, revogar o acesso de uma
+pessoa derrubaria o bot.
+
+No mesmo pacote, dois defeitos menores da mesma tela, ambos por ler o campo errado da resposta do
+whatsbot: a lista de canais vinha em `data` (eu lia `channels`/`items`), e a tela dizia "nenhum
+canal deste tipo" com o canal criado e ativo do outro lado; e o nome vem em `display_name` (eu lia
+`name`), então o seletor mostrava o id em vez do nome.

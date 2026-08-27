@@ -16,10 +16,10 @@ Legenda de responsável: **você** = depende de credencial, contrato ou decisão
 | 1.1 | **Rotacionar as credenciais do Neon e do Upstash** | você | Elas passaram pelo chat. Quem tiver o histórico tem o banco e o Redis. |
 | 1.2 | ~~Trocar os segredos de exemplo por valores gerados~~ | **feito** | `npm run gerar:segredos` escreve `apps/api/.env.production` com tudo saído de `randomBytes`, permissão 600, fora do git. |
 | 1.3 | ~~Trocar a senha do admin do seed~~ | **feito** | O seed recusa senha ou domínio de exemplo em produção, cria só o admin (sem os três usuários de demonstração) e não imprime a senha. |
-| 1.4 | Definir o domínio e emitir o certificado (o `WEB_ORIGIN` não pode ser localhost) | você | Sem isso o cookie de sessão e o CORS não fecham. |
-| 1.5 | **Construir e subir a imagem Docker** | você | O `Dockerfile` e o compose existem e foram revisados, mas **nunca passaram por um build** — não há Docker/WSL2 nesta máquina. É o único artefato de deploy não verificado. |
-| 1.6 | Rodar as migrations no banco de produção (`prisma migrate deploy`) | você | Nunca use `--shadow-database-url` apontando para banco com dados. |
-| 1.7 | **Redeploy da produção** | você | O que está no ar é a imagem de antes desta rodada: a produção não tem a Ficha 360, a aba de IA, o cadastro de contato nem a correção do bot. A migration `ponte_ia` roda no start do container. |
+| 1.4 | Domínio definitivo `atendimento.bradel.com.br` | você | **Contornado, não resolvido.** A produção roda no domínio automático do Coolify (`zios6of…sslip.io`), com certificado. O registro na UOL está travado pelas duas zonas divergentes de `bradel.com.br`: criar na zona errada não propaga. Enquanto os dois domínios estiverem no recurso, o Coolify pede certificado para um nome que não resolve e o log reclama do Let's Encrypt. |
+| 1.5 | ~~Construir e subir a imagem Docker~~ | **feito** | O Coolify constrói e sobe a imagem única a cada `git push`. Verificado no log de implantação e pela resposta da API em produção. |
+| 1.6 | ~~Rodar as migrations no banco de produção~~ | **feito** | `prisma migrate deploy` roda no arranque do container; `ponte_ia` aplicada. Nunca use `--shadow-database-url` apontando para banco com dados. |
+| 1.7 | ~~Redeploy da produção~~ | **feito** | Commit `71b970f` no ar em 27/08/2026, conferido de fora: a rota nova responde 401 (antes 404), o bundle tem o mesmo hash do build local e a migration `ponte_ia` está aplicada. Falta um novo deploy para o `GET /bots/ia/ping` (decisão 48). |
 
 ## 2. Canais: construído, nunca exercitado de verdade
 
@@ -29,8 +29,8 @@ Legenda de responsável: **você** = depende de credencial, contrato ou decisão
 | 2.2 | Aprovar os templates de mensagem no WhatsApp | você | Campanha ativa fora da janela de 24h exige template aprovado. |
 | 2.3 | **Contratar o provedor de voz** (Twilio ou compatível) | você | O driver foi escrito a partir do contrato documentado da API e **nunca falou com conta real**. |
 | 2.4 | Anexo do agente no Instagram Direct | — | Não é possível: o canal só aceita URL, não upload. Documentado. |
-| 2.5 | **Instalar o plugin `plataforma` no whatsbot-pro** e criar o canal lá | você | Os dois lados estão prontos e testados (40 checagens aqui, 5 na tela, 126 no plugin), e o `.zip` está gerado em `whatsbot-pro-plugins/dist/`. Falta instalá-lo na sua instância e criar o canal apontando para esta API — deste lado, tudo se configura em Configurações › IA. |
-| 2.6 | Versionar o plugin em `Techify-one/whatsbot-pro-plugins` | eu, depois de você clonar | Ele está em `C:\Users\kaua.tavares\whatsbot-pro-plugins\plugins\plataforma`, fora de qualquer git — o repositório real não está nesta máquina. |
+| 2.5 | Ligar a ponte no whatsbot-pro | você | **Plugin instalado e ativo (v0.1.2), canal `plataforma_56ef0e6b` criado apontando para o `WEBCHAT`, diagnóstico verde.** Falta conferir o campo *Token de integração* do canal — as máscaras indicavam o segredo do webhook colado ali — e ligar a ponte na aba IA da plataforma. Testado com 46 checagens aqui e 129 no plugin. |
+| 2.6 | Versionar o plugin em `Techify-one/whatsbot-pro-plugins` | eu, depois de você clonar | Ele está em `C:\Users\kaua.tavares\whatsbot-pro-plugins\plugins\plataforma`, fora de qualquer git. Agora já obedece ao formato do repositório oficial (`plataforma.json`, entrada no `catalog.json`, `.zip` gerado pelo script oficial) e a suíte de 129 testes roda nesta máquina — clonar e copiar a pasta resolve. |
 
 ## 3. Voz: o que só existe com tronco
 

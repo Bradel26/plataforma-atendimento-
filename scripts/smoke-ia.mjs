@@ -81,9 +81,10 @@ const t = { token: admin };
 
 /* ── 1. token de integracao ────────────────────────────────────────────── */
 
+const nomeToken = `Smoke IA ${EXECUCAO}`;
 const criado = await req('POST', '/integracoes/tokens', {
   ...t,
-  corpo: { nome: `Smoke IA ${EXECUCAO}` },
+  corpo: { nome: nomeToken },
 });
 checar(criado.status === 201, 'token de integracao criado', `HTTP ${criado.status}`);
 const TOKEN_IA = criado.dados.valor;
@@ -101,6 +102,32 @@ checar(naLista?.prefixo === TOKEN_IA.slice(0, 8), 'prefixo identifica qual token
 const semPermissao = await entrar('agente1@plataforma.local', 'Agente@123');
 const negado = await req('GET', '/integracoes/tokens', { token: semPermissao });
 checar(negado.status === 403, 'agente nao lista tokens de integracao', `HTTP ${negado.status}`);
+
+/* ── 1b. ping: o unico jeito de o plugin saber se o token e aceito ────────
+ *
+ * O diagnostico do plugin conferia a ponte pelo `/health`, que e publico: ele
+ * respondia igual com token certo, errado ou vazio, e a tela dizia "ponte
+ * operante" com o segredo do webhook colado no campo do token. Estas checagens
+ * existem para que o verde da tela signifique alguma coisa.
+ */
+const ping = await req('GET', '/bots/ia/ping', { token: TOKEN_IA });
+checar(ping.status === 200 && ping.dados.ok === true, 'ping aceita o token de integracao', `HTTP ${ping.status}`);
+checar(ping.dados?.integracao === nomeToken, 'ping diz QUAL integracao a plataforma reconheceu');
+checar(
+  !JSON.stringify(ping.dados ?? {}).includes(TOKEN_IA),
+  'ping nao devolve o valor do token',
+);
+
+const pingSemToken = await req('GET', '/bots/ia/ping');
+checar(pingSemToken.status === 401, 'ping recusa chamada sem token', `HTTP ${pingSemToken.status}`);
+
+const pingTokenErrado = await req('GET', '/bots/ia/ping', { token: 'pi_naoexiste' });
+checar(pingTokenErrado.status === 401, 'ping recusa token invalido', `HTTP ${pingTokenErrado.status}`);
+
+// O token de sessao do painel nao serve aqui: se servisse, revogar o acesso de
+// uma pessoa derrubaria o bot, e um usuario comum falaria pelas rotas de maquina.
+const pingComSessao = await req('GET', '/bots/ia/ping', { token: admin });
+checar(pingComSessao.status === 401, 'ping recusa token de sessao de usuario', `HTTP ${pingComSessao.status}`);
 
 /* ── 2. ponte ligada no webchat ────────────────────────────────────────── */
 

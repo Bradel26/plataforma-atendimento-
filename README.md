@@ -88,7 +88,7 @@ backend na mesma origem (necessário para o cookie de refresh).
 | `npm run smoke:metricas` | indicadores do dashboard conferidos por delta (36 checagens) |
 | `npm run smoke:worker` | volta dos trabalhos mortos para a fila (12 checagens) |
 | `npm run smoke:ficha` | linha do tempo da ficha 360: ordem, cursor, filtro e atividades (48 checagens) |
-| `npm run smoke:ia` | ponte com o motor de IA externo, com webhook de verdade (40 checagens) |
+| `npm run smoke:ia` | ponte com o motor de IA externo, com webhook de verdade (46 checagens) |
 
 ## API (Fase 0)
 
