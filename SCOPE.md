@@ -116,6 +116,8 @@ credencial real para testar.
 - [ ] **Transcrição automática de voz** — **não construído**, precisa de serviço de fala-para-texto
 - [x] Campanhas de contato ativo (multicanal, template, disparo em lote, reprocessamento) — voz depende da telefonia
 - [x] Chatbot por fluxo de palavras-chave (responder, transferir para fila, encerrar), integrado ao Webchat e aos canais Meta
+- [x] **Ponte com motor de IA externo** (whatsbot-pro): entrega assinada do inbound, resposta do
+  agente entrando como mensagem BOT, token de integração revogável — ver decisão 41
 
 #### Por que a telefonia ficou de fora
 
@@ -906,3 +908,39 @@ com `<caption>`, `scope` nas células de cabeçalho e linha de total. A barra pa
 `aria-hidden`: o número ao lado dela já foi lido, e a barra só dá a escala.
 
 Serve para mais gente do que parece: quem quer conferir o número exato também prefere a tabela.
+
+### 41. A IA é um motor de fora, e a plataforma continua dona da conversa
+
+O Bradel já tem um whatsbot-pro rodando: agentes AGNO, tools, custo por execução, painel. A
+alternativa era construir um segundo cérebro aqui dentro — e ficar com dois lugares para ajustar
+prompt, dois históricos de custo e duas respostas possíveis para a mesma pergunta.
+
+A escolha foi a ponte: o whatsbot pensa, a plataforma continua dona do canal oficial, da fila, da
+conversa, do CRM e da entrega para a Meta. O plugin `plataforma` vive no whatsbot-pro; deste lado
+ficam `ia.service.ts` e `/api/bots/ia/*`.
+
+Cinco decisões que o desenho da ponte forçou:
+
+- **A entrega vai assinada sobre `"{timestamp}.{corpo}"`, não sobre o corpo.** Assinando só o corpo,
+  uma entrega legítima capturada valeria para sempre e o agente responderia de novo a cada reenvio.
+  Tolerância de 5 minutos, como no webhook da Meta.
+- **A saída nunca lança.** `entregarParaIa` é chamada depois de a mensagem estar gravada e engole
+  qualquer falha: o motor de IA é opcional, e um webhook fora do ar não pode fazer a plataforma
+  devolver 500 para a Meta — que reentregaria o webhook e duplicaria a mensagem do cliente.
+- **Quem decide se a IA pode falar é a plataforma, no campo `acionarIa`.** O plugin só sabe quem
+  escreveu; a plataforma sabe se um atendente assumiu e se o atendimento foi finalizado. Sem esse
+  campo, a IA responderia por cima do humano e o cliente receberia duas respostas diferentes para a
+  mesma pergunta. O que o atendente escreve também é entregue — sem isso o agente repete a pergunta
+  que a pessoa acabou de responder — mas com `acionarIa: false`: contexto não é gatilho.
+- **Token de integração próprio, não JWT de usuário.** Token de usuário expira em minutos e carrega
+  um perfil com permissão de tela. Guardado como SHA-256 e não bcrypt: são 32 bytes aleatórios
+  conferidos a cada mensagem recebida, e 100 ms por conferência viraria o gargalo do canal. As rotas
+  de `/api/bots/ia` recusam token de sessão de propósito — e é o que o smoke test verifica.
+- **A resposta vai ao canal antes de ser gravada.** É o mesmo caminho do atendente humano: se a Meta
+  recusar, a mensagem não entra no histórico. Não existe "enviada" que o cliente nunca recebeu — e
+  era exatamente esse o defeito do bot de árvore local, cuja resposta nunca saía do painel nos
+  canais externos.
+
+Verificado com `npm run smoke:ia`: 41 checagens com um webhook de verdade no lugar do whatsbot,
+conferindo a assinatura recebida byte a byte, o `acionarIa` nos quatro estados e as três recusas com
+código próprio. Do lado do plugin, 126 testes.
