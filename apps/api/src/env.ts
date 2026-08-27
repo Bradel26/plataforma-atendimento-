@@ -12,6 +12,12 @@ const schema = z.object({
   JWT_REFRESH_TTL_DAYS: z.coerce.number().int().positive().default(7),
   WEB_ORIGIN: z.string().default('http://localhost:5173'),
   /**
+   * Endereco publico desta API, usado onde a URL precisa ser absoluta e sair da
+   * rede — o anexo que o motor de IA externo vai baixar, por exemplo. Vazio cai
+   * em WEB_ORIGIN, que e o certo quando front e API estao no mesmo dominio.
+   */
+  PUBLIC_URL: z.string().default(''),
+  /**
    * Pasta do front compilado, relativa ao cwd da API. Quando ela existe, a
    * propria API serve o site — util onde outro proxy e o dono das portas e nao
    * ha subdominio para separar front e API.

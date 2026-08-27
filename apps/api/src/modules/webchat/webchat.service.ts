@@ -3,6 +3,7 @@ import { badRequest, notFound } from '../../lib/errors';
 import { signWebchatToken } from '../../lib/tokens';
 import { notificarConversaAtualizada, notificarConversaNova, notificarMensagem } from '../../realtime/hub';
 import { responderAutomaticamente } from '../bots/bots.service';
+import { entregarParaIa } from '../bots/ia.service';
 import { inclusaoDetalhe, toConversaDetalhe, toMensagem } from '../conversations/conversations.serializer';
 
 type IniciarInput = {
@@ -119,8 +120,10 @@ export async function mensagemDoCliente(conversaId: string, conteudo: string) {
   // A conversa sobe na lista e o contador de nao lidas muda para quem estiver vendo.
   notificarConversaAtualizada(detalhe, destinos);
 
-  // Chatbot (Fase 4): responde so enquanto ninguem assumiu a conversa.
-  await responderAutomaticamente(conversaId, conteudo);
+  // Chatbot: o motor de IA externo primeiro; sem ele, o bot de arvore local.
+  // Nos dois casos so responde enquanto ninguem assumiu a conversa.
+  const ia = await entregarParaIa(mensagem, atualizada);
+  if (!ia.entregue) await responderAutomaticamente(conversaId, conteudo);
 
   return toMensagem(mensagem);
 }

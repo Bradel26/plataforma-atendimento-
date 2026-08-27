@@ -13,11 +13,25 @@ const mascarar = (valor: string | null) =>
 
 /**
  * Campos cifrados em repouso. `verifyToken` entra na lista porque quem o tem
- * consegue passar pela verificacao do webhook e assinar o canal em outro lugar.
+ * consegue passar pela verificacao do webhook e assinar o canal em outro lugar;
+ * `iaSegredo` porque com ele se forja uma entrega para o motor de IA.
  */
-const SEGREDOS = ['accessToken', 'appSecret', 'verifyToken'] as const;
+const SEGREDOS = ['accessToken', 'appSecret', 'verifyToken', 'iaSegredo'] as const;
 
-type ComSegredos = { accessToken: string | null; appSecret: string | null; verifyToken: string | null };
+/**
+ * O que `salvarCanal` cifra. `iaSegredo` fica de fora porque nao entra por esta
+ * rota — ele e gravado por `salvarIa`, que cifra por conta propria. Duas listas
+ * em vez de uma para o tipo de entrada nao ter de aceitar um campo que a rota
+ * de canal nao recebe.
+ */
+const SEGREDOS_DO_CANAL = ['accessToken', 'appSecret', 'verifyToken'] as const;
+
+type ComSegredos = {
+  accessToken: string | null;
+  appSecret: string | null;
+  verifyToken: string | null;
+  iaSegredo: string | null;
+};
 
 /** Decifra os segredos de um registro lido do banco. */
 function aberto<T extends ComSegredos>(config: T): T {
@@ -81,7 +95,7 @@ export async function salvarCanal(canal: CanalExterno, input: SalvarCanalInput) 
   // Cifra so o que veio nesta requisicao; campo ausente nao e reescrito, e
   // campo enviado como null continua sendo limpeza explicita.
   const paraGravar = { ...input };
-  for (const campo of SEGREDOS) {
+  for (const campo of SEGREDOS_DO_CANAL) {
     const valor = paraGravar[campo];
     if (valor) paraGravar[campo] = cifrar(valor);
   }

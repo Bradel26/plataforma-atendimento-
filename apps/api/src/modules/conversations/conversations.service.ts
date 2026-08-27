@@ -5,6 +5,7 @@ import { apos, decodificarCursor, fatiar } from '../../lib/paginacao';
 import { badRequest, forbidden, notFound } from '../../lib/errors';
 import { notificarConversaAtualizada, notificarMensagem } from '../../realtime/hub';
 import { enviarArquivoParaCanal, enviarParaCanal, exigeEnvioExterno } from '../channels/outbound.service';
+import { entregarParaIa } from '../bots/ia.service';
 import { TIPO_CONVITE_PESQUISA, criarPesquisa, entregarPesquisa } from '../surveys/surveys.service';
 import { enfileirar } from '../../lib/fila';
 import {
@@ -195,6 +196,12 @@ export async function enviarMensagem(solicitante: Solicitante, id: string, conte
     { conversaId: id, mensagem: toMensagem(mensagem) },
     { conversaId: id, filaId: atualizada.fila?.id, agenteId: atualizada.agente?.id },
   );
+
+  // Contexto para o motor de IA, quando o canal tem um: sem o que o humano
+  // respondeu, o agente repete a pergunta que a pessoa acabou de responder.
+  // Nao aciona a IA (o corpo vai com acionarIa: false) e nao e aguardado — o
+  // atendente nao espera por um webhook de terceiro para ver a mensagem sair.
+  void entregarParaIa(mensagem, { ...conversa, agenteId: conversa.agenteId ?? solicitante.sub });
 
   return { mensagem: toMensagem(mensagem), conversa: atualizada };
 }

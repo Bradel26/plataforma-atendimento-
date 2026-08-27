@@ -7,7 +7,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider  = "postgresql"
   // Endpoint pooled (pgbouncer) para a aplicacao.
   url       = env("DATABASE_URL")
   // Endpoint direto: o Prisma Migrate precisa de conexao sem pooler.
@@ -56,9 +56,10 @@ model User {
   agendamentos      TicketSchedule[]
   registrosLgpd     LgpdLog[]
   chamadas          Call[]
-  atividades        Activity[] @relation("AtividadeResponsavel")
-  atividadesCriadas Activity[] @relation("AtividadeAutor")
+  atividades        Activity[]            @relation("AtividadeResponsavel")
+  atividadesCriadas Activity[]            @relation("AtividadeAutor")
   mudancasEstagio   OpportunityStageLog[]
+  tokensIntegracao  IntegrationToken[]
 
   @@index([perfil])
   @@map("usuarios")
@@ -153,29 +154,29 @@ enum AttachmentType {
 
 /// Contato/cliente final. Base do CRM (expandido na Fase 2 com Conta, Lead e Oportunidade).
 model Contact {
-  id           String   @id @default(uuid())
-  nome         String
-  telefone     String?
-  email        String?
-  canalOrigem  Channel  @default(WEBCHAT) @map("canal_origem")
-  tags         String[] @default([])
-  observacoes  String?
+  id              String    @id @default(uuid())
+  nome            String
+  telefone        String?
+  email           String?
+  canalOrigem     Channel   @default(WEBCHAT) @map("canal_origem")
+  tags            String[]  @default([])
+  observacoes     String?
   /// Momento em que o titular aceitou o aviso de privacidade (LGPD art. 8).
   consentimentoEm DateTime? @map("consentimento_em")
   /// Preenchido quando os dados pessoais foram substituidos por placeholders.
   anonimizadoEm   DateTime? @map("anonimizado_em")
-  criadoEm     DateTime @default(now()) @map("criado_em")
-  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+  criadoEm        DateTime  @default(now()) @map("criado_em")
+  atualizadoEm    DateTime  @updatedAt @map("atualizado_em")
 
   contaId String? @map("conta_id")
 
-  conta      Account?       @relation(fields: [contaId], references: [id], onDelete: SetNull)
-  conversas      Conversation[]
-  leads          Lead[]
-  protocolos     Ticket[]
-  itensCampanha  CampaignItem[]
-  chamadas       Call[]
-  atividades     Activity[]
+  conta         Account?       @relation(fields: [contaId], references: [id], onDelete: SetNull)
+  conversas     Conversation[]
+  leads         Lead[]
+  protocolos    Ticket[]
+  itensCampanha CampaignItem[]
+  chamadas      Call[]
+  atividades    Activity[]
 
   @@index([email])
   @@index([telefone])
@@ -191,17 +192,17 @@ model Conversation {
   agenteId  String?            @map("agente_id")
   assunto   String?
 
-  criadoEm        DateTime  @default(now()) @map("criado_em")
-  atribuidoEm     DateTime? @map("atribuido_em")
-  finalizadoEm    DateTime? @map("finalizado_em")
-  ultimaMensagemEm DateTime @default(now()) @map("ultima_mensagem_em")
-  naoLidas        Int       @default(0) @map("nao_lidas")
+  criadoEm         DateTime  @default(now()) @map("criado_em")
+  atribuidoEm      DateTime? @map("atribuido_em")
+  finalizadoEm     DateTime? @map("finalizado_em")
+  ultimaMensagemEm DateTime  @default(now()) @map("ultima_mensagem_em")
+  naoLidas         Int       @default(0) @map("nao_lidas")
   /// Identificador do interlocutor no canal externo (wa_id, PSID, IGSID).
-  enderecoExterno String?   @map("endereco_externo")
+  enderecoExterno  String?   @map("endereco_externo")
 
-  contato   Contact @relation(fields: [contatoId], references: [id], onDelete: Cascade)
-  fila      Queue?  @relation(fields: [filaId], references: [id], onDelete: SetNull)
-  agente     User?    @relation(fields: [agenteId], references: [id], onDelete: SetNull)
+  contato    Contact   @relation(fields: [contatoId], references: [id], onDelete: Cascade)
+  fila       Queue?    @relation(fields: [filaId], references: [id], onDelete: SetNull)
+  agente     User?     @relation(fields: [agenteId], references: [id], onDelete: SetNull)
   mensagens  Message[]
   protocolos Ticket[]
   pesquisa   Survey?
@@ -214,20 +215,20 @@ model Conversation {
 }
 
 model Message {
-  id        String         @id @default(uuid())
-  conversaId String        @map("conversa_id")
-  autor     MessageAuthor
+  id         String         @id @default(uuid())
+  conversaId String         @map("conversa_id")
+  autor      MessageAuthor
   /// Preenchido quando autor = AGENTE.
-  autorId   String?        @map("autor_id")
-  conteudo  String
-  tipoAnexo AttachmentType @default(TEXTO) @map("tipo_anexo")
-  anexoUrl  String?        @map("anexo_url")
+  autorId    String?        @map("autor_id")
+  conteudo   String
+  tipoAnexo  AttachmentType @default(TEXTO) @map("tipo_anexo")
+  anexoUrl   String?        @map("anexo_url")
   /// Id da mensagem no provedor externo. Unico: o webhook da Meta reentrega.
-  idExterno String?        @unique @map("id_externo")
-  criadoEm  DateTime       @default(now()) @map("criado_em")
+  idExterno  String?        @unique @map("id_externo")
+  criadoEm   DateTime       @default(now()) @map("criado_em")
 
-  conversa Conversation @relation(fields: [conversaId], references: [id], onDelete: Cascade)
-  autorUsuario User?    @relation(fields: [autorId], references: [id], onDelete: SetNull)
+  conversa     Conversation @relation(fields: [conversaId], references: [id], onDelete: Cascade)
+  autorUsuario User?        @relation(fields: [autorId], references: [id], onDelete: SetNull)
 
   @@index([conversaId, criadoEm])
   @@map("mensagens")
@@ -271,15 +272,15 @@ enum OportunidadeStatus {
 
 /// Conta/Empresa: agrupa contatos e oportunidades.
 model Account {
-  id          String   @id @default(uuid())
-  nome        String
-  cnpj        String?  @unique
-  segmento    String?
-  site        String?
-  telefone    String?
-  email       String?
-  observacoes String?
-  criadoEm    DateTime @default(now()) @map("criado_em")
+  id           String   @id @default(uuid())
+  nome         String
+  cnpj         String?  @unique
+  segmento     String?
+  site         String?
+  telefone     String?
+  email        String?
+  observacoes  String?
+  criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
   contatos      Contact[]
@@ -293,24 +294,24 @@ model Account {
 }
 
 model Lead {
-  id             String       @id @default(uuid())
-  contatoId      String       @map("contato_id")
-  contaId        String?      @map("conta_id")
-  fase           LeadFase     @default(NOVO)
-  tipo           LeadTipo     @default(INBOUND)
-  responsavelId  String?      @map("responsavel_id")
-  prazo          DateTime?
-  canalOrigem    Channel      @default(WEBCHAT) @map("canal_origem")
-  motivoPerda    MotivoPerda? @map("motivo_perda")
-  valorEstimado  Decimal?     @map("valor_estimado") @db.Decimal(14, 2)
-  observacoes    String?
-  criadoEm       DateTime     @default(now()) @map("criado_em")
-  atualizadoEm   DateTime     @updatedAt @map("atualizado_em")
-  fechadoEm      DateTime?    @map("fechado_em")
+  id            String       @id @default(uuid())
+  contatoId     String       @map("contato_id")
+  contaId       String?      @map("conta_id")
+  fase          LeadFase     @default(NOVO)
+  tipo          LeadTipo     @default(INBOUND)
+  responsavelId String?      @map("responsavel_id")
+  prazo         DateTime?
+  canalOrigem   Channel      @default(WEBCHAT) @map("canal_origem")
+  motivoPerda   MotivoPerda? @map("motivo_perda")
+  valorEstimado Decimal?     @map("valor_estimado") @db.Decimal(14, 2)
+  observacoes   String?
+  criadoEm      DateTime     @default(now()) @map("criado_em")
+  atualizadoEm  DateTime     @updatedAt @map("atualizado_em")
+  fechadoEm     DateTime?    @map("fechado_em")
 
-  contato     Contact @relation(fields: [contatoId], references: [id], onDelete: Cascade)
+  contato     Contact  @relation(fields: [contatoId], references: [id], onDelete: Cascade)
   conta       Account? @relation(fields: [contaId], references: [id], onDelete: SetNull)
-  responsavel User?   @relation(fields: [responsavelId], references: [id], onDelete: SetNull)
+  responsavel User?    @relation(fields: [responsavelId], references: [id], onDelete: SetNull)
 
   @@index([fase, atualizadoEm])
   @@index([responsavelId, fase])
@@ -338,7 +339,7 @@ model FunnelStage {
   /// Probabilidade de fechamento no estagio (0-100), usada em previsao.
   probabilidade Int    @default(0)
 
-  funil         Funnel        @relation(fields: [funilId], references: [id], onDelete: Cascade)
+  funil         Funnel                @relation(fields: [funilId], references: [id], onDelete: Cascade)
   oportunidades Opportunity[]
   saidas        OpportunityStageLog[] @relation("EstagioSaida")
   entradas      OpportunityStageLog[] @relation("EstagioEntrada")
@@ -366,11 +367,11 @@ model Opportunity {
   /// historico custaria uma agregacao por cartao.
   estagioDesde       DateTime           @default(now()) @map("estagio_desde")
 
-  conta       Account     @relation(fields: [contaId], references: [id], onDelete: Cascade)
-  funil       Funnel      @relation(fields: [funilId], references: [id])
-  estagio     FunnelStage @relation(fields: [estagioId], references: [id])
-  responsavel User?       @relation(fields: [responsavelId], references: [id], onDelete: SetNull)
-  itens       OpportunityItem[]
+  conta            Account               @relation(fields: [contaId], references: [id], onDelete: Cascade)
+  funil            Funnel                @relation(fields: [funilId], references: [id])
+  estagio          FunnelStage           @relation(fields: [estagioId], references: [id])
+  responsavel      User?                 @relation(fields: [responsavelId], references: [id], onDelete: SetNull)
+  itens            OpportunityItem[]
   atividades       Activity[]
   historicoEstagio OpportunityStageLog[]
 
@@ -434,14 +435,14 @@ model Activity {
 /// Cada passagem de estagio de uma oportunidade. Alimenta dois relatorios que
 /// hoje nao existem: conversao etapa a etapa e tempo medio por etapa.
 model OpportunityStageLog {
-  id             String @id @default(uuid())
-  oportunidadeId String @map("oportunidade_id")
-  deEstagioId    String? @map("de_estagio_id")
-  paraEstagioId  String  @map("para_estagio_id")
-  usuarioId      String? @map("usuario_id")
+  id                String   @id @default(uuid())
+  oportunidadeId    String   @map("oportunidade_id")
+  deEstagioId       String?  @map("de_estagio_id")
+  paraEstagioId     String   @map("para_estagio_id")
+  usuarioId         String?  @map("usuario_id")
   /// Quanto tempo ficou no estagio de origem. Nulo no primeiro registro.
-  segundosNoEstagio Int? @map("segundos_no_estagio")
-  criadoEm       DateTime @default(now()) @map("criado_em")
+  segundosNoEstagio Int?     @map("segundos_no_estagio")
+  criadoEm          DateTime @default(now()) @map("criado_em")
 
   oportunidade Opportunity  @relation(fields: [oportunidadeId], references: [id], onDelete: Cascade)
   deEstagio    FunnelStage? @relation("EstagioSaida", fields: [deEstagioId], references: [id], onDelete: SetNull)
@@ -461,7 +462,7 @@ model Product {
   ativo     Boolean  @default(true)
   criadoEm  DateTime @default(now()) @map("criado_em")
 
-  itensCatalogo CatalogItem[]
+  itensCatalogo     CatalogItem[]
   itensOportunidade OpportunityItem[]
 
   @@map("produtos")
@@ -546,11 +547,11 @@ model Ticket {
   resolvidoEm   DateTime?        @map("resolvido_em")
   fechadoEm     DateTime?        @map("fechado_em")
 
-  contato      Contact?      @relation(fields: [contatoId], references: [id], onDelete: SetNull)
-  conta        Account?      @relation(fields: [contaId], references: [id], onDelete: SetNull)
-  conversa     Conversation? @relation(fields: [conversaId], references: [id], onDelete: SetNull)
-  responsavel  User?         @relation(fields: [responsavelId], references: [id], onDelete: SetNull)
-  fila         Queue?        @relation(fields: [filaId], references: [id], onDelete: SetNull)
+  contato      Contact?           @relation(fields: [contatoId], references: [id], onDelete: SetNull)
+  conta        Account?           @relation(fields: [contaId], references: [id], onDelete: SetNull)
+  conversa     Conversation?      @relation(fields: [conversaId], references: [id], onDelete: SetNull)
+  responsavel  User?              @relation(fields: [responsavelId], references: [id], onDelete: SetNull)
+  fila         Queue?             @relation(fields: [filaId], references: [id], onDelete: SetNull)
   comentarios  TicketComment[]
   anexos       TicketAttachment[]
   agendamentos TicketSchedule[]
@@ -562,13 +563,13 @@ model Ticket {
 }
 
 model TicketComment {
-  id        String   @id @default(uuid())
-  ticketId  String   @map("ticket_id")
-  autorId   String?  @map("autor_id")
-  conteudo  String
+  id       String   @id @default(uuid())
+  ticketId String   @map("ticket_id")
+  autorId  String?  @map("autor_id")
+  conteudo String
   /// true = nota interna (nao visivel ao cliente); false = resposta ao cliente.
-  interno   Boolean  @default(true)
-  criadoEm  DateTime @default(now()) @map("criado_em")
+  interno  Boolean  @default(true)
+  criadoEm DateTime @default(now()) @map("criado_em")
 
   ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   autor  User?  @relation(fields: [autorId], references: [id], onDelete: SetNull)
@@ -618,9 +619,9 @@ model TicketSchedule {
 
 /// Credenciais e destino de fila por canal externo. Um registro por canal.
 model ChannelConfig {
-  id     String  @id @default(uuid())
-  canal  Channel @unique
-  ativo  Boolean @default(false)
+  id    String  @id @default(uuid())
+  canal Channel @unique
+  ativo Boolean @default(false)
 
   /// WhatsApp Cloud API
   phoneNumberId String? @map("phone_number_id")
@@ -638,6 +639,13 @@ model ChannelConfig {
 
   /// Fila que recebe as conversas deste canal.
   filaId String? @map("fila_id")
+
+  /// Entrega as mensagens deste canal ao motor de IA externo (ver ia.service).
+  iaAtiva      Boolean @default(false) @map("ia_ativa")
+  /// Webhook do motor de IA. Ex.: https://whatsbot/api/webhook/plataforma/<id>.
+  iaUrlWebhook String? @map("ia_url_webhook")
+  /// Segredo HMAC com que assinamos a entrega. Cifrado em repouso.
+  iaSegredo    String? @map("ia_segredo")
 
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
@@ -657,18 +665,18 @@ enum TipoPesquisa {
 
 /// Pesquisa de satisfacao disparada ao finalizar o atendimento.
 model Survey {
-  id         String       @id @default(uuid())
-  conversaId String       @unique @map("conversa_id")
-  tipo       TipoPesquisa @default(CSAT)
+  id           String       @id @default(uuid())
+  conversaId   String       @unique @map("conversa_id")
+  tipo         TipoPesquisa @default(CSAT)
   /// CSAT: 1 a 5. NPS: 0 a 10.
-  nota       Int?
-  comentario String?
+  nota         Int?
+  comentario   String?
   /// Token opaco usado no link enviado ao cliente.
-  token      String       @unique
-  enviadoEm  DateTime     @default(now()) @map("enviado_em")
+  token        String       @unique
+  enviadoEm    DateTime     @default(now()) @map("enviado_em")
   /// Preenchido quando o link chega ao cliente. Nulo = criada e nao entregue.
-  entregueEm DateTime?    @map("entregue_em")
-  respondidoEm DateTime?  @map("respondido_em")
+  entregueEm   DateTime?    @map("entregue_em")
+  respondidoEm DateTime?    @map("respondido_em")
 
   conversa Conversation @relation(fields: [conversaId], references: [id], onDelete: Cascade)
 
@@ -755,15 +763,15 @@ model Campaign {
 }
 
 model CampaignItem {
-  id          String             @id @default(uuid())
-  campanhaId  String             @map("campanha_id")
-  contatoId   String             @map("contato_id")
-  status      CampanhaItemStatus @default(PENDENTE)
+  id           String             @id @default(uuid())
+  campanhaId   String             @map("campanha_id")
+  contatoId    String             @map("contato_id")
+  status       CampanhaItemStatus @default(PENDENTE)
   /// Motivo da falha, para o operador corrigir sem abrir log.
-  erro        String?
-  conversaId  String?            @map("conversa_id")
-  enviadoEm   DateTime?          @map("enviado_em")
-  respondidoEm DateTime?         @map("respondido_em")
+  erro         String?
+  conversaId   String?            @map("conversa_id")
+  enviadoEm    DateTime?          @map("enviado_em")
+  respondidoEm DateTime?          @map("respondido_em")
 
   campanha Campaign @relation(fields: [campanhaId], references: [id], onDelete: Cascade)
   contato  Contact  @relation(fields: [contatoId], references: [id], onDelete: Cascade)
@@ -818,15 +826,15 @@ model BotStep {
 
 /// Politica de retencao de dados (LGPD). Registro unico, id "default".
 model RetentionPolicy {
-  id             String   @id @default("default")
+  id              String    @id @default("default")
   /// Expurgo automatico diario. Desligado por padrao: apagar dado de cliente
   /// e decisao do responsavel, nao efeito colateral de instalar o sistema.
-  ativa          Boolean  @default(false)
-  diasConversas  Int      @default(90) @map("dias_conversas")
-  diasProtocolos Int      @default(365) @map("dias_protocolos")
-  diasPresenca   Int      @default(365) @map("dias_presenca")
+  ativa           Boolean   @default(false)
+  diasConversas   Int       @default(90) @map("dias_conversas")
+  diasProtocolos  Int       @default(365) @map("dias_protocolos")
+  diasPresenca    Int       @default(365) @map("dias_presenca")
   ultimoExpurgoEm DateTime? @map("ultimo_expurgo_em")
-  atualizadoEm   DateTime @updatedAt @map("atualizado_em")
+  atualizadoEm    DateTime  @updatedAt @map("atualizado_em")
 
   @@map("politica_retencao")
 }
@@ -879,21 +887,21 @@ enum CallStatus {
 
 /// Credenciais do provedor de voz. Registro unico, id "default".
 model VoiceConfig {
-  id            String   @id @default("default")
-  ativo         Boolean  @default(false)
+  id              String   @id @default("default")
+  ativo           Boolean  @default(false)
   /// Identificador do driver em modules/voice (ex.: "twilio").
-  provedor      String   @default("twilio")
-  contaSid      String?  @map("conta_sid")
+  provedor        String   @default("twilio")
+  contaSid        String?  @map("conta_sid")
   /// Cifrado em repouso, como os segredos dos canais da Meta.
-  authToken     String?  @map("auth_token")
-  numeroPadrao  String?  @map("numero_padrao")
+  authToken       String?  @map("auth_token")
+  numeroPadrao    String?  @map("numero_padrao")
   /// URL publica que o provedor chama nos eventos (precisa ser HTTPS).
-  urlWebhook    String?  @map("url_webhook")
+  urlWebhook      String?  @map("url_webhook")
   /// Fila que recebe as chamadas entrantes.
-  filaId        String?  @map("fila_id")
+  filaId          String?  @map("fila_id")
   /// Baixa a gravacao para o storage proprio quando o provedor avisa que existe.
-  guardarGravacao Boolean @default(true) @map("guardar_gravacao")
-  atualizadoEm  DateTime @updatedAt @map("atualizado_em")
+  guardarGravacao Boolean  @default(true) @map("guardar_gravacao")
+  atualizadoEm    DateTime @updatedAt @map("atualizado_em")
 
   fila Queue? @relation(fields: [filaId], references: [id], onDelete: SetNull)
 
@@ -908,8 +916,8 @@ model Call {
   direcao   CallDirecao
   status    CallStatus  @default(INICIANDO)
 
-  numeroOrigem  String  @map("numero_origem")
-  numeroDestino String  @map("numero_destino")
+  numeroOrigem  String @map("numero_origem")
+  numeroDestino String @map("numero_destino")
 
   contatoId  String? @map("contato_id")
   conversaId String? @map("conversa_id")
@@ -922,11 +930,11 @@ model Call {
   /// Duracao da conversa em segundos, informada pelo provedor no encerramento.
   duracao     Int?
 
-  gravacaoUrl      String?  @map("gravacao_url")
-  gravacaoDuracao  Int?     @map("gravacao_duracao")
-  transcricao      String?
-  custo            Decimal? @db.Decimal(10, 4)
-  motivoFalha      String?  @map("motivo_falha")
+  gravacaoUrl     String?  @map("gravacao_url")
+  gravacaoDuracao Int?     @map("gravacao_duracao")
+  transcricao     String?
+  custo           Decimal? @db.Decimal(10, 4)
+  motivoFalha     String?  @map("motivo_falha")
 
   contato  Contact?      @relation(fields: [contatoId], references: [id], onDelete: SetNull)
   conversa Conversation? @relation(fields: [conversaId], references: [id], onDelete: SetNull)
@@ -937,4 +945,40 @@ model Call {
   @@index([agenteId, iniciadoEm])
   @@index([status])
   @@map("chamadas")
+}
+
+// ---------------------------------------------------------------------------
+// Fase 4 — Integracoes de maquina (motor de IA externo, ERP, automacoes)
+// ---------------------------------------------------------------------------
+
+/// Token de servico para quem chama a API sem ser usuario.
+///
+/// Nao reaproveita o JWT de usuario de proposito: token de usuario expira em
+/// minutos e carrega um perfil com permissao de tela, enquanto integracao
+/// precisa de credencial longa, revogavel uma a uma e auditavel sem confundir
+/// com gente. Guardado como hash: vazamento do banco nao entrega o token.
+model IntegrationToken {
+  id      String           @id @default(uuid())
+  nome    String
+  /// SHA-256 do token. O valor em claro e mostrado uma vez, na criacao.
+  hash    String           @unique
+  /// Primeiros caracteres, para identificar qual token esta na configuracao.
+  prefixo String
+  /// Quais rotas o token abre. Hoje so `IA`; enum para nao virar string livre.
+  escopo  EscopoIntegracao @default(IA)
+  ativo   Boolean          @default(true)
+
+  criadoEm    DateTime  @default(now()) @map("criado_em")
+  criadoPorId String?   @map("criado_por_id")
+  ultimoUsoEm DateTime? @map("ultimo_uso_em")
+  revogadoEm  DateTime? @map("revogado_em")
+
+  criadoPor User? @relation(fields: [criadoPorId], references: [id], onDelete: SetNull)
+
+  @@index([ativo])
+  @@map("tokens_integracao")
+}
+
+enum EscopoIntegracao {
+  IA
 }

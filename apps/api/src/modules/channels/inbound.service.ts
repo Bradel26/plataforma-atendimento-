@@ -4,6 +4,7 @@ import { prisma } from '../../lib/prisma';
 import { redigirTexto } from '../../lib/redacao';
 import { notificarConversaAtualizada, notificarConversaNova, notificarMensagem } from '../../realtime/hub';
 import { responderAutomaticamente } from '../bots/bots.service';
+import { entregarParaIa } from '../bots/ia.service';
 import { inclusaoDetalhe, toConversaDetalhe, toMensagem } from '../conversations/conversations.serializer';
 import type { MensagemNormalizada } from './meta.types';
 
@@ -93,8 +94,11 @@ export async function registrarMensagemEntrante(dados: MensagemNormalizada) {
   if (nova) notificarConversaNova(detalhe, destinos);
   else notificarConversaAtualizada(detalhe, destinos);
 
-  // Chatbot (Fase 4): mesmo tratamento do webchat nos canais externos.
-  await responderAutomaticamente(conversa.id, dados.conteudo);
+  // Motor de IA externo tem precedencia sobre o bot de arvore local: dois bots
+  // respondendo a mesma mensagem e pior que nenhum. Entregar nao lanca — canal
+  // com IA fora do ar cai no bot local, e a mensagem do cliente ja esta gravada.
+  const ia = await entregarParaIa(mensagem, atualizada);
+  if (!ia.entregue) await responderAutomaticamente(conversa.id, dados.conteudo);
 
   return { duplicada: false as const, conversaId: conversa.id, mensagemId: mensagem.id };
 }

@@ -11,6 +11,8 @@ import { authRoutes } from './modules/auth/auth.routes';
 import { brandingRoutes } from './modules/branding/branding.routes';
 import { contactsRoutes } from './modules/contacts/contacts.routes';
 import { botsRoutes } from './modules/bots/bots.routes';
+import { iaRoutes } from './modules/bots/ia.routes';
+import { integracoesRoutes } from './modules/integrations/tokens.routes';
 import { campanhasRoutes } from './modules/campaigns/campaigns.routes';
 import { channelsRoutes } from './modules/channels/channels.routes';
 import { webhooksRoutes } from './modules/channels/webhooks.routes';
@@ -87,7 +89,11 @@ export function createApp() {
   app.use('/api/lgpd', lgpdRoutes);
   app.use('/api/voz', vozRoutes);
   app.use('/api/campanhas', campanhasRoutes);
+  // Antes de /api/bots: aquele router aplica requireAuth em tudo, e o motor de
+  // IA autentica por token de integracao, nao por sessao de usuario.
+  app.use('/api/bots/ia', iaRoutes);
   app.use('/api/bots', botsRoutes);
+  app.use('/api/integracoes', integracoesRoutes);
 
   // O front, quando servido por este processo (ver servirFront).
   const comFront = servirFront(app);
