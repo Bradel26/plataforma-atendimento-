@@ -98,6 +98,7 @@ aspas (o Coolify engasga com os dois), já com os três ajustes de container:
 | `PORT` | `3333` | a porta que o Traefik espera |
 | `WORKER_EMBUTIDO` | `true` | um container é um processo; o worker vai junto |
 | `STATIC_DIR` | `../web/dist` | o front compilado dentro da imagem |
+| `PUBLIC_URL` | vazio | opcional: endereço público da API, para o anexo que o motor de IA externo baixa. Vazio usa `WEB_ORIGIN` |
 
 No Coolify, em **Environment Variables**, abra o **Developer view** (o modo de colar em bloco), e
 cole o arquivo inteiro.

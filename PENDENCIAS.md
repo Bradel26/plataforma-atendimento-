@@ -18,7 +18,8 @@ Legenda de responsável: **você** = depende de credencial, contrato ou decisão
 | 1.3 | ~~Trocar a senha do admin do seed~~ | **feito** | O seed recusa senha ou domínio de exemplo em produção, cria só o admin (sem os três usuários de demonstração) e não imprime a senha. |
 | 1.4 | Definir o domínio e emitir o certificado (o `WEB_ORIGIN` não pode ser localhost) | você | Sem isso o cookie de sessão e o CORS não fecham. |
 | 1.5 | **Construir e subir a imagem Docker** | você | O `Dockerfile` e o compose existem e foram revisados, mas **nunca passaram por um build** — não há Docker/WSL2 nesta máquina. É o único artefato de deploy não verificado. |
-| 1.6 | Rodar as migrations no banco de produção (`prisma migrate deploy`) | você | 10 migrations aguardando. Nunca use `--shadow-database-url` apontando para banco com dados. |
+| 1.6 | Rodar as migrations no banco de produção (`prisma migrate deploy`) | você | Nunca use `--shadow-database-url` apontando para banco com dados. |
+| 1.7 | **Redeploy da produção** | você | O que está no ar é a imagem de antes desta rodada: a produção não tem a Ficha 360, a aba de IA, o cadastro de contato nem a correção do bot. A migration `ponte_ia` roda no start do container. |
 
 ## 2. Canais: construído, nunca exercitado de verdade
 
