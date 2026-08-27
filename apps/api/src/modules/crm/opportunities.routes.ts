@@ -74,7 +74,7 @@ opportunitiesRoutes.post(
   '/',
   validateBody(criarOportunidadeSchema),
   asyncHandler(async (req, res) => {
-    res.status(201).json({ oportunidade: await criarOportunidade(req.body) });
+    res.status(201).json({ oportunidade: await criarOportunidade(req.body, req.user?.sub) });
   }),
 );
 
@@ -82,7 +82,7 @@ opportunitiesRoutes.patch(
   '/:id',
   validateBody(atualizarOportunidadeSchema),
   asyncHandler(async (req, res) => {
-    res.json({ oportunidade: await atualizarOportunidade(param(req, 'id'), req.body) });
+    res.json({ oportunidade: await atualizarOportunidade(param(req, 'id'), req.body, req.user?.sub) });
   }),
 );
 

@@ -87,7 +87,7 @@ export async function obterOportunidade(id: string) {
   return toOportunidade(o);
 }
 
-export async function criarOportunidade(input: CriarOportunidadeInput) {
+export async function criarOportunidade(input: CriarOportunidadeInput, usuarioId?: string) {
   const conta = await prisma.account.findUnique({ where: { id: input.contaId } });
   if (!conta) throw notFound('Conta nao encontrada');
 
@@ -107,16 +107,26 @@ export async function criarOportunidade(input: CriarOportunidadeInput) {
       responsavelId: input.responsavelId ?? null,
       previsaoFechamento: input.previsaoFechamento ?? null,
       itens: itens.length > 0 ? { createMany: { data: itens } } : undefined,
+      // Primeira entrada do historico: sem estagio de origem e sem tempo gasto.
+      // Sem ela, a conversao etapa a etapa perde o denominador do primeiro
+      // estagio — todo cartao teria entrado no funil "do nada".
+      historicoEstagio: { create: { paraEstagioId: estagio.id, usuarioId: usuarioId ?? null } },
     },
     include: inclusaoOportunidade,
   });
   return toOportunidade(criada);
 }
 
-export async function atualizarOportunidade(id: string, input: AtualizarOportunidadeInput) {
+export async function atualizarOportunidade(
+  id: string,
+  input: AtualizarOportunidadeInput,
+  usuarioId?: string,
+) {
   const atual = await prisma.opportunity.findUnique({ where: { id } });
   if (!atual) throw notFound('Oportunidade nao encontrada');
   if (atual.status !== 'ABERTA') throw badRequest('Oportunidade fechada nao pode ser alterada');
+
+  const mudouEstagio = Boolean(input.estagioId) && input.estagioId !== atual.estagioId;
 
   if (input.estagioId) {
     const estagio = await prisma.funnelStage.findUnique({ where: { id: input.estagioId } });
@@ -124,11 +134,39 @@ export async function atualizarOportunidade(id: string, input: AtualizarOportuni
     if (estagio.funilId !== atual.funilId) throw badRequest('Estagio nao pertence ao funil da oportunidade');
   }
 
-  const atualizada = await prisma.opportunity.update({
-    where: { id },
-    data: input,
-    include: inclusaoOportunidade,
-  });
+  if (!mudouEstagio) {
+    const atualizada = await prisma.opportunity.update({
+      where: { id },
+      data: input,
+      include: inclusaoOportunidade,
+    });
+    return toOportunidade(atualizada);
+  }
+
+  // Mudanca de estagio grava historico e reancora estagioDesde. Numa transacao
+  // porque as duas escritas sao a mesma verdade: um historico sem a nova ancora
+  // (ou o contrario) faz o tempo por etapa mentir para sempre.
+  const agora = new Date();
+  const segundos = Math.max(0, Math.round((agora.getTime() - atual.estagioDesde.getTime()) / 1000));
+
+  const [, atualizada] = await prisma.$transaction([
+    prisma.opportunityStageLog.create({
+      data: {
+        oportunidadeId: id,
+        deEstagioId: atual.estagioId,
+        paraEstagioId: input.estagioId as string,
+        usuarioId: usuarioId ?? null,
+        segundosNoEstagio: segundos,
+        criadoEm: agora,
+      },
+    }),
+    prisma.opportunity.update({
+      where: { id },
+      data: { ...input, estagioDesde: agora },
+      include: inclusaoOportunidade,
+    }),
+  ]);
+
   return toOportunidade(atualizada);
 }
 

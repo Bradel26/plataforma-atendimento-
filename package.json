@@ -33,6 +33,7 @@
     "smoke:widget": "node scripts/smoke-widget.mjs",
     "smoke:voz": "node scripts/smoke-voz.mjs",
     "smoke:metricas": "node scripts/smoke-metricas.mjs",
+    "smoke:ficha": "node scripts/smoke-ficha.mjs",
     "gerar:segredos": "node scripts/gerar-segredos.mjs",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",

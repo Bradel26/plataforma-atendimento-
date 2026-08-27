@@ -20,6 +20,24 @@ const listarSchema = z.object({
   cursor: z.string().optional(),
 });
 
+/**
+ * Cadastro manual de contato.
+ *
+ * Ate aqui o contato so nascia de uma conversa (webhook de canal ou webchat), o
+ * que faz sentido para atendimento e nao faz nenhum para CRM: o vendedor que
+ * volta de uma feira com trinta cartoes nao tem por onde comecar. Nenhum dos
+ * CRMs avaliados deixa de ter um "Novo cliente".
+ */
+const criarSchema = z.object({
+  nome: z.string().trim().min(2, 'Nome muito curto').max(120),
+  email: z.string().email().nullable().optional(),
+  telefone: z.string().trim().min(8).max(20).nullable().optional(),
+  canalOrigem: z.enum(['WEBCHAT', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'EMAIL', 'VOZ']).default('WEBCHAT'),
+  observacoes: z.string().trim().max(2000).nullable().optional(),
+  tags: z.array(z.string().trim().min(1).max(30)).max(20).default([]),
+  contaId: z.string().uuid().nullable().optional(),
+});
+
 const atualizarSchema = z
   .object({
     nome: z.string().trim().min(2).max(120).optional(),
@@ -80,6 +98,39 @@ contactsRoutes.get(
     });
 
     res.json({ contato, conversas: conversas.map(toConversaResumo) });
+  }),
+);
+
+contactsRoutes.post(
+  '/',
+  validateBody(criarSchema),
+  asyncHandler(async (req, res) => {
+    const dados = req.body as z.infer<typeof criarSchema>;
+
+    if (dados.contaId) {
+      const conta = await prisma.account.findUnique({
+        where: { id: dados.contaId },
+        select: { id: true },
+      });
+      if (!conta) throw notFound('Conta nao encontrada');
+    }
+
+    // Nao ha unique em email nem telefone (o mesmo numero pode aparecer em
+    // canais diferentes durante a importacao), entao a duplicidade e avisada e
+    // nao bloqueada — bloquear aqui travaria o cadastro legitimo de dois
+    // contatos da mesma empresa que compartilham o telefone do escritorio.
+    const duplicado = await prisma.contact.findFirst({
+      where: {
+        OR: [
+          dados.email ? { email: dados.email } : undefined,
+          dados.telefone ? { telefone: dados.telefone } : undefined,
+        ].filter(Boolean) as Prisma.ContactWhereInput[],
+      },
+      select: { id: true, nome: true },
+    });
+
+    const contato = await prisma.contact.create({ data: dados });
+    res.status(201).json({ contato, possivelDuplicado: duplicado });
   }),
 );
 

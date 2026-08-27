@@ -25,6 +25,7 @@ import { pesquisasPublicasRoutes, pesquisasRoutes } from './modules/surveys/surv
 import { catalogsRoutes, productsRoutes } from './modules/crm/catalog.routes';
 import { leadsRoutes } from './modules/crm/leads.routes';
 import { funnelsRoutes, opportunitiesRoutes } from './modules/crm/opportunities.routes';
+import { atividadesRoutes, fichaRoutes } from './modules/crm/ficha.routes';
 import { arquivosRoutes } from './modules/files/files.routes';
 import { widgetRoutes } from './modules/widget/widget.routes';
 import { lgpdRoutes } from './modules/lgpd/lgpd.routes';
@@ -72,6 +73,8 @@ export function createApp() {
   app.use('/api/funis', funnelsRoutes);
   app.use('/api/produtos', productsRoutes);
   app.use('/api/catalogos', catalogsRoutes);
+  app.use('/api/ficha', fichaRoutes);
+  app.use('/api/atividades', atividadesRoutes);
   app.use('/api/protocolos', ticketsRoutes);
   app.use('/api/dados', dadosRoutes);
   app.use('/api/canais', channelsRoutes);

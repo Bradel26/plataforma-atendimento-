@@ -8,6 +8,10 @@ import type { Prisma } from '@prisma/client';
 export const paraNumero = (valor: Prisma.Decimal | null): number | null =>
   valor === null ? null : Number(valor);
 
+/** Dias inteiros decorridos desde a data, nunca negativo. */
+const diasDesde = (data: Date) =>
+  Math.max(0, Math.floor((Date.now() - data.getTime()) / 86_400_000));
+
 export const inclusaoLead = {
   contato: { select: { id: true, nome: true, email: true, telefone: true } },
   conta: { select: { id: true, nome: true } },
@@ -71,5 +75,14 @@ export function toOportunidade(o: OportunidadeDb) {
     itens,
     /** Soma dos itens — usada para conferir com o valor informado na oportunidade. */
     totalItens: itens.reduce((acc, i) => acc + i.total, 0),
+    estagioDesde: o.estagioDesde,
+    /**
+     * Dias na etapa atual e idade total do cartao. Vao calculados aqui, e nao no
+     * front, para que os dois numeros venham do mesmo relogio: o navegador do
+     * vendedor pode estar com a hora errada, e "3 dias parado" e um numero em
+     * que alguem vai agir.
+     */
+    diasNoEstagio: diasDesde(o.estagioDesde),
+    diasAberta: diasDesde(o.criadoEm),
   };
 }
