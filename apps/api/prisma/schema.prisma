@@ -56,6 +56,9 @@ model User {
   agendamentos      TicketSchedule[]
   registrosLgpd     LgpdLog[]
   chamadas          Call[]
+  atividades        Activity[] @relation("AtividadeResponsavel")
+  atividadesCriadas Activity[] @relation("AtividadeAutor")
+  mudancasEstagio   OpportunityStageLog[]
 
   @@index([perfil])
   @@map("usuarios")
@@ -172,6 +175,7 @@ model Contact {
   protocolos     Ticket[]
   itensCampanha  CampaignItem[]
   chamadas       Call[]
+  atividades     Activity[]
 
   @@index([email])
   @@index([telefone])
@@ -282,6 +286,7 @@ model Account {
   leads         Lead[]
   oportunidades Opportunity[]
   protocolos    Ticket[]
+  atividades    Activity[]
 
   @@index([nome])
   @@map("contas")
@@ -335,6 +340,8 @@ model FunnelStage {
 
   funil         Funnel        @relation(fields: [funilId], references: [id], onDelete: Cascade)
   oportunidades Opportunity[]
+  saidas        OpportunityStageLog[] @relation("EstagioSaida")
+  entradas      OpportunityStageLog[] @relation("EstagioEntrada")
 
   @@unique([funilId, ordem])
   @@map("funil_estagios")
@@ -354,16 +361,96 @@ model Opportunity {
   criadoEm           DateTime           @default(now()) @map("criado_em")
   atualizadoEm       DateTime           @updatedAt @map("atualizado_em")
   fechadoEm          DateTime?          @map("fechado_em")
+  /// Desde quando esta no estagio atual. Denormalizado de proposito: o cartao do
+  /// kanban mostra "dias na etapa" em toda renderizacao, e derivar isso do
+  /// historico custaria uma agregacao por cartao.
+  estagioDesde       DateTime           @default(now()) @map("estagio_desde")
 
   conta       Account     @relation(fields: [contaId], references: [id], onDelete: Cascade)
   funil       Funnel      @relation(fields: [funilId], references: [id])
   estagio     FunnelStage @relation(fields: [estagioId], references: [id])
   responsavel User?       @relation(fields: [responsavelId], references: [id], onDelete: SetNull)
   itens       OpportunityItem[]
+  atividades       Activity[]
+  historicoEstagio OpportunityStageLog[]
 
   @@index([status, atualizadoEm])
   @@index([funilId, estagioId])
   @@map("oportunidades")
+}
+
+/// Tipos de atividade comercial. Sao os mesmos que os CRMs avaliados usam para
+/// medir produtividade por vendedor (ver ANALISE-CRM.md): sem tipo na atividade,
+/// o relatorio de "atividades feitas / agendadas por tipo" nao existe.
+enum TipoAtividade {
+  NOTA
+  LIGACAO
+  WHATSAPP
+  EMAIL
+  REUNIAO
+  VISITA
+  PROPOSTA
+}
+
+/// Atividade comercial: ou um registro do que aconteceu, ou uma tarefa com prazo.
+/// A diferenca e o campo `prazo` — nulo significa "so registrei", preenchido
+/// significa "tenho que fazer". Um mesmo modelo para os dois porque a linha do
+/// tempo do cliente mostra os dois lado a lado, na mesma ordem cronologica.
+model Activity {
+  id            String        @id @default(uuid())
+  tipo          TipoAtividade
+  titulo        String
+  descricao     String?
+  prazo         DateTime?
+  concluidoEm   DateTime?     @map("concluido_em")
+  responsavelId String?       @map("responsavel_id")
+  criadoPorId   String?       @map("criado_por_id")
+
+  /// Ao menos um vinculo e obrigatorio; validado na camada de servico, nao no
+  /// banco, porque Prisma nao expressa "um destes quatro nao nulo".
+  contatoId      String? @map("contato_id")
+  contaId        String? @map("conta_id")
+  oportunidadeId String? @map("oportunidade_id")
+  protocoloId    String? @map("protocolo_id")
+
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  responsavel  User?        @relation("AtividadeResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+  criadoPor    User?        @relation("AtividadeAutor", fields: [criadoPorId], references: [id], onDelete: SetNull)
+  contato      Contact?     @relation(fields: [contatoId], references: [id], onDelete: Cascade)
+  conta        Account?     @relation(fields: [contaId], references: [id], onDelete: Cascade)
+  oportunidade Opportunity? @relation(fields: [oportunidadeId], references: [id], onDelete: Cascade)
+  protocolo    Ticket?      @relation(fields: [protocoloId], references: [id], onDelete: Cascade)
+
+  @@index([contatoId, criadoEm])
+  @@index([contaId, criadoEm])
+  @@index([oportunidadeId, criadoEm])
+  @@index([responsavelId, prazo])
+  @@index([prazo])
+  @@map("atividades")
+}
+
+/// Cada passagem de estagio de uma oportunidade. Alimenta dois relatorios que
+/// hoje nao existem: conversao etapa a etapa e tempo medio por etapa.
+model OpportunityStageLog {
+  id             String @id @default(uuid())
+  oportunidadeId String @map("oportunidade_id")
+  deEstagioId    String? @map("de_estagio_id")
+  paraEstagioId  String  @map("para_estagio_id")
+  usuarioId      String? @map("usuario_id")
+  /// Quanto tempo ficou no estagio de origem. Nulo no primeiro registro.
+  segundosNoEstagio Int? @map("segundos_no_estagio")
+  criadoEm       DateTime @default(now()) @map("criado_em")
+
+  oportunidade Opportunity  @relation(fields: [oportunidadeId], references: [id], onDelete: Cascade)
+  deEstagio    FunnelStage? @relation("EstagioSaida", fields: [deEstagioId], references: [id], onDelete: SetNull)
+  paraEstagio  FunnelStage  @relation("EstagioEntrada", fields: [paraEstagioId], references: [id], onDelete: Cascade)
+  usuario      User?        @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([oportunidadeId, criadoEm])
+  @@index([paraEstagioId, criadoEm])
+  @@map("oportunidade_historico_estagio")
 }
 
 model Product {
@@ -467,6 +554,7 @@ model Ticket {
   comentarios  TicketComment[]
   anexos       TicketAttachment[]
   agendamentos TicketSchedule[]
+  atividades   Activity[]
 
   @@index([status, atualizadoEm])
   @@index([responsavelId, status])
