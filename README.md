@@ -76,7 +76,7 @@ backend na mesma origem (necessário para o cookie de refresh).
 | `npm run infra:up` / `infra:down` | containers de dados |
 | `npm run infra:reset` | derruba os containers **e apaga os volumes** |
 | `npm run smoke` | tempo real do atendimento (9 checagens) |
-| `npm run smoke:canais` | webhooks e envio da Meta (17 checagens) |
+| `npm run smoke:canais` | webhooks e envio da Meta, incluindo a resposta do bot (21 checagens) |
 | `npm run smoke:pesquisa` | entrega da pesquisa de satisfação (16 checagens) |
 | `npm run smoke:midia` | upload, URL assinada, mídia dos canais e anexo do agente (29 checagens) |
 | `npm run smoke:seguranca` | bloqueio de login, limite por IP e segredo cifrado (16 checagens) |
@@ -87,6 +87,8 @@ backend na mesma origem (necessário para o cookie de refresh).
 | `npm run smoke:voz` | assinatura, ciclo da chamada e recusa do provedor (29 checagens) |
 | `npm run smoke:metricas` | indicadores do dashboard conferidos por delta (36 checagens) |
 | `npm run smoke:worker` | volta dos trabalhos mortos para a fila (12 checagens) |
+| `npm run smoke:ficha` | linha do tempo da ficha 360: ordem, cursor, filtro e atividades (48 checagens) |
+| `npm run smoke:ia` | ponte com o motor de IA externo, com webhook de verdade (40 checagens) |
 
 ## API (Fase 0)
 
@@ -571,7 +573,7 @@ barra, e quem quer o número exato também prefere a tabela.
 
 ```bash
 npm run dev            # em outro terminal: API, web, Postgres e Redis de pé
-npm run test:e2e       # 18 testes em Chromium
+npm run test:e2e       # 33 testes em Chromium
 npm run test:e2e:ui    # modo interativo, para depurar
 ```
 

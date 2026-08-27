@@ -29,7 +29,7 @@ Legenda de responsável: **você** = depende de credencial, contrato ou decisão
 | 2.2 | Aprovar os templates de mensagem no WhatsApp | você | Campanha ativa fora da janela de 24h exige template aprovado. |
 | 2.3 | **Contratar o provedor de voz** (Twilio ou compatível) | você | O driver foi escrito a partir do contrato documentado da API e **nunca falou com conta real**. |
 | 2.4 | Anexo do agente no Instagram Direct | — | Não é possível: o canal só aceita URL, não upload. Documentado. |
-| 2.5 | **Instalar o plugin `plataforma` no whatsbot-pro** e criar o canal lá | você | Os dois lados estão prontos e testados (41 checagens aqui, 5 na tela, 126 no plugin), e o `.zip` está gerado em `whatsbot-pro-plugins/dist/`. Falta instalá-lo na sua instância e criar o canal apontando para esta API — deste lado, tudo se configura em Configurações › IA. |
+| 2.5 | **Instalar o plugin `plataforma` no whatsbot-pro** e criar o canal lá | você | Os dois lados estão prontos e testados (40 checagens aqui, 5 na tela, 126 no plugin), e o `.zip` está gerado em `whatsbot-pro-plugins/dist/`. Falta instalá-lo na sua instância e criar o canal apontando para esta API — deste lado, tudo se configura em Configurações › IA. |
 | 2.6 | Versionar o plugin em `Techify-one/whatsbot-pro-plugins` | eu, depois de você clonar | Ele está em `C:\Users\kaua.tavares\whatsbot-pro-plugins\plugins\plataforma`, fora de qualquer git — o repositório real não está nesta máquina. |
 
 ## 3. Voz: o que só existe com tronco

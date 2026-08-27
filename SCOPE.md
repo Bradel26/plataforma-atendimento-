@@ -943,7 +943,7 @@ Cinco decisões que o desenho da ponte forçou:
   era exatamente esse o defeito do bot de árvore local, cuja resposta nunca saía do painel nos
   canais externos.
 
-Verificado com `npm run smoke:ia`: 41 checagens com um webhook de verdade no lugar do whatsbot,
+Verificado com `npm run smoke:ia`: 40 checagens com um webhook de verdade no lugar do whatsbot,
 conferindo a assinatura recebida byte a byte, o `acionarIa` nos quatro estados e as três recusas com
 código próprio. Do lado do plugin, 126 testes.
 
