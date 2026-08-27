@@ -184,7 +184,23 @@ export function ContatosTab() {
       </Card>
 
       <div className="space-y-5">
-      {duplicado && <Alerta>{duplicado}</Alerta>}
+      {duplicado && (
+        /* Fechavel: o aviso fica acima da ficha e nao tem por que sobreviver ao
+           proximo clique — quem conferiu quer a tela de volta. */
+        <div className="flex items-start gap-2">
+          <div className="flex-1">
+            <Alerta>{duplicado}</Alerta>
+          </div>
+          <button
+            type="button"
+            onClick={() => setDuplicado(null)}
+            aria-label="Fechar aviso"
+            className="rounded-lg border border-slate-300 px-2.5 py-2 text-xs text-slate-600 transition hover:bg-slate-50"
+          >
+            Fechar
+          </button>
+        </div>
+      )}
       {/* `key` no id: trocar de contato remonta a ficha e zera o cursor da linha
           do tempo. Sem isso, a primeira pagina do contato novo viria depois dos
           eventos do anterior. */}

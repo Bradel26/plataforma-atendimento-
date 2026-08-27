@@ -253,8 +253,14 @@ test.describe('Ficha 360 do contato', () => {
 
     // O segundo entrou — dois contatos da mesma empresa podem dividir o telefone
     // do escritorio — mas a tela avisa para conferir.
-    await expect(page.getByText(/Ja existe "Duplicado primeiro/)).toBeVisible();
+    const aviso = page.getByText(/Ja existe "Duplicado primeiro/);
+    await expect(aviso).toBeVisible();
     await expect(page.getByRole('heading', { name: /Duplicado segundo/ })).toBeVisible();
+
+    // E o aviso fecha: ele fica acima da ficha e nao tem por que sobreviver ao
+    // proximo clique.
+    await page.getByRole('button', { name: 'Fechar aviso' }).click();
+    await expect(aviso).toHaveCount(0);
   });
 
   test('trocar de contato troca a ficha inteira', async ({ page }) => {
