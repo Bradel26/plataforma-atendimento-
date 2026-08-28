@@ -37,6 +37,8 @@
     "smoke:tenant": "node scripts/smoke-tenant.mjs",
     "censo:tenant": "node scripts/censo-tenant.mjs",
     "backup:banco": "node scripts/backup-producao.mjs",
+    "validar:producao": "node scripts/validar-producao.mjs",
+    "observar:deploy": "node scripts/observar-deploy.mjs",
     "smoke:ia": "node scripts/smoke-ia.mjs",
     "gerar:segredos": "node scripts/gerar-segredos.mjs",
     "test:e2e": "playwright test",

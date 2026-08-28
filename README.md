@@ -92,6 +92,8 @@ backend na mesma origem (necessário para o cookie de refresh).
 | `npm run smoke:tenant` | isolamento entre duas organizacoes: listagem, id direto, escrita cruzada, tempo real, arquivo, token de integracao, unicidades (47 checagens) |
 | `npm run censo:tenant` | censo de linhas por tabela, para conferir migracao (`--comparar` contra um censo salvo) |
 | `npm run backup:banco -- <arquivo .env> [destino.json]` | retrato logico do banco em JSON, antes de migration estrutural (esta maquina nao tem `pg_dump`) |
+| `npm run validar:producao -- <url> <arquivo .env> [saida.json]` | validação de produção por HTTP, somente leitura: login, permissões, contagens de 12 listagens, protocolo, arquivo, webchat, ponte de IA, Socket.IO (23 checagens) |
+| `npm run observar:deploy -- <url> <arquivo .env> [minutos]` | detecta a troca de container mantendo um Socket.IO aberto (o `health` responde 200 antes e depois) |
 
 ## API (Fase 0)
 
