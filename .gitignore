@@ -50,3 +50,6 @@ test-results/
 playwright-report/
 /blob-report/
 .playwright/
+
+# Retratos logicos do banco (dados reais — nunca versionar)
+backups/

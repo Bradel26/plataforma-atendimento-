@@ -36,6 +36,7 @@
     "smoke:ficha": "node scripts/smoke-ficha.mjs",
     "smoke:tenant": "node scripts/smoke-tenant.mjs",
     "censo:tenant": "node scripts/censo-tenant.mjs",
+    "backup:banco": "node scripts/backup-producao.mjs",
     "smoke:ia": "node scripts/smoke-ia.mjs",
     "gerar:segredos": "node scripts/gerar-segredos.mjs",
     "test:e2e": "playwright test",

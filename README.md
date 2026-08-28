@@ -70,7 +70,7 @@ backend na mesma origem (necessário para o cookie de refresh).
 | `npm run dev` | API e web em modo watch |
 | `npm run dev:api` / `npm run dev:web` | apenas um dos dois |
 | `npm run typecheck` | TypeScript nos dois apps |
-| `npm test` | suíte de unidade (68 testes, sem infraestrutura) |
+| `npm test` | suíte de unidade (124 testes, sem infraestrutura) |
 | `npm run build` | build de produção |
 | `npm run db:studio` | Prisma Studio |
 | `npm run infra:up` / `infra:down` | containers de dados |
@@ -91,6 +91,7 @@ backend na mesma origem (necessário para o cookie de refresh).
 | `npm run smoke:ia` | ponte com o motor de IA externo, com webhook de verdade (46 checagens) |
 | `npm run smoke:tenant` | isolamento entre duas organizacoes: listagem, id direto, escrita cruzada, tempo real, arquivo, token de integracao, unicidades (47 checagens) |
 | `npm run censo:tenant` | censo de linhas por tabela, para conferir migracao (`--comparar` contra um censo salvo) |
+| `npm run backup:banco -- <arquivo .env> [destino.json]` | retrato logico do banco em JSON, antes de migration estrutural (esta maquina nao tem `pg_dump`) |
 
 ## API (Fase 0)
 
