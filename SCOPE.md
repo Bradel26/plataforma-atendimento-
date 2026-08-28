@@ -197,7 +197,8 @@ omnichannel + automação + IA na mesma base. Protheus está fora de escopo nest
   **Concluído em produção: commit `df5ffc5`, implantado em 28/08/2026** (deploy manual)
 - [x] **1.2 Perfis e escopo de visibilidade** — cinco perfis (`GESTOR` e `COMERCIAL` novos),
   `gestorId` para equipe direta, `responsavelId` em contato e cliente, e sete políticas de domínio
-  sobre um contexto compartilhado. Ver decisão 51. **Ainda não implantado**
+  sobre um contexto compartilhado. Ver decisão 51 e a regra arquitetural da decisão 52.
+  **Concluído em produção: commit `fb07715`, implantado em 28/08/2026** (deploy manual)
 - [ ] 1.3 Tags centralizadas
 - [ ] 1.4 Ficha 360 completa
 - [ ] 1.5 Atividades e follow-up
@@ -1416,6 +1417,32 @@ CRM entre os usuários de produção (há um único usuário, `ADMIN`), então "
 fica coberto em desenvolvimento por `nav.test.ts` (a subrota herda os perfis do módulo),
 `rotas-crm.spec.ts` (o `AGENTE` entra por `/contatos/:id`) e `smoke:tenant` (isolamento entre
 organizações).
+
+#### Marco do 1.2 em produção
+
+Implantado em 28/08/2026, commit `fb07715`, por **Deploy manual** no Coolify — segunda confirmação de
+que a infraestrutura constrói e implanta bem, e que o defeito está apenas no gatilho do auto-deploy
+(pendência 4.12). Build de 1m45s, rolling update de 6s.
+
+| Verificação | Resultado |
+|---|---|
+| Commit implantado | Coolify reporta `fb07715a6337…`; bundle em produção `index-pjQZ9D6j.js`, **idêntico** ao que `fb07715` compila localmente |
+| CSS | `index-GKEDeTp_.css`, inalterado — o 1.2 não mexeu em estilo, e o hash confirma isso |
+| Migrations | 17 → **20**, com as três do 1.2 marcadas `ok`: `20260828190000_perfis_gestor_comercial`, `20260828191000_gestor_de_equipe`, `20260828192000_responsavel_contato_conta` |
+| Contagens | **idênticas** linha por linha ao censo tirado antes do deploy — 36 tabelas comparadas |
+| `organizacao_id` | `sem_org = 0` em todas as 24 tabelas; uma organização nos dados |
+| Login e RBAC | admin entra, `/auth/me` devolve `perfil=ADMIN`, rota interna sem token recusa com 401 |
+| Listagens | 12 listagens respondem, nenhuma 500 — o defeito `SEM_USUARIO_NO_CONTEXTO` do desenvolvimento não reapareceu |
+| Detalhe | contato, ficha, conversa com mensagens, fila, funil com 5 estágios, kanban |
+| Rotas do 1.1 | navegador contra produção, 4 casos somente leitura, verdes |
+| Validação HTTP | 31 ok, 0 falhas |
+
+Os dois valores novos no enum `Role` e as três colunas anuláveis entraram sem backfill: em produção
+todo `responsavelId` e todo `gestorId` é `NULL`, e o único usuário é ADMIN — que vê tudo. Por isso o
+deploy do 1.2 **não muda nenhuma tela hoje**. O comportamento novo passa a valer quando os primeiros
+usuários GESTOR, COMERCIAL e AGENTE existirem, e é por isso que a cobertura funcional dos cinco
+perfis vive nas suítes locais (`smoke:visibilidade`, 60 checagens) e não em massa de teste criada em
+produção.
 
 ### 51. Três camadas que não se confundem: organização, perfil e escopo
 
