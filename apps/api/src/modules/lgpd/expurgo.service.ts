@@ -1,4 +1,5 @@
 import { prisma } from '../../lib/prisma';
+import { organizacaoAtual } from '../../lib/tenant';
 import { apagarArquivosDeMensagens, apagarArquivosDeProtocolos, varrerOrfaos } from './arquivos';
 import { anonimizarTitular, obterPolitica, registrar } from './lgpd.service';
 
@@ -105,7 +106,7 @@ export async function executarExpurgo(opcoes: { simulacao: boolean; autorId?: st
   resumo.arquivosOrfaos = await varrerOrfaos(false);
 
   await prisma.retentionPolicy.update({
-    where: { id: 'default' },
+    where: { organizacaoId: organizacaoAtual() },
     data: { ultimoExpurgoEm: new Date() },
   });
   // Datas viram texto: a coluna e JSON e nao aceita Date.

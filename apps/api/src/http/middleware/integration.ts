@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 import type { EscopoIntegracao, IntegrationToken } from '@prisma/client';
 import { unauthorized } from '../../lib/errors';
+import { comOrganizacao, semOrganizacao } from '../../lib/tenant';
 import { resolverToken } from '../../modules/integrations/tokens.service';
 
 declare global {
@@ -29,12 +30,20 @@ export function requireIntegration(escopo: EscopoIntegracao) {
     }
 
     try {
-      const token = await resolverToken(header.slice('Bearer '.length).trim(), escopo);
+      // Irrestrito para achar o token: o hash e global, e e ELE que diz de qual
+      // organizacao a chamada e. Perguntar dentro de um contexto exigiria saber
+      // a organizacao antes de descobri-la.
+      const token = await semOrganizacao(
+        'token de integracao: o hash e que revela a organizacao',
+        () => resolverToken(header.slice('Bearer '.length).trim(), escopo),
+      );
       // Mensagem generica: dizer "token revogado" em vez de "token invalido"
       // confirma para quem tentou que o valor um dia foi bom.
       if (!token) return next(unauthorized('Token de integracao invalido'));
       req.integracao = token;
-      next();
+      // Daqui para frente a maquina esta presa a organizacao do proprio token:
+      // nao existe parametro de rota que a faca falar com outra.
+      comOrganizacao(token.organizacaoId, () => next());
     } catch (err) {
       next(err);
     }

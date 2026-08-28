@@ -83,8 +83,18 @@ const { dados: sessao } = await req('POST', '/webchat/sessoes', {
 const conversaId = sessao.conversa.id;
 
 const base = Date.now() - 70 * 60 * 1000;
+// O script grava direto no banco, sem passar pela API, e por isso nao tem o
+// contexto de organizacao que a extensao do Prisma usa. Aqui a organizacao vem
+// da conversa que a API acabou de criar — e nao de uma constante — para que o
+// script continue certo se o webchat mudar de organizacao padrao.
+const { organizacaoId } = await prisma.conversation.findUniqueOrThrow({
+  where: { id: conversaId },
+  select: { organizacaoId: true },
+});
+
 await prisma.message.createMany({
   data: Array.from({ length: 70 }, (_, i) => ({
+    organizacaoId,
     conversaId,
     autor: i % 2 === 0 ? 'CLIENTE' : 'AGENTE',
     conteudo: `Mensagem ${String(i + 1).padStart(3, '0')}`,

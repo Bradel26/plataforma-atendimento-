@@ -29,7 +29,15 @@ const API = 'http://localhost:3333/api';
 const APP_SECRET = 'segredo-de-teste-do-app-meta';
 const TOKEN_FALSO = 'EAAG-token-falso-para-teste-de-erro';
 const EXECUCAO = Date.now().toString(36);
-const redis = new Redis(env.REDIS_URL);
+// Mesmo prefixo que a aplicacao usa (ver lib/redis.ts): sem ele o script leria
+// `fila:atrasados` enquanto a API escreve em `dev:fila:atrasados`, e a checagem
+// falharia dizendo que a fila nao mexeu.
+// `??` e nao `||`: prefixo definido como vazio de proposito tem de ser respeitado.
+// E o padrao e 'dev' salvo em producao, porque o .env local nao declara NODE_ENV.
+const prefixoRedis = env.REDIS_PREFIXO ?? (env.NODE_ENV === 'production' ? '' : 'dev');
+const redis = new Redis(env.REDIS_URL, {
+  keyPrefix: prefixoRedis ? `${prefixoRedis}:` : undefined,
+});
 
 let falhas = 0;
 const checar = (cond, titulo, extra = '') => {

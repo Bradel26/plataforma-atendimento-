@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { ORGANIZACAO_INICIAL, comOrganizacao } from './tenant';
 import {
   assinar,
   assinaturaValida,
@@ -70,17 +71,42 @@ describe('URL assinada', () => {
 });
 
 describe('caminho no disco', () => {
+  /**
+   * `caminhoDe` passou a exigir contexto de organizacao: a chave carrega a
+   * organizacao no prefixo, e conferir o prefixo contra quem pede e o que
+   * transforma o prefixo em fronteira de verdade.
+   */
+  const naOrganizacaoInicial = <T>(fn: () => T) => comOrganizacao(ORGANIZACAO_INICIAL, fn);
+
   it('recusa chave fora do formato', () => {
-    expect(() => caminhoDe('nao-e-chave')).toThrow();
+    expect(() => naOrganizacaoInicial(() => caminhoDe('nao-e-chave'))).toThrow();
   });
 
   /** A travessia de diretorio e o ataque que este formato existe para barrar. */
   it('recusa travessia de diretorio', () => {
-    expect(() => caminhoDe('../../etc/passwd')).toThrow();
-    expect(() => caminhoDe('2026/08/../../../package.json')).toThrow();
+    expect(() => naOrganizacaoInicial(() => caminhoDe('../../etc/passwd'))).toThrow();
+    expect(() => naOrganizacaoInicial(() => caminhoDe('2026/08/../../../package.json'))).toThrow();
   });
 
-  it('resolve chave valida dentro da raiz do storage', () => {
-    expect(caminhoDe(CHAVE)).toContain('storage-teste');
+  it('resolve chave antiga, sem prefixo, para a organizacao inicial', () => {
+    expect(naOrganizacaoInicial(() => caminhoDe(CHAVE))).toContain('storage-teste');
+  });
+
+  it('recusa chave de outra organizacao', () => {
+    const outra = '11111111-1111-1111-1111-111111111111';
+    const chaveDaOutra = `${outra}/2026/08/8f14e45f-ceea-467a-9e77-fbc4d3fbe4a5.png`;
+    // A assinatura protege contra adivinhacao; o prefixo e o que impede que um
+    // link legitimo de uma empresa sirva na sessao de outra.
+    expect(() => naOrganizacaoInicial(() => caminhoDe(chaveDaOutra))).toThrow();
+    expect(comOrganizacao(outra, () => caminhoDe(chaveDaOutra))).toContain('storage-teste');
+  });
+
+  it('chave antiga nao serve para organizacao que nao a inicial', () => {
+    const outra = '11111111-1111-1111-1111-111111111111';
+    expect(() => comOrganizacao(outra, () => caminhoDe(CHAVE))).toThrow();
+  });
+
+  it('sem contexto, lanca em vez de resolver', () => {
+    expect(() => caminhoDe(CHAVE)).toThrow(/organizacao/i);
   });
 });

@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { asyncHandler } from '../../http/async-handler';
 import { env } from '../../env';
+import { organizacaoPorSlug, slugDaQuery } from '../../lib/organizacao';
+import { comOrganizacao } from '../../lib/tenant';
 import { getBranding } from '../branding/branding.service';
 
 /**
@@ -18,8 +20,12 @@ export const widgetRoutes = Router();
 
 widgetRoutes.get(
   '/widget.js',
-  asyncHandler(async (_req, res) => {
-    const branding = await getBranding();
+  asyncHandler(async (req, res) => {
+    // O script e publico e nao tem sessao. O `?org=` permite que cada empresa
+    // sirva o widget com a marca dela; sem ele, a organizacao inicial — que e o
+    // que mantem o widget instalado hoje funcionando sem mudar o site.
+    const organizacaoId = await organizacaoPorSlug(slugDaQuery(req.query.org));
+    const branding = await comOrganizacao(organizacaoId, () => getBranding());
 
     res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
     // Cache curto: trocar a cor da marca nas configuracoes precisa refletir no

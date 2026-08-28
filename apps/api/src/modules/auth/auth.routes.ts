@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { asyncHandler } from '../../http/async-handler';
+import { comOrganizacao, semOrganizacao } from '../../lib/tenant';
 import { requireAuth } from '../../http/middleware/auth';
 import { limitar } from '../../http/middleware/rate-limit';
 import { validateBody } from '../../http/middleware/validate';
@@ -27,7 +28,11 @@ authRoutes.post(
   limitar({ nome: 'login', janelaSegundos: 300, maximo: 30 }),
   validateBody(loginSchema),
   asyncHandler(async (req, res) => {
-    const { accessToken, refreshToken, usuario } = await login(req.body);
+    // Irrestrito de proposito: e o e-mail que descobre a organizacao.
+    const { accessToken, refreshToken, usuario } = await semOrganizacao(
+      'login: resolve o usuario pelo e-mail antes de saber a organizacao',
+      () => login(req.body),
+    );
     res.cookie(REFRESH_COOKIE, refreshToken, refreshCookieOptions);
     res.json({ accessToken, usuario });
   }),
@@ -37,8 +42,12 @@ authRoutes.post(
   '/refresh',
   limitar({ nome: 'refresh', janelaSegundos: 300, maximo: 120 }),
   asyncHandler(async (req, res) => {
-    const userId = await consumeRefreshToken(req.cookies?.[REFRESH_COOKIE]);
-    const { accessToken, refreshToken, usuario } = await sessionForUserId(userId);
+    const { userId, organizacaoId } = await consumeRefreshToken(req.cookies?.[REFRESH_COOKIE]);
+    // A organizacao vem do refresh guardado no Redis, nao do corpo nem de header:
+    // renovar sessao nao pode ser um jeito de trocar de organizacao.
+    const { accessToken, refreshToken, usuario } = await comOrganizacao(organizacaoId, () =>
+      sessionForUserId(userId),
+    );
     res.cookie(REFRESH_COOKIE, refreshToken, refreshCookieOptions);
     res.json({ accessToken, usuario });
   }),

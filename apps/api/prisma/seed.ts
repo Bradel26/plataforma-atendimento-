@@ -1,8 +1,13 @@
-import { PrismaClient, type Role } from '@prisma/client';
+import { type Role } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import 'dotenv/config';
+import { prisma, prismaSemIsolamento } from '../src/lib/prisma';
+import { ORGANIZACAO_INICIAL, comOrganizacao } from '../src/lib/tenant';
 
-const prisma = new PrismaClient();
+// O seed usa o cliente COM isolamento e roda dentro do contexto da organizacao
+// inicial. Usar um cliente cru aqui gravaria linhas com organizacao vazia, e o
+// CHECK do banco recusaria — o que e o comportamento certo, mas o lugar errado
+// de descobrir.
 
 const PRODUCAO = process.env.NODE_ENV === 'production';
 
@@ -147,7 +152,22 @@ async function semearCrm() {
   console.log(`  funil: ${funil.nome} (${estagios.length} estagios) | catalogo: ${catalogo.nome}`);
 }
 
-main()
+/**
+ * O seed inteiro roda na organizacao inicial.
+ *
+ * Garantir que ela exista aqui, e nao so na migration, deixa o seed funcionar
+ * num banco criado do zero com `migrate deploy` — que e o caminho de producao.
+ */
+async function comOrganizacaoInicial() {
+  await prismaSemIsolamento.organizacao.upsert({
+    where: { id: ORGANIZACAO_INICIAL },
+    update: {},
+    create: { id: ORGANIZACAO_INICIAL, nome: 'Bradel', slug: 'bradel' },
+  });
+  return comOrganizacao(ORGANIZACAO_INICIAL, () => main());
+}
+
+comOrganizacaoInicial()
   .catch((err) => {
     console.error(err);
     process.exit(1);

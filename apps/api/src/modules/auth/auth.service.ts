@@ -55,8 +55,9 @@ async function buildSession(user: Awaited<ReturnType<typeof prisma.user.findUniq
     nome: user.nome,
     email: user.email,
     perfil: user.perfil,
+    org: user.organizacaoId,
   });
-  const refreshToken = await issueRefreshToken(user.id);
+  const refreshToken = await issueRefreshToken(user.id, user.organizacaoId);
   return { accessToken, refreshToken, usuario: toPublicUser(user) };
 }
 

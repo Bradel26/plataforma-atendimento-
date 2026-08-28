@@ -1,5 +1,6 @@
 import { prisma } from '../../lib/prisma';
 import { badRequest, notFound } from '../../lib/errors';
+import { organizacaoAtual } from '../../lib/tenant';
 import { signWebchatToken } from '../../lib/tokens';
 import { notificarConversaAtualizada, notificarConversaNova, notificarMensagem } from '../../realtime/hub';
 import { responderAutomaticamente } from '../bots/bots.service';
@@ -84,7 +85,13 @@ export async function iniciarSessao(input: IniciarInput) {
   notificarConversaNova(detalhe, { filaId: fila.id, conversaId: conversa.id });
 
   return {
-    sessaoToken: signWebchatToken({ conversaId: conversa.id, contatoId: contato.id }),
+    sessaoToken: signWebchatToken({
+      conversaId: conversa.id,
+      contatoId: contato.id,
+      // A organizacao entra no token do visitante para que cada mensagem
+      // seguinte dele reabra o contexto certo sem consultar o banco.
+      org: organizacaoAtual(),
+    }),
     conversa: detalhe,
   };
 }

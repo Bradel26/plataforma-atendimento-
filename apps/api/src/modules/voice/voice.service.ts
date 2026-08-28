@@ -5,6 +5,7 @@ import { cifrar, decifrar } from '../../lib/crypto-box';
 import { enfileirar } from '../../lib/fila';
 import { apos, decodificarCursor, fatiar } from '../../lib/paginacao';
 import { urlAssinada } from '../../lib/storage';
+import { organizacaoAtual } from '../../lib/tenant';
 import { notificarChamada } from '../../realtime/hub';
 import type { Credenciais, EventoChamada, Provedor } from './voice.provider';
 import { twilio } from './twilio.provider';
@@ -20,8 +21,7 @@ const FINAIS: CallStatus[] = ['COMPLETADA', 'NAO_ATENDIDA', 'OCUPADA', 'FALHOU',
 
 export async function obterConfig() {
   const config =
-    (await prisma.voiceConfig.findUnique({ where: { id: 'default' } })) ??
-    (await prisma.voiceConfig.create({ data: { id: 'default' } }));
+    (await prisma.voiceConfig.findFirst()) ?? (await prisma.voiceConfig.create({ data: {} }));
 
   // Segredo cifrado em repouso, como os canais da Meta.
   return { ...config, authToken: config.authToken ? decifrar(config.authToken) : null };
@@ -73,7 +73,7 @@ export async function salvarConfig(input: {
   }
 
   const dados = { ...input, ...(input.authToken ? { authToken: cifrar(input.authToken) } : {}) };
-  await prisma.voiceConfig.update({ where: { id: 'default' }, data: dados });
+  await prisma.voiceConfig.update({ where: { organizacaoId: organizacaoAtual() }, data: dados });
   return configPublica();
 }
 

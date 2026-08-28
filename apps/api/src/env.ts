@@ -6,6 +6,24 @@ const schema = z.object({
   PORT: z.coerce.number().int().positive().default(3333),
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().min(1),
+  /**
+   * Prefixo de TODA chave no Redis. Separa instalacoes que dividem o mesmo
+   * servidor.
+   *
+   * Existe por causa de um defeito encontrado ao verificar a fila: o
+   * `.env.production` gerado aponta para o mesmo Upstash do ambiente de
+   * desenvolvimento, e a fila de trabalho e uma lista unica (`fila:prontos`).
+   * O resultado e que o worker de producao consumia trabalho criado aqui,
+   * achava o registro inexistente no banco dele e voltava em silencio — o
+   * disparo de campanha ficava PENDENTE para sempre, sem erro em lugar nenhum.
+   *
+   * Prefixar por organizacao nao resolveria: o id da organizacao inicial e fixo
+   * e igual nos dois bancos. A separacao tem de ser por instalacao.
+   *
+   * Em desenvolvimento o padrao e `dev`. Em producao fica vazio de proposito,
+   * para nao abandonar trabalho ja enfileirado no deploy desta versao.
+   */
+  REDIS_PREFIXO: z.string().default(''),
   JWT_ACCESS_SECRET: z.string().min(16, 'JWT_ACCESS_SECRET precisa de pelo menos 16 caracteres'),
   JWT_REFRESH_SECRET: z.string().min(16, 'JWT_REFRESH_SECRET precisa de pelo menos 16 caracteres'),
   JWT_ACCESS_TTL: z.string().default('15m'),

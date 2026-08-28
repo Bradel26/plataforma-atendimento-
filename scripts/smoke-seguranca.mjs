@@ -37,7 +37,15 @@ const checar = (cond, titulo, extra = '') => {
   console.log(`${cond ? 'ok    ' : 'FALHOU'} ${titulo}${extra ? ` — ${extra}` : ''}`);
 };
 
-const redis = new Redis(env.REDIS_URL);
+// Mesmo prefixo que a aplicacao usa (ver lib/redis.ts): sem ele o script leria
+// `fila:atrasados` enquanto a API escreve em `dev:fila:atrasados`, e a checagem
+// falharia dizendo que a fila nao mexeu.
+// `??` e nao `||`: prefixo definido como vazio de proposito tem de ser respeitado.
+// E o padrao e 'dev' salvo em producao, porque o .env local nao declara NODE_ENV.
+const prefixoRedis = env.REDIS_PREFIXO ?? (env.NODE_ENV === 'production' ? '' : 'dev');
+const redis = new Redis(env.REDIS_URL, {
+  keyPrefix: prefixoRedis ? `${prefixoRedis}:` : undefined,
+});
 const limparLimites = async () => {
   const chaves = [...(await redis.keys('limite:*')), ...(await redis.keys('login:falhas:*'))];
   if (chaves.length) await redis.del(chaves);

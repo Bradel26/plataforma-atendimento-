@@ -3,6 +3,7 @@ import { mkdir, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 import { env } from '../env';
 import { badRequest, notFound } from './errors';
+import { ORGANIZACAO_INICIAL, organizacaoAtual } from './tenant';
 
 /**
  * Armazenamento de arquivos enviados (anexos de protocolo e midia recebida dos
@@ -50,7 +51,22 @@ export const podeExibirInline = (tipo: string) => EXIBIVEIS.some((p) => tipo.sta
 export const limiteBytes = env.UPLOAD_MAX_MB * 1024 * 1024;
 
 /** `2026/08/<uuid>.<ext>` — barra normal ate no Windows, e parte da URL. */
-const CHAVE_VALIDA = /^\d{4}\/\d{2}\/[0-9a-f-]{36}\.[a-z0-9]{1,5}$/;
+/**
+ * Chave de arquivo: `<organizacao>/<ano>/<mes>/<uuid>.<ext>`.
+ *
+ * O prefixo da organizacao e o que da fronteira ao armazenamento. A assinatura
+ * do link protege contra adivinhacao, mas nao pertence a ninguem: com o caminho
+ * antigo, um link valido servia venha de onde viesse.
+ *
+ * O formato antigo (sem prefixo) continua aceito para leitura: os arquivos que
+ * ja estao no disco pertencem a organizacao inicial, e recusa-los seria perder
+ * anexo de conversa que existe hoje.
+ */
+const CHAVE_VALIDA = /^[0-9a-f-]{36}\/\d{4}\/\d{2}\/[0-9a-f-]{36}\.[a-z0-9]{1,5}$/;
+const CHAVE_ANTIGA = /^\d{4}\/\d{2}\/[0-9a-f-]{36}\.[a-z0-9]{1,5}$/;
+
+/** Aceita a chave nova e a de antes do isolamento. */
+const chaveValida = (chave: string) => CHAVE_VALIDA.test(chave) || CHAVE_ANTIGA.test(chave);
 
 const raiz = () => resolve(process.cwd(), env.STORAGE_DIR);
 
@@ -73,7 +89,7 @@ export async function salvar(entrada: { buffer: Buffer; nome: string; tipo: stri
   }
 
   const agora = new Date();
-  const pasta = `${agora.getFullYear()}/${String(agora.getMonth() + 1).padStart(2, '0')}`;
+  const pasta = `${organizacaoAtual()}/${agora.getFullYear()}/${String(agora.getMonth() + 1).padStart(2, '0')}`;
   const chave = `${pasta}/${randomUUID()}.${EXTENSAO[tipo]}`;
   const destino = join(raiz(), ...chave.split('/'));
 
@@ -97,7 +113,18 @@ export async function salvar(entrada: { buffer: Buffer; nome: string; tipo: stri
  * qualquer arquivo do servidor.
  */
 export function caminhoDe(chave: string) {
-  if (!CHAVE_VALIDA.test(chave)) throw notFound('Arquivo nao encontrado');
+  if (!chaveValida(chave)) throw notFound('Arquivo nao encontrado');
+  // A organizacao do caminho tem de ser a de quem pede. Sem esta linha, o
+  // prefixo seria organizacao no nome e nada na pratica: a assinatura sozinha
+  // liberaria o arquivo para qualquer sessao.
+  const prefixo = chave.split('/')[0]!;
+  if (CHAVE_VALIDA.test(chave) && prefixo !== organizacaoAtual()) {
+    throw notFound('Arquivo nao encontrado');
+  }
+  // Chave antiga pertence a organizacao inicial — e so ela pode ler.
+  if (CHAVE_ANTIGA.test(chave) && organizacaoAtual() !== ORGANIZACAO_INICIAL) {
+    throw notFound('Arquivo nao encontrado');
+  }
   const destino = resolve(raiz(), ...chave.split('/'));
   if (!destino.startsWith(raiz() + sep)) throw notFound('Arquivo nao encontrado');
   return destino;
@@ -139,7 +166,7 @@ const hmac = (chave: string, expira: number) =>
 /** URL pronta para o navegador: caminho + assinatura. */
 export const urlAssinada = (url: string) => {
   const chave = url.replace(/^\/api\/arquivos\//, '');
-  return CHAVE_VALIDA.test(chave) ? `${url}?t=${assinar(chave)}` : url;
+  return chaveValida(chave) ? `${url}?t=${assinar(chave)}` : url;
 };
 
 /**

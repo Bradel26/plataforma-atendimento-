@@ -16,6 +16,52 @@ datasource db {
 }
 
 /// Perfis de acesso (Fase 0 do escopo).
+/// Organizacao: a empresa que USA a plataforma.
+///
+/// Nao confundir com `Account`, que e a empresa CLIENTE de quem usa: uma
+/// organizacao tem muitas contas. O nome em portugues e proposital — o resto do
+/// schema esta em portugues, e "tenant" nao aparece em nenhuma tela.
+///
+/// O isolamento nao depende de ninguem lembrar de filtrar: a extensao do Prisma
+/// injeta `organizacaoId` em toda operacao das tabelas que tem a coluna, e a
+/// ausencia de contexto lanca erro em vez de virar consulta sem filtro.
+model Organizacao {
+  id    String  @id @default(uuid())
+  nome  String
+  /// Identificador estavel e legivel. Reservado para subdominio no futuro.
+  slug  String  @unique
+  ativa Boolean @default(true)
+
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  usuarios         User[]
+  tokensIntegracao IntegrationToken[]
+  contatos         Contact[]
+  conversas        Conversation[]
+  filas            Queue[]
+  canais           ChannelConfig[]
+  contas           Account[]
+  leads            Lead[]
+  funis            Funnel[]
+  oportunidades    Opportunity[]
+  produtos         Product[]
+  catalogos        PriceCatalog[]
+  protocolos       Ticket[]
+  campanhas        Campaign[]
+  bots             Bot[]
+  escalas          WorkShift[]
+  branding         Branding?
+  politicaRetencao RetentionPolicy?
+  vozConfig        VoiceConfig?
+  mensagens        Message[]
+  chamadas         Call[]
+  pesquisas        Survey[]
+  registrosLgpd    LgpdLog[]
+
+  @@map("organizacoes")
+}
+
 enum Role {
   ADMIN
   SUPERVISOR
@@ -31,16 +77,17 @@ enum AgentStatus {
 }
 
 model User {
-  id           String      @id @default(uuid())
-  nome         String
-  email        String      @unique
-  senhaHash    String      @map("senha_hash")
-  perfil       Role        @default(AGENTE)
-  status       AgentStatus @default(OFFLINE)
-  ativo        Boolean     @default(true)
-  ultimoLogin  DateTime?   @map("ultimo_login")
-  criadoEm     DateTime    @default(now()) @map("criado_em")
-  atualizadoEm DateTime    @updatedAt @map("atualizado_em")
+  id            String      @id @default(uuid())
+  organizacaoId String      @default("") @map("organizacao_id")
+  nome          String
+  email         String      @unique
+  senhaHash     String      @map("senha_hash")
+  perfil        Role        @default(AGENTE)
+  status        AgentStatus @default(OFFLINE)
+  ativo         Boolean     @default(true)
+  ultimoLogin   DateTime?   @map("ultimo_login")
+  criadoEm      DateTime    @default(now()) @map("criado_em")
+  atualizadoEm  DateTime    @updatedAt @map("atualizado_em")
 
   filas             QueueAgent[]
   conversas         Conversation[]
@@ -60,8 +107,9 @@ model User {
   atividadesCriadas Activity[]            @relation("AtividadeAutor")
   mudancasEstagio   OpportunityStageLog[]
   tokensIntegracao  IntegrationToken[]
+  organizacao       Organizacao           @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
-  @@index([perfil])
+  @@index([organizacaoId, perfil])
   @@map("usuarios")
 }
 
@@ -76,23 +124,26 @@ enum Channel {
 }
 
 model Queue {
-  id           String   @id @default(uuid())
-  nome         String   @unique
-  descricao    String?
-  canalPadrao  Channel  @default(WEBCHAT) @map("canal_padrao")
-  ativa        Boolean  @default(true)
-  criadoEm     DateTime @default(now()) @map("criado_em")
-  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+  id            String   @id @default(uuid())
+  organizacaoId String   @default("") @map("organizacao_id")
+  nome          String   @unique
+  descricao     String?
+  canalPadrao   Channel  @default(WEBCHAT) @map("canal_padrao")
+  ativa         Boolean  @default(true)
+  criadoEm      DateTime @default(now()) @map("criado_em")
+  atualizadoEm  DateTime @updatedAt @map("atualizado_em")
 
-  agentes    QueueAgent[]
-  conversas  Conversation[]
-  protocolos Ticket[]
-  canais     ChannelConfig[]
-  campanhas  Campaign[]
-  botPassos  BotStep[]
-  chamadas   Call[]
-  vozConfig  VoiceConfig[]
+  agentes     QueueAgent[]
+  conversas   Conversation[]
+  protocolos  Ticket[]
+  canais      ChannelConfig[]
+  campanhas   Campaign[]
+  botPassos   BotStep[]
+  chamadas    Call[]
+  vozConfig   VoiceConfig[]
+  organizacao Organizacao     @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
+  @@index([organizacaoId])
   @@map("filas")
 }
 
@@ -113,13 +164,15 @@ model QueueAgent {
 
 /// White Label — registro unico (id fixo "default") com a identidade visual da instancia.
 model Branding {
-  id            String   @id @default("default")
-  appName       String   @default("Plataforma de Atendimento") @map("app_name")
-  logoUrl       String?  @map("logo_url")
-  corPrimaria   String   @default("#2563eb") @map("cor_primaria")
-  corSecundaria String   @default("#0f172a") @map("cor_secundaria")
-  corDestaque   String   @default("#16a34a") @map("cor_destaque")
-  atualizadoEm  DateTime @updatedAt @map("atualizado_em")
+  id            String      @id @default(uuid())
+  organizacaoId String      @unique @default("") @map("organizacao_id")
+  appName       String      @default("Plataforma de Atendimento") @map("app_name")
+  logoUrl       String?     @map("logo_url")
+  corPrimaria   String      @default("#2563eb") @map("cor_primaria")
+  corSecundaria String      @default("#0f172a") @map("cor_secundaria")
+  corDestaque   String      @default("#16a34a") @map("cor_destaque")
+  atualizadoEm  DateTime    @updatedAt @map("atualizado_em")
+  organizacao   Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
   @@map("branding")
 }
@@ -155,6 +208,7 @@ enum AttachmentType {
 /// Contato/cliente final. Base do CRM (expandido na Fase 2 com Conta, Lead e Oportunidade).
 model Contact {
   id              String    @id @default(uuid())
+  organizacaoId   String    @default("") @map("organizacao_id")
   nome            String
   telefone        String?
   email           String?
@@ -177,20 +231,22 @@ model Contact {
   itensCampanha CampaignItem[]
   chamadas      Call[]
   atividades    Activity[]
+  organizacao   Organizacao    @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
-  @@index([email])
-  @@index([telefone])
+  @@index([organizacaoId, email])
+  @@index([organizacaoId, telefone])
   @@map("contatos")
 }
 
 model Conversation {
-  id        String             @id @default(uuid())
-  canal     Channel            @default(WEBCHAT)
-  status    ConversationStatus @default(EM_ESPERA)
-  contatoId String             @map("contato_id")
-  filaId    String?            @map("fila_id")
-  agenteId  String?            @map("agente_id")
-  assunto   String?
+  id            String             @id @default(uuid())
+  organizacaoId String             @default("") @map("organizacao_id")
+  canal         Channel            @default(WEBCHAT)
+  status        ConversationStatus @default(EM_ESPERA)
+  contatoId     String             @map("contato_id")
+  filaId        String?            @map("fila_id")
+  agenteId      String?            @map("agente_id")
+  assunto       String?
 
   criadoEm         DateTime  @default(now()) @map("criado_em")
   atribuidoEm      DateTime? @map("atribuido_em")
@@ -200,37 +256,40 @@ model Conversation {
   /// Identificador do interlocutor no canal externo (wa_id, PSID, IGSID).
   enderecoExterno  String?   @map("endereco_externo")
 
-  contato    Contact   @relation(fields: [contatoId], references: [id], onDelete: Cascade)
-  fila       Queue?    @relation(fields: [filaId], references: [id], onDelete: SetNull)
-  agente     User?     @relation(fields: [agenteId], references: [id], onDelete: SetNull)
-  mensagens  Message[]
-  protocolos Ticket[]
-  pesquisa   Survey?
-  chamadas   Call[]
+  contato     Contact     @relation(fields: [contatoId], references: [id], onDelete: Cascade)
+  fila        Queue?      @relation(fields: [filaId], references: [id], onDelete: SetNull)
+  agente      User?       @relation(fields: [agenteId], references: [id], onDelete: SetNull)
+  mensagens   Message[]
+  protocolos  Ticket[]
+  pesquisa    Survey?
+  chamadas    Call[]
+  organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
-  @@index([status, ultimaMensagemEm])
-  @@index([agenteId, status])
-  @@index([filaId, status])
+  @@index([organizacaoId, status, ultimaMensagemEm])
+  @@index([organizacaoId, agenteId, status])
+  @@index([organizacaoId, filaId, status])
   @@map("conversas")
 }
 
 model Message {
-  id         String         @id @default(uuid())
-  conversaId String         @map("conversa_id")
-  autor      MessageAuthor
+  id            String         @id @default(uuid())
+  organizacaoId String         @default("") @map("organizacao_id")
+  conversaId    String         @map("conversa_id")
+  autor         MessageAuthor
   /// Preenchido quando autor = AGENTE.
-  autorId    String?        @map("autor_id")
-  conteudo   String
-  tipoAnexo  AttachmentType @default(TEXTO) @map("tipo_anexo")
-  anexoUrl   String?        @map("anexo_url")
+  autorId       String?        @map("autor_id")
+  conteudo      String
+  tipoAnexo     AttachmentType @default(TEXTO) @map("tipo_anexo")
+  anexoUrl      String?        @map("anexo_url")
   /// Id da mensagem no provedor externo. Unico: o webhook da Meta reentrega.
-  idExterno  String?        @unique @map("id_externo")
-  criadoEm   DateTime       @default(now()) @map("criado_em")
+  idExterno     String?        @unique @map("id_externo")
+  criadoEm      DateTime       @default(now()) @map("criado_em")
 
   conversa     Conversation @relation(fields: [conversaId], references: [id], onDelete: Cascade)
   autorUsuario User?        @relation(fields: [autorId], references: [id], onDelete: SetNull)
+  organizacao  Organizacao  @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
-  @@index([conversaId, criadoEm])
+  @@index([organizacaoId, conversaId, criadoEm])
   @@map("mensagens")
 }
 
@@ -272,29 +331,32 @@ enum OportunidadeStatus {
 
 /// Conta/Empresa: agrupa contatos e oportunidades.
 model Account {
-  id           String   @id @default(uuid())
-  nome         String
-  cnpj         String?  @unique
-  segmento     String?
-  site         String?
-  telefone     String?
-  email        String?
-  observacoes  String?
-  criadoEm     DateTime @default(now()) @map("criado_em")
-  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+  id            String   @id @default(uuid())
+  organizacaoId String   @default("") @map("organizacao_id")
+  nome          String
+  cnpj          String?  @unique
+  segmento      String?
+  site          String?
+  telefone      String?
+  email         String?
+  observacoes   String?
+  criadoEm      DateTime @default(now()) @map("criado_em")
+  atualizadoEm  DateTime @updatedAt @map("atualizado_em")
 
   contatos      Contact[]
   leads         Lead[]
   oportunidades Opportunity[]
   protocolos    Ticket[]
   atividades    Activity[]
+  organizacao   Organizacao   @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
-  @@index([nome])
+  @@index([organizacaoId, nome])
   @@map("contas")
 }
 
 model Lead {
   id            String       @id @default(uuid())
+  organizacaoId String       @default("") @map("organizacao_id")
   contatoId     String       @map("contato_id")
   contaId       String?      @map("conta_id")
   fase          LeadFase     @default(NOVO)
@@ -309,25 +371,29 @@ model Lead {
   atualizadoEm  DateTime     @updatedAt @map("atualizado_em")
   fechadoEm     DateTime?    @map("fechado_em")
 
-  contato     Contact  @relation(fields: [contatoId], references: [id], onDelete: Cascade)
-  conta       Account? @relation(fields: [contaId], references: [id], onDelete: SetNull)
-  responsavel User?    @relation(fields: [responsavelId], references: [id], onDelete: SetNull)
+  contato     Contact     @relation(fields: [contatoId], references: [id], onDelete: Cascade)
+  conta       Account?    @relation(fields: [contaId], references: [id], onDelete: SetNull)
+  responsavel User?       @relation(fields: [responsavelId], references: [id], onDelete: SetNull)
+  organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
-  @@index([fase, atualizadoEm])
-  @@index([responsavelId, fase])
+  @@index([organizacaoId, fase, atualizadoEm])
+  @@index([organizacaoId, responsavelId, fase])
   @@map("leads")
 }
 
 /// Funil customizavel de oportunidades.
 model Funnel {
-  id       String   @id @default(uuid())
-  nome     String   @unique
-  ativo    Boolean  @default(true)
-  criadoEm DateTime @default(now()) @map("criado_em")
+  id            String   @id @default(uuid())
+  organizacaoId String   @default("") @map("organizacao_id")
+  nome          String   @unique
+  ativo         Boolean  @default(true)
+  criadoEm      DateTime @default(now()) @map("criado_em")
 
   estagios      FunnelStage[]
   oportunidades Opportunity[]
+  organizacao   Organizacao   @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
+  @@index([organizacaoId])
   @@map("funis")
 }
 
@@ -350,6 +416,7 @@ model FunnelStage {
 
 model Opportunity {
   id                 String             @id @default(uuid())
+  organizacaoId      String             @default("") @map("organizacao_id")
   titulo             String
   contaId            String             @map("conta_id")
   funilId            String             @map("funil_id")
@@ -374,9 +441,10 @@ model Opportunity {
   itens            OpportunityItem[]
   atividades       Activity[]
   historicoEstagio OpportunityStageLog[]
+  organizacao      Organizacao           @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
-  @@index([status, atualizadoEm])
-  @@index([funilId, estagioId])
+  @@index([organizacaoId, status, atualizadoEm])
+  @@index([organizacaoId, funilId, estagioId])
   @@map("oportunidades")
 }
 
@@ -455,29 +523,35 @@ model OpportunityStageLog {
 }
 
 model Product {
-  id        String   @id @default(uuid())
-  nome      String
-  sku       String   @unique
-  descricao String?
-  ativo     Boolean  @default(true)
-  criadoEm  DateTime @default(now()) @map("criado_em")
+  id            String   @id @default(uuid())
+  organizacaoId String   @default("") @map("organizacao_id")
+  nome          String
+  sku           String   @unique
+  descricao     String?
+  ativo         Boolean  @default(true)
+  criadoEm      DateTime @default(now()) @map("criado_em")
 
   itensCatalogo     CatalogItem[]
   itensOportunidade OpportunityItem[]
+  organizacao       Organizacao       @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
+  @@index([organizacaoId])
   @@map("produtos")
 }
 
 /// Catalogo de precos: mesmo produto pode ter preco diferente por catalogo.
 model PriceCatalog {
-  id       String   @id @default(uuid())
-  nome     String   @unique
-  moeda    String   @default("BRL")
-  ativo    Boolean  @default(true)
-  criadoEm DateTime @default(now()) @map("criado_em")
+  id            String   @id @default(uuid())
+  organizacaoId String   @default("") @map("organizacao_id")
+  nome          String   @unique
+  moeda         String   @default("BRL")
+  ativo         Boolean  @default(true)
+  criadoEm      DateTime @default(now()) @map("criado_em")
 
-  itens CatalogItem[]
+  itens       CatalogItem[]
+  organizacao Organizacao   @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
+  @@index([organizacaoId])
   @@map("catalogos_preco")
 }
 
@@ -531,6 +605,7 @@ model Ticket {
   /// Numero sequencial legivel, usado na comunicacao com o cliente.
   numero        Int              @unique @default(autoincrement())
   id            String           @id @default(uuid())
+  organizacaoId String           @default("") @map("organizacao_id")
   titulo        String
   descricao     String
   status        TicketStatus     @default(ABERTO)
@@ -556,9 +631,10 @@ model Ticket {
   anexos       TicketAttachment[]
   agendamentos TicketSchedule[]
   atividades   Activity[]
+  organizacao  Organizacao        @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
-  @@index([status, atualizadoEm])
-  @@index([responsavelId, status])
+  @@index([organizacaoId, status, atualizadoEm])
+  @@index([organizacaoId, responsavelId, status])
   @@map("protocolos")
 }
 
@@ -619,9 +695,10 @@ model TicketSchedule {
 
 /// Credenciais e destino de fila por canal externo. Um registro por canal.
 model ChannelConfig {
-  id    String  @id @default(uuid())
-  canal Channel @unique
-  ativo Boolean @default(false)
+  id            String  @id @default(uuid())
+  organizacaoId String  @default("") @map("organizacao_id")
+  canal         Channel @unique
+  ativo         Boolean @default(false)
 
   /// WhatsApp Cloud API
   phoneNumberId String? @map("phone_number_id")
@@ -649,8 +726,10 @@ model ChannelConfig {
 
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
-  fila Queue? @relation(fields: [filaId], references: [id], onDelete: SetNull)
+  fila        Queue?      @relation(fields: [filaId], references: [id], onDelete: SetNull)
+  organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
+  @@index([organizacaoId])
   @@map("canais_config")
 }
 
@@ -665,40 +744,45 @@ enum TipoPesquisa {
 
 /// Pesquisa de satisfacao disparada ao finalizar o atendimento.
 model Survey {
-  id           String       @id @default(uuid())
-  conversaId   String       @unique @map("conversa_id")
-  tipo         TipoPesquisa @default(CSAT)
+  id            String       @id @default(uuid())
+  organizacaoId String       @default("") @map("organizacao_id")
+  conversaId    String       @unique @map("conversa_id")
+  tipo          TipoPesquisa @default(CSAT)
   /// CSAT: 1 a 5. NPS: 0 a 10.
-  nota         Int?
-  comentario   String?
+  nota          Int?
+  comentario    String?
   /// Token opaco usado no link enviado ao cliente.
-  token        String       @unique
-  enviadoEm    DateTime     @default(now()) @map("enviado_em")
+  token         String       @unique
+  enviadoEm     DateTime     @default(now()) @map("enviado_em")
   /// Preenchido quando o link chega ao cliente. Nulo = criada e nao entregue.
-  entregueEm   DateTime?    @map("entregue_em")
-  respondidoEm DateTime?    @map("respondido_em")
+  entregueEm    DateTime?    @map("entregue_em")
+  respondidoEm  DateTime?    @map("respondido_em")
 
-  conversa Conversation @relation(fields: [conversaId], references: [id], onDelete: Cascade)
+  conversa    Conversation @relation(fields: [conversaId], references: [id], onDelete: Cascade)
+  organizacao Organizacao  @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
-  @@index([respondidoEm])
+  @@index([organizacaoId, respondidoEm])
   @@map("pesquisas")
 }
 
 /// Escala de trabalho do agente: um registro por dia da semana.
 model WorkShift {
-  id        String   @id @default(uuid())
-  agenteId  String   @map("agente_id")
+  id            String   @id @default(uuid())
+  organizacaoId String   @default("") @map("organizacao_id")
+  agenteId      String   @map("agente_id")
   /// 0 = domingo ... 6 = sabado
-  diaSemana Int      @map("dia_semana")
+  diaSemana     Int      @map("dia_semana")
   /// "HH:MM" no fuso da operacao.
-  inicio    String
-  fim       String
-  ativo     Boolean  @default(true)
-  criadoEm  DateTime @default(now()) @map("criado_em")
+  inicio        String
+  fim           String
+  ativo         Boolean  @default(true)
+  criadoEm      DateTime @default(now()) @map("criado_em")
 
-  agente User @relation(fields: [agenteId], references: [id], onDelete: Cascade)
+  agente      User        @relation(fields: [agenteId], references: [id], onDelete: Cascade)
+  organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
   @@unique([agenteId, diaSemana])
+  @@index([organizacaoId])
   @@map("escalas")
 }
 
@@ -740,25 +824,27 @@ enum CampanhaItemStatus {
 
 /// Campanha de contato ativo (envio em massa por canal).
 model Campaign {
-  id           String         @id @default(uuid())
-  nome         String
-  canal        Channel        @default(WHATSAPP)
+  id            String         @id @default(uuid())
+  organizacaoId String         @default("") @map("organizacao_id")
+  nome          String
+  canal         Channel        @default(WHATSAPP)
   /// Template da mensagem. Suporta {{nome}}, {{email}} e {{telefone}}.
-  mensagem     String
-  status       CampanhaStatus @default(RASCUNHO)
-  filaId       String?        @map("fila_id")
-  criadoPorId  String?        @map("criado_por_id")
-  agendadaPara DateTime?      @map("agendada_para")
-  iniciadaEm   DateTime?      @map("iniciada_em")
-  concluidaEm  DateTime?      @map("concluida_em")
-  criadoEm     DateTime       @default(now()) @map("criado_em")
-  atualizadoEm DateTime       @updatedAt @map("atualizado_em")
+  mensagem      String
+  status        CampanhaStatus @default(RASCUNHO)
+  filaId        String?        @map("fila_id")
+  criadoPorId   String?        @map("criado_por_id")
+  agendadaPara  DateTime?      @map("agendada_para")
+  iniciadaEm    DateTime?      @map("iniciada_em")
+  concluidaEm   DateTime?      @map("concluida_em")
+  criadoEm      DateTime       @default(now()) @map("criado_em")
+  atualizadoEm  DateTime       @updatedAt @map("atualizado_em")
 
-  fila      Queue?         @relation(fields: [filaId], references: [id], onDelete: SetNull)
-  criadoPor User?          @relation(fields: [criadoPorId], references: [id], onDelete: SetNull)
-  itens     CampaignItem[]
+  fila        Queue?         @relation(fields: [filaId], references: [id], onDelete: SetNull)
+  criadoPor   User?          @relation(fields: [criadoPorId], references: [id], onDelete: SetNull)
+  itens       CampaignItem[]
+  organizacao Organizacao    @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
-  @@index([status])
+  @@index([organizacaoId, status])
   @@map("campanhas")
 }
 
@@ -790,6 +876,7 @@ enum BotAcao {
 /// Fluxo de atendimento automatico que responde antes do agente assumir.
 model Bot {
   id                 String   @id @default(uuid())
+  organizacaoId      String   @default("") @map("organizacao_id")
   nome               String
   ativo              Boolean  @default(false)
   /// null = vale para todos os canais.
@@ -802,8 +889,10 @@ model Bot {
   criadoEm           DateTime @default(now()) @map("criado_em")
   atualizadoEm       DateTime @updatedAt @map("atualizado_em")
 
-  passos BotStep[]
+  passos      BotStep[]
+  organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
+  @@index([organizacaoId])
   @@map("bots")
 }
 
@@ -826,15 +915,17 @@ model BotStep {
 
 /// Politica de retencao de dados (LGPD). Registro unico, id "default".
 model RetentionPolicy {
-  id              String    @id @default("default")
+  id              String      @id @default(uuid())
+  organizacaoId   String      @unique @default("") @map("organizacao_id")
   /// Expurgo automatico diario. Desligado por padrao: apagar dado de cliente
   /// e decisao do responsavel, nao efeito colateral de instalar o sistema.
-  ativa           Boolean   @default(false)
-  diasConversas   Int       @default(90) @map("dias_conversas")
-  diasProtocolos  Int       @default(365) @map("dias_protocolos")
-  diasPresenca    Int       @default(365) @map("dias_presenca")
-  ultimoExpurgoEm DateTime? @map("ultimo_expurgo_em")
-  atualizadoEm    DateTime  @updatedAt @map("atualizado_em")
+  ativa           Boolean     @default(false)
+  diasConversas   Int         @default(90) @map("dias_conversas")
+  diasProtocolos  Int         @default(365) @map("dias_protocolos")
+  diasPresenca    Int         @default(365) @map("dias_presenca")
+  ultimoExpurgoEm DateTime?   @map("ultimo_expurgo_em")
+  atualizadoEm    DateTime    @updatedAt @map("atualizado_em")
+  organizacao     Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
   @@map("politica_retencao")
 }
@@ -848,19 +939,21 @@ enum AcaoLgpd {
 /// Trilha de auditoria das operacoes de LGPD — a plataforma tem de conseguir
 /// provar o que apagou, quando e a pedido de quem (principio da prestacao de contas).
 model LgpdLog {
-  id        String   @id @default(uuid())
-  acao      AcaoLgpd
+  id            String   @id @default(uuid())
+  organizacaoId String   @default("") @map("organizacao_id")
+  acao          AcaoLgpd
   /// Nulo quando a acao foi o expurgo automatico.
-  autorId   String?  @map("autor_id")
+  autorId       String?  @map("autor_id")
   /// Sem chave estrangeira de proposito: o registro precisa sobreviver ao
   /// titular que ele documenta.
-  contatoId String?  @map("contato_id")
-  detalhe   Json
-  criadoEm  DateTime @default(now()) @map("criado_em")
+  contatoId     String?  @map("contato_id")
+  detalhe       Json
+  criadoEm      DateTime @default(now()) @map("criado_em")
 
-  autor User? @relation(fields: [autorId], references: [id], onDelete: SetNull)
+  autor       User?       @relation(fields: [autorId], references: [id], onDelete: SetNull)
+  organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
-  @@index([criadoEm])
+  @@index([organizacaoId, criadoEm])
   @@map("lgpd_registros")
 }
 
@@ -887,7 +980,8 @@ enum CallStatus {
 
 /// Credenciais do provedor de voz. Registro unico, id "default".
 model VoiceConfig {
-  id              String   @id @default("default")
+  id              String   @id @default(uuid())
+  organizacaoId   String   @unique @default("") @map("organizacao_id")
   ativo           Boolean  @default(false)
   /// Identificador do driver em modules/voice (ex.: "twilio").
   provedor        String   @default("twilio")
@@ -903,18 +997,20 @@ model VoiceConfig {
   guardarGravacao Boolean  @default(true) @map("guardar_gravacao")
   atualizadoEm    DateTime @updatedAt @map("atualizado_em")
 
-  fila Queue? @relation(fields: [filaId], references: [id], onDelete: SetNull)
+  fila        Queue?      @relation(fields: [filaId], references: [id], onDelete: SetNull)
+  organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
   @@map("voz_config")
 }
 
 /// Registro de chamada (CDR). Uma linha por chamada, entrante ou sainte.
 model Call {
-  id        String      @id @default(uuid())
+  id            String      @id @default(uuid())
+  organizacaoId String      @default("") @map("organizacao_id")
   /// Id da chamada no provedor. Unico: o webhook reentrega o mesmo evento.
-  idExterno String      @unique @map("id_externo")
-  direcao   CallDirecao
-  status    CallStatus  @default(INICIANDO)
+  idExterno     String      @unique @map("id_externo")
+  direcao       CallDirecao
+  status        CallStatus  @default(INICIANDO)
 
   numeroOrigem  String @map("numero_origem")
   numeroDestino String @map("numero_destino")
@@ -936,14 +1032,15 @@ model Call {
   custo           Decimal? @db.Decimal(10, 4)
   motivoFalha     String?  @map("motivo_falha")
 
-  contato  Contact?      @relation(fields: [contatoId], references: [id], onDelete: SetNull)
-  conversa Conversation? @relation(fields: [conversaId], references: [id], onDelete: SetNull)
-  agente   User?         @relation(fields: [agenteId], references: [id], onDelete: SetNull)
-  fila     Queue?        @relation(fields: [filaId], references: [id], onDelete: SetNull)
+  contato     Contact?      @relation(fields: [contatoId], references: [id], onDelete: SetNull)
+  conversa    Conversation? @relation(fields: [conversaId], references: [id], onDelete: SetNull)
+  agente      User?         @relation(fields: [agenteId], references: [id], onDelete: SetNull)
+  fila        Queue?        @relation(fields: [filaId], references: [id], onDelete: SetNull)
+  organizacao Organizacao   @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
-  @@index([iniciadoEm])
-  @@index([agenteId, iniciadoEm])
-  @@index([status])
+  @@index([organizacaoId, iniciadoEm])
+  @@index([organizacaoId, agenteId, iniciadoEm])
+  @@index([organizacaoId, status])
   @@map("chamadas")
 }
 
@@ -958,24 +1055,26 @@ model Call {
 /// precisa de credencial longa, revogavel uma a uma e auditavel sem confundir
 /// com gente. Guardado como hash: vazamento do banco nao entrega o token.
 model IntegrationToken {
-  id      String           @id @default(uuid())
-  nome    String
+  id            String           @id @default(uuid())
+  organizacaoId String           @default("") @map("organizacao_id")
+  nome          String
   /// SHA-256 do token. O valor em claro e mostrado uma vez, na criacao.
-  hash    String           @unique
+  hash          String           @unique
   /// Primeiros caracteres, para identificar qual token esta na configuracao.
-  prefixo String
+  prefixo       String
   /// Quais rotas o token abre. Hoje so `IA`; enum para nao virar string livre.
-  escopo  EscopoIntegracao @default(IA)
-  ativo   Boolean          @default(true)
+  escopo        EscopoIntegracao @default(IA)
+  ativo         Boolean          @default(true)
 
   criadoEm    DateTime  @default(now()) @map("criado_em")
   criadoPorId String?   @map("criado_por_id")
   ultimoUsoEm DateTime? @map("ultimo_uso_em")
   revogadoEm  DateTime? @map("revogado_em")
 
-  criadoPor User? @relation(fields: [criadoPorId], references: [id], onDelete: SetNull)
+  criadoPor   User?       @relation(fields: [criadoPorId], references: [id], onDelete: SetNull)
+  organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
-  @@index([ativo])
+  @@index([organizacaoId, ativo])
   @@map("tokens_integracao")
 }
 

@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { Channel } from '@prisma/client';
-import { prisma } from '../../lib/prisma';
+import { prisma, prismaSemIsolamento } from '../../lib/prisma';
+import { semOrganizacao } from '../../lib/tenant';
 import { badRequest, notFound } from '../../lib/errors';
 import { cifrar, decifrar } from '../../lib/crypto-box';
 
@@ -112,8 +113,62 @@ export async function salvarCanal(canal: CanalExterno, input: SalvarCanalInput) 
 
 /** Sempre devolve os segredos em claro — o resto do sistema nao sabe da cifra. */
 export async function obterConfig(canal: Channel) {
-  const config = await prisma.channelConfig.findUnique({ where: { canal } });
+  const config = await prisma.channelConfig.findFirst({ where: { canal } });
   return config ? aberto(config) : null;
+}
+
+/**
+ * Descobre a organizacao dona de um webhook de entrada.
+ *
+ * A URL do webhook e compartilhada — `/api/webhooks/whatsapp` e a mesma para
+ * todas as empresas —, entao o canal na rota nao identifica ninguem. Quem
+ * identifica e o **id externo** que a Meta manda no corpo: `phone_number_id` no
+ * WhatsApp, `page_id` no Messenger, `ig_user_id` no Instagram. Sao ids globais
+ * da Meta, e e por isso que eles sao unicos no banco inteiro e nao por
+ * organizacao: dois clientes nao podem cadastrar o mesmo numero.
+ *
+ * Roda irrestrito porque e justamente a pergunta "de quem e isto?" — nao ha
+ * contexto para abrir antes da resposta.
+ *
+ * Sem identificador no corpo (payload de teste, canal recem-cadastrado), cai
+ * para o unico canal ativo daquele tipo. Com mais de um, recusa em vez de
+ * escolher: entregar a mensagem de um cliente na caixa de outro e pior do que
+ * nao entregar.
+ */
+export async function organizacaoDoWebhook(
+  canal: Channel,
+  identificador: string | null,
+): Promise<string | null> {
+  return semOrganizacao('webhook: o id externo no corpo e que revela a organizacao', async () => {
+    if (identificador) {
+      const porId = await prismaSemIsolamento.channelConfig.findFirst({
+        where: {
+          canal,
+          ativo: true,
+          OR: [
+            { phoneNumberId: identificador },
+            { pageId: identificador },
+            { igUserId: identificador },
+          ],
+        },
+        select: { organizacaoId: true },
+      });
+      if (porId) return porId.organizacaoId;
+    }
+
+    const ativos = await prismaSemIsolamento.channelConfig.findMany({
+      where: { canal, ativo: true },
+      select: { organizacaoId: true },
+      take: 2,
+    });
+    if (ativos.length === 1) return ativos[0]!.organizacaoId;
+    if (ativos.length > 1) {
+      console.warn(
+        `[webhook] ${canal}: ${ativos.length}+ organizacoes com o canal ativo e nenhum id externo no corpo — mensagem descartada`,
+      );
+    }
+    return null;
+  });
 }
 
 /**

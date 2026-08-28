@@ -17,10 +17,19 @@ export const EVENTOS = {
   chamadaAtualizada: 'chamada:atualizada',
 } as const;
 
-/** Salas: um agente escuta as filas dele e a propria caixa; gestao escuta tudo. */
+/**
+ * Salas: um agente escuta as filas dele e a propria caixa; gestao escuta tudo
+ * **da organizacao dele**.
+ *
+ * Todo nome comeca pela organizacao, inclusive os que ja tinham id proprio. O
+ * caso que obrigou isso foi `supervisao`, que era um nome fixo: todo ADMIN e
+ * SUPERVISOR entrava nele, e com duas empresas na mesma instalacao o supervisor
+ * de uma recebia em tempo real cada mensagem e cada transferencia da outra —
+ * sem nenhuma requisicao HTTP no caminho para filtrar.
+ */
 export const salas = {
-  usuario: (id: string) => `usuario:${id}`,
-  fila: (id: string) => `fila:${id}`,
-  conversa: (id: string) => `conversa:${id}`,
-  supervisao: 'supervisao',
+  usuario: (org: string, id: string) => `org:${org}:usuario:${id}`,
+  fila: (org: string, id: string) => `org:${org}:fila:${id}`,
+  conversa: (org: string, id: string) => `org:${org}:conversa:${id}`,
+  supervisao: (org: string) => `org:${org}:supervisao`,
 } as const;

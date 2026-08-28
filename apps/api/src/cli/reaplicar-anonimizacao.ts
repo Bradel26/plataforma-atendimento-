@@ -10,6 +10,7 @@
  *   npm run lgpd:reaplicar:executar      (aplica de verdade)
  */
 import { prisma } from '../lib/prisma';
+import { ORGANIZACAO_INICIAL, comOrganizacao } from '../lib/tenant';
 import { redis } from '../lib/redis';
 import { reaplicarAnonimizacoes } from '../modules/lgpd/lgpd.service';
 
@@ -32,4 +33,7 @@ async function main() {
   await Promise.allSettled([prisma.$disconnect(), redis.quit()]);
 }
 
-void main();
+// Roda na organizacao inicial. Ferramenta de operacao e por organizacao: com
+// mais de uma, ela passa a receber o slug como argumento — e melhor pedir do que
+// reanonimizar a base de quem nao pediu.
+void comOrganizacao(ORGANIZACAO_INICIAL, () => main());

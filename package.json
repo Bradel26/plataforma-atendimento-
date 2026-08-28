@@ -34,6 +34,8 @@
     "smoke:voz": "node scripts/smoke-voz.mjs",
     "smoke:metricas": "node scripts/smoke-metricas.mjs",
     "smoke:ficha": "node scripts/smoke-ficha.mjs",
+    "smoke:tenant": "node scripts/smoke-tenant.mjs",
+    "censo:tenant": "node scripts/censo-tenant.mjs",
     "smoke:ia": "node scripts/smoke-ia.mjs",
     "gerar:segredos": "node scripts/gerar-segredos.mjs",
     "test:e2e": "playwright test",

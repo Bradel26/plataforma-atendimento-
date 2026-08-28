@@ -5,6 +5,9 @@ import { requireAuth, requireRole } from '../../http/middleware/auth';
 import { limitar } from '../../http/middleware/rate-limit';
 import { validateBody, validateQuery } from '../../http/middleware/validate';
 import { param } from '../../http/params';
+import { notFound } from '../../lib/errors';
+import { prismaSemIsolamento } from '../../lib/prisma';
+import { comOrganizacao, semOrganizacao } from '../../lib/tenant';
 import { obterPorToken, responder, resultados } from './surveys.service';
 
 /** Rotas publicas: o cliente responde por link, sem conta na plataforma. */
@@ -22,10 +25,27 @@ const periodoSchema = z.object({
   ate: z.coerce.date().optional(),
 });
 
+/**
+ * Organizacao dona de um convite de pesquisa.
+ *
+ * O cliente que responde nao tem sessao: quem identifica a organizacao e o
+ * proprio token do convite, que e opaco e de uso unico. Irrestrito porque a
+ * pergunta e "de quem e este token?".
+ */
+async function organizacaoDoConvite(token: string): Promise<string> {
+  const pesquisa = await semOrganizacao('pesquisa publica: o token e que revela a organizacao', () =>
+    prismaSemIsolamento.survey.findFirst({ where: { token }, select: { organizacaoId: true } }),
+  );
+  if (!pesquisa) throw notFound('Pesquisa nao encontrada');
+  return pesquisa.organizacaoId;
+}
+
 pesquisasPublicasRoutes.get(
   '/:token',
   asyncHandler(async (req, res) => {
-    res.json({ pesquisa: await obterPorToken(param(req, 'token')) });
+    const token = param(req, 'token');
+    const org = await organizacaoDoConvite(token);
+    res.json({ pesquisa: await comOrganizacao(org, () => obterPorToken(token)) });
   }),
 );
 
@@ -35,7 +55,11 @@ pesquisasPublicasRoutes.post(
   limitar({ nome: 'pesquisa-resposta', janelaSegundos: 600, maximo: 30 }),
   validateBody(responderSchema),
   asyncHandler(async (req, res) => {
-    res.json(await responder(param(req, 'token'), req.body.nota, req.body.comentario));
+    const token = param(req, 'token');
+    const org = await organizacaoDoConvite(token);
+    res.json(
+      await comOrganizacao(org, () => responder(token, req.body.nota, req.body.comentario)),
+    );
   }),
 );
 

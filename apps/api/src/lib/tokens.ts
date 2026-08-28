@@ -10,10 +10,21 @@ export type AccessPayload = {
   nome: string;
   email: string;
   perfil: Role;
+  /**
+   * Organizacao do usuario. Sem ela o token nao serve: a extensao do Prisma le
+   * o contexto que este campo abre, e sem contexto nenhuma consulta sai.
+   *
+   * Token emitido antes desta versao nao tem o campo e e recusado — o efeito e
+   * um login a mais, uma vez, para quem estava com sessao aberta no deploy.
+   */
+  org: string;
 };
 
 type RefreshPayload = { sub: string; jti: string };
 
+// Prefixo por organizacao em toda chave de sessao. O jti ja e unico; o prefixo
+// existe para que apagar as sessoes de uma organizacao seja uma varredura de
+// prefixo, e para que nada de uma empresa se pareça com chave de outra.
 const refreshKey = (jti: string) => `refresh:${jti}`;
 const REFRESH_TTL_SECONDS = env.JWT_REFRESH_TTL_DAYS * 24 * 60 * 60;
 
@@ -34,6 +45,9 @@ export function verifyAccessToken(token: string): AccessPayload {
   if (payload.tipo === WEBCHAT_TIPO || !payload.perfil) {
     throw unauthorized('Token de acesso invalido ou expirado');
   }
+  // Token sem organizacao e de antes do isolamento: nao ha como abrir contexto,
+  // e aceitar sem contexto e exatamente o que nao pode acontecer.
+  if (!payload.org) throw unauthorized('Token de acesso invalido ou expirado');
   return payload;
 }
 
@@ -43,6 +57,8 @@ export type WebchatPayload = {
   tipo: typeof WEBCHAT_TIPO;
   conversaId: string;
   contatoId: string;
+  /** Organizacao dona do widget que abriu esta conversa. */
+  org: string;
 };
 
 /**
@@ -62,6 +78,7 @@ export function verifyWebchatToken(token: string): WebchatPayload {
     throw unauthorized('Sessao do webchat invalida ou expirada');
   }
   if (payload.tipo !== WEBCHAT_TIPO) throw unauthorized('Sessao do webchat invalida');
+  if (!payload.org) throw unauthorized('Sessao do webchat invalida');
   return payload;
 }
 
@@ -69,9 +86,11 @@ export function verifyWebchatToken(token: string): WebchatPayload {
  * Emite um refresh token e registra o jti no Redis.
  * O jti no Redis e a fonte de verdade: permite revogar (logout) e rotacionar.
  */
-export async function issueRefreshToken(userId: string): Promise<string> {
+export async function issueRefreshToken(userId: string, organizacaoId: string): Promise<string> {
   const jti = randomUUID();
-  await redis.set(refreshKey(jti), userId, 'EX', REFRESH_TTL_SECONDS);
+  // `<organizacao>:<usuario>` no valor: a renovacao devolve os dois, e assim ela
+  // nao pode mudar de organizacao no caminho.
+  await redis.set(refreshKey(jti), `${organizacaoId}:${userId}`, 'EX', REFRESH_TTL_SECONDS);
   return jwt.sign({ sub: userId, jti } satisfies RefreshPayload, env.JWT_REFRESH_SECRET, {
     expiresIn: `${env.JWT_REFRESH_TTL_DAYS}d`,
   });
@@ -84,7 +103,9 @@ export async function issueRefreshToken(userId: string): Promise<string> {
  * codigo para decidir se vale tentar de novo. Sem sessao nao ha corrida a
  * recuperar; com cookie invalido pode ser outra aba que acabou de rotacionar.
  */
-export async function consumeRefreshToken(token: string | undefined): Promise<string> {
+export async function consumeRefreshToken(
+  token: string | undefined,
+): Promise<{ userId: string; organizacaoId: string }> {
   if (!token) throw new AppError(401, 'SEM_SESSAO', 'Nenhuma sessao para renovar');
 
   let payload: RefreshPayload;
@@ -94,10 +115,20 @@ export async function consumeRefreshToken(token: string | undefined): Promise<st
     throw unauthorized('Sessao expirada, faca login novamente');
   }
 
-  const removed = await redis.del(refreshKey(payload.jti));
-  if (removed === 0) throw unauthorized('Sessao expirada, faca login novamente');
+  // GETDEL: le e apaga num passo. Ler e depois apagar abriria uma janela em que
+  // duas renovacoes simultaneas leriam o mesmo jti — token de uso unico usado
+  // duas vezes.
+  const valor = await redis.getdel(refreshKey(payload.jti));
+  if (!valor) throw unauthorized('Sessao expirada, faca login novamente');
 
-  return payload.sub;
+  // Valor no formato `<organizacao>:<usuario>`. Sessao gravada antes do
+  // isolamento nao tem organizacao e e recusada: um login a mais, uma vez.
+  const [organizacaoId, userId] = valor.split(':');
+  if (!organizacaoId || !userId || userId !== payload.sub) {
+    throw unauthorized('Sessao expirada, faca login novamente');
+  }
+
+  return { userId, organizacaoId };
 }
 
 /** Revoga o refresh token sem erro caso ja esteja invalido (logout idempotente). */

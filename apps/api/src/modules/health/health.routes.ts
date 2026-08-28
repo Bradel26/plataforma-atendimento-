@@ -2,14 +2,14 @@ import { Router } from 'express';
 import { asyncHandler } from '../../http/async-handler';
 import { requireAuth, requireRole } from '../../http/middleware/auth';
 import { estadoDaFila, reprocessarMortos } from '../../lib/fila';
-import { prisma } from '../../lib/prisma';
+import { prismaSemIsolamento } from '../../lib/prisma';
 import { redis } from '../../lib/redis';
 
 export const healthRoutes = Router();
 
 healthRoutes.get('/', async (_req, res) => {
   const [postgres, cache] = await Promise.all([
-    prisma.$queryRaw`SELECT 1`.then(() => 'ok' as const).catch(() => 'falha' as const),
+    prismaSemIsolamento.$queryRaw`SELECT 1`.then(() => 'ok' as const).catch(() => 'falha' as const),
     redis.ping().then(() => 'ok' as const).catch(() => 'falha' as const),
   ]);
 

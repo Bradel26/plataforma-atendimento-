@@ -1,8 +1,15 @@
-import { Router, raw } from 'express';
+import { Router, raw, type Response } from 'express';
 import { asyncHandler } from '../../http/async-handler';
 import { param } from '../../http/params';
 import { notFound } from '../../lib/errors';
-import { CANAIS_EXTERNOS, assinaturaValida, obterConfig, type CanalExterno } from './channels.service';
+import { comOrganizacao } from '../../lib/tenant';
+import {
+  CANAIS_EXTERNOS,
+  assinaturaValida,
+  obterConfig,
+  organizacaoDoWebhook,
+  type CanalExterno,
+} from './channels.service';
 import { registrarMensagemEntrante } from './inbound.service';
 import { normalizarWebhook } from './meta.parser';
 import type { MetaWebhook } from './meta.types';
@@ -25,7 +32,10 @@ webhooksRoutes.get(
   '/:canal',
   asyncHandler(async (req, res) => {
     const canal = canalDaRota(param(req, 'canal'));
-    const config = await obterConfig(canal);
+    // Verificacao da Meta nao tem corpo, so query: resolve pelo unico canal
+    // ativo daquele tipo.
+    const org = await organizacaoDoWebhook(canal, null);
+    const config = org ? await comOrganizacao(org, () => obterConfig(canal)) : null;
 
     const modo = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
@@ -53,6 +63,52 @@ webhooksRoutes.post(
   raw({ type: '*/*', limit: '1mb' }),
   asyncHandler(async (req, res) => {
     const canal = canalDaRota(param(req, 'canal'));
+    const corpoBruto = Buffer.isBuffer(req.body) ? req.body : Buffer.from('');
+
+    // A organizacao sai do id externo dentro do corpo. Isto acontece ANTES de
+    // qualquer leitura de configuracao: sem saber de quem e a mensagem, nao ha
+    // segredo com que validar a assinatura.
+    const organizacaoId = await organizacaoDoWebhook(canal, identificadorExterno(corpoBruto));
+    if (!organizacaoId) {
+      res.status(503).json({ error: { code: 'CANAL_INDISPONIVEL', message: `Canal ${canal} inativo` } });
+      return;
+    }
+
+    await comOrganizacao(organizacaoId, () => processarEntrada(canal, corpoBruto, req, res));
+  }),
+);
+
+/**
+ * Le o id externo do corpo bruto sem confiar nele para nada alem de rotear.
+ *
+ * A assinatura ainda nao foi validada neste ponto — nao poderia ter sido, porque
+ * o segredo depende de saber a organizacao. Entao o id serve para escolher QUAL
+ * segredo usar, e a assinatura e conferida depois, dentro do contexto. Um id
+ * falso leva a mensagem a um segredo que nao vai bater.
+ */
+function identificadorExterno(corpoBruto: Buffer): string | null {
+  try {
+    const payload = JSON.parse(corpoBruto.toString('utf8')) as MetaWebhook;
+    for (const entrada of payload.entry ?? []) {
+      for (const mudanca of entrada.changes ?? []) {
+        const id = mudanca.value?.metadata?.phone_number_id;
+        if (id) return id;
+      }
+      if (entrada.id) return entrada.id;
+    }
+  } catch {
+    // Corpo que nao e JSON nao tem id: o fluxo abaixo responde 400.
+  }
+  return null;
+}
+
+/** O corpo do POST, agora dentro do contexto da organizacao. */
+async function processarEntrada(
+  canal: CanalExterno,
+  corpoBruto: Buffer,
+  req: { header(nome: string): string | undefined },
+  res: Response,
+) {
     const config = await obterConfig(canal);
 
     if (!config?.ativo || !config.appSecret) {
@@ -60,7 +116,6 @@ webhooksRoutes.post(
       return;
     }
 
-    const corpoBruto = Buffer.isBuffer(req.body) ? req.body : Buffer.from('');
     const assinatura = req.header('x-hub-signature-256');
 
     if (!assinaturaValida(corpoBruto, assinatura, config.appSecret)) {
@@ -87,5 +142,4 @@ webhooksRoutes.post(
     }
 
     res.json({ recebidas: mensagens.length, processadas, duplicadas });
-  }),
-);
+}

@@ -54,7 +54,15 @@ const supervisor = await entrar('supervisor@plataforma.local', 'Super@123');
 const agente = await entrar('agente1@plataforma.local', 'Agente@123');
 
 const { default: Redis } = await import('ioredis');
-const redis = new Redis(env.REDIS_URL);
+// Mesmo prefixo que a aplicacao usa (ver lib/redis.ts): sem ele o script leria
+// `fila:atrasados` enquanto a API escreve em `dev:fila:atrasados`, e a checagem
+// falharia dizendo que a fila nao mexeu.
+// `??` e nao `||`: prefixo definido como vazio de proposito tem de ser respeitado.
+// E o padrao e 'dev' salvo em producao, porque o .env local nao declara NODE_ENV.
+const prefixoRedis = env.REDIS_PREFIXO ?? (env.NODE_ENV === 'production' ? '' : 'dev');
+const redis = new Redis(env.REDIS_URL, {
+  keyPrefix: prefixoRedis ? `${prefixoRedis}:` : undefined,
+});
 
 const estado = async (token = admin) => (await req('GET', '/health/fila', { token })).dados.fila;
 

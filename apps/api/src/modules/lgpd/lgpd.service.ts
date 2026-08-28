@@ -1,6 +1,7 @@
 import type { AcaoLgpd, Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { notFound } from '../../lib/errors';
+import { organizacaoAtual } from '../../lib/tenant';
 import { apagarArquivosDeMensagens, apagarArquivosDeProtocolos } from './arquivos';
 
 /**
@@ -19,8 +20,10 @@ const PADRAO = { id: 'default' } as const;
 
 export async function obterPolitica() {
   return (
-    (await prisma.retentionPolicy.findUnique({ where: PADRAO })) ??
-    prisma.retentionPolicy.create({ data: PADRAO })
+    // Uma politica POR ORGANIZACAO. Nao e detalhe de arquitetura: prazo de guarda
+    // e obrigacao legal de quem trata o dado, e uma politica compartilhada
+    // apagaria dado que outra empresa e obrigada a manter.
+    (await prisma.retentionPolicy.findFirst()) ?? prisma.retentionPolicy.create({ data: {} })
   );
 }
 
@@ -31,7 +34,10 @@ export async function salvarPolitica(input: {
   diasPresenca?: number;
 }) {
   await obterPolitica();
-  return prisma.retentionPolicy.update({ where: PADRAO, data: input });
+  return prisma.retentionPolicy.update({
+    where: { organizacaoId: organizacaoAtual() },
+    data: input,
+  });
 }
 
 export function registrar(

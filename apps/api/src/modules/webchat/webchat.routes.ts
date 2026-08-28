@@ -3,7 +3,9 @@ import { z } from 'zod';
 import { asyncHandler } from '../../http/async-handler';
 import { limitar } from '../../http/middleware/rate-limit';
 import { validateBody } from '../../http/middleware/validate';
-import { unauthorized } from '../../lib/errors';
+import { notFound, unauthorized } from '../../lib/errors';
+import { organizacaoPorSlug } from '../../lib/organizacao';
+import { comOrganizacao } from '../../lib/tenant';
 import { verifyWebchatToken } from '../../lib/tokens';
 import { historico, iniciarSessao, mensagemDoCliente } from './webchat.service';
 
@@ -21,6 +23,8 @@ const iniciarSchema = z.object({
    * entrada, a coleta comeca sem o titular saber para que.
    */
   aceiteLgpd: z.literal(true, { message: 'E necessario aceitar o aviso de privacidade' }),
+  /** Slug da organizacao dona do widget. Ausente = organizacao inicial. */
+  organizacao: z.string().trim().min(1).max(60).optional(),
 });
 
 const mensagemSchema = z.object({
@@ -42,14 +46,18 @@ webchatRoutes.post(
   limitar({ nome: 'webchat-sessao', janelaSegundos: 600, maximo: 20 }),
   validateBody(iniciarSchema),
   asyncHandler(async (req, res) => {
-    res.status(201).json(await iniciarSessao(req.body));
+    const organizacaoId = await organizacaoPorSlug(req.body.organizacao);
+    res
+      .status(201)
+      .json(await comOrganizacao(organizacaoId, () => iniciarSessao(req.body)));
   }),
 );
 
 webchatRoutes.get(
   '/conversa',
   asyncHandler(async (req, res) => {
-    res.json({ conversa: await historico(sessao(req).conversaId) });
+    const { conversaId, org } = sessao(req);
+    res.json({ conversa: await comOrganizacao(org, () => historico(conversaId)) });
   }),
 );
 
@@ -58,7 +66,9 @@ webchatRoutes.post(
   limitar({ nome: 'webchat-mensagem', janelaSegundos: 60, maximo: 60 }),
   validateBody(mensagemSchema),
   asyncHandler(async (req, res) => {
-    const { conversaId } = sessao(req);
-    res.status(201).json({ mensagem: await mensagemDoCliente(conversaId, req.body.conteudo) });
+    const { conversaId, org } = sessao(req);
+    res.status(201).json({
+      mensagem: await comOrganizacao(org, () => mensagemDoCliente(conversaId, req.body.conteudo)),
+    });
   }),
 );

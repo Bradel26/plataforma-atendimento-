@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { redis } from './redis';
+import { ORGANIZACAO_INICIAL, comOrganizacao, organizacaoAtual } from './tenant';
 import { redigir, redigirTexto } from './redacao';
 
 /**
@@ -23,7 +24,23 @@ const ESPERAS_MS = [5_000, 30_000, 120_000];
 
 export type Contexto = { tentativa: number; ultimaTentativa: boolean };
 type Handler = (dados: never, ctx: Contexto) => Promise<void>;
-type Trabalho = { id: string; tipo: string; dados: unknown; tentativa: number };
+type Trabalho = {
+  id: string;
+  tipo: string;
+  dados: unknown;
+  tentativa: number;
+  /**
+   * Organizacao de quem enfileirou.
+   *
+   * Viaja no corpo do trabalho, e nao no nome da lista: uma lista por
+   * organizacao multiplicaria as conexoes ao Redis e exigiria descoberta
+   * dinamica de listas para o worker saber de onde consumir. O efeito colateral
+   * conhecido e o de vizinhanca — um lote grande de uma empresa atrasa as
+   * outras. A correcao disso e distribuicao justa entre organizacoes, e ela so
+   * se paga com volume real; fica como limite conhecido, nao como surpresa.
+   */
+  organizacaoId: string;
+};
 
 const handlers = new Map<string, Handler>();
 
@@ -39,7 +56,16 @@ export function registrarHandler<T>(tipo: string, handler: (dados: T, ctx: Conte
 }
 
 export async function enfileirar(tipo: string, dados: unknown, opcoes: { atrasoMs?: number } = {}) {
-  const trabalho: Trabalho = { id: randomUUID(), tipo, dados, tentativa: 0 };
+  // A organizacao e capturada aqui, na hora de enfileirar, e nao lida na hora de
+  // processar: quando o worker pega o trabalho, o contexto de quem pediu ja
+  // acabou. Ela precisa viajar com o trabalho.
+  const trabalho: Trabalho = {
+    id: randomUUID(),
+    tipo,
+    dados,
+    tentativa: 0,
+    organizacaoId: organizacaoAtual(),
+  };
   await guardar(trabalho, opcoes.atrasoMs ?? 0);
   return trabalho.id;
 }
@@ -74,7 +100,12 @@ async function processar(trabalho: Trabalho) {
   const ultimaTentativa = trabalho.tentativa >= ESPERAS_MS.length;
 
   try {
-    await handler(trabalho.dados as never, { tentativa: trabalho.tentativa + 1, ultimaTentativa });
+    // O handler roda no contexto da organizacao que enfileirou. Trabalho antigo,
+    // gravado antes desta versao, nao tem o campo: cai na organizacao inicial,
+    // que e de onde ele veio, e assim a fila nao precisa ser esvaziada no deploy.
+    await comOrganizacao(trabalho.organizacaoId || ORGANIZACAO_INICIAL, () =>
+      handler(trabalho.dados as never, { tentativa: trabalho.tentativa + 1, ultimaTentativa }),
+    );
   } catch (err) {
     const motivo = err instanceof Error ? err.message : 'erro desconhecido';
 
@@ -142,7 +173,9 @@ export async function estadoDaFila() {
  */
 export async function aguardarVaga(canal: string, porSegundo: number) {
   for (let i = 0; i < 30; i++) {
-    const chave = `taxa:${canal}:${Math.floor(Date.now() / 1000)}`;
+    // Limite por organizacao E por canal: com a chave so por canal, o volume de
+    // uma empresa estrangularia o envio da outra.
+    const chave = `org:${organizacaoAtual()}:taxa:${canal}:${Math.floor(Date.now() / 1000)}`;
     const usados = await redis.incr(chave);
     if (usados === 1) await redis.expire(chave, 2);
     if (usados <= porSegundo) return;
