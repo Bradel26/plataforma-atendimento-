@@ -94,6 +94,7 @@ backend na mesma origem (necessário para o cookie de refresh).
 | `npm run backup:banco -- <arquivo .env> [destino.json]` | retrato logico do banco em JSON, antes de migration estrutural (esta maquina nao tem `pg_dump`) |
 | `npm run validar:producao -- <url> <arquivo .env> [saida.json]` | validação de produção por HTTP, somente leitura: login, permissões, contagens de 12 listagens, protocolo, arquivo, webchat, ponte de IA, Socket.IO (23 checagens) |
 | `npm run observar:deploy -- <url> <arquivo .env> [minutos]` | detecta a troca de container mantendo um Socket.IO aberto (o `health` responde 200 antes e depois) |
+| `E2E_BASE_URL=<url> npm run e2e:producao` | navegador contra produção, **somente leitura**: rotas do CRM, F5, botão voltar, menu ativo e 404 (4 casos). Credenciais lidas de `ENV_PRODUCAO`, padrão `apps/api/.env.coolify` |
 
 ## API (Fase 0)
 

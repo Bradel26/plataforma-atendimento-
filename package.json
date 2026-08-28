@@ -39,6 +39,7 @@
     "backup:banco": "node scripts/backup-producao.mjs",
     "validar:producao": "node scripts/validar-producao.mjs",
     "observar:deploy": "node scripts/observar-deploy.mjs",
+    "e2e:producao": "playwright test -c playwright.producao.config.ts",
     "smoke:ia": "node scripts/smoke-ia.mjs",
     "gerar:segredos": "node scripts/gerar-segredos.mjs",
     "test:e2e": "playwright test",
