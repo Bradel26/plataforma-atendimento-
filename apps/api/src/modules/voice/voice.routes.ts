@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { asyncHandler } from '../../http/async-handler';
 import { requireAuth, requireRole } from '../../http/middleware/auth';
 import { validateBody, validateQuery } from '../../http/middleware/validate';
+import { prismaSemIsolamento } from '../../lib/prisma';
+import { ORGANIZACAO_INICIAL, comOrganizacao, semOrganizacao } from '../../lib/tenant';
 import { getBranding } from '../branding/branding.service';
 import {
   aplicarEvento,
@@ -104,6 +106,69 @@ vozRoutes.get(
 
 /** O provedor envia formulario, nao JSON. */
 vozWebhookRoutes.use(express.urlencoded({ extended: false }));
+
+/**
+ * Descobre a organizacao dona de um evento de voz.
+ *
+ * Mesmo problema do webhook de canal: a URL e compartilhada, entao a rota nao
+ * identifica ninguem. Quem identifica e o **id da chamada** que o provedor manda
+ * no corpo — a chamada ja existe no banco e tem a organizacao dela.
+ *
+ * Sem chamada conhecida (evento de teste, primeira ligacao de um tronco novo),
+ * cai para a unica organizacao com voz configurada. Com mais de uma, recusa em
+ * vez de escolher: aplicar o evento de uma empresa na chamada de outra e pior do
+ * que perder o evento.
+ */
+async function organizacaoDoEventoDeVoz(corpo: unknown): Promise<string | null> {
+  const dados = (corpo ?? {}) as Record<string, unknown>;
+  const idExterno = [dados.CallSid, dados.ParentCallSid, dados.callSid]
+    .map((v) => (typeof v === 'string' ? v.trim() : ''))
+    .find(Boolean);
+
+  return semOrganizacao('webhook de voz: o id da chamada e que revela a organizacao', async () => {
+    if (idExterno) {
+      const chamada = await prismaSemIsolamento.call.findFirst({
+        where: { idExterno },
+        select: { organizacaoId: true },
+      });
+      if (chamada) return chamada.organizacaoId;
+    }
+
+    const ativas = await prismaSemIsolamento.voiceConfig.findMany({
+      where: { ativo: true },
+      select: { organizacaoId: true },
+      take: 2,
+    });
+    if (ativas.length === 1) return ativas[0]!.organizacaoId;
+
+    // Nenhuma configurada e o caso do ambiente de desenvolvimento e do primeiro
+    // teste: cai na organizacao inicial para que o webhook responda algo
+    // diagnosticavel em vez de 500.
+    if (ativas.length === 0) return ORGANIZACAO_INICIAL;
+
+    console.warn('[voz] evento sem chamada conhecida e mais de uma organizacao com voz ativa — descartado');
+    return null;
+  });
+}
+
+/**
+ * Abre o contexto da organizacao antes de qualquer leitura.
+ *
+ * Vale para as duas rotas de webhook: a assinatura e conferida contra a
+ * configuracao da organizacao, e ler a configuracao ja exige saber qual e ela.
+ */
+vozWebhookRoutes.use(
+  asyncHandler(async (req, _res, next) => {
+    const organizacaoId = await organizacaoDoEventoDeVoz(req.body);
+    if (!organizacaoId) {
+      // 200 de proposito: o provedor reentrega o que nao recebe 200, e reentrega
+      // infinita de um evento que nao da para rotear nao melhora nada.
+      _res.status(200).json({ ignorado: true, motivo: 'evento sem organizacao identificavel' });
+      return;
+    }
+    comOrganizacao(organizacaoId, () => next());
+  }),
+);
 
 /**
  * Valida a assinatura do provedor.
