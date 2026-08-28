@@ -186,7 +186,8 @@ Ploomes é referência conceitual, não modelo a copiar: o diferencial continua 
 omnichannel + automação + IA na mesma base. Protheus está fora de escopo nesta etapa.
 
 - [x] **1.1 Rotas próprias para os registros principais** — `/clientes/:id`, `/contatos/:id` e
-  `/oportunidades/:id`, com `/crm` preservado como lista. Ver decisão 50
+  `/oportunidades/:id`, com `/crm` preservado como lista. Ver decisão 50.
+  **Concluído em produção: commit `df5ffc5`, implantado em 28/08/2026** (deploy manual)
 - [ ] 1.2 Perfis e escopo de visibilidade ("vejo só o que é meu") — menor agora, o mecanismo de
   contexto já existe desde a Fundação de Organização
 - [ ] 1.3 Tags centralizadas
@@ -1380,3 +1381,30 @@ A primeira versão do caso da oportunidade usava `isVisible()` sem espera — qu
 instante em que é chamada, e nesse instante o kanban ainda estava em voo. O teste caía no
 `test.skip` e a suíte reportava "skipped", que é a pior forma de falhar: parece verde. Agora ele
 espera o funil montar e cria uma oportunidade se o banco estiver vazio.
+
+#### Marco do 1.1 em produção
+
+Implantado em 28/08/2026, commit `df5ffc5`, por **Deploy manual** no Coolify — o push não disparou
+build nenhum (ver pendência 4.12).
+
+| verificação | resultado |
+|---|---|
+| Troca de container | socket caiu 18:58:30, de volta 18:58:38 — 8 s de janela (`observar:deploy`) |
+| Commit implantado | bundle em produção **idêntico** ao que `df5ffc5` compila localmente: `index-BcDONC3f.js` + `index-GKEDeTp_.css` |
+| Contagens | as 12 idênticas à linha de base tirada antes do deploy da Fundação |
+| API | 31 checagens, 0 falhas (`validar:producao`) |
+| Navegador | 4 casos, 0 falhas (`e2e:producao`) — `/crm`, `/crm?aba=contas`, `/contatos/:id` com registro real, F5, botão voltar, menu ativo, as três telas de "não encontrado" e 404 no acesso direto pela API |
+
+**Como se identificou o commit sem hash de commit exposto.** A aplicação não publica o SHA em
+lugar nenhum, e `/api/health` responde igual antes e depois. Mas o hash do bundle do Vite é derivado
+do **conteúdo**: compilar `df5ffc5` localmente e comparar com o que produção serve identifica o
+commit, e não apenas "mudou algo". Vale registrar porque a alternativa — acreditar no painel — foi
+justamente o erro cometido na aba de IA (decisão 48).
+
+**O que não foi exercido, e por quê.** Produção tem 0 contas e 0 oportunidades, então `/clientes/:id`
+e `/oportunidades/:id` só puderam ser validadas na tela de "não encontrado" — por decisão do dono do
+produto, nada foi criado em produção só para completar o teste. E não existe perfil sem acesso ao
+CRM entre os usuários de produção (há um único usuário, `ADMIN`), então "URL não contorna permissão"
+fica coberto em desenvolvimento por `nav.test.ts` (a subrota herda os perfis do módulo),
+`rotas-crm.spec.ts` (o `AGENTE` entra por `/contatos/:id`) e `smoke:tenant` (isolamento entre
+organizações).
