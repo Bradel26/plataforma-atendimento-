@@ -43,6 +43,10 @@ let quedas = 0;
 
 s.on('connect', () => console.log(`${hora()}  socket conectado${quedas ? ` (reconexao ${quedas})` : ''}`));
 s.on('disconnect', (motivo) => {
+  // `io client disconnect` e este proprio script fechando o socket no fim da
+  // janela. Contar isso como troca de container faria o observador anunciar um
+  // deploy que nao houve — exatamente o erro que ele existe para evitar.
+  if (motivo === 'io client disconnect') return;
   quedas += 1;
   console.log(`${hora()}  SOCKET CAIU (${motivo}) — container sendo substituido`);
 });
