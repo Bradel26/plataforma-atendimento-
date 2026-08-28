@@ -128,6 +128,16 @@ async function montarOrganizacao(letra) {
     },
   });
 
+  // Numero explicito nao passa pelo contador da organizacao, entao ele fica
+  // atras da numeracao em uso e o `censo:tenant` — com razao — acusa contador
+  // atrasado. Alinhar aqui mantem o censo util como diagnostico: o que ele
+  // aponta depois disso e problema de verdade, nao residuo de smoke.
+  await prisma.$executeRawUnsafe(
+    `UPDATE "organizacoes" SET "proximo_protocolo" = $2 WHERE "id" = $1`,
+    id,
+    protocolo.numero + 1,
+  );
+
   return { id, slug, usuario, fila, contato, conversa, conta, funil, estagio, oportunidade, protocolo };
 }
 

@@ -145,6 +145,40 @@ chamada, gravação como anexo e um adaptador de discagem — sem mexer no núcl
 em vez de Asterisk próprio. Elimina manutenção de infraestrutura de voz, que é uma especialidade
 por si só.
 
+### Fundação de Organização ✅ concluída e em produção
+
+Feita entre a Fase 4 e a Fase 1 do CRM, por economia: a Fase 1 já traz o escopo de visibilidade, que
+é a mesma passagem por todos os serviços. Ver decisão 49.
+
+- [x] Coluna `organizacao_id` em 24 tabelas raiz, com backfill e obrigatoriedade
+- [x] Isolamento estrutural por extensão do Prisma Client + contexto em `AsyncLocalStorage`
+- [x] Unicidades por organização, contador de protocolo por organização, arquivos com prefixo
+- [x] Salas do Socket.IO e chaves do Redis separadas por organização e por instalação
+- [x] Teste anti-erosão que lê o `schema.prisma` e recusa tabela nova sem lado declarado
+- [x] **Marco em produção: commit `fffa923`, implantado em 28/08/2026**
+
+**Marco da Fundação — o que foi verificado em produção**
+
+| verificação | resultado |
+|---|---|
+| Backup antes do deploy | branch do Neon criado pelo dono da conta; retrato lógico local disponível via `backup:banco` |
+| Migrations | as 4 aplicadas na ordem planejada, todas `ok` no `_prisma_migrations` — nenhuma aberta, nenhuma desfeita |
+| `prisma migrate deploy` | é o único comando do container ([Dockerfile:53](Dockerfile#L53)); `migrate dev` e shadow database não participam |
+| Contagens antes/depois | idênticas em 12 listagens (relatórios em `backups/producao-antes.json` e `-depois.json`) |
+| `organizacao_id` nulo ou vazio | zero em todas as 24 tabelas |
+| Dono dos dados | uma só organização presente, `00000000-…-0001` |
+| Contador de protocolo | semeado em 1, com 0 protocolos — coerente |
+| Código novo no ar | provado pelo campo `organizacao` no schema do webchat, que só existe nestes commits |
+| Login, permissões, ficha, conversa, mensagens, fila, funil, kanban, canal mascarado, Socket.IO, webchat, ponte de IA | 31 checagens, 0 falhas (`validar:producao`) |
+
+**O que não foi exercido em produção, e por quê.** A base de produção está quase vazia (1 usuário,
+2 contatos, 2 conversas, 5 mensagens), então quatro coisas não têm dado para testar sem escrever
+nela: abertura real de protocolo pelo contador novo, leitura de anexo com a chave antiga, sessão de
+webchat ponta a ponta e escopo de visibilidade de `AGENTE`/`SUPERVISOR` — o único usuário é `ADMIN`.
+As quatro são cobertas em desenvolvimento pelo `smoke:tenant` (47 checagens) contra o mesmo código.
+A ponte de IA responde 401 sem token, o que prova a rota montada mas não o token de produção: essa
+conferência é o botão *Verificar ponte* do plugin.
+
 ---
 
 ## Riscos e pontos de atenção
@@ -1243,3 +1277,25 @@ Dois limites conhecidos, registrados para não virarem surpresa: a fila comparti
 vizinhança (um lote grande de uma empresa atrasa as outras), e o login por e-mail fica ambíguo se a
 mesma pessoa existir em duas organizações — hoje isso responde 409 pedindo para informar qual, em vez
 de sortear uma.
+
+#### O que o deploy ensinou sobre observar deploy
+
+Duas ferramentas nasceram deste deploy porque as duas perguntas óbvias não tinham resposta.
+
+A primeira: *o container trocou?* `/api/health` responde 200 antes e depois, e nestes commits o
+bundle do front não mudou — vite hasheia por conteúdo, então o nome do asset é o mesmo. O que
+distingue os dois processos é uma conexão Socket.IO aberta, que **cai** quando o container é
+substituído. É o que `observar:deploy` faz, e foi como se soube que o primeiro push ficou 30 minutos
+sem provocar build nenhum.
+
+A segunda: *é o código novo?* Contagem certa e listagem 200 não provam nada — o container antigo
+daria o mesmo. A prova precisa ser um comportamento que só existe no código novo, e precisa não
+escrever na base. O escolhido foi mandar `organizacao: 123` (número) para `/api/webchat/sessoes`: o
+schema novo tem esse campo e reclama do tipo, o antigo o descartaria como desconhecido. A validação
+falha nos dois casos, então nenhuma sessão é criada — e o erro do campo `organizacao` só aparece com
+o código novo.
+
+Terceira lição, menor: um contador de protocolo alimentado por número explícito fica atrás da
+numeração em uso, e o `censo:tenant` agora acusa isso. O `smoke:tenant`, que insere números
+explícitos de propósito, passou a alinhar o contador depois — um censo que nasce sujo não serve de
+diagnóstico.

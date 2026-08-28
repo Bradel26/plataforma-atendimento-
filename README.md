@@ -90,7 +90,7 @@ backend na mesma origem (necessário para o cookie de refresh).
 | `npm run smoke:ficha` | linha do tempo da ficha 360: ordem, cursor, filtro e atividades (48 checagens) |
 | `npm run smoke:ia` | ponte com o motor de IA externo, com webhook de verdade (46 checagens) |
 | `npm run smoke:tenant` | isolamento entre duas organizacoes: listagem, id direto, escrita cruzada, tempo real, arquivo, token de integracao, unicidades (47 checagens) |
-| `npm run censo:tenant` | censo de linhas por tabela, para conferir migracao (`--comparar` contra um censo salvo) |
+| `npm run censo:tenant` | censo do banco: migrations aplicadas, organizações e contador de protocolo, linhas e `organizacao_id` ausente por tabela (`--comparar` contra um censo salvo, `--env <arquivo>` para apontar a outro banco sem expor a credencial na linha de comando) |
 | `npm run backup:banco -- <arquivo .env> [destino.json]` | retrato logico do banco em JSON, antes de migration estrutural (esta maquina nao tem `pg_dump`) |
 | `npm run validar:producao -- <url> <arquivo .env> [saida.json]` | validação de produção por HTTP, somente leitura: login, permissões, contagens de 12 listagens, protocolo, arquivo, webchat, ponte de IA, Socket.IO (23 checagens) |
 | `npm run observar:deploy -- <url> <arquivo .env> [minutos]` | detecta a troca de container mantendo um Socket.IO aberto (o `health` responde 200 antes e depois) |

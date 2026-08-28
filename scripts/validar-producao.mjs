@@ -154,6 +154,58 @@ for (const [nome, caminho] of Object.entries(LISTAGENS)) {
   }
 }
 
+// ── 3b. detalhe de cada recurso ─────────────────────────────────────────────
+// Uma listagem que responde 200 nao prova muito: ela pode estar devolvendo
+// lista vazia por filtro errado. O detalhe de um registro conhecido passa pelo
+// `findFirst` reescrito pela extensao do Prisma, que e onde a mudanca mora.
+console.log('\ndetalhe:');
+async function primeiro(caminho) {
+  const r = await tudo(caminho);
+  return (r.itens ?? [])[0] ?? null;
+}
+
+const umContato = await primeiro('/api/contatos');
+if (umContato) {
+  const d = await api(`/api/contatos/${umContato.id}`);
+  checar('detalhe de contato', d.status === 200, `status ${d.status}`);
+  const f = await api(`/api/ficha/contato/${umContato.id}`);
+  checar('ficha do contato', f.status === 200 || f.status === 404, `status ${f.status}`);
+}
+
+const umaConversa = await primeiro('/api/conversas');
+if (umaConversa) {
+  const d = await api(`/api/conversas/${umaConversa.id}`);
+  checar('detalhe de conversa', d.status === 200, `status ${d.status}`);
+  const m = await api(`/api/conversas/${umaConversa.id}/mensagens`);
+  const lista = Array.isArray(m.corpo) ? m.corpo : (Object.values(m.corpo ?? {}).find((v) => Array.isArray(v)) ?? []);
+  checar('mensagens da conversa', m.status === 200 && lista.length > 0, `${lista.length} mensagem(ns)`);
+  relatorio.mensagensNaPrimeiraConversa = lista.length;
+}
+
+const umaFila = await primeiro('/api/filas');
+if (umaFila) {
+  const d = await api(`/api/filas/${umaFila.id}`);
+  checar('detalhe de fila', d.status === 200, `status ${d.status}`);
+}
+
+// O funil nao tem rota de detalhe: quem monta a tela e o kanban, em
+// /api/oportunidades/kanban. E ele que exercita funil + estagios + agregacao.
+const umFunil = await primeiro('/api/funis');
+if (umFunil) {
+  checar('funil traz estagios na listagem', Array.isArray(umFunil.estagios), `${umFunil.estagios?.length ?? 0} estagio(s)`);
+  const k = await api(`/api/oportunidades/kanban?funilId=${umFunil.id}`);
+  checar('kanban do funil', k.status === 200, `status ${k.status}`);
+  relatorio.funil = { estagios: umFunil.estagios?.length ?? null, kanban: k.status };
+}
+
+// O segredo do canal e cifrado em repouso e so pode voltar mascarado.
+const canais = await api('/api/canais');
+const textoCanais = JSON.stringify(canais.corpo ?? {});
+checar(
+  'canal nao devolve segredo em claro',
+  !/"(appSecret|verifyToken|authToken|apiToken|token)"\s*:\s*"[^*•]{12,}"/.test(textoCanais),
+);
+
 // ── 4. numeracao de protocolo ───────────────────────────────────────────────
 const prot = await tudo('/api/protocolos');
 const numeros = (prot.itens ?? []).map((p) => p.numero).filter((n) => typeof n === 'number');
