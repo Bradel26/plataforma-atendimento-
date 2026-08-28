@@ -1,5 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
+import { filtroDe, politicaContas, politicaOportunidades } from '../../lib/politicas';
+import { apenasVisivel } from '../../lib/visibilidade';
 import { badRequest, conflict, notFound } from '../../lib/errors';
 import { inclusaoOportunidade, toOportunidade } from './crm.serializers';
 import type {
@@ -72,8 +74,11 @@ export async function listarOportunidades(query: ListarOportunidadesQuery) {
     });
   }
 
+  // O escopo entra sempre. `{}` significa "sem restricao": era o que esta
+  // consulta usava quando nenhum filtro vinha da query.
+  filtros.push(await filtroDe(politicaOportunidades));
   const oportunidades = await prisma.opportunity.findMany({
-    where: filtros.length > 0 ? { AND: filtros } : {},
+    where: { AND: filtros },
     include: inclusaoOportunidade,
     orderBy: { atualizadoEm: 'desc' },
     take: query.limite,
@@ -82,13 +87,20 @@ export async function listarOportunidades(query: ListarOportunidadesQuery) {
 }
 
 export async function obterOportunidade(id: string) {
-  const o = await prisma.opportunity.findUnique({ where: { id }, include: inclusaoOportunidade });
+  // Mesmo filtro da listagem: fora do escopo responde 404, nao 403.
+  const o = await prisma.opportunity.findFirst({
+    where: apenasVisivel(id, await filtroDe(politicaOportunidades)),
+    include: inclusaoOportunidade,
+  });
   if (!o) throw notFound('Oportunidade nao encontrada');
   return toOportunidade(o);
 }
 
 export async function criarOportunidade(input: CriarOportunidadeInput, usuarioId?: string) {
-  const conta = await prisma.account.findUnique({ where: { id: input.contaId } });
+  // A conta tem de estar no escopo de quem cria a oportunidade.
+  const conta = await prisma.account.findFirst({
+    where: apenasVisivel(input.contaId, await filtroDe(politicaContas)),
+  });
   if (!conta) throw notFound('Conta nao encontrada');
 
   const { funil, estagio } = await resolverFunil(input.funilId, input.estagioId);
@@ -122,7 +134,9 @@ export async function atualizarOportunidade(
   input: AtualizarOportunidadeInput,
   usuarioId?: string,
 ) {
-  const atual = await prisma.opportunity.findUnique({ where: { id } });
+  const atual = await prisma.opportunity.findFirst({
+    where: apenasVisivel(id, await filtroDe(politicaOportunidades)),
+  });
   if (!atual) throw notFound('Oportunidade nao encontrada');
   if (atual.status !== 'ABERTA') throw badRequest('Oportunidade fechada nao pode ser alterada');
 
@@ -171,7 +185,9 @@ export async function atualizarOportunidade(
 }
 
 export async function fecharOportunidade(id: string, input: FecharOportunidadeInput) {
-  const atual = await prisma.opportunity.findUnique({ where: { id } });
+  const atual = await prisma.opportunity.findFirst({
+    where: apenasVisivel(id, await filtroDe(politicaOportunidades)),
+  });
   if (!atual) throw notFound('Oportunidade nao encontrada');
   if (atual.status !== 'ABERTA') throw badRequest('Oportunidade ja esta fechada');
 
@@ -189,7 +205,9 @@ export async function fecharOportunidade(id: string, input: FecharOportunidadeIn
 
 /** Substitui os itens e recalcula o valor da oportunidade. */
 export async function definirItens(id: string, input: ItensInput) {
-  const atual = await prisma.opportunity.findUnique({ where: { id } });
+  const atual = await prisma.opportunity.findFirst({
+    where: apenasVisivel(id, await filtroDe(politicaOportunidades)),
+  });
   if (!atual) throw notFound('Oportunidade nao encontrada');
   if (atual.status !== 'ABERTA') throw badRequest('Oportunidade fechada nao pode ser alterada');
 
@@ -211,7 +229,9 @@ export async function funilKanban(funilId?: string) {
   const { funil } = await resolverFunil(funilId);
 
   const oportunidades = await prisma.opportunity.findMany({
-    where: { funilId: funil.id, status: 'ABERTA' },
+    // O kanban e uma listagem como as outras: sem o escopo, o quadro mostraria
+    // o funil da organizacao inteira enquanto a lista mostra a carteira.
+    where: { AND: [{ funilId: funil.id, status: 'ABERTA' }, await filtroDe(politicaOportunidades)] },
     include: inclusaoOportunidade,
     orderBy: { atualizadoEm: 'desc' },
   });

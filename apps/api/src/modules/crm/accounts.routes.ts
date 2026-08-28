@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../../http/async-handler';
 import { requireAuth, requireRole } from '../../http/middleware/auth';
+import { filtroDe, politicaContatos, politicaContas } from '../../lib/politicas';
+import { apenasVisivel } from '../../lib/visibilidade';
 import { validateBody, validateQuery } from '../../http/middleware/validate';
 import { param } from '../../http/params';
 import { badRequest, conflict, notFound } from '../../lib/errors';
@@ -27,6 +29,8 @@ const criarSchema = z.object({
   telefone: z.string().trim().min(8).max(20).nullable().optional(),
   email: z.string().email().nullable().optional(),
   observacoes: z.string().trim().max(2000).nullable().optional(),
+  /** Responsavel principal pela carteira. Nulo devolve a conta para a carteira aberta. */
+  responsavelId: z.string().uuid().nullable().optional(),
 });
 
 const atualizarSchema = criarSchema
@@ -45,16 +49,26 @@ accountsRoutes.get(
   validateQuery(listarSchema),
   asyncHandler(async (_req, res) => {
     const { busca, limite } = res.locals.query as z.infer<typeof listarSchema>;
+    const escopo = await filtroDe(politicaContas);
     const contas = await prisma.account.findMany({
-      where: busca
-        ? {
-            OR: [
-              { nome: { contains: busca, mode: 'insensitive' } },
-              { cnpj: { contains: busca.replace(/\D/g, '') } },
-              { segmento: { contains: busca, mode: 'insensitive' } },
-            ],
-          }
-        : undefined,
+      // O escopo entra sempre; a busca, so quando ha termo. Antes o `where` era
+      // `undefined` sem busca, que significa "sem restricao".
+      where: {
+        AND: [
+          escopo,
+          ...(busca
+            ? [
+                {
+                  OR: [
+                    { nome: { contains: busca, mode: 'insensitive' as const } },
+                    { cnpj: { contains: busca.replace(/\D/g, '') } },
+                    { segmento: { contains: busca, mode: 'insensitive' as const } },
+                  ],
+                },
+              ]
+            : []),
+        ],
+      },
       orderBy: { nome: 'asc' },
       take: limite,
       include: { _count: { select: { contatos: true, leads: true, oportunidades: true } } },
@@ -76,12 +90,24 @@ accountsRoutes.get(
   '/:id',
   asyncHandler(async (req, res) => {
     const id = param(req, 'id');
-    const conta = await prisma.account.findUnique({
-      where: { id },
-      include: { contatos: { orderBy: { nome: 'asc' } } },
+    const conta = await prisma.account.findFirst({
+      where: apenasVisivel(id, await filtroDe(politicaContas)),
+      // Os contatos da ficha passam pela politica de contato: um agente que
+      // chegou ao cliente por uma conversa nao herda a lista inteira de pessoas
+      // dele.
+      include: { contatos: { where: await filtroDe(politicaContatos), orderBy: { nome: 'asc' } } },
     });
     if (!conta) throw notFound('Conta nao encontrada');
 
+    /*
+     * Leads e oportunidades da ficha NAO passam pelas politicas comerciais.
+     *
+     * E deliberado, e foi decisao do dono do produto: o agente pode ver
+     * informacao comercial resumida dentro da ficha do cliente quando isso
+     * ajuda no atendimento — o que ele nao acessa e a **lista**, o **kanban** e
+     * o **detalhe** de oportunidade, barrados por perfil nas rotas proprias.
+     * A porta de entrada aqui e a conta, e ela ja passou pela politica.
+     */
     const [leads, oportunidades] = await Promise.all([
       prisma.lead.findMany({ where: { contaId: id }, include: inclusaoLead, orderBy: { atualizadoEm: 'desc' } }),
       prisma.opportunity.findMany({
@@ -116,13 +142,24 @@ accountsRoutes.patch(
   validateBody(atualizarSchema),
   asyncHandler(async (req, res) => {
     const id = param(req, 'id');
-    const atual = await prisma.account.findUnique({ where: { id } });
+    const atual = await prisma.account.findFirst({
+      where: apenasVisivel(id, await filtroDe(politicaContas)),
+    });
     if (!atual) throw notFound('Conta nao encontrada');
 
     if (req.body.cnpj && req.body.cnpj !== atual.cnpj) {
       const existente = await prisma.account.findFirst({ where: { cnpj: req.body.cnpj } });
       if (existente) throw conflict('Ja existe uma conta com este CNPJ');
     }
+    /*
+     * Trocar o responsavel da conta **nao** propaga para os contatos.
+     *
+     * O `update` mexe so na conta, e e proposital: o responsavel do contato foi
+     * herdado como valor inicial na criacao e desde entao e independente.
+     * Propagar aqui reatribuiria em silencio a carteira de outra pessoa — e um
+     * `updateMany` nos contatos e exatamente a "melhoria" que alguem faria mais
+     * tarde sem perceber o que quebra. Ha teste guardando este comportamento.
+     */
     res.json({ conta: await prisma.account.update({ where: { id }, data: req.body }) });
   }),
 );
@@ -132,9 +169,22 @@ accountsRoutes.post(
   validateBody(vincularSchema),
   asyncHandler(async (req, res) => {
     const id = param(req, 'id');
+    /*
+     * As DUAS pontas passam pela politica.
+     *
+     * E o furo classico da escrita que referencia outro registro: sem isto, um
+     * comercial vincularia o contato da carteira do colega ao proprio cliente —
+     * uma escrita que ele nao pode fazer, por um caminho que a listagem nunca
+     * mostraria. Foi o mesmo tipo de furo que o smoke:tenant achou na atividade,
+     * durante a fundacao de organizacao.
+     */
+    const [escopoConta, escopoContato] = await Promise.all([
+      filtroDe(politicaContas),
+      filtroDe(politicaContatos),
+    ]);
     const [conta, contato] = await Promise.all([
-      prisma.account.findUnique({ where: { id } }),
-      prisma.contact.findUnique({ where: { id: req.body.contatoId } }),
+      prisma.account.findFirst({ where: apenasVisivel(id, escopoConta) }),
+      prisma.contact.findFirst({ where: apenasVisivel(req.body.contatoId, escopoContato) }),
     ]);
     if (!conta) throw notFound('Conta nao encontrada');
     if (!contato) throw notFound('Contato nao encontrado');
@@ -160,7 +210,9 @@ accountsRoutes.delete(
     const id = param(req, 'id');
     const contatoId = param(req, 'contatoId');
 
-    const contato = await prisma.contact.findUnique({ where: { id: contatoId } });
+    const contato = await prisma.contact.findFirst({
+      where: apenasVisivel(contatoId, await filtroDe(politicaContatos)),
+    });
     if (!contato) throw notFound('Contato nao encontrado');
     // Confere o par: `DELETE /contas/<outra>/contatos/<id>` nao pode soltar um
     // vinculo que nao e daquela conta.
@@ -175,7 +227,12 @@ accountsRoutes.delete(
   requireRole('ADMIN'),
   asyncHandler(async (req, res) => {
     const id = param(req, 'id');
-    const atual = await prisma.account.findUnique({ where: { id } });
+    // DELETE e restrito a ADMIN, cuja politica e filtro vazio — aplicar aqui e
+    // no-op hoje. Fica aplicado de proposito: se um dia o DELETE for liberado
+    // para outro perfil, a trava ja esta no lugar.
+    const atual = await prisma.account.findFirst({
+      where: apenasVisivel(id, await filtroDe(politicaContas)),
+    });
     if (!atual) throw notFound('Conta nao encontrada');
     await prisma.account.delete({ where: { id } });
     res.status(204).end();

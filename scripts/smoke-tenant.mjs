@@ -234,6 +234,48 @@ for (const [metodo, rota, corpo, nome] of escritas) {
 const contatoDepois = await prisma.contact.findUnique({ where: { id: A.contato.id } });
 checar(contatoDepois?.nome === 'Contato A', 'contato de A intacto depois das tentativas', contatoDepois?.nome);
 
+/*
+ * Apontar para GENTE de outra organizacao — `responsavelId` e `gestorId`.
+ *
+ * Diferente das escritas acima: aqui quem escreve e o admin da PROPRIA
+ * organizacao, mexendo no PROPRIO registro, e so o id referenciado e de fora.
+ * Nenhuma politica de visibilidade cobre isso, porque nao ha politica sobre
+ * usuario — atribuir um registro a um colega e legitimo. Quem cobre e
+ * `exigirUsuarioDaOrganizacao`: a extensao do Prisma isola as *consultas*, mas
+ * nao confere chave estrangeira, e sem a conferencia o banco aceitaria um
+ * responsavel que a organizacao nem enxerga.
+ */
+const responsavelDeFora = await req('PATCH', `/contatos/${A.contato.id}`, {
+  token: tokenA,
+  corpo: { responsavelId: B.usuario.id },
+});
+checar(
+  responsavelDeFora.status === 404,
+  'recusa responsavel de outra organizacao no contato',
+  `HTTP ${responsavelDeFora.status}`,
+);
+
+const gestorDeFora = await req('PATCH', `/usuarios/${A.usuario.id}`, {
+  token: tokenA,
+  corpo: { gestorId: B.usuario.id },
+});
+checar(
+  gestorDeFora.status === 404,
+  'recusa gestor de outra organizacao no usuario',
+  `HTTP ${gestorDeFora.status}`,
+);
+
+// E nada disso gravou: recusar com 404 e deixar o campo escrito seria pior que
+// nao recusar, porque o furo ficaria invisivel na resposta.
+const [contatoFinal, usuarioFinal] = await Promise.all([
+  prisma.contact.findUnique({ where: { id: A.contato.id }, select: { responsavelId: true } }),
+  prisma.user.findUnique({ where: { id: A.usuario.id }, select: { gestorId: true } }),
+]);
+checar(
+  contatoFinal?.responsavelId !== B.usuario.id && usuarioFinal?.gestorId !== B.usuario.id,
+  'nenhum vinculo para fora da organizacao foi gravado',
+);
+
 /* ── 5. token de integracao preso a organizacao ────────────────────────────── */
 
 const criado = await req('POST', '/integracoes/tokens', {

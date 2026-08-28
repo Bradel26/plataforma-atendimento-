@@ -12,7 +12,7 @@ import { RELATORIOS, type NomeRelatorio } from './reports.service';
 
 export const relatoriosRoutes = Router();
 
-relatoriosRoutes.use(requireAuth, requireRole('ADMIN', 'SUPERVISOR'));
+relatoriosRoutes.use(requireAuth, requireRole('ADMIN', 'SUPERVISOR', 'GESTOR'));
 
 const periodoSchema = z.object({
   desde: z.coerce.date().optional(),

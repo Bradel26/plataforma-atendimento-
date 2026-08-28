@@ -82,7 +82,16 @@ function AppRoutes() {
           // uma permissao divergir da do menu sem ninguem notar.
           return [
             <Route key={rota} path={rota} element={<Pagina />} />,
-            ...(subrotas ?? []).map((s) => <Route key={s} path={s} element={<Pagina />} />),
+            // A subrota pode restringir mais que o modulo: quem ve o CRM nao
+            // necessariamente ve `/oportunidades/:id`. A rota nem e registrada
+            // para quem nao tem o perfil, e a URL digitada cai no
+            // redirecionamento de rota desconhecida.
+            // `perfis` ausente HERDA o do modulo — que ja passou no filtro
+            // acima. Escrever `temPerfil(...(s.perfis ?? []))` daria falso com
+            // lista vazia e faria a subrota sem restricao deixar de existir.
+            ...(subrotas ?? [])
+              .filter((s) => (s.perfis ? temPerfil(...s.perfis) : true))
+              .map((s) => <Route key={s.rota} path={s.rota} element={<Pagina />} />),
           ];
         })}
       </Route>

@@ -17,12 +17,34 @@ import { AppError } from './errors';
  * auditar por busca.
  */
 
+/**
+ * Quem esta operando. Presente em requisicao autenticada; ausente em webhook e
+ * em trabalho da fila, que nao tem usuario.
+ *
+ * Fica no contexto pelo mesmo motivo da organizacao: sem isso, cada politica de
+ * visibilidade teria de ser costurada por parametro em todo servico do CRM, e o
+ * dia em que alguem esquecesse de passar o solicitante a consulta voltaria sem
+ * filtro. A organizacao e uma **fronteira** (o banco recusa o que atravessa); o
+ * usuario e um **escopo** (o que ele enxerga dentro da propria organizacao), e
+ * por isso o escopo mora em politicas explicitas, nao numa extensao do Prisma.
+ */
+export type UsuarioDoContexto = { id: string; perfil: string };
+
 type Contexto = {
   organizacaoId: string;
   /** Marca o trecho que atravessa organizacoes de proposito. */
   irrestrito?: boolean;
   /** Por que atravessa. So para diagnostico; aparece no erro se algo escapar. */
   motivo?: string;
+  usuario?: UsuarioDoContexto;
+  /**
+   * Cache de vida curta, do tamanho de uma requisicao.
+   *
+   * Guarda a **promessa**, nao o valor: duas politicas rodando em paralelo
+   * pediriam o contexto de visibilidade ao mesmo tempo, e guardar so o valor
+   * faria as duas consultarem o banco antes de qualquer uma gravar o resultado.
+   */
+  cache?: Map<string, Promise<unknown>>;
 };
 
 const armazem = new AsyncLocalStorage<Contexto>();
@@ -30,10 +52,16 @@ const armazem = new AsyncLocalStorage<Contexto>();
 /** Id da organizacao inicial, criada pela migration `organizacao`. */
 export const ORGANIZACAO_INICIAL = '00000000-0000-0000-0000-000000000001';
 
-/** Roda `fn` com a organizacao ativa. Tudo dentro fica isolado nela. */
-export function comOrganizacao<T>(organizacaoId: string, fn: () => T): T {
+/**
+ * Roda `fn` com a organizacao ativa. Tudo dentro fica isolado nela.
+ *
+ * O `usuario` e opcional porque webhook e worker legitimamente nao tem um. Quem
+ * depende dele (as politicas de visibilidade) chama `usuarioAtual()`, que lanca
+ * na ausencia — de novo, ausencia lanca em vez de virar "sem filtro".
+ */
+export function comOrganizacao<T>(organizacaoId: string, fn: () => T, usuario?: UsuarioDoContexto): T {
   if (!organizacaoId) throw new Error('comOrganizacao recebeu id vazio');
-  return armazem.run({ organizacaoId }, fn);
+  return armazem.run({ organizacaoId, usuario }, fn);
 }
 
 /**
@@ -91,4 +119,47 @@ export function organizacaoAtualOuNula(): string | null {
     );
   }
   return ctx.irrestrito ? null : ctx.organizacaoId;
+}
+
+/**
+ * Quem esta operando, ou lanca.
+ *
+ * Lanca em vez de devolver nulo pelo mesmo motivo de `organizacaoAtual`: uma
+ * politica de visibilidade sem usuario nao tem como decidir nada, e devolver
+ * nulo faria o filtro sumir justamente onde ele importa.
+ */
+export function usuarioAtual(): UsuarioDoContexto {
+  const ctx = armazem.getStore();
+  if (!ctx?.usuario) {
+    throw new AppError(
+      500,
+      'SEM_USUARIO_NO_CONTEXTO',
+      'Operacao exige o usuario da requisicao. Politica de visibilidade nao se aplica a webhook nem a trabalho da fila.',
+    );
+  }
+  return ctx.usuario;
+}
+
+/** Quem esta operando, ou `null`. Para quem trata a ausencia de proposito. */
+export const usuarioAtualOuNulo = (): UsuarioDoContexto | null => armazem.getStore()?.usuario ?? null;
+
+/**
+ * Calcula uma vez por contexto e reaproveita.
+ *
+ * Existe para o contexto de visibilidade: ele custa duas consultas (filas e
+ * equipe) e e pedido por cada politica que a requisicao usar. Sem isto, uma tela
+ * que lista contatos, contas e atividades pagaria seis.
+ *
+ * Fora de qualquer contexto nao ha onde guardar, e a funcao apenas executa —
+ * chamar de um teste de unidade nao deve exigir cerimonia.
+ */
+export function memoizado<T>(chave: string, produzir: () => Promise<T>): Promise<T> {
+  const ctx = armazem.getStore();
+  if (!ctx) return produzir();
+  ctx.cache ??= new Map();
+  const guardado = ctx.cache.get(chave);
+  if (guardado) return guardado as Promise<T>;
+  const promessa = produzir();
+  ctx.cache.set(chave, promessa);
+  return promessa;
 }

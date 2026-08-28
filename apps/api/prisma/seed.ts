@@ -45,6 +45,8 @@ const usuarios: Array<{ nome: string; email: string; senha: string; perfil: Role
     ? []
     : [
         { nome: 'Supervisor Demo', email: 'supervisor@plataforma.local', senha: 'Super@123', perfil: 'SUPERVISOR' as Role },
+        { nome: 'Gestor Demo', email: 'gestor@plataforma.local', senha: 'Gestor@123', perfil: 'GESTOR' as Role },
+        { nome: 'Comercial Demo', email: 'comercial@plataforma.local', senha: 'Comer@123', perfil: 'COMERCIAL' as Role },
         { nome: 'Agente Um', email: 'agente1@plataforma.local', senha: 'Agente@123', perfil: 'AGENTE' as Role },
         { nome: 'Agente Dois', email: 'agente2@plataforma.local', senha: 'Agente@123', perfil: 'AGENTE' as Role },
       ]),
@@ -60,6 +62,23 @@ async function main() {
       update: { nome: u.nome, perfil: u.perfil, ativo: true },
       create: { nome: u.nome, email, perfil: u.perfil, senhaHash: await bcrypt.hash(u.senha, 10) },
     });
+  }
+
+  /*
+   * O comercial de demonstracao fica na equipe do gestor.
+   *
+   * Sem isso, "escopo de equipe" nao da para experimentar a mao no ambiente de
+   * desenvolvimento: um gestor sem subordinado ve exatamente o mesmo que um
+   * comercial, e a diferenca entre os dois perfis fica invisivel.
+   */
+  if (!PRODUCAO) {
+    const gestor = await prisma.user.findFirst({ where: { email: 'gestor@plataforma.local' } });
+    if (gestor) {
+      await prisma.user.updateMany({
+        where: { email: 'comercial@plataforma.local' },
+        data: { gestorId: gestor.id },
+      });
+    }
   }
 
   const filas = [

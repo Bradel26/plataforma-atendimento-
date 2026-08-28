@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const perfil = z.enum(['ADMIN', 'SUPERVISOR', 'AGENTE']);
+const perfil = z.enum(['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL', 'AGENTE']);
 const status = z.enum(['OFFLINE', 'DISPONIVEL', 'EM_ATENDIMENTO', 'PAUSA']);
 
 export const createUserSchema = z.object({
@@ -17,6 +17,13 @@ export const updateUserSchema = z
     senha: z.string().min(8, 'A senha deve ter ao menos 8 caracteres').optional(),
     perfil: perfil.optional(),
     ativo: z.boolean().optional(),
+    /**
+     * Gestor direto. Define a equipe do perfil GESTOR.
+     *
+     * Sem este campo, `gestorId` so existiria mexendo no banco — e um escopo de
+     * equipe que nao da para configurar e um escopo que ninguem usa.
+     */
+    gestorId: z.string().uuid().nullable().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, { message: 'Informe ao menos um campo' });
 

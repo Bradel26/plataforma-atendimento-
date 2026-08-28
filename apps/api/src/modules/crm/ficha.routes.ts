@@ -6,6 +6,15 @@ import { validateBody, validateQuery } from '../../http/middleware/validate';
 import { param } from '../../http/params';
 import { badRequest, notFound } from '../../lib/errors';
 import { prisma } from '../../lib/prisma';
+import {
+  filtroDe,
+  politicaAtividades,
+  politicaContas,
+  politicaContatos,
+  politicaOportunidades,
+  politicaProtocolos,
+} from '../../lib/politicas';
+import { apenasVisivel } from '../../lib/visibilidade';
 import { TIPOS_EVENTO, fichaConta, fichaContato, timeline } from './ficha.service';
 
 export const fichaRoutes = Router();
@@ -59,8 +68,8 @@ fichaRoutes.get(
     // A conta entra na raiz para que a ficha do contato mostre tambem o que
     // aconteceu com a empresa dele — sem isso, a "vida do cliente" para no
     // atendimento e nunca chega na oportunidade.
-    const contato = await prisma.contact.findUnique({
-      where: { id: contatoId },
+    const contato = await prisma.contact.findFirst({
+      where: apenasVisivel(contatoId, await filtroDe(politicaContatos)),
       select: { contaId: true },
     });
     if (!contato) throw notFound('Contato nao encontrado');
@@ -75,7 +84,10 @@ fichaRoutes.get(
   validateQuery(timelineSchema),
   asyncHandler(async (req, res) => {
     const contaId = param(req, 'id');
-    const existe = await prisma.account.findUnique({ where: { id: contaId }, select: { id: true } });
+    const existe = await prisma.account.findFirst({
+      where: apenasVisivel(contaId, await filtroDe(politicaContas)),
+      select: { id: true },
+    });
     if (!existe) throw notFound('Conta nao encontrada');
 
     const q = res.locals.query as z.infer<typeof timelineSchema>;
@@ -153,11 +165,16 @@ atividadesRoutes.get(
 
     const atividades = await prisma.activity.findMany({
       where: {
-        ...situacao,
-        contatoId: q.contatoId,
-        contaId: q.contaId,
-        oportunidadeId: q.oportunidadeId,
-        responsavelId: q.responsavelId,
+        AND: [
+          {
+            ...situacao,
+            contatoId: q.contatoId,
+            contaId: q.contaId,
+            oportunidadeId: q.oportunidadeId,
+            responsavelId: q.responsavelId,
+          },
+          await filtroDe(politicaAtividades),
+        ],
       },
       // Tarefa em aberto ordena pelo prazo mais proximo; o resto, pelo mais
       // recente. `nulls: 'last'` deixa o registro sem prazo no fim.
@@ -190,14 +207,48 @@ async function conferirVinculos(dados: {
   oportunidadeId?: string | null;
   protocoloId?: string | null;
 }) {
+  /*
+   * Cada vinculo passa pela politica do proprio dominio.
+   *
+   * Antes a conferencia so garantia que o registro era da mesma **organizacao**
+   * — o que fechava o furo que o smoke:tenant achou na fundacao. Agora garante
+   * tambem que ele esta no **escopo de quem escreve**: sem isso, um comercial
+   * penduraria uma atividade no contato da carteira do colega, e a atividade
+   * apareceria na ficha alheia.
+   */
   const conferencias: Array<[string | null | undefined, () => Promise<unknown>]> = [
-    [dados.contatoId, () => prisma.contact.findFirst({ where: { id: dados.contatoId! }, select: { id: true } })],
-    [dados.contaId, () => prisma.account.findFirst({ where: { id: dados.contaId! }, select: { id: true } })],
+    [
+      dados.contatoId,
+      async () =>
+        prisma.contact.findFirst({
+          where: apenasVisivel(dados.contatoId!, await filtroDe(politicaContatos)),
+          select: { id: true },
+        }),
+    ],
+    [
+      dados.contaId,
+      async () =>
+        prisma.account.findFirst({
+          where: apenasVisivel(dados.contaId!, await filtroDe(politicaContas)),
+          select: { id: true },
+        }),
+    ],
     [
       dados.oportunidadeId,
-      () => prisma.opportunity.findFirst({ where: { id: dados.oportunidadeId! }, select: { id: true } }),
+      async () =>
+        prisma.opportunity.findFirst({
+          where: apenasVisivel(dados.oportunidadeId!, await filtroDe(politicaOportunidades)),
+          select: { id: true },
+        }),
     ],
-    [dados.protocoloId, () => prisma.ticket.findFirst({ where: { id: dados.protocoloId! }, select: { id: true } })],
+    [
+      dados.protocoloId,
+      async () =>
+        prisma.ticket.findFirst({
+          where: apenasVisivel(dados.protocoloId!, await filtroDe(politicaProtocolos)),
+          select: { id: true },
+        }),
+    ],
   ];
 
   for (const [valor, buscar] of conferencias) {
@@ -235,8 +286,20 @@ atividadesRoutes.patch(
   validateBody(atualizarSchema),
   asyncHandler(async (req, res) => {
     const id = param(req, 'id');
-    const existe = await prisma.activity.findUnique({ where: { id }, select: { id: true } });
+    const existe = await prisma.activity.findFirst({
+      where: apenasVisivel(id, await filtroDe(politicaAtividades)),
+      select: { id: true },
+    });
     if (!existe) throw notFound('Atividade nao encontrada');
+    /*
+     * Sem conferencia de vinculo aqui, e de proposito: o `atualizarSchema` da
+     * atividade nao aceita `contatoId`, `contaId` nem `oportunidadeId` — so
+     * tipo, titulo, descricao, prazo e responsavel. Nao ha vinculo para
+     * atravessar. O TypeScript confirmou isso ao recusar a chamada por "no
+     * properties in common", o que e uma forma barata de auditar esta classe de
+     * furo: se alguem acrescentar `contatoId` ao schema, a conferencia volta a
+     * ser necessaria e a ausencia dela deixa de ser justificavel.
+     */
 
     const atividade = await prisma.activity.update({
       where: { id },
@@ -252,8 +315,8 @@ atividadesRoutes.post(
   '/:id/concluir',
   asyncHandler(async (req, res) => {
     const id = param(req, 'id');
-    const atual = await prisma.activity.findUnique({
-      where: { id },
+    const atual = await prisma.activity.findFirst({
+      where: apenasVisivel(id, await filtroDe(politicaAtividades)),
       select: { concluidoEm: true },
     });
     if (!atual) throw notFound('Atividade nao encontrada');
@@ -273,7 +336,10 @@ atividadesRoutes.post(
   '/:id/reabrir',
   asyncHandler(async (req, res) => {
     const id = param(req, 'id');
-    const existe = await prisma.activity.findUnique({ where: { id }, select: { id: true } });
+    const existe = await prisma.activity.findFirst({
+      where: apenasVisivel(id, await filtroDe(politicaAtividades)),
+      select: { id: true },
+    });
     if (!existe) throw notFound('Atividade nao encontrada');
 
     const atividade = await prisma.activity.update({
@@ -290,7 +356,10 @@ atividadesRoutes.delete(
   '/:id',
   asyncHandler(async (req, res) => {
     const id = param(req, 'id');
-    const existe = await prisma.activity.findUnique({ where: { id }, select: { id: true } });
+    const existe = await prisma.activity.findFirst({
+      where: apenasVisivel(id, await filtroDe(politicaAtividades)),
+      select: { id: true },
+    });
     if (!existe) throw notFound('Atividade nao encontrada');
 
     await prisma.activity.delete({ where: { id } });

@@ -1,5 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
+import { exigirVinculosVisiveis, filtroDe, politicaConversas, politicaProtocolos } from '../../lib/politicas';
+import { apenasVisivel } from '../../lib/visibilidade';
 import { urlAssinada } from '../../lib/storage';
 import { apos, decodificarCursor, fatiar } from '../../lib/paginacao';
 import { badRequest, notFound } from '../../lib/errors';
@@ -66,8 +68,30 @@ function serialize(t: TicketDb) {
   };
 }
 
+/**
+ * Carrega sem escopo. Uso interno: `publicar` recarrega o protocolo depois de
+ * uma escrita para serializar e notificar.
+ *
+ * Filtrar aqui teria um efeito perverso: um agente que abre protocolo sem
+ * responsavel numa fila que nao e dele receberia 404 do registro que ele mesmo
+ * acabou de criar. Quem precisa de escopo usa `carregarVisivel`.
+ */
 async function carregar(id: string) {
   const ticket = await prisma.ticket.findUnique({ where: { id }, include: inclusao });
+  if (!ticket) throw notFound('Chamado nao encontrado');
+  return ticket;
+}
+
+/**
+ * Carrega dentro do escopo de quem pediu — o mesmo filtro da listagem.
+ *
+ * Protocolo fora do escopo responde 404, nao 403.
+ */
+async function carregarVisivel(id: string) {
+  const ticket = await prisma.ticket.findFirst({
+    where: apenasVisivel(id, await filtroDe(politicaProtocolos)),
+    include: inclusao,
+  });
   if (!ticket) throw notFound('Chamado nao encontrado');
   return ticket;
 }
@@ -105,8 +129,10 @@ export async function listarTickets(query: ListarTicketsQuery) {
   const depois = apos('atualizadoEm', decodificarCursor(query.cursor));
   if (depois) filtros.push(depois);
 
+  // O escopo entra sempre; `{}` sem filtro nenhum era "sem restricao".
+  filtros.push(await filtroDe(politicaProtocolos));
   const registros = await prisma.ticket.findMany({
-    where: filtros.length > 0 ? { AND: filtros } : {},
+    where: { AND: filtros },
     include: inclusao,
     orderBy: [{ atualizadoEm: 'desc' }, { id: 'desc' }],
     take: query.limite + 1,
@@ -117,7 +143,7 @@ export async function listarTickets(query: ListarTicketsQuery) {
 }
 
 export async function obterTicket(id: string) {
-  return serialize(await carregar(id));
+  return serialize(await carregarVisivel(id));
 }
 
 /**
@@ -144,8 +170,15 @@ async function reservarNumero(): Promise<number> {
 }
 
 export async function criarTicket(input: CriarTicketInput, autorId: string) {
+  // Contato, conta e conversa vem por id no corpo: sem esta conferencia, abrir
+  // um protocolo era o caminho para pendurar trabalho no cliente de outra
+  // carteira — e, antes do 1.2, nem a organizacao era conferida aqui.
+  await exigirVinculosVisiveis(input);
+
   if (input.conversaId) {
-    const conversa = await prisma.conversation.findUnique({ where: { id: input.conversaId } });
+    const conversa = await prisma.conversation.findFirst({
+      where: apenasVisivel(input.conversaId, await filtroDe(politicaConversas)),
+    });
     if (!conversa) throw notFound('Conversa de origem nao encontrada');
     // Herda contato e fila da conversa quando nao informados.
     input.contatoId ??= conversa.contatoId;
@@ -160,7 +193,10 @@ export async function criarTicket(input: CriarTicketInput, autorId: string) {
 }
 
 export async function atualizarTicket(id: string, input: AtualizarTicketInput) {
-  const atual = await carregar(id);
+  const atual = await carregarVisivel(id);
+  // O `input` inteiro vai para o `update` mais abaixo, e ele aceita trocar
+  // contato e conta do protocolo.
+  await exigirVinculosVisiveis(input);
   if (atual.status === 'FECHADO' && input.status !== 'ABERTO' && input.status !== 'EM_ANDAMENTO') {
     throw badRequest('Chamado fechado — reabra mudando o status para ABERTO ou EM_ANDAMENTO');
   }
@@ -182,7 +218,7 @@ export async function atualizarTicket(id: string, input: AtualizarTicketInput) {
 }
 
 export async function comentar(id: string, autorId: string, conteudo: string, interno: boolean) {
-  await carregar(id);
+  await carregarVisivel(id);
   await prisma.ticketComment.create({ data: { ticketId: id, autorId, conteudo, interno } });
   return publicar(id);
 }
@@ -192,13 +228,13 @@ export async function anexar(
   autorId: string,
   dados: { nome: string; url: string; tipo?: string | null; tamanho?: number | null },
 ) {
-  await carregar(id);
+  await carregarVisivel(id);
   await prisma.ticketAttachment.create({ data: { ticketId: id, autorId, ...dados } });
   return publicar(id);
 }
 
 export async function agendar(id: string, input: AgendamentoInput) {
-  await carregar(id);
+  await carregarVisivel(id);
   if (input.fim && input.fim <= input.inicio) throw badRequest('O fim deve ser depois do inicio');
   await prisma.ticketSchedule.create({ data: { ticketId: id, ...input } });
   return publicar(id);

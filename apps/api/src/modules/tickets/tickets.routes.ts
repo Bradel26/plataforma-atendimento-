@@ -6,6 +6,8 @@ import { validateBody, validateQuery } from '../../http/middleware/validate';
 import { param } from '../../http/params';
 import { notFound } from '../../lib/errors';
 import { prisma } from '../../lib/prisma';
+import { filtroDe, politicaProtocolos } from '../../lib/politicas';
+import { apenasVisivel } from '../../lib/visibilidade';
 import { limiteBytes, salvar } from '../../lib/storage';
 import {
   agendamentoSchema,
@@ -144,7 +146,11 @@ ticketsRoutes.delete(
   requireRole('ADMIN', 'SUPERVISOR'),
   asyncHandler(async (req, res) => {
     const id = param(req, 'id');
-    const existe = await prisma.ticket.findUnique({ where: { id } });
+    // DELETE e de ADMIN/SUPERVISOR, que veem tudo — no-op hoje, trava no lugar
+    // se o perfil for ampliado depois.
+    const existe = await prisma.ticket.findFirst({
+      where: apenasVisivel(id, await filtroDe(politicaProtocolos)),
+    });
     if (!existe) throw notFound('Chamado nao encontrado');
     await prisma.ticket.delete({ where: { id } });
     res.status(204).end();

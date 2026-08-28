@@ -60,8 +60,13 @@ backend na mesma origem (necessário para o cookie de refresh).
 |---|---|---|
 | Administrador | `admin@plataforma.local` | `Admin@123` |
 | Supervisor | `supervisor@plataforma.local` | `Super@123` |
+| Gestor | `gestor@plataforma.local` | `Gestor@123` |
+| Comercial | `comercial@plataforma.local` | `Comer@123` |
 | Agente | `agente1@plataforma.local` | `Agente@123` |
 | Agente | `agente2@plataforma.local` | `Agente@123` |
+
+O comercial de demonstração fica na equipe do gestor (`gestorId`), para dar o que experimentar no
+escopo de equipe — um gestor sem subordinado enxerga o mesmo que um comercial.
 
 ## Scripts
 
@@ -70,7 +75,7 @@ backend na mesma origem (necessário para o cookie de refresh).
 | `npm run dev` | API e web em modo watch |
 | `npm run dev:api` / `npm run dev:web` | apenas um dos dois |
 | `npm run typecheck` | TypeScript nos dois apps |
-| `npm test` | suíte de unidade (131 testes, sem infraestrutura) |
+| `npm test` | suíte de unidade (149 testes, sem infraestrutura) |
 | `npm run build` | build de produção |
 | `npm run db:studio` | Prisma Studio |
 | `npm run infra:up` / `infra:down` | containers de dados |
@@ -89,10 +94,11 @@ backend na mesma origem (necessário para o cookie de refresh).
 | `npm run smoke:worker` | volta dos trabalhos mortos para a fila (12 checagens) |
 | `npm run smoke:ficha` | linha do tempo da ficha 360: ordem, cursor, filtro e atividades (48 checagens) |
 | `npm run smoke:ia` | ponte com o motor de IA externo, com webhook de verdade (46 checagens) |
-| `npm run smoke:tenant` | isolamento entre duas organizacoes: listagem, id direto, escrita cruzada, tempo real, arquivo, token de integracao, unicidades (49 checagens) |
+| `npm run smoke:tenant` | isolamento entre duas organizacoes: listagem, id direto, escrita cruzada, tempo real, arquivo, token de integracao, unicidades, vinculo apontando para usuario de outra organizacao (52 checagens) |
+| `npm run smoke:visibilidade` | escopo **dentro** de uma organização: cinco perfis, listagem, id direto, fora do escopo, equipe, sem responsável, herança do responsável, escrita cruzada por id, configurabilidade do escopo (60 checagens) |
 | `npm run censo:tenant` | censo do banco: migrations aplicadas, organizações e contador de protocolo, linhas e `organizacao_id` ausente por tabela (`--comparar` contra um censo salvo, `--env <arquivo>` para apontar a outro banco sem expor a credencial na linha de comando) |
 | `npm run backup:banco -- <arquivo .env> [destino.json]` | retrato logico do banco em JSON, antes de migration estrutural (esta maquina nao tem `pg_dump`) |
-| `npm run validar:producao -- <url> <arquivo .env> [saida.json]` | validação de produção por HTTP, somente leitura: login, permissões, contagens de 12 listagens, protocolo, arquivo, webchat, ponte de IA, Socket.IO (23 checagens) |
+| `npm run validar:producao -- <url> <arquivo .env> [saida.json]` | validação de produção por HTTP, somente leitura: login, permissões, contagens de 12 listagens, detalhe de contato/ficha/conversa/fila/funil, protocolo, arquivo, webchat, ponte de IA, Socket.IO (31 checagens) |
 | `npm run observar:deploy -- <url> <arquivo .env> [minutos]` | detecta a troca de container mantendo um Socket.IO aberto (o `health` responde 200 antes e depois) |
 | `E2E_BASE_URL=<url> npm run e2e:producao` | navegador contra produção, **somente leitura**: rotas do CRM, F5, botão voltar, menu ativo e 404 (4 casos). Credenciais lidas de `ENV_PRODUCAO`, padrão `apps/api/.env.coolify` |
 
@@ -197,11 +203,28 @@ WebSocket em `/socket.io`. Contrato de eventos e salas documentado no [SCOPE.md]
 
 ## Perfis
 
-- **ADMIN** — acesso total, incluindo Configurações (usuários, filas, White Label).
-- **SUPERVISOR** — tudo menos Configurações; pode vincular agentes a filas.
-- **AGENTE** — Atendimento, Protocolo e CRM.
+Cinco perfis. **Perfil** decide o que a pessoa pode *fazer*; **escopo de visibilidade** decide
+*quais registros* da própria organização ela enxerga (decisão 51 do SCOPE.md).
 
-O menu lateral é filtrado por perfil e as rotas do frontend seguem a mesma regra do backend.
+| Perfil | Telas | Escopo de dados |
+|---|---|---|
+| **ADMIN** | tudo, incluindo Configurações (usuários, filas, White Label, integrações) | toda a organização |
+| **SUPERVISOR** | tudo menos o administrativo restrito ao ADMIN; vincula agentes a filas | toda a organização |
+| **GESTOR** | CRM, Dashboards, Relatórios, Monitoramento | próprios + **equipe direta** (`gestorId`), um nível |
+| **COMERCIAL** | CRM | próprios + carteira aberta (registros sem responsável) |
+| **AGENTE** | Atendimento, Protocolo, CRM sem as abas Leads, Oportunidades, Produtos e Importar/Exportar | próprios + operacional de filas; contato só por **vínculo operacional** |
+
+O menu lateral é filtrado por perfil e as rotas do frontend seguem a mesma regra do backend. Uma
+subrota (`/oportunidades/:id`) pode **restringir** os perfis do módulo, nunca ampliar — `nav.test.ts`
+falha se alguém tentar.
+
+Duas respostas distintas de propósito: **404** para registro que existe e não é seu (403 confirmaria
+que ele existe), e **403** para processo que não é do perfil — um agente pedindo `/leads` recebe 403,
+não lista vazia, porque lista vazia diria "não há leads".
+
+`responsavelId = null` **não** significa "de todos": é carteira aberta para gestão e comercial, e
+para o AGENTE não abre nada sem vínculo operacional. Protocolo e conversa sem responsável seguem a
+**fila**, não a carteira.
 
 ## White Label
 
@@ -598,7 +621,7 @@ barra, e quem quer o número exato também prefere a tabela.
 
 ```bash
 npm run dev            # em outro terminal: API, web, Postgres e Redis de pé
-npm run test:e2e       # 43 testes em Chromium
+npm run test:e2e       # 48 testes em Chromium
 npm run test:e2e:ui    # modo interativo, para depurar
 ```
 

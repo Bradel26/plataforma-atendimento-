@@ -30,6 +30,17 @@ export const funnelsRoutes = Router();
 opportunitiesRoutes.use(requireAuth);
 funnelsRoutes.use(requireAuth);
 
+/**
+ * Oportunidade e funil sao processo comercial: AGENTE fora.
+ *
+ * Ele continua vendo informacao comercial **resumida** dentro da ficha do
+ * cliente, que e outra rota (`/contas/:id`) e outra porta de entrada — o que
+ * fica barrado aqui e lista, kanban e detalhe operacional.
+ */
+const COMERCIAIS = requireRole('ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL');
+opportunitiesRoutes.use(COMERCIAIS);
+funnelsRoutes.use(COMERCIAIS);
+
 funnelsRoutes.get(
   '/',
   asyncHandler(async (_req, res) => {

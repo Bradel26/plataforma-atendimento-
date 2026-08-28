@@ -21,10 +21,22 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction) {
   try {
     const usuario = verifyAccessToken(header.slice('Bearer '.length).trim());
     req.user = usuario;
-    // O contexto envolve o `next()`: tudo o que rodar depois — handler, service,
-    // consulta — herda a organizacao, incluindo as continuacoes assincronas.
-    // E daqui que o isolamento sai de graca para o resto do codigo.
-    comOrganizacao(usuario.org, () => next());
+    /*
+     * O contexto envolve o `next()`: tudo o que rodar depois — handler, service,
+     * consulta — herda a organizacao, incluindo as continuacoes assincronas.
+     * E daqui que o isolamento sai de graca para o resto do codigo.
+     *
+     * O **usuario** entra junto, e nao apenas no `asyncHandler`. Motivo achado
+     * na primeira execucao do `smoke:visibilidade`: como este middleware abre o
+     * contexto antes, o `asyncHandler` encontrava contexto ja ativo, pulava a
+     * abertura — corretamente, para nao aninhar — e com isso o usuario nunca
+     * chegava. Toda listagem respondia 500 com `SEM_USUARIO_NO_CONTEXTO`.
+     *
+     * Vale registrar que o modo de falha foi barulhento: "ausencia lanca"
+     * transformou um contexto incompleto em erro imediato, e nao numa consulta
+     * sem filtro devolvendo a organizacao inteira.
+     */
+    comOrganizacao(usuario.org, () => next(), { id: usuario.sub, perfil: usuario.perfil });
   } catch (err) {
     next(err);
   }

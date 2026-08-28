@@ -75,6 +75,10 @@ model Organizacao {
 enum Role {
   ADMIN
   SUPERVISOR
+  /// Gestao comercial: enxerga a propria equipe direta (ver `gestorId`).
+  GESTOR
+  /// Vendas: enxerga a propria carteira e o que esta sem responsavel.
+  COMERCIAL
   AGENTE
 }
 
@@ -96,6 +100,9 @@ model User {
   status        AgentStatus @default(OFFLINE)
   ativo         Boolean     @default(true)
   ultimoLogin   DateTime?   @map("ultimo_login")
+  /// Gestor direto. Define a equipe do perfil GESTOR: equipe dele sao os
+  /// usuarios que apontam para ele. Um nivel, sem arvore recursiva.
+  gestorId      String?     @map("gestor_id")
   criadoEm      DateTime    @default(now()) @map("criado_em")
   atualizadoEm  DateTime    @updatedAt @map("atualizado_em")
 
@@ -118,12 +125,18 @@ model User {
   mudancasEstagio   OpportunityStageLog[]
   tokensIntegracao  IntegrationToken[]
   organizacao       Organizacao           @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  /// SetNull: desligar o gestor nao pode apagar a equipe dele.
+  gestor            User?                 @relation("Equipe", fields: [gestorId], references: [id], onDelete: SetNull)
+  equipe            User[]                @relation("Equipe")
+  contatos          Contact[]             @relation("ContatoResponsavel")
+  contas            Account[]             @relation("ContaResponsavel")
 
   /// E-mail unico POR ORGANIZACAO. A mesma pessoa em duas empresas sao dois
   /// registros, com senhas independentes — vinculo N-para-N e troca de
   /// organizacao na sessao sao complexidade de SaaS que ficou fora deste passo.
   @@unique([organizacaoId, email])
   @@index([organizacaoId, perfil])
+  @@index([organizacaoId, gestorId])
   @@map("usuarios")
 }
 
@@ -238,9 +251,15 @@ model Contact {
   criadoEm        DateTime  @default(now()) @map("criado_em")
   atualizadoEm    DateTime  @updatedAt @map("atualizado_em")
 
-  contaId String? @map("conta_id")
+  contaId       String? @map("conta_id")
+  /// Responsavel proprio do contato. Anulavel: contato nasce sozinho no webchat
+  /// e ninguem o assume. Ao criar vinculado a uma conta, recebe o responsavel
+  /// dela como valor INICIAL — depois os dois sao independentes, e trocar o
+  /// responsavel da conta nao propaga.
+  responsavelId String? @map("responsavel_id")
 
   conta         Account?       @relation(fields: [contaId], references: [id], onDelete: SetNull)
+  responsavel   User?          @relation("ContatoResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
   conversas     Conversation[]
   leads         Lead[]
   protocolos    Ticket[]
@@ -251,6 +270,7 @@ model Contact {
 
   @@index([organizacaoId, email])
   @@index([organizacaoId, telefone])
+  @@index([organizacaoId, responsavelId])
   @@map("contatos")
 }
 
@@ -356,6 +376,10 @@ model Account {
   telefone      String?
   email         String?
   observacoes   String?
+  /// Responsavel principal pela carteira. Anulavel: conta sem responsavel e
+  /// carteira aberta, visivel para os perfis comerciais e de gestao — esconder
+  /// cliente sem dono impediria alguem de assumi-lo.
+  responsavelId String?  @map("responsavel_id")
   criadoEm      DateTime @default(now()) @map("criado_em")
   atualizadoEm  DateTime @updatedAt @map("atualizado_em")
 
@@ -364,11 +388,13 @@ model Account {
   oportunidades Opportunity[]
   protocolos    Ticket[]
   atividades    Activity[]
+  responsavel   User?         @relation("ContaResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
   organizacao   Organizacao   @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
   /// CNPJ unico por organizacao: o mesmo cliente pode ser de duas empresas.
   @@unique([organizacaoId, cnpj])
   @@index([organizacaoId, nome])
+  @@index([organizacaoId, responsavelId])
   @@map("contas")
 }
 

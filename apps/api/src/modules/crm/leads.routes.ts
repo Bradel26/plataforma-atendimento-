@@ -17,6 +17,15 @@ import {
 export const leadsRoutes = Router();
 
 leadsRoutes.use(requireAuth);
+/**
+ * Lead e processo comercial: AGENTE nao navega pela base de prospeccao.
+ *
+ * A trava e por **perfil**, e nao por escopo: um agente pedindo a lista nao deve
+ * receber uma lista vazia (o que sugere "nao ha leads"), e sim 403 — a acao nao
+ * e dele. Escopo decide *quais* registros; perfil decide *se* a rota existe.
+ * A politica de lead ainda recusa por dentro, como segunda trava.
+ */
+leadsRoutes.use(requireRole('ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'));
 
 leadsRoutes.get(
   '/',

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NAV, itemDaRota } from './nav';
+import { NAV, itemDaRota, perfisDaSubrota, subrotaDaRota } from './nav';
 
 /**
  * O menu como fonte unica de rota e permissao.
@@ -22,11 +22,36 @@ describe('navegacao', () => {
     }
   });
 
-  it('a rota de registro herda exatamente os perfis do modulo', () => {
+  it('subrota sem perfis proprios herda os do modulo', () => {
     const crm = NAV.find((i) => i.rota === '/crm')!;
-    for (const caminho of ['/contatos/abc', '/clientes/abc', '/oportunidades/abc']) {
-      expect(itemDaRota(caminho)?.perfis).toEqual(crm.perfis);
+    for (const caminho of ['/contatos/abc', '/clientes/abc']) {
+      const achado = subrotaDaRota(caminho)!;
+      expect(perfisDaSubrota(achado.item, achado.sub)).toEqual(crm.perfis);
     }
+  });
+
+  it('subrota RESTRINGE, nunca amplia os perfis do modulo', () => {
+    /*
+     * A regra que sustenta a permissao das rotas de registro.
+     *
+     * Restringir e legitimo: `/oportunidades/:id` e um subconjunto de quem ve o
+     * CRM, porque o AGENTE ve o CRM e nao ve oportunidade. **Ampliar** seria
+     * criar permissao nova por uma porta lateral — a rota de detalhe e o caminho
+     * que nao passa pelo menu, e quem digita a URL nunca viu a barra lateral.
+     */
+    for (const item of NAV) {
+      for (const sub of item.subrotas ?? []) {
+        const excedentes = perfisDaSubrota(item, sub).filter((p) => !item.perfis.includes(p));
+        expect(excedentes, `${sub.rota} amplia os perfis de ${item.rota}`).toEqual([]);
+      }
+    }
+  });
+
+  it('a oportunidade e a subrota restrita: sem AGENTE', () => {
+    const crm = NAV.find((i) => i.rota === '/crm')!;
+    const sub = crm.subrotas!.find((s) => s.rota === '/oportunidades/:id')!;
+    expect(crm.perfis).toContain('AGENTE');
+    expect(perfisDaSubrota(crm, sub)).not.toContain('AGENTE');
   });
 
   it('toda subrota declarada resolve de volta para quem a declarou', () => {
@@ -35,8 +60,8 @@ describe('navegacao', () => {
     // aqui, e nao em producao com a permissao errada.
     for (const item of NAV) {
       for (const subrota of item.subrotas ?? []) {
-        const exemplo = subrota.replace(/\/:[^/]+/g, '/exemplo');
-        expect(itemDaRota(exemplo)?.rota, `${subrota} deveria pertencer a ${item.rota}`).toBe(item.rota);
+        const exemplo = subrota.rota.replace(/\/:[^/]+/g, '/exemplo');
+        expect(itemDaRota(exemplo)?.rota, `${subrota.rota} deveria pertencer a ${item.rota}`).toBe(item.rota);
       }
     }
   });
@@ -61,8 +86,8 @@ describe('navegacao', () => {
     const rotas = new Set(NAV.map((i) => i.rota));
     for (const item of NAV) {
       for (const subrota of item.subrotas ?? []) {
-        const base = subrota.slice(0, subrota.indexOf('/:'));
-        expect(rotas.has(base), `${subrota} colide com o modulo ${base}`).toBe(false);
+        const base = subrota.rota.slice(0, subrota.rota.indexOf('/:'));
+        expect(rotas.has(base), `${subrota.rota} colide com o modulo ${base}`).toBe(false);
       }
     }
   });

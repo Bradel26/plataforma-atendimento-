@@ -1,5 +1,7 @@
 import type { AttachmentType, Prisma, Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
+import { filtroDe, politicaConversas } from '../../lib/politicas';
+import { apenasVisivel } from '../../lib/visibilidade';
 import { salvar } from '../../lib/storage';
 import { apos, decodificarCursor, fatiar } from '../../lib/paginacao';
 import { badRequest, forbidden, notFound } from '../../lib/errors';
@@ -19,28 +21,21 @@ import type { ListarConversasQuery, TransferirInput } from './conversations.sche
 
 export type Solicitante = { sub: string; perfil: Role; nome: string };
 
-const eGestao = (perfil: Role) => perfil === 'ADMIN' || perfil === 'SUPERVISOR';
-
 /**
- * Agente ve as conversas dele e as que estao em espera nas filas em que atua.
- * Gestao ve tudo.
+ * O escopo de visibilidade saiu daqui.
+ *
+ * Era uma funcao privada deste modulo, o que bastava enquanto conversa era o
+ * unico dominio com escopo. Com contato, conta, lead, oportunidade, atividade e
+ * protocolo entrando na mesma conversa, a regra virou infraestrutura
+ * compartilhada em `lib/politicas.ts` — e, mais importante, **listagem e acesso
+ * por id passaram a usar o mesmo filtro**. Antes eram duas implementacoes da
+ * mesma regra (`escopoVisivel` e `garantirAcesso`), que e exatamente a forma de
+ * uma delas ficar para tras numa mudanca futura.
  */
-async function escopoVisivel(solicitante: Solicitante): Promise<Prisma.ConversationWhereInput> {
-  if (eGestao(solicitante.perfil)) return {};
-
-  const vinculos = await prisma.queueAgent.findMany({
-    where: { usuarioId: solicitante.sub },
-    select: { filaId: true },
-  });
-  const filaIds = vinculos.map((v) => v.filaId);
-
-  return {
-    OR: [{ agenteId: solicitante.sub }, { status: 'EM_ESPERA', filaId: { in: filaIds } }],
-  };
-}
+const escopoVisivel = () => filtroDe(politicaConversas);
 
 export async function listarConversas(solicitante: Solicitante, query: ListarConversasQuery) {
-  const filtros: Prisma.ConversationWhereInput[] = [await escopoVisivel(solicitante)];
+  const filtros: Prisma.ConversationWhereInput[] = [await escopoVisivel()];
 
   if (query.status) filtros.push({ status: query.status });
   if (query.minhas === 'true') filtros.push({ agenteId: solicitante.sub });
@@ -84,7 +79,6 @@ export async function listarMensagens(
   query: { limite: number; cursor?: string },
 ) {
   const conversa = await carregarOuFalhar(id);
-  await garantirAcesso(solicitante, conversa);
 
   const cursor = decodificarCursor(query.cursor);
   const registros = await prisma.message.findMany({
@@ -102,7 +96,7 @@ export async function listarMensagens(
 export async function contarPorStatus(solicitante: Solicitante) {
   const grupos = await prisma.conversation.groupBy({
     by: ['status'],
-    where: await escopoVisivel(solicitante),
+    where: await escopoVisivel(),
     _count: { _all: true },
   });
 
@@ -111,32 +105,27 @@ export async function contarPorStatus(solicitante: Solicitante) {
   return base;
 }
 
+/**
+ * Carrega a conversa **dentro do escopo de quem pediu**.
+ *
+ * O id entra no mesmo `where` da politica, e nao numa checagem depois da carga.
+ * Consequencia deliberada: conversa fora do escopo responde **404**, nao 403.
+ * "Proibido" contaria que a conversa existe e a quem ela pertence — e a regra da
+ * casa, desde a fundacao de organizacao, e nao confirmar existencia do que nao e
+ * seu. 403 continua sendo a resposta certa para o outro caso: **acao** que o
+ * perfil nao pode executar, que e assunto de `requireRole`.
+ */
 async function carregarOuFalhar(id: string) {
-  const conversa = await prisma.conversation.findUnique({ where: { id }, include: inclusaoDetalhe });
+  const conversa = await prisma.conversation.findFirst({
+    where: apenasVisivel(id, await filtroDe(politicaConversas)),
+    include: inclusaoDetalhe,
+  });
   if (!conversa) throw notFound('Conversa nao encontrada');
   return conversa;
 }
 
-/** Agente so acessa conversa propria ou em espera na fila dele. */
-async function garantirAcesso(
-  solicitante: Solicitante,
-  conversa: { agenteId: string | null; filaId: string | null; status: string },
-) {
-  if (eGestao(solicitante.perfil)) return;
-  if (conversa.agenteId === solicitante.sub) return;
-
-  if (conversa.status === 'EM_ESPERA' && conversa.filaId) {
-    const vinculo = await prisma.queueAgent.findUnique({
-      where: { filaId_usuarioId: { filaId: conversa.filaId, usuarioId: solicitante.sub } },
-    });
-    if (vinculo) return;
-  }
-  throw forbidden('Esta conversa esta atribuida a outro agente');
-}
-
 export async function obterConversa(solicitante: Solicitante, id: string) {
   const conversa = await carregarOuFalhar(id);
-  await garantirAcesso(solicitante, conversa);
   return toConversaDetalhe(conversa);
 }
 
@@ -151,7 +140,6 @@ export async function assumirConversa(solicitante: Solicitante, id: string) {
   if (conversa.agenteId && conversa.agenteId !== solicitante.sub) {
     throw badRequest('Conversa ja atribuida a outro agente');
   }
-  await garantirAcesso(solicitante, conversa);
 
   await prisma.conversation.update({
     where: { id },
@@ -165,7 +153,6 @@ export async function assumirConversa(solicitante: Solicitante, id: string) {
 export async function enviarMensagem(solicitante: Solicitante, id: string, conteudo: string) {
   const conversa = await carregarOuFalhar(id);
   if (conversa.status === 'FINALIZADO') throw badRequest('Conversa finalizada — nao aceita novas mensagens');
-  await garantirAcesso(solicitante, conversa);
 
   // Responder sem ter assumido atribui a conversa ao agente automaticamente.
   const assumir = conversa.agenteId ? {} : { agenteId: solicitante.sub, atribuidoEm: new Date() };
@@ -220,7 +207,6 @@ export async function enviarArquivo(
 ) {
   const conversa = await carregarOuFalhar(id);
   if (conversa.status === 'FINALIZADO') throw badRequest('Conversa finalizada — nao aceita novas mensagens');
-  await garantirAcesso(solicitante, conversa);
 
   const envio = exigeEnvioExterno(conversa.canal)
     ? await enviarArquivoParaCanal(conversa.canal, conversa.enderecoExterno, { ...arquivo, legenda })
@@ -267,7 +253,6 @@ function tipoAnexoDe(mime: string): AttachmentType {
 export async function transferirConversa(solicitante: Solicitante, id: string, input: TransferirInput) {
   const conversa = await carregarOuFalhar(id);
   if (conversa.status === 'FINALIZADO') throw badRequest('Conversa ja finalizada');
-  await garantirAcesso(solicitante, conversa);
 
   const sufixo = input.motivo ? ` Motivo: ${input.motivo}` : '';
 
@@ -301,7 +286,6 @@ export async function transferirConversa(solicitante: Solicitante, id: string, i
 export async function finalizarConversa(solicitante: Solicitante, id: string) {
   const conversa = await carregarOuFalhar(id);
   if (conversa.status === 'FINALIZADO') throw badRequest('Conversa ja finalizada');
-  await garantirAcesso(solicitante, conversa);
 
   await prisma.conversation.update({
     where: { id },
@@ -332,7 +316,6 @@ export async function finalizarConversa(solicitante: Solicitante, id: string) {
 /** Zera o contador de nao lidas ao abrir a conversa no painel. */
 export async function marcarComoLida(solicitante: Solicitante, id: string) {
   const conversa = await carregarOuFalhar(id);
-  await garantirAcesso(solicitante, conversa);
   if (conversa.naoLidas === 0) return toConversaDetalhe(conversa);
 
   await prisma.conversation.update({ where: { id }, data: { naoLidas: 0 } });

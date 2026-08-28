@@ -35,6 +35,7 @@
     "smoke:metricas": "node scripts/smoke-metricas.mjs",
     "smoke:ficha": "node scripts/smoke-ficha.mjs",
     "smoke:tenant": "node scripts/smoke-tenant.mjs",
+    "smoke:visibilidade": "node scripts/smoke-visibilidade.mjs",
     "censo:tenant": "node scripts/censo-tenant.mjs",
     "backup:banco": "node scripts/backup-producao.mjs",
     "validar:producao": "node scripts/validar-producao.mjs",

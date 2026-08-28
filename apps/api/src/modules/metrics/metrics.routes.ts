@@ -17,7 +17,7 @@ const periodoSchema = z.object({
 /** Indicadores do dashboard. Padrao: ultimas 24 horas. */
 metricsRoutes.get(
   '/indicadores',
-  requireRole('ADMIN', 'SUPERVISOR'),
+  requireRole('ADMIN', 'SUPERVISOR', 'GESTOR'),
   validateQuery(periodoSchema),
   asyncHandler(async (_req, res) => {
     const { desde, ate } = res.locals.query as z.infer<typeof periodoSchema>;
@@ -30,7 +30,7 @@ metricsRoutes.get(
 /** Painel de monitoramento em tempo real. */
 metricsRoutes.get(
   '/agentes',
-  requireRole('ADMIN', 'SUPERVISOR'),
+  requireRole('ADMIN', 'SUPERVISOR', 'GESTOR'),
   asyncHandler(async (_req, res) => {
     res.json({ agentes: await monitoramentoAgentes() });
   }),

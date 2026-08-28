@@ -185,3 +185,62 @@ test.describe('Rotas proprias do CRM', () => {
     await expect(cartao(page, nome)).toBeVisible();
   });
 });
+
+/**
+ * Escopo de visibilidade no que a tela mostra (passo 1.2).
+ *
+ * O que so o navegador prova: que as abas do processo comercial nao aparecem
+ * para o AGENTE, e que a rota de detalhe de oportunidade nao existe para ele.
+ * Esconder e melhor que deixar clicar e receber erro — uma aba que sempre falha
+ * e uma aba que nao deveria estar la.
+ *
+ * A regra de permissao em si e verificada no vitest (`nav.test.ts`), onde da
+ * para afirmar que subrota nunca amplia o perfil do modulo, e no
+ * `smoke:visibilidade`, que exercita os cinco perfis contra a API.
+ */
+test.describe('CRM: escopo por perfil', () => {
+  const abas = (page: Page) => page.locator('nav button');
+
+  test('o agente nao ve as abas do processo comercial', async ({ page }) => {
+    await entrar(page, 'agente', '/crm');
+
+    await expect(abas(page).filter({ hasText: 'Contatos' })).toBeVisible();
+    await expect(abas(page).filter({ hasText: 'Contas' })).toBeVisible();
+
+    // Lead e oportunidade sao processo comercial; produtos e importacao sao de
+    // gestao. A API recusa as quatro por perfil, entao a aba nao pode existir.
+    for (const proibida of ['Leads', 'Oportunidades', 'Produtos e precos', 'Importar / Exportar']) {
+      await expect(abas(page).filter({ hasText: proibida }), `aba ${proibida}`).toHaveCount(0);
+    }
+  });
+
+  test('o admin ve as seis abas', async ({ page }) => {
+    await entrar(page, 'admin', '/crm');
+    // O contraponto: sem ele, o teste acima passaria com o CRM inteiro quebrado.
+    await expect(abas(page)).toHaveCount(6);
+  });
+
+  test('?aba=leads digitado pelo agente cai em Contatos, nao numa aba que falha', async ({ page }) => {
+    await entrar(page, 'agente', '/crm?aba=leads');
+    await expect(abas(page).filter({ hasText: 'Contatos' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  test('/oportunidades/:id nao existe para o agente', async ({ page }) => {
+    await entrar(page, 'agente', '/crm');
+
+    // Rota nao registrada para o perfil: cai no redirecionamento de rota
+    // desconhecida, que leva ao primeiro modulo permitido. O que nao pode
+    // acontecer e a tela de detalhe montar.
+    await page.goto('/oportunidades/00000000-0000-4000-8000-000000000abc');
+    await expect(page).not.toHaveURL(/\/oportunidades\//);
+    await expect(page.getByText('Oportunidade nao encontrada')).toBeHidden();
+  });
+
+  test('/oportunidades/:id existe para o admin', async ({ page }) => {
+    await entrar(page, 'admin', '/crm');
+    await page.goto('/oportunidades/00000000-0000-4000-8000-000000000abc');
+    // Mesmo com id inexistente, a rota e dele: a URL fica e a tela responde.
+    await expect(page).toHaveURL(/\/oportunidades\//);
+    await expect(page.getByText('Oportunidade nao encontrada')).toBeVisible();
+  });
+});

@@ -1,5 +1,6 @@
 import type { AgentStatus, Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
+import { exigirUsuarioDaOrganizacao } from '../../lib/politicas';
 import { conflict, notFound } from '../../lib/errors';
 import { hashPassword } from '../../lib/password';
 import { notificarStatusAgente } from '../../realtime/hub';
@@ -53,6 +54,19 @@ export async function updateUser(id: string, input: UpdateUserInput) {
   if (input.email && input.email !== atual.email) {
     const emailEmUso = await prisma.user.findFirst({ where: { email: input.email } });
     if (emailEmUso) throw conflict('Ja existe um usuario com este email');
+  }
+
+  /*
+   * O gestor tem de existir nesta organizacao, e nao pode ser a propria pessoa.
+   *
+   * Ciclo de um no e o unico que da para formar com um nivel de hierarquia, e
+   * ele seria silencioso: `equipeIds` ja inclui o proprio usuario, entao alguem
+   * como gestor de si mesmo nao mudaria nada hoje — e viraria um ciclo de
+   * verdade no dia em que a arvore recursiva existir.
+   */
+  if (input.gestorId) {
+    if (input.gestorId === id) throw conflict('Um usuario nao pode ser gestor de si mesmo');
+    await exigirUsuarioDaOrganizacao(input.gestorId);
   }
 
   const { senha, ...resto } = input;

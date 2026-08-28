@@ -1,6 +1,8 @@
 import { Prisma } from '@prisma/client';
 import { notFound } from '../../lib/errors';
 import { prisma } from '../../lib/prisma';
+import { filtroDe, politicaContas, politicaContatos } from '../../lib/politicas';
+import { apenasVisivel } from '../../lib/visibilidade';
 import { codificarCursor, decodificarCursor } from '../../lib/paginacao';
 
 /**
@@ -310,8 +312,10 @@ async function resumo(raiz: Raiz) {
 }
 
 export async function fichaContato(contatoId: string) {
-  const contato = await prisma.contact.findUnique({
-    where: { id: contatoId },
+  // A ficha e a porta de entrada do registro: se ele nao esta no escopo de quem
+  // pediu, nem os indicadores devem ser calculados. 404, nao 403.
+  const contato = await prisma.contact.findFirst({
+    where: apenasVisivel(contatoId, await filtroDe(politicaContatos)),
     include: { conta: true },
   });
   if (!contato) throw notFound('Contato nao encontrado');
@@ -331,10 +335,14 @@ export async function fichaContato(contatoId: string) {
 }
 
 export async function fichaConta(contaId: string) {
-  const conta = await prisma.account.findUnique({
-    where: { id: contaId },
+  const conta = await prisma.account.findFirst({
+    where: apenasVisivel(contaId, await filtroDe(politicaContas)),
     include: {
-      contatos: { select: { id: true, nome: true, telefone: true, email: true }, orderBy: { nome: 'asc' } },
+      contatos: {
+        where: await filtroDe(politicaContatos),
+        select: { id: true, nome: true, telefone: true, email: true },
+        orderBy: { nome: 'asc' },
+      },
     },
   });
   if (!conta) throw notFound('Conta nao encontrada');

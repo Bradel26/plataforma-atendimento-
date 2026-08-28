@@ -28,9 +28,23 @@ export type NavItem = {
    * permissao da rota de detalhe divergir da permissao do modulo sem que nada
    * reclamasse — e a URL digitada a mao e justamente o caminho que nao passa
    * pelo menu.
+   *
+   * `perfis` na subrota **restringe**, nunca amplia: `/oportunidades/:id` e um
+   * subconjunto de quem ve o CRM, porque o AGENTE ve o CRM e nao ve
+   * oportunidade. Ampliar seria criar permissao nova por uma porta lateral, e
+   * `nav.test.ts` falha se alguem tentar.
    */
-  subrotas?: string[];
+  subrotas?: SubRota[];
 };
+
+export type SubRota = {
+  rota: string;
+  /** Ausente: herda os perfis do modulo. Presente: precisa ser subconjunto deles. */
+  perfis?: Perfil[];
+};
+
+/** Perfis efetivos de uma subrota: os dela, ou os do modulo. */
+export const perfisDaSubrota = (item: NavItem, sub: SubRota): Perfil[] => sub.perfis ?? item.perfis;
 
 /**
  * A rota casa com o padrao?
@@ -56,31 +70,47 @@ function combina(pathname: string, padrao: string): boolean {
  */
 export function itemDaRota(pathname: string): NavItem | undefined {
   return NAV.find(
-    (item) => combina(pathname, item.rota) || (item.subrotas ?? []).some((s) => combina(pathname, s)),
+    (item) =>
+      combina(pathname, item.rota) || (item.subrotas ?? []).some((s) => combina(pathname, s.rota)),
   );
+}
+
+/** A subrota que responde por esta URL, se houver. */
+export function subrotaDaRota(pathname: string): { item: NavItem; sub: SubRota } | undefined {
+  for (const item of NAV) {
+    const sub = (item.subrotas ?? []).find((s) => combina(pathname, s.rota));
+    if (sub) return { item, sub };
+  }
+  return undefined;
 }
 
 /** Menu lateral fixo — ordem definida no SCOPE.md (Fase 0). */
 export const NAV: NavItem[] = [
-  { rota: '/dashboards', label: 'Dashboards', icone: IconDashboards, perfis: ['ADMIN', 'SUPERVISOR'], fase: 3 },
+  { rota: '/dashboards', label: 'Dashboards', icone: IconDashboards, perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR'], fase: 3 },
   { rota: '/atendimento', label: 'Atendimento', icone: IconAtendimento, perfis: ['ADMIN', 'SUPERVISOR', 'AGENTE'], fase: 1 },
   { rota: '/protocolo', label: 'Protocolo', icone: IconProtocolo, perfis: ['ADMIN', 'SUPERVISOR', 'AGENTE'], fase: 2 },
-  { rota: '/monitoramento', label: 'Monitoramento', icone: IconMonitoramento, perfis: ['ADMIN', 'SUPERVISOR'], fase: 3 },
+  { rota: '/monitoramento', label: 'Monitoramento', icone: IconMonitoramento, perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR'], fase: 3 },
   { rota: '/gestao', label: 'Area da Gestao', icone: IconGestao, perfis: ['ADMIN', 'SUPERVISOR'], fase: 3 },
   { rota: '/campanhas', label: 'Campanhas', icone: IconCampanhas, perfis: ['ADMIN', 'SUPERVISOR'], fase: 4 },
-  { rota: '/relatorios', label: 'Relatorios', icone: IconRelatorios, perfis: ['ADMIN', 'SUPERVISOR'], fase: 3 },
+  { rota: '/relatorios', label: 'Relatorios', icone: IconRelatorios, perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR'], fase: 3 },
   { rota: '/escalas', label: 'Escalas', icone: IconEscalas, perfis: ['ADMIN', 'SUPERVISOR'], fase: 3 },
   { rota: '/telefonia', label: 'Telefonia', icone: IconTelefonia, perfis: ['ADMIN', 'SUPERVISOR', 'AGENTE'], fase: 4 },
   {
     rota: '/crm',
     label: 'CRM',
     icone: IconCrm,
-    perfis: ['ADMIN', 'SUPERVISOR', 'AGENTE'],
+    perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL', 'AGENTE'],
     fase: 1,
     // Cada registro principal com endereco proprio, para poder ser mandado por
     // mensagem e sobreviver a um F5. A tela e a mesma: `/crm` continua sendo a
     // lista, e a rota de detalhe so diz qual aba abrir e qual registro carregar.
-    subrotas: ['/contatos/:id', '/clientes/:id', '/oportunidades/:id'],
+    subrotas: [
+      { rota: '/contatos/:id' },
+      { rota: '/clientes/:id' },
+      // Oportunidade e processo comercial: o AGENTE ve o CRM, mas nao esta rota.
+      // Ele continua vendo informacao comercial resumida na ficha do cliente.
+      { rota: '/oportunidades/:id', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'] },
+    ],
   },
   { rota: '/configuracoes', label: 'Configuracoes', icone: IconConfiguracoes, perfis: ['ADMIN'], fase: 0 },
 ];

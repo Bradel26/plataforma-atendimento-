@@ -32,8 +32,19 @@ export function asyncHandler(fn: (req: Request, res: Response, next: NextFunctio
       return;
     }
 
-    comOrganizacao(organizacaoId, () => {
-      fn(req, res, next).catch(next);
-    });
+    // O usuario entra junto: e o que permite as politicas de visibilidade
+    // (`lib/visibilidade.ts`) decidirem escopo sem que todo servico do CRM
+    // precise receber o solicitante por parametro. Token de integracao nao tem
+    // usuario, e nesse caso fica ausente de proposito — politica de
+    // visibilidade nao se aplica a ponte de IA.
+    const usuario = req.user ? { id: req.user.sub, perfil: req.user.perfil } : undefined;
+
+    comOrganizacao(
+      organizacaoId,
+      () => {
+        fn(req, res, next).catch(next);
+      },
+      usuario,
+    );
   };
 }

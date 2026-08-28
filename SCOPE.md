@@ -9,10 +9,17 @@ Construir uma aplicação web própria no formato de plataforma de atendimento o
 
 ## Perfis de usuário
 
-- **Administrador** — acesso total, configura canais, usuários, filas, integrações.
-- **Supervisor/Gestor** — dashboards, monitora agentes, escuta/sussurro em chamadas, relatórios.
-- **Agente/Atendente** — atende conversas atribuídas, usa CRM básico, registra protocolos.
-- **Cliente final** (opcional, fase avançada) — portal de acompanhamento de chamados.
+Cinco perfis desde o passo 1.2 (ver decisão 51). **Perfil** define o que a pessoa pode *fazer*;
+**escopo de visibilidade** define *quais registros* da própria organização ela enxerga.
+
+| Perfil | Faz | Enxerga |
+|---|---|---|
+| **Administrador** | tudo, inclusive canais, usuários, filas e integrações | toda a organização |
+| **Supervisor** | operação ampla: atendimento, protocolos, filas, escalas, CRM, dashboards, relatórios, monitoramento — **não** herda o administrativo restrito ao ADMIN | toda a organização |
+| **Gestor** | CRM, dashboards, relatórios, monitoramento; sem configurações nem integrações | próprios + **equipe direta** (`gestorId`), um nível |
+| **Comercial** | CRM (clientes, contatos, leads, oportunidades, atividades) | próprios + carteira aberta (sem responsável) |
+| **Agente/Atendente** | atendimento, protocolos, CRM sem as abas comerciais | próprios + escopo operacional de filas; contato só por **vínculo operacional** |
+| **Cliente final** (opcional, fase avançada) | portal de acompanhamento de chamados | — |
 
 ## Stack técnica
 
@@ -188,8 +195,9 @@ omnichannel + automação + IA na mesma base. Protheus está fora de escopo nest
 - [x] **1.1 Rotas próprias para os registros principais** — `/clientes/:id`, `/contatos/:id` e
   `/oportunidades/:id`, com `/crm` preservado como lista. Ver decisão 50.
   **Concluído em produção: commit `df5ffc5`, implantado em 28/08/2026** (deploy manual)
-- [ ] 1.2 Perfis e escopo de visibilidade ("vejo só o que é meu") — menor agora, o mecanismo de
-  contexto já existe desde a Fundação de Organização
+- [x] **1.2 Perfis e escopo de visibilidade** — cinco perfis (`GESTOR` e `COMERCIAL` novos),
+  `gestorId` para equipe direta, `responsavelId` em contato e cliente, e sete políticas de domínio
+  sobre um contexto compartilhado. Ver decisão 51. **Ainda não implantado**
 - [ ] 1.3 Tags centralizadas
 - [ ] 1.4 Ficha 360 completa
 - [ ] 1.5 Atividades e follow-up
@@ -1408,3 +1416,159 @@ CRM entre os usuários de produção (há um único usuário, `ADMIN`), então "
 fica coberto em desenvolvimento por `nav.test.ts` (a subrota herda os perfis do módulo),
 `rotas-crm.spec.ts` (o `AGENTE` entra por `/contatos/:id`) e `smoke:tenant` (isolamento entre
 organizações).
+
+### 51. Três camadas que não se confundem: organização, perfil e escopo
+
+O passo 1.2 existe porque `escopoVisivel()` era uma função **privada** do módulo de conversas, e
+bastava enquanto conversa era o único domínio com escopo. Com contato, cliente, lead, oportunidade,
+atividade e protocolo entrando na mesma conversa, ela virou infraestrutura — e a oportunidade de
+separar três coisas que costumam virar uma só:
+
+- **organização** decide *de quem são* os dados. É **fronteira**: aplicada pela extensão do Prisma,
+  e o banco recusa o que atravessa. Nada em `lib/politicas.ts` menciona organização.
+- **perfil** decide o que a pessoa pode *fazer*. Vive em `requireRole` e no `NAV`.
+- **escopo** decide o que ela pode *enxergar* dentro da própria organização. É o que o 1.2 constrói.
+
+#### Por que escopo não entrou na extensão do Prisma
+
+Organização é a **mesma** regra em 24 tabelas, e por isso pôde virar uma extensão que ninguém precisa
+lembrar de chamar. Escopo é uma regra **por domínio**: conversa depende de fila, contato do agente
+depende de conversa e de protocolo, atividade depende do registro-pai. Uma função única capaz de tudo
+isso seria uma função única cheia de exceções — e a primeira exceção esquecida vira vazamento
+silencioso. Então: um contexto compartilhado (`contextoVisibilidade`) e sete políticas independentes.
+
+As políticas ficam num arquivo só, e isso é deliberado: a de contato do AGENTE **compõe** as de
+conversa e protocolo, e a de cliente compõe a de contato. Espalhadas por módulo, seria dependência
+circular entre domínios. Juntas, têm um efeito colateral bom — as sete regras que decidem quem vê o
+que cabem numa leitura, o que para código de acesso vale mais do que arrumação por pasta.
+
+#### Listagem e acesso por id usam o MESMO filtro
+
+Antes havia duas implementações da mesma regra: `escopoVisivel` na listagem e `garantirAcesso` no
+acesso por id. É exatamente a forma de uma delas ficar para trás numa mudança futura. Agora o id
+entra no mesmo `where`:
+
+```ts
+findFirst({ where: apenasVisivel(id, await filtroDe(politicaContas)) }) ?? notFound()
+```
+
+Uma regra, um caminho, e o 404 cai de graça.
+
+#### 404 para registro, 403 para processo
+
+A distinção é de propósito e as duas aparecem no `smoke:visibilidade`:
+
+- **404** quando o registro existe mas não é seu — "proibido" contaria que ele existe e de quem é;
+- **403** quando o **processo** não é seu. Um agente pedindo `/leads` recebe 403, não lista vazia:
+  lista vazia diria "não há leads", que é mentira, e mentira em tela vira chamado de suporte.
+
+#### `responsavelId = null` não significa "de todos"
+
+A regra é explícita por domínio, e a distinção mais importante é a do AGENTE. Para gestão e
+comercial, registro sem responsável é **carteira aberta** — esconder cliente sem dono impediria
+alguém de assumi-lo. Para o AGENTE, sem responsável **não abre nada**: ele vê contato por *vínculo
+operacional* (conversa própria, conversa em espera na fila dele, protocolo acessível pela fila).
+
+Sem essa distinção, numa base onde ninguém atribuiu responsável — que é a base real hoje — todo
+contato apareceria para todo agente, e o escopo não escoparia nada. `visibilidade.test.ts` guarda a
+propriedade afirmando que a política de contato do AGENTE não tem termo `responsavelId: null` solto
+no topo.
+
+Protocolo e conversa têm regra própria: sem responsável ali significa **espera**, e a regra é a
+**fila**, não a carteira. Um comercial não ganha protocolo sem dono por ter carteira aberta.
+
+Atividade **deriva**: responsável, autor, ou registro-pai visível. Uma nota escrita numa ficha não
+pode ser mais aberta do que a ficha onde foi escrita.
+
+#### Equipe é um nível, e o gestor está dentro dela
+
+`User.gestorId` anulável; equipe de um gestor são os usuários que apontam para ele. Árvore recursiva
+ficou fora por decisão do dono do produto. O próprio gestor entra em `equipeIds` — sem isso, gestor
+sem subordinado não veria nem os próprios registros.
+
+#### Responsável do contato: herança de valor, não vínculo
+
+Ao criar contato vinculado a um cliente: `responsavelId` informado manda (inclusive nulo), ausente
+herda o do cliente, e sem cliente fica sem dono. "Ausente" e "nulo" precisam ser distinguíveis — quem
+manda `null` está dizendo "sem dono", e herdar ali seria desobedecer.
+
+Depois disso os dois são independentes: **trocar o responsável do cliente não propaga**. O
+`updateMany` nos contatos é a "melhoria" que alguém faria mais tarde sem perceber que reatribui em
+silêncio a carteira de outra pessoa — há teste guardando isso.
+
+#### Sem backfill, de propósito
+
+As três migrations só acrescentam: dois valores no enum `Role`, `gestorId`, e `responsavelId` em
+contato e cliente. Tudo anulável e tudo `NULL`. No dia do deploy ninguém perde tela, porque `NULL` é
+carteira aberta para gestão e comercial. Para o AGENTE muda de verdade — e é essa a intenção.
+
+#### O defeito que a primeira execução achou
+
+Toda listagem respondia **500 com `SEM_USUARIO_NO_CONTEXTO`**. Causa: `requireAuth` abre o contexto
+de organização antes do `asyncHandler`, que então encontrava contexto ativo e pulava a abertura —
+corretamente, para não aninhar — e com isso o usuário nunca chegava. O usuário passou a entrar no
+`requireAuth`, onde ele acabou de ser verificado.
+
+Vale registrar o **modo de falha**: "ausência lança" transformou contexto incompleto em erro
+imediato e ruidoso, em vez de uma consulta sem filtro devolvendo a organização inteira em silêncio.
+É a segunda vez nesta base que essa escolha paga (a primeira foi o `multer`, decisão 49).
+
+#### Subrota restringe, nunca amplia
+
+`subrotas` passou de `string[]` a objeto com `perfis` opcional, e `/oportunidades/:id` ficou
+`ADMIN, SUPERVISOR, GESTOR, COMERCIAL` — o AGENTE vê o CRM e não vê essa rota. `nav.test.ts` falha se
+alguma subrota declarar perfil que o módulo não tem: a rota de detalhe é o caminho que **não passa
+pelo menu**, e ampliar por ali seria criar permissão por uma porta lateral.
+
+No front, as abas Leads, Oportunidades, Produtos e Importar/Exportar desaparecem para quem não tem o
+perfil, em vez de existirem para falhar no clique. `?aba=leads` digitado por um agente cai em
+Contatos.
+
+### 52. Regra arquitetural: escrita que recebe id de outra entidade valida o vínculo
+
+**Vale para todo endpoint de escrita deste projeto, sem exceção:** se o corpo da requisição aceita o
+id de uma entidade relacionada, o registro referenciado tem de passar pela política de visibilidade
+do domínio dele — ou por validação equivalente de escopo — **antes** de persistir.
+
+O motivo é o histórico. A classe de falha apareceu em **nove** endpoints diferentes na varredura do
+passo 1.2, sempre com a mesma forma: a listagem esconde o registro, mas o corpo da requisição o
+alcança por id e o vincula. Filtrar a leitura não protege a escrita, porque a escrita não lê.
+
+Formas que a falha assume, em ordem de sutileza:
+
+1. **O endpoint nunca conferiu o id.** `POST /protocolos` aceitava contato e conta sem olhar — antes
+   do 1.2 nem a organização era verificada ali.
+2. **O `input` inteiro vai para o `update`.** `PATCH /protocolos/:id` e `PATCH /leads/:id` espalhavam
+   o corpo com `...input`, e os schemas aceitam `contatoId`/`contaId`. O código não menciona o
+   vínculo em lugar nenhum — é exatamente por isso que passa desapercebido na leitura.
+3. **Vínculo de duas pontas.** `POST /contas/:id/contatos` precisa conferir as **duas**: o cliente e
+   o contato. Conferir só a ponta da URL deixa a outra aberta.
+4. **Aponta para gente, não para registro.** `responsavelId` e `gestorId` não têm política de
+   visibilidade — atribuir a um colega é legítimo. O que não pode é apontar para usuário de outra
+   organização: a extensão do Prisma isola as **consultas**, e não confere chave estrangeira.
+
+O que **não** entra na regra: id de configuração da organização — `filaId`, `funilId`, `estagioId`,
+`produtoId`, `catalogoId`, `canalId`, `agenteId`, `usuarioId` e os identificadores de provedor
+(`wabaId`, `phoneNumberId`, `pageId`, `igUserId`). São recursos da organização inteira, a fronteira
+do Prisma já os cobre, e quem decide *se* a pessoa pode usá-los é o `requireRole`.
+
+Como cumprir, sem abstração nova: `exigirVinculosVisiveis(dados)` em `lib/politicas.ts` — as
+políticas de domínio já existentes chamadas de um lugar só, para o décimo endpoint não esquecer. Ela
+responde **404**, e não 403, pela mesma razão do acesso por id: "proibido" confirmaria que o registro
+existe. Campo ausente ou nulo não é conferido — nulo é "desvincular", e desvincular o que já é seu é
+legítimo.
+
+Duas consequências que a varredura expôs e que valem como regra própria:
+
+- **Escopo tem de ser configurável pela aplicação.** O `PATCH /contatos/:id` não aceitava
+  `responsavelId` (o campo nascia herdado do cliente e nunca mudava) e **nada** aceitava `gestorId`
+  (a equipe do gestor só existiria mexendo no banco). Escopo que só se configura por SQL é escopo
+  que ninguém usa — e aí a regra de visibilidade decora o código sem proteger nada.
+- **O erro de tipo é auditoria barata.** No `PATCH /atividades/:id` escrevi a conferência e o
+  TypeScript recusou com "no properties in common", provando que aquele schema não tem campo de
+  vínculo. Vale mais que a leitura: se alguém acrescentar `contatoId` ao schema, a ausência da
+  conferência deixa de ser justificável.
+
+Cobertura: `smoke:visibilidade` seções 10 e 11 (escrita cruzada por id e configurabilidade) e
+`smoke:tenant` seção 4 (vínculo apontando para usuário de outra organização). As duas suítes são
+parte obrigatória da regressão.

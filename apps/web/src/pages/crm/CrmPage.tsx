@@ -1,4 +1,6 @@
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useAuth } from '../../features/auth/AuthProvider';
+import type { Perfil } from '../../lib/types';
 import { ContasTab } from './ContasTab';
 import { DadosTab } from './DadosTab';
 import { ContatosTab } from './ContatosTab';
@@ -6,14 +8,21 @@ import { LeadsTab } from './LeadsTab';
 import { OportunidadesTab } from './OportunidadesTab';
 import { ProdutosTab } from './ProdutosTab';
 
+/**
+ * `perfis` na aba restringe quem a ve.
+ *
+ * Esconder e melhor que deixar clicar e receber erro: lead e oportunidade sao
+ * processo comercial, a API recusa por perfil, e uma aba que sempre falha e uma
+ * aba que nao deveria estar la. Ausente = todos que ja chegaram ao CRM.
+ */
 const ABAS = [
   { id: 'contatos', label: 'Contatos' },
   { id: 'contas', label: 'Contas' },
-  { id: 'leads', label: 'Leads' },
-  { id: 'oportunidades', label: 'Oportunidades' },
-  { id: 'produtos', label: 'Produtos e precos' },
-  { id: 'dados', label: 'Importar / Exportar' },
-] as const;
+  { id: 'leads', label: 'Leads', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'] },
+  { id: 'oportunidades', label: 'Oportunidades', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'] },
+  { id: 'produtos', label: 'Produtos e precos', perfis: ['ADMIN', 'SUPERVISOR'] },
+  { id: 'dados', label: 'Importar / Exportar', perfis: ['ADMIN', 'SUPERVISOR'] },
+] as const satisfies ReadonlyArray<{ id: string; label: string; perfis?: readonly Perfil[] }>;
 
 type AbaId = (typeof ABAS)[number]['id'];
 
@@ -43,12 +52,17 @@ export function CrmPage() {
   const { pathname, search } = useLocation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { temPerfil } = useAuth();
+
+  const abasVisiveis = ABAS.filter((a) => ('perfis' in a ? temPerfil(...a.perfis) : true));
 
   const registro = POR_PREFIXO.find((r) => pathname.startsWith(`${r.base}/`));
   const abaDaBusca = new URLSearchParams(search).get('aba');
+  // Aba pedida na URL so vale se o perfil a enxerga: `?aba=leads` digitado por
+  // um agente cai em Contatos, e nao numa aba que a API vai recusar.
   const aba: AbaId =
     registro?.aba ??
-    (ABAS.some((a) => a.id === abaDaBusca) ? (abaDaBusca as AbaId) : 'contatos');
+    (abasVisiveis.some((a) => a.id === abaDaBusca) ? (abaDaBusca as AbaId) : 'contatos');
 
   // Trocar de aba volta para a lista: a rota de detalhe pertence a uma aba, e
   // ficar em `/contatos/abc` mostrando a aba Contas seria a URL mentindo.
@@ -61,7 +75,7 @@ export function CrmPage() {
   return (
     <div className="space-y-5">
       <nav className="flex flex-wrap gap-1 border-b border-slate-200">
-        {ABAS.map(({ id: abaId, label }) => (
+        {abasVisiveis.map(({ id: abaId, label }) => (
           <button
             key={abaId}
             type="button"
