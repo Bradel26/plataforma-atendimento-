@@ -32,6 +32,15 @@ model Organizacao {
   slug  String  @unique
   ativa Boolean @default(true)
 
+  /// Proximo numero de protocolo desta organizacao.
+  ///
+  /// Contador na propria linha da organizacao, e nao sequencia do banco: a
+  /// sequencia e por tabela e nao sabe contar por organizacao. A reserva
+  /// acontece dentro da transacao que grava o protocolo, com o UPDATE
+  /// devolvendo o valor — duas criacoes simultaneas pegam numeros diferentes
+  /// porque a segunda espera o lock da linha.
+  proximoProtocolo Int @default(1) @map("proximo_protocolo")
+
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
@@ -57,6 +66,7 @@ model Organizacao {
   mensagens        Message[]
   chamadas         Call[]
   pesquisas        Survey[]
+  atividades       Activity[]
   registrosLgpd    LgpdLog[]
 
   @@map("organizacoes")
@@ -80,7 +90,7 @@ model User {
   id            String      @id @default(uuid())
   organizacaoId String      @default("") @map("organizacao_id")
   nome          String
-  email         String      @unique
+  email         String
   senhaHash     String      @map("senha_hash")
   perfil        Role        @default(AGENTE)
   status        AgentStatus @default(OFFLINE)
@@ -109,6 +119,10 @@ model User {
   tokensIntegracao  IntegrationToken[]
   organizacao       Organizacao           @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
+  /// E-mail unico POR ORGANIZACAO. A mesma pessoa em duas empresas sao dois
+  /// registros, com senhas independentes — vinculo N-para-N e troca de
+  /// organizacao na sessao sao complexidade de SaaS que ficou fora deste passo.
+  @@unique([organizacaoId, email])
   @@index([organizacaoId, perfil])
   @@map("usuarios")
 }
@@ -126,7 +140,7 @@ enum Channel {
 model Queue {
   id            String   @id @default(uuid())
   organizacaoId String   @default("") @map("organizacao_id")
-  nome          String   @unique
+  nome          String
   descricao     String?
   canalPadrao   Channel  @default(WEBCHAT) @map("canal_padrao")
   ativa         Boolean  @default(true)
@@ -143,6 +157,8 @@ model Queue {
   vozConfig   VoiceConfig[]
   organizacao Organizacao     @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
+  /// Nome unico por organizacao: as duas podem ter uma fila "Comercial".
+  @@unique([organizacaoId, nome])
   @@index([organizacaoId])
   @@map("filas")
 }
@@ -334,7 +350,7 @@ model Account {
   id            String   @id @default(uuid())
   organizacaoId String   @default("") @map("organizacao_id")
   nome          String
-  cnpj          String?  @unique
+  cnpj          String?
   segmento      String?
   site          String?
   telefone      String?
@@ -350,6 +366,8 @@ model Account {
   atividades    Activity[]
   organizacao   Organizacao   @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
+  /// CNPJ unico por organizacao: o mesmo cliente pode ser de duas empresas.
+  @@unique([organizacaoId, cnpj])
   @@index([organizacaoId, nome])
   @@map("contas")
 }
@@ -385,7 +403,7 @@ model Lead {
 model Funnel {
   id            String   @id @default(uuid())
   organizacaoId String   @default("") @map("organizacao_id")
-  nome          String   @unique
+  nome          String
   ativo         Boolean  @default(true)
   criadoEm      DateTime @default(now()) @map("criado_em")
 
@@ -393,6 +411,8 @@ model Funnel {
   oportunidades Opportunity[]
   organizacao   Organizacao   @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
+  /// Nome unico por organizacao.
+  @@unique([organizacaoId, nome])
   @@index([organizacaoId])
   @@map("funis")
 }
@@ -467,6 +487,14 @@ enum TipoAtividade {
 /// tempo do cliente mostra os dois lado a lado, na mesma ordem cronologica.
 model Activity {
   id            String        @id @default(uuid())
+  /// Atividade e o unico caso em que a coluna existe apesar de a tabela ser filha.
+  ///
+  /// Ela se liga a contato, conta, oportunidade OU protocolo, e a regra "ao menos
+  /// um vinculo" e validada no servico, nao no banco. Isso abria um caminho de
+  /// escrita cruzada que nenhum filtro de LEITURA pega: uma atividade com o
+  /// contato de uma empresa e a oportunidade de outra era aceita pelo Postgres.
+  /// O `smoke:tenant` provou o furo antes de existir cliente para sofrer com ele.
+  organizacaoId String        @default("") @map("organizacao_id")
   tipo          TipoAtividade
   titulo        String
   descricao     String?
@@ -490,13 +518,14 @@ model Activity {
   contato      Contact?     @relation(fields: [contatoId], references: [id], onDelete: Cascade)
   conta        Account?     @relation(fields: [contaId], references: [id], onDelete: Cascade)
   oportunidade Opportunity? @relation(fields: [oportunidadeId], references: [id], onDelete: Cascade)
+  organizacao  Organizacao  @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
   protocolo    Ticket?      @relation(fields: [protocoloId], references: [id], onDelete: Cascade)
 
-  @@index([contatoId, criadoEm])
-  @@index([contaId, criadoEm])
-  @@index([oportunidadeId, criadoEm])
-  @@index([responsavelId, prazo])
-  @@index([prazo])
+  @@index([organizacaoId, contatoId, criadoEm])
+  @@index([organizacaoId, contaId, criadoEm])
+  @@index([organizacaoId, oportunidadeId, criadoEm])
+  @@index([organizacaoId, responsavelId, prazo])
+  @@index([organizacaoId, prazo])
   @@map("atividades")
 }
 
@@ -526,7 +555,7 @@ model Product {
   id            String   @id @default(uuid())
   organizacaoId String   @default("") @map("organizacao_id")
   nome          String
-  sku           String   @unique
+  sku           String
   descricao     String?
   ativo         Boolean  @default(true)
   criadoEm      DateTime @default(now()) @map("criado_em")
@@ -535,6 +564,8 @@ model Product {
   itensOportunidade OpportunityItem[]
   organizacao       Organizacao       @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
+  /// SKU unico por organizacao: duas empresas podem vender o mesmo produto.
+  @@unique([organizacaoId, sku])
   @@index([organizacaoId])
   @@map("produtos")
 }
@@ -543,7 +574,7 @@ model Product {
 model PriceCatalog {
   id            String   @id @default(uuid())
   organizacaoId String   @default("") @map("organizacao_id")
-  nome          String   @unique
+  nome          String
   moeda         String   @default("BRL")
   ativo         Boolean  @default(true)
   criadoEm      DateTime @default(now()) @map("criado_em")
@@ -551,6 +582,8 @@ model PriceCatalog {
   itens       CatalogItem[]
   organizacao Organizacao   @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
+  /// Nome unico por organizacao.
+  @@unique([organizacaoId, nome])
   @@index([organizacaoId])
   @@map("catalogos_preco")
 }
@@ -603,7 +636,14 @@ enum TicketPrioridade {
 
 model Ticket {
   /// Numero sequencial legivel, usado na comunicacao com o cliente.
-  numero        Int              @unique @default(autoincrement())
+  /// Numero do protocolo, sequencial POR ORGANIZACAO.
+  ///
+  /// Deixou de ser `autoincrement()`: a sequencia do Postgres e uma so para a
+  /// tabela, entao os protocolos de uma empresa consumiriam os numeros da outra
+  /// — a segunda a entrar abriria o protocolo n. 1.847 no primeiro dia. Quem
+  /// distribui agora e o contador em `Organizacao.proximoProtocolo`, reservado
+  /// dentro da transacao que cria o protocolo.
+  numero        Int
   id            String           @id @default(uuid())
   organizacaoId String           @default("") @map("organizacao_id")
   titulo        String
@@ -633,6 +673,7 @@ model Ticket {
   atividades   Activity[]
   organizacao  Organizacao        @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
+  @@unique([organizacaoId, numero])
   @@index([organizacaoId, status, atualizadoEm])
   @@index([organizacaoId, responsavelId, status])
   @@map("protocolos")
@@ -697,7 +738,7 @@ model TicketSchedule {
 model ChannelConfig {
   id            String  @id @default(uuid())
   organizacaoId String  @default("") @map("organizacao_id")
-  canal         Channel @unique
+  canal         Channel
   ativo         Boolean @default(false)
 
   /// WhatsApp Cloud API
@@ -729,6 +770,22 @@ model ChannelConfig {
   fila        Queue?      @relation(fields: [filaId], references: [id], onDelete: SetNull)
   organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
+  /// Um canal de cada tipo POR ORGANIZACAO. Antes era um por instalacao: existia
+  /// UM WhatsApp no sistema inteiro, o que sozinho impedia a virada.
+  @@unique([organizacaoId, canal])
+  /// Ids externos da Meta: unicos por TIPO DE CANAL, no banco inteiro.
+  ///
+  /// Nao por organizacao, porque sao ids globais do lado da Meta — dois clientes
+  /// nao podem cadastrar o mesmo numero — e e essa unicidade que permite ao
+  /// webhook, cuja URL e compartilhada, descobrir de quem e a mensagem.
+  ///
+  /// E nao globais por coluna, porque o `pageId` repete de proposito: o Instagram
+  /// Direct e atrelado a uma pagina do Facebook, entao a MESMA organizacao tem o
+  /// mesmo `pageId` nos canais FACEBOOK e INSTAGRAM. Descobri isso quando a
+  /// unicidade global recusou o dado que ja estava no banco.
+  @@unique([canal, phoneNumberId])
+  @@unique([canal, pageId])
+  @@unique([canal, igUserId])
   @@index([organizacaoId])
   @@map("canais_config")
 }

@@ -104,7 +104,7 @@ accountsRoutes.post(
   validateBody(criarSchema),
   asyncHandler(async (req, res) => {
     if (req.body.cnpj) {
-      const existente = await prisma.account.findUnique({ where: { cnpj: req.body.cnpj } });
+      const existente = await prisma.account.findFirst({ where: { cnpj: req.body.cnpj } });
       if (existente) throw conflict('Ja existe uma conta com este CNPJ');
     }
     res.status(201).json({ conta: await prisma.account.create({ data: req.body }) });
@@ -120,7 +120,7 @@ accountsRoutes.patch(
     if (!atual) throw notFound('Conta nao encontrada');
 
     if (req.body.cnpj && req.body.cnpj !== atual.cnpj) {
-      const existente = await prisma.account.findUnique({ where: { cnpj: req.body.cnpj } });
+      const existente = await prisma.account.findFirst({ where: { cnpj: req.body.cnpj } });
       if (existente) throw conflict('Ja existe uma conta com este CNPJ');
     }
     res.json({ conta: await prisma.account.update({ where: { id }, data: req.body }) });

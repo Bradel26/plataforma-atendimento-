@@ -242,7 +242,7 @@ export async function listarFunis() {
 }
 
 export async function criarFunil(input: { nome: string; estagios: Array<{ nome: string; probabilidade: number }> }) {
-  const existente = await prisma.funnel.findUnique({ where: { nome: input.nome } });
+  const existente = await prisma.funnel.findFirst({ where: { nome: input.nome } });
   if (existente) throw conflict('Ja existe um funil com este nome');
 
   return prisma.funnel.create({

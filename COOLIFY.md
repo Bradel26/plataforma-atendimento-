@@ -99,6 +99,7 @@ aspas (o Coolify engasga com os dois), já com os três ajustes de container:
 | `WORKER_EMBUTIDO` | `true` | um container é um processo; o worker vai junto |
 | `STATIC_DIR` | `../web/dist` | o front compilado dentro da imagem |
 | `PUBLIC_URL` | vazio | opcional: endereço público da API, para o anexo que o motor de IA externo baixa. Vazio usa `WEB_ORIGIN` |
+| `REDIS_PREFIXO` | vazio | prefixo de toda chave no Redis. **Deixe vazio na produção** e use algo como `dev` no ambiente de desenvolvimento: os dois apontam para o mesmo Upstash, e sem prefixo os dois workers disputam a mesma fila de trabalho — cada um descartando em silêncio o trabalho do outro |
 
 No Coolify, em **Environment Variables**, abra o **Developer view** (o modo de colar em bloco), e
 cole o arquivo inteiro.

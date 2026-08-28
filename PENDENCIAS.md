@@ -56,6 +56,9 @@ Em ordem de risco que remove, do maior para o menor.
 | 4.2 | ~~Worker em processo separado~~ | **feito** — `src/worker.ts`, mesma imagem, outro processo; `WORKER_EMBUTIDO` controla o embutido. | — |
 | 4.3 | ~~Anonimização de backup e de log~~ | **feito** — `npm run lgpd:reaplicar` reanonimiza a partir da trilha depois de restaurar; log redige dado pessoal antes de imprimir. | — |
 | 4.4 | Testes de integração com banco efêmero | Os smokes usam o banco de dev; um teste destrutivo não tem onde rodar em segurança. Precisa de Docker. | médio |
+| 4.8 | **Conferir o `REDIS_PREFIXO` da produção no Coolify** | você | O `.env.production` gerado aponta para o mesmo Upstash do ambiente de desenvolvimento, e a fila de trabalho é uma lista única. Em desenvolvimento o prefixo agora é `dev`, o que já separa os dois; confirme que a produção está **sem** prefixo (ou com o seu próprio) e que não sobrou trabalho preso na lista antiga. | pequeno |
+| 4.9 | Distribuição justa da fila entre organizações | eu, quando houver volume | A fila é uma lista compartilhada com a organização no corpo do trabalho. Um lote grande de uma empresa atrasa as outras — efeito de vizinhança conhecido, não surpresa. | médio |
+| 4.10 | Ativar RLS no Postgres | eu, quando houver a segunda organização | As tabelas já estão desenhadas para isso. Ativar com uma organização só acrescenta um modo de falha difícil de diagnosticar sem proteger contra nada que exista. | médio |
 | 4.5 | ~~Modo escuro~~ | **feito** — remapeamento das variáveis do Tailwind, paleta de dados própria validada no fundo escuro. | — |
 | 4.6 | ~~Tabela acessível nos gráficos~~ | **feito** — botão `Ver como tabela` em toda barra, com caption, scope e total. | — |
 | 4.7 | ~~Reprocessar dead-letter pela interface~~ | **feito** — aba Configurações › Fila de trabalho, restrita a ADMIN. | — |

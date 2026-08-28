@@ -10,7 +10,7 @@ import type { MensagemNormalizada } from './meta.types';
 
 /** Fila de destino: a configurada no canal, ou a primeira fila ativa daquele canal. */
 async function filaDoCanal(canal: Channel) {
-  const config = await prisma.channelConfig.findUnique({ where: { canal } });
+  const config = await prisma.channelConfig.findFirst({ where: { canal } });
   if (config?.filaId) return config.filaId;
 
   const fila =

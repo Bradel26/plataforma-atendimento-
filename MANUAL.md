@@ -348,3 +348,32 @@ tente de novo.
 
 **"Os números do dashboard parecem estranhos."** Confira o período selecionado. E lembre que fila de
 espera e agentes por status são sempre o *agora*, não o período.
+
+## Organizações (multi-tenancy)
+
+A plataforma passou a suportar mais de uma empresa na mesma instalação. Hoje existe **uma**, chamada
+Bradel, e nada mudou para quem usa: o que mudou é que agora existe fronteira.
+
+O que isso significa na prática, se um dia houver uma segunda:
+
+**Cada empresa vê apenas o que é dela.** Contatos, conversas, clientes, oportunidades, protocolos,
+filas, usuários, funis, produtos, campanhas, escalas e canais. Não há tela nem endereço da API que
+mostre dado de outra — pedir um registro de outra empresa responde "não encontrado", e não "proibido",
+de propósito: dizer "proibido" já confirmaria que aquele cliente existe.
+
+**Cada empresa tem os próprios canais.** Antes existia uma configuração de WhatsApp para a instalação
+inteira. Agora cada uma tem a sua, com o seu número.
+
+**Cada empresa tem a própria marca, a própria política de retenção da LGPD e a própria numeração de
+protocolo.** A da LGPD importa por obrigação legal: prazo de guarda é responsabilidade de quem trata
+o dado.
+
+**O webchat e o widget aceitam `?org=<identificador>`.** Sem o parâmetro, caem na Bradel — que é o que
+mantém o widget já instalado funcionando sem mexer no site.
+
+O que **não** existe, por decisão: cobrança, planos, assinatura, tela pública de cadastro de empresa e
+troca de organização sem sair da sessão. Nada disso é necessário para o isolamento, e cada um deles é
+um produto próprio.
+
+Um detalhe que aparece na tela: se um dia o mesmo e-mail existir em duas empresas, o login pede para
+informar qual — em vez de escolher uma por conta própria.

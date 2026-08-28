@@ -29,7 +29,10 @@ export async function getUser(id: string) {
 }
 
 export async function createUser(input: CreateUserInput) {
-  const existente = await prisma.user.findUnique({ where: { email: input.email } });
+  // findFirst e nao findUnique: o e-mail passou a ser unico POR organizacao, e a
+  // pergunta certa e "ja existe nesta organizacao?" — que e o que o filtro da
+  // extensao faz aqui.
+  const existente = await prisma.user.findFirst({ where: { email: input.email } });
   if (existente) throw conflict('Ja existe um usuario com este email');
 
   const user = await prisma.user.create({
@@ -48,7 +51,7 @@ export async function updateUser(id: string, input: UpdateUserInput) {
   if (!atual) throw notFound('Usuario nao encontrado');
 
   if (input.email && input.email !== atual.email) {
-    const emailEmUso = await prisma.user.findUnique({ where: { email: input.email } });
+    const emailEmUso = await prisma.user.findFirst({ where: { email: input.email } });
     if (emailEmUso) throw conflict('Ja existe um usuario com este email');
   }
 

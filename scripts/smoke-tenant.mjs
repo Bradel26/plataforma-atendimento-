@@ -18,6 +18,7 @@
  * teste ficam no banco com slug `smoke-a-<execucao>`, e o censo continua batendo.
  */
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 import { io as socketCliente } from 'socket.io-client';
 
 const API = process.env.SMOKE_API ?? 'http://localhost:3333/api';
@@ -60,7 +61,10 @@ async function req(metodo, rota, { corpo, token, base = API } = {}) {
 /* ── Montagem: duas organizacoes completas ─────────────────────────────────── */
 
 const SENHA = 'Smoke@Tenant1';
-const senhaHash = '$2a$10$JJ/aiCkZ0YsyaBQ0Ffx.MerZTfVFCM1xVeInDo6mCC5v/OFdc9rTS'; // Smoke@Tenant1
+// O hash e gerado aqui, e nao escrito como constante: hash de bcrypt colado a
+// mao nao pode ser conferido por leitura, e um valor errado aparece como "o
+// login falhou" — que manda quem le procurar defeito no isolamento.
+const senhaHash = await bcrypt.hash(SENHA, 10);
 
 async function montarOrganizacao(letra) {
   const slug = `smoke-${letra}-${EXECUCAO}`;
@@ -114,11 +118,12 @@ async function montarOrganizacao(letra) {
   const protocolo = await prisma.ticket.create({
     data: {
       organizacaoId: id,
-      assunto: `Protocolo ${letra.toUpperCase()}`,
+      titulo: `Protocolo ${letra.toUpperCase()}`,
+      descricao: 'Criado pelo smoke de isolamento.',
       contatoId: contato.id,
       filaId: fila.id,
       status: 'ABERTO',
-      prioridade: 'MEDIA',
+      prioridade: 'NORMAL',
       numero: letra === 'a' ? 900001 : 900002,
     },
   });
@@ -298,10 +303,24 @@ const numeroRepetido = 777001;
 let numerosIndependentes = false;
 try {
   await prisma.ticket.create({
-    data: { organizacaoId: A.id, assunto: 'n', contatoId: A.contato.id, filaId: A.fila.id, numero: numeroRepetido },
+    data: {
+      organizacaoId: A.id,
+      titulo: 'n',
+      descricao: 'n',
+      contatoId: A.contato.id,
+      filaId: A.fila.id,
+      numero: numeroRepetido,
+    },
   });
   await prisma.ticket.create({
-    data: { organizacaoId: B.id, assunto: 'n', contatoId: B.contato.id, filaId: B.fila.id, numero: numeroRepetido },
+    data: {
+      organizacaoId: B.id,
+      titulo: 'n',
+      descricao: 'n',
+      contatoId: B.contato.id,
+      filaId: B.fila.id,
+      numero: numeroRepetido,
+    },
   });
   numerosIndependentes = true;
 } catch (err) {
@@ -357,34 +376,50 @@ try {
 
 /* ── 8. arquivo: link assinado de A nao serve com sessao de B ──────────────── */
 
-const anexoA = await prisma.message.findFirst({
-  where: { organizacaoId: A.id, anexoUrl: { not: null } },
-  select: { anexoUrl: true },
+// O anexo e criado pela API de A, e nao no banco: e o caminho real, e e ele que
+// gera a chave com o prefixo da organizacao.
+const anexado = await fetch(`${API}/protocolos/${A.protocolo.id}/anexos`, {
+  method: 'POST',
+  headers: { Authorization: `Bearer ${tokenA}` },
+  body: (() => {
+    const fd = new FormData();
+    fd.append('arquivo', new Blob(['conteudo do smoke de isolamento'], { type: 'text/plain' }), 'nota.txt');
+    return fd;
+  })(),
 });
-if (!anexoA) {
-  console.log('nota   sem anexo na organizacao A para testar arquivo — coberto por storage.test.ts');
-} else {
-  const r = await fetch(`${API.replace(/\/api$/, '')}${anexoA.anexoUrl}`, {
-    headers: { Authorization: `Bearer ${tokenB}` },
-  });
-  checar(r.status === 404, 'link assinado de A responde 404 com sessao de B', `HTTP ${r.status}`);
+const corpoAnexo = await anexado.json().catch(() => null);
+const urlAnexo = corpoAnexo?.protocolo?.anexos?.at(-1)?.url ?? null;
+checar(Boolean(urlAnexo), 'anexo criado na organizacao A', `HTTP ${anexado.status}`);
+
+if (urlAnexo) {
+  const raiz = API.replace(/\/api$/, '');
+  // A chave tem de comecar pela organizacao: e o prefixo que da fronteira ao
+  // armazenamento. Sem ele, um link valido servia venha de onde viesse.
+  checar(urlAnexo.includes(A.id), 'a chave do arquivo carrega a organizacao', urlAnexo.slice(0, 60));
+
+  const comA = await fetch(`${raiz}${urlAnexo}`, { headers: { Authorization: `Bearer ${tokenA}` } });
+  checar(comA.status === 200, 'A le o proprio arquivo', `HTTP ${comA.status}`);
+
+  const comB = await fetch(`${raiz}${urlAnexo}`, { headers: { Authorization: `Bearer ${tokenB}` } });
+  checar(comB.status === 404, 'link assinado de A responde 404 com sessao de B', `HTTP ${comB.status}`);
+
+  // Trocar o prefixo para a organizacao de B quebra a assinatura, que cobre a
+  // chave inteira: o link nao pode ser "reescrito" para virar link de outra.
+  const forjado = urlAnexo.replace(A.id, B.id);
+  const comForja = await fetch(`${raiz}${forjado}`, { headers: { Authorization: `Bearer ${tokenB}` } });
+  checar(
+    comForja.status === 401 || comForja.status === 404,
+    'reescrever a organizacao na URL nao abre o arquivo',
+    `HTTP ${comForja.status}`,
+  );
 }
 
-/* ── 9. ausencia de contexto lanca ─────────────────────────────────────────── */
+/* ── 9. ausencia de contexto ───────────────────────────────────────────────── */
 
-// O caminho de dentro: consulta pelo cliente estendido sem contexto aberto.
-const { prisma: prismaIsolado } = await import('../apps/api/src/lib/prisma.ts').catch(() => ({ prisma: null }));
-if (prismaIsolado) {
-  let lancou = false;
-  try {
-    await prismaIsolado.contact.findMany({ take: 1 });
-  } catch (err) {
-    lancou = /organizacao/i.test(err.message);
-  }
-  checar(lancou, 'consulta sem contexto de organizacao lanca em vez de devolver tudo');
-} else {
-  console.log('nota   isolamento sem contexto coberto por vitest (tenant.contexto.test.ts)');
-}
+// Coberto por `apps/api/src/lib/tenant.contexto.test.ts`, no vitest: e
+// comportamento de biblioteca, e provar que uma funcao lanca nao precisa de HTTP
+// nem de banco — precisaria apenas de mais motivos para falhar por outra razao.
+console.log('nota   "sem contexto lanca" e verificado no vitest (tenant.contexto.test.ts, 9 casos)');
 
 /* ── Resumo ────────────────────────────────────────────────────────────────── */
 

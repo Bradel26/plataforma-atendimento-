@@ -37,17 +37,14 @@ const checar = (cond, titulo, extra = '') => {
   console.log(`${cond ? 'ok    ' : 'FALHOU'} ${titulo}${extra ? ` — ${extra}` : ''}`);
 };
 
-// Mesmo prefixo que a aplicacao usa (ver lib/redis.ts): sem ele o script leria
-// `fila:atrasados` enquanto a API escreve em `dev:fila:atrasados`, e a checagem
-// falharia dizendo que a fila nao mexeu.
-// `??` e nao `||`: prefixo definido como vazio de proposito tem de ser respeitado.
-// E o padrao e 'dev' salvo em producao, porque o .env local nao declara NODE_ENV.
+// O prefixo e aplicado a mao, e nao por `keyPrefix` do cliente: com `keyPrefix`,
+// `KEYS` devolve o nome COMPLETO e o `DEL` seguinte prefixaria de novo, apagando
+// `dev:dev:limite:...` — que nao existe. Explicito evita a pegadinha.
 const prefixoRedis = env.REDIS_PREFIXO ?? (env.NODE_ENV === 'production' ? '' : 'dev');
-const redis = new Redis(env.REDIS_URL, {
-  keyPrefix: prefixoRedis ? `${prefixoRedis}:` : undefined,
-});
+const K = (nome) => (prefixoRedis ? `${prefixoRedis}:${nome}` : nome);
+const redis = new Redis(env.REDIS_URL);
 const limparLimites = async () => {
-  const chaves = [...(await redis.keys('limite:*')), ...(await redis.keys('login:falhas:*'))];
+  const chaves = [...(await redis.keys(K('limite:*'))), ...(await redis.keys(K('login:falhas:*')))];
   if (chaves.length) await redis.del(chaves);
   return chaves.length;
 };
@@ -99,7 +96,7 @@ await req('POST', '/auth/login', { corpo: { email: 'admin@plataforma.local', sen
 const depois = await req('POST', '/auth/login', {
   corpo: { email: 'admin@plataforma.local', senha: 'Admin@123' },
 });
-const falhasAdmin = await redis.get('login:falhas:admin@plataforma.local');
+const falhasAdmin = await redis.get(K('login:falhas:admin@plataforma.local'));
 checar(depois.status === 200 && !falhasAdmin, '2. login correto zera as falhas da conta', `restou ${falhasAdmin}`);
 
 // 3. Limite por IP: acima do teto, 429 mesmo com credencial diferente a cada vez

@@ -56,7 +56,7 @@ async function main() {
   for (const u of usuarios) {
     const email = u.email.toLowerCase();
     await prisma.user.upsert({
-      where: { email },
+      where: { organizacaoId_email: { organizacaoId: ORGANIZACAO_INICIAL, email } },
       update: { nome: u.nome, perfil: u.perfil, ativo: true },
       create: { nome: u.nome, email, perfil: u.perfil, senhaHash: await bcrypt.hash(u.senha, 10) },
     });
@@ -70,7 +70,7 @@ async function main() {
   const agentes = await prisma.user.findMany({ where: { perfil: 'AGENTE' } });
 
   for (const f of filas) {
-    const fila = await prisma.queue.upsert({ where: { nome: f.nome }, update: f, create: f });
+    const fila = await prisma.queue.upsert({ where: { organizacaoId_nome: { organizacaoId: ORGANIZACAO_INICIAL, nome: f.nome } }, update: f, create: f });
     for (const agente of agentes) {
       await prisma.queueAgent.upsert({
         where: { filaId_usuarioId: { filaId: fila.id, usuarioId: agente.id } },
@@ -107,7 +107,7 @@ async function semearCrm() {
   ];
 
   const funil = await prisma.funnel.upsert({
-    where: { nome: 'Funil de Vendas' },
+    where: { organizacaoId_nome: { organizacaoId: ORGANIZACAO_INICIAL, nome: 'Funil de Vendas' } },
     update: {},
     create: { nome: 'Funil de Vendas' },
   });
@@ -121,7 +121,7 @@ async function semearCrm() {
   }
 
   const catalogo = await prisma.priceCatalog.upsert({
-    where: { nome: 'Tabela Padrao' },
+    where: { organizacaoId_nome: { organizacaoId: ORGANIZACAO_INICIAL, nome: 'Tabela Padrao' } },
     update: {},
     create: { nome: 'Tabela Padrao', moeda: 'BRL' },
   });
@@ -138,7 +138,7 @@ async function semearCrm() {
 
   for (const p of produtos) {
     const produto = await prisma.product.upsert({
-      where: { sku: p.sku },
+      where: { organizacaoId_sku: { organizacaoId: ORGANIZACAO_INICIAL, sku: p.sku } },
       update: { nome: p.nome },
       create: { sku: p.sku, nome: p.nome },
     });

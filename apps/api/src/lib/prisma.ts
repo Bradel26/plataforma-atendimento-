@@ -35,6 +35,7 @@ const COM_ORGANIZACAO = new Set([
   'Call',
   'Survey',
   'LgpdLog',
+  'Activity',
 ]);
 
 /** Operacoes que leem ou alteram por filtro: ganham `where`. */

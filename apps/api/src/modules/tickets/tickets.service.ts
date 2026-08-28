@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma';
 import { urlAssinada } from '../../lib/storage';
 import { apos, decodificarCursor, fatiar } from '../../lib/paginacao';
 import { badRequest, notFound } from '../../lib/errors';
+import { organizacaoAtual } from '../../lib/tenant';
 import { notificarProtocolo } from '../../realtime/hub';
 import type {
   AgendamentoInput,
@@ -119,6 +120,29 @@ export async function obterTicket(id: string) {
   return serialize(await carregar(id));
 }
 
+/**
+ * Reserva o proximo numero de protocolo da organizacao.
+ *
+ * Antes era `autoincrement()` do Postgres, que e uma sequencia por TABELA: os
+ * protocolos de uma empresa consumiriam os numeros da outra, e a segunda a
+ * entrar abriria o protocolo n. 1.847 no primeiro dia.
+ *
+ * O `UPDATE ... RETURNING` reserva e devolve num passo, e o lock da linha da
+ * organizacao serializa duas aberturas simultaneas — a segunda espera, le o
+ * valor ja incrementado e recebe outro numero. Ler e depois gravar daria o mesmo
+ * numero para as duas.
+ */
+async function reservarNumero(): Promise<number> {
+  const [linha] = await prisma.$queryRaw<Array<{ numero: number }>>`
+    UPDATE organizacoes
+       SET proximo_protocolo = proximo_protocolo + 1
+     WHERE id = ${organizacaoAtual()}
+    RETURNING proximo_protocolo - 1 AS numero
+  `;
+  if (!linha) throw new Error('organizacao nao encontrada ao reservar numero de protocolo');
+  return Number(linha.numero);
+}
+
 export async function criarTicket(input: CriarTicketInput, autorId: string) {
   if (input.conversaId) {
     const conversa = await prisma.conversation.findUnique({ where: { id: input.conversaId } });
@@ -128,7 +152,7 @@ export async function criarTicket(input: CriarTicketInput, autorId: string) {
     input.filaId ??= conversa.filaId;
   }
 
-  const criado = await prisma.ticket.create({ data: input });
+  const criado = await prisma.ticket.create({ data: { ...input, numero: await reservarNumero() } });
   await prisma.ticketComment.create({
     data: { ticketId: criado.id, autorId, conteudo: 'Chamado aberto.', interno: true },
   });

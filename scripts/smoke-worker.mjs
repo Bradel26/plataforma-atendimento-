@@ -26,7 +26,7 @@ const env = Object.fromEntries(
 
 const API = 'http://localhost:3333/api';
 const EXECUCAO = Date.now().toString(36);
-const MORTOS = 'fila:mortos';
+const MORTOS_BASE = 'fila:mortos';
 
 let falhas = 0;
 const checar = (cond, titulo, extra = '') => {
@@ -54,15 +54,12 @@ const supervisor = await entrar('supervisor@plataforma.local', 'Super@123');
 const agente = await entrar('agente1@plataforma.local', 'Agente@123');
 
 const { default: Redis } = await import('ioredis');
-// Mesmo prefixo que a aplicacao usa (ver lib/redis.ts): sem ele o script leria
-// `fila:atrasados` enquanto a API escreve em `dev:fila:atrasados`, e a checagem
-// falharia dizendo que a fila nao mexeu.
-// `??` e nao `||`: prefixo definido como vazio de proposito tem de ser respeitado.
-// E o padrao e 'dev' salvo em producao, porque o .env local nao declara NODE_ENV.
+// O prefixo e aplicado a mao, e nao por `keyPrefix` do cliente: com `keyPrefix`,
+// `KEYS` devolve o nome COMPLETO e o `DEL` seguinte prefixaria de novo, apagando
+// `dev:dev:limite:...` — que nao existe. Explicito evita a pegadinha.
 const prefixoRedis = env.REDIS_PREFIXO ?? (env.NODE_ENV === 'production' ? '' : 'dev');
-const redis = new Redis(env.REDIS_URL, {
-  keyPrefix: prefixoRedis ? `${prefixoRedis}:` : undefined,
-});
+const K = (nome) => (prefixoRedis ? `${prefixoRedis}:${nome}` : nome);
+const redis = new Redis(env.REDIS_URL);
 
 const estado = async (token = admin) => (await req('GET', '/health/fila', { token })).dados.fila;
 
@@ -83,7 +80,7 @@ const trabalhoVivo = {
   tentativa: 3,
   erro: 'falha simulada pelo smoke',
 };
-await redis.lpush(MORTOS, JSON.stringify(trabalhoVivo));
+await redis.lpush(K(MORTOS_BASE), JSON.stringify(trabalhoVivo));
 
 const depoisDeMorrer = await estado();
 checar(depoisDeMorrer.mortos === antes.mortos + 1, '4. trabalho entrou na lista de mortos', `${antes.mortos} -> ${depoisDeMorrer.mortos}`);
@@ -109,25 +106,25 @@ checar(
 // 3. Trabalho sem handler nao entra em laco: fica nos mortos, contado como
 // descartado. Devolver seria voltar para os mortos no mesmo instante.
 const semHandler = { id: `sem-handler-${EXECUCAO}`, tipo: `tipo:inexistente-${EXECUCAO}`, dados: {}, tentativa: 0, erro: 'sem handler' };
-await redis.lpush(MORTOS, JSON.stringify(semHandler));
+await redis.lpush(K(MORTOS_BASE), JSON.stringify(semHandler));
 const segundo = await req('POST', '/health/fila/reprocessar', { token: admin });
 const aindaMorto = segundo.dados.fila.ultimosMortos.some((m) => m.tipo === semHandler.tipo);
 checar(segundo.dados.descartados >= 1, '9. trabalho sem handler conta como descartado', `${segundo.dados.descartados}`);
 checar(aindaMorto, '10. e continua na lista, em vez de circular para sempre');
 
 // 4. Item corrompido nao trava a fila nem volta para ela.
-await redis.lpush(MORTOS, '{isso nao e json');
+await redis.lpush(K(MORTOS_BASE), '{isso nao e json');
 const terceiro = await req('POST', '/health/fila/reprocessar', { token: admin });
 checar(terceiro.status === 200, '11. lixo na lista nao derruba a rota', `status ${terceiro.status}`);
-const lixoSobrou = (await redis.lrange(MORTOS, 0, -1)).includes('{isso nao e json');
+const lixoSobrou = (await redis.lrange(K(MORTOS_BASE), 0, -1)).includes('{isso nao e json');
 checar(!lixoSobrou, '12. item corrompido sai da lista e nao volta para a fila');
 
 // 5. Limpeza: tira o que este teste plantou.
-const restantes = await redis.lrange(MORTOS, 0, -1);
+const restantes = await redis.lrange(K(MORTOS_BASE), 0, -1);
 for (const item of restantes) {
-  if (item.includes(EXECUCAO)) await redis.lrem(MORTOS, 0, item);
+  if (item.includes(EXECUCAO)) await redis.lrem(K(MORTOS_BASE), 0, item);
 }
-const prontos = await redis.lrange('fila:prontos', 0, -1);
+const prontos = await redis.lrange(K('fila:prontos'), 0, -1);
 for (const item of prontos) {
   if (item.includes(EXECUCAO)) await redis.lrem('fila:prontos', 0, item);
 }

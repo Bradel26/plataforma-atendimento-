@@ -73,7 +73,7 @@ productsRoutes.post(
   requireRole('ADMIN', 'SUPERVISOR'),
   validateBody(produtoSchema),
   asyncHandler(async (req, res) => {
-    const existente = await prisma.product.findUnique({ where: { sku: req.body.sku } });
+    const existente = await prisma.product.findFirst({ where: { sku: req.body.sku } });
     if (existente) throw conflict('Ja existe um produto com este SKU');
     res.status(201).json({ produto: await prisma.product.create({ data: req.body }) });
   }),
@@ -89,7 +89,7 @@ productsRoutes.patch(
     if (!atual) throw notFound('Produto nao encontrado');
 
     if (req.body.sku && req.body.sku !== atual.sku) {
-      const emUso = await prisma.product.findUnique({ where: { sku: req.body.sku } });
+      const emUso = await prisma.product.findFirst({ where: { sku: req.body.sku } });
       if (emUso) throw conflict('Ja existe um produto com este SKU');
     }
     res.json({ produto: await prisma.product.update({ where: { id }, data: req.body }) });
@@ -118,7 +118,7 @@ catalogsRoutes.post(
   requireRole('ADMIN', 'SUPERVISOR'),
   validateBody(catalogoSchema),
   asyncHandler(async (req, res) => {
-    const existente = await prisma.priceCatalog.findUnique({ where: { nome: req.body.nome } });
+    const existente = await prisma.priceCatalog.findFirst({ where: { nome: req.body.nome } });
     if (existente) throw conflict('Ja existe um catalogo com este nome');
     res.status(201).json({ catalogo: await prisma.priceCatalog.create({ data: req.body }) });
   }),

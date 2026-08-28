@@ -12,7 +12,24 @@ const CREDENCIAIS_INVALIDAS = new AppError(401, 'INVALID_CREDENTIALS', 'Email ou
 export async function login({ email, senha }: LoginInput) {
   await garantirNaoBloqueado(email);
 
-  const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+  /*
+   * O e-mail deixou de ser identificador global: ele e unico POR organizacao.
+   *
+   * `take: 2` em vez de `findFirst` de proposito. Com `findFirst`, duas pessoas
+   * com o mesmo e-mail em organizacoes diferentes fariam o login entrar sempre na
+   * primeira que o banco devolvesse — silenciosamente, e sem jeito de a segunda
+   * pessoa entrar nunca. Ler duas transforma isso em pergunta em vez de sorteio.
+   */
+  const candidatos = await prisma.user.findMany({ where: { email: email.toLowerCase() }, take: 2 });
+  if (candidatos.length > 1) {
+    throw new AppError(
+      409,
+      'ORGANIZACAO_AMBIGUA',
+      'Este e-mail existe em mais de uma organizacao. Informe qual delas.',
+    );
+  }
+
+  const user = candidatos[0];
   if (!user) {
     // Conta o erro mesmo sem usuario: sem isso, varrer emails sai de graca.
     await registrarFalha(email);

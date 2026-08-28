@@ -29,15 +29,12 @@ const API = 'http://localhost:3333/api';
 const APP_SECRET = 'segredo-de-teste-do-app-meta';
 const TOKEN_FALSO = 'EAAG-token-falso-para-teste-de-erro';
 const EXECUCAO = Date.now().toString(36);
-// Mesmo prefixo que a aplicacao usa (ver lib/redis.ts): sem ele o script leria
-// `fila:atrasados` enquanto a API escreve em `dev:fila:atrasados`, e a checagem
-// falharia dizendo que a fila nao mexeu.
-// `??` e nao `||`: prefixo definido como vazio de proposito tem de ser respeitado.
-// E o padrao e 'dev' salvo em producao, porque o .env local nao declara NODE_ENV.
+// O prefixo e aplicado a mao, e nao por `keyPrefix` do cliente: com `keyPrefix`,
+// `KEYS` devolve o nome COMPLETO e o `DEL` seguinte prefixaria de novo, apagando
+// `dev:dev:limite:...` — que nao existe. Explicito evita a pegadinha.
 const prefixoRedis = env.REDIS_PREFIXO ?? (env.NODE_ENV === 'production' ? '' : 'dev');
-const redis = new Redis(env.REDIS_URL, {
-  keyPrefix: prefixoRedis ? `${prefixoRedis}:` : undefined,
-});
+const K = (nome) => (prefixoRedis ? `${prefixoRedis}:${nome}` : nome);
+const redis = new Redis(env.REDIS_URL);
 
 let falhas = 0;
 const checar = (cond, titulo, extra = '') => {
@@ -176,9 +173,9 @@ const { dados: lista } = await req('GET', '/conversas?limite=100', { token: admi
 const conversa = (lista.conversas ?? []).find((c) => c.canal === 'WHATSAPP' && c.status !== 'FINALIZADO');
 checar(Boolean(conversa), '5. conversa de WhatsApp em aberto localizada');
 
-const atrasadosAntes = await redis.zcard('fila:atrasados');
+const atrasadosAntes = await redis.zcard(K('fila:atrasados'));
 await req('POST', `/conversas/${conversa.id}/finalizar`, { token: admin });
-const atrasadosDepois = await redis.zcard('fila:atrasados');
+const atrasadosDepois = await redis.zcard(K('fila:atrasados'));
 checar(
   atrasadosDepois > atrasadosAntes,
   '   convite de pesquisa que falhou foi para a fila de atrasados',
@@ -198,7 +195,7 @@ const { status: statusFila, dados: estado } = await req('GET', '/health/fila', {
 checar(statusFila === 200 && typeof estado.fila?.prontos === 'number', '6. estado da fila exposto para a gestao', JSON.stringify(estado.fila && { prontos: estado.fila.prontos, atrasados: estado.fila.atrasados, mortos: estado.fila.mortos }));
 
 // Limpa a nova tentativa pendente para nao deixar trabalho orfao rodando.
-await redis.del('fila:atrasados');
+await redis.del(K('fila:atrasados'));
 await configurarWhatsApp(true);
 await redis.quit();
 console.log(`\n${falhas} FALHOU`);

@@ -89,6 +89,8 @@ backend na mesma origem (necessário para o cookie de refresh).
 | `npm run smoke:worker` | volta dos trabalhos mortos para a fila (12 checagens) |
 | `npm run smoke:ficha` | linha do tempo da ficha 360: ordem, cursor, filtro e atividades (48 checagens) |
 | `npm run smoke:ia` | ponte com o motor de IA externo, com webhook de verdade (46 checagens) |
+| `npm run smoke:tenant` | isolamento entre duas organizacoes: listagem, id direto, escrita cruzada, tempo real, arquivo, token de integracao, unicidades (47 checagens) |
+| `npm run censo:tenant` | censo de linhas por tabela, para conferir migracao (`--comparar` contra um censo salvo) |
 
 ## API (Fase 0)
 

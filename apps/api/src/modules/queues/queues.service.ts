@@ -33,7 +33,7 @@ export async function getQueue(id: string) {
 }
 
 export async function createQueue(input: z.infer<typeof createQueueSchema>) {
-  const existente = await prisma.queue.findUnique({ where: { nome: input.nome } });
+  const existente = await prisma.queue.findFirst({ where: { nome: input.nome } });
   if (existente) throw conflict('Ja existe uma fila com este nome');
 
   const fila = await prisma.queue.create({ data: input, include: comAgentes });
@@ -45,7 +45,7 @@ export async function updateQueue(id: string, input: z.infer<typeof updateQueueS
   if (!atual) throw notFound('Fila nao encontrada');
 
   if (input.nome && input.nome !== atual.nome) {
-    const nomeEmUso = await prisma.queue.findUnique({ where: { nome: input.nome } });
+    const nomeEmUso = await prisma.queue.findFirst({ where: { nome: input.nome } });
     if (nomeEmUso) throw conflict('Ja existe uma fila com este nome');
   }
 

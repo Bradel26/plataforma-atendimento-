@@ -170,12 +170,50 @@ atividadesRoutes.get(
   }),
 );
 
+/**
+ * Confere que todo vinculo informado pertence a organizacao de quem pede.
+ *
+ * A coluna `organizacaoId` da atividade impede a LEITURA cruzada, e nao a
+ * escrita: o Postgres aceitaria uma atividade da organizacao B apontando para o
+ * contato da A, porque a chave estrangeira nao exige mesma organizacao. Cada
+ * `findFirst` abaixo passa pelo filtro da extensao, entao um id de outra empresa
+ * simplesmente nao e encontrado.
+ *
+ * 404 e nao 403: dizer "proibido" confirmaria que o registro existe.
+ *
+ * Isto foi encontrado pelo `smoke:tenant`, que recebeu 201 onde esperava 404 —
+ * o unico furo real da fundacao de organizacao.
+ */
+async function conferirVinculos(dados: {
+  contatoId?: string | null;
+  contaId?: string | null;
+  oportunidadeId?: string | null;
+  protocoloId?: string | null;
+}) {
+  const conferencias: Array<[string | null | undefined, () => Promise<unknown>]> = [
+    [dados.contatoId, () => prisma.contact.findFirst({ where: { id: dados.contatoId! }, select: { id: true } })],
+    [dados.contaId, () => prisma.account.findFirst({ where: { id: dados.contaId! }, select: { id: true } })],
+    [
+      dados.oportunidadeId,
+      () => prisma.opportunity.findFirst({ where: { id: dados.oportunidadeId! }, select: { id: true } }),
+    ],
+    [dados.protocoloId, () => prisma.ticket.findFirst({ where: { id: dados.protocoloId! }, select: { id: true } })],
+  ];
+
+  for (const [valor, buscar] of conferencias) {
+    if (!valor) continue;
+    if (!(await buscar())) throw notFound('Registro vinculado nao encontrado');
+  }
+}
+
 atividadesRoutes.post(
   '/',
   validateBody(criarSchema),
   asyncHandler(async (req, res) => {
     const dados = req.body as z.infer<typeof criarSchema>;
     const autorId = req.user?.sub;
+
+    await conferirVinculos(dados);
 
     const atividade = await prisma.activity.create({
       data: {

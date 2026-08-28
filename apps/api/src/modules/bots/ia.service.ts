@@ -5,6 +5,7 @@ import { AppError, badRequest, conflict, notFound } from '../../lib/errors';
 import { prisma } from '../../lib/prisma';
 import { cifrar } from '../../lib/crypto-box';
 import { limiteBytes, salvar, tipoAceito, urlAssinada } from '../../lib/storage';
+import { organizacaoAtual } from '../../lib/tenant';
 import { notificarConversaAtualizada, notificarMensagem } from '../../realtime/hub';
 import { obterConfig } from '../channels/channels.service';
 import { enviarArquivoParaCanal, enviarParaCanal, exigeEnvioExterno } from '../channels/outbound.service';
@@ -436,7 +437,7 @@ export async function salvarIa(
   const paraGravar = { ...input, ...(input.iaSegredo ? { iaSegredo: cifrar(input.iaSegredo) } : {}) };
 
   await prisma.channelConfig.upsert({
-    where: { canal },
+    where: { organizacaoId_canal: { organizacaoId: organizacaoAtual(), canal } },
     update: paraGravar,
     create: { canal, ...paraGravar },
   });

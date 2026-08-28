@@ -1127,3 +1127,119 @@ No mesmo pacote, dois defeitos menores da mesma tela, ambos por ler o campo erra
 whatsbot: a lista de canais vinha em `data` (eu lia `channels`/`items`), e a tela dizia "nenhum
 canal deste tipo" com o canal criado e ativo do outro lado; e o nome vem em `display_name` (eu lia
 `name`), então o seletor mostrava o id em vez do nome.
+
+### 49. Fundação de organização: a plataforma ganha um dono
+
+Antes da Fase 1 do CRM, a arquitetura passou a suportar múltiplas empresas na mesma instalação. Não
+é SaaS: não há cobrança, plano, assinatura, cadastro público de empresa nem troca de organização na
+sessão. O que existe é **fronteira onde antes não havia coluna**.
+
+A decisão de fazer isto *antes* da Fase 1 foi de custo, não de zelo: a Fase 1 já inclui o escopo de
+visibilidade ("vejo só o que é meu"), que é a mesma passagem por todos os serviços. Feitas juntas,
+um trabalho; em ordem, o mesmo trabalho duas vezes.
+
+**O isolamento não depende de ninguém lembrar de filtrar.** Uma extensão do Prisma Client injeta
+`organizacaoId` em toda leitura, atualização e exclusão das 24 tabelas raiz, e preenche em toda
+criação. O contexto vem de `AsyncLocalStorage`, aberto na autenticação. Nenhum *service* menciona
+organização — e é justamente por isso que nenhum pode esquecer.
+
+A regra que sustenta o desenho: **ausência de contexto lança**. O modo de falha clássico de
+multi-tenancy é o filtro opcional que, sem valor, vira "sem filtro" e devolve a base inteira. Aqui a
+consulta nem sai.
+
+Quem atravessa organizações de propósito diz isso em voz alta com `semOrganizacao(motivo, fn)`. São
+seis lugares, todos auditáveis por busca: login (o e-mail é que revela a organização), webhook de
+canal (o `phone_number_id` no corpo), convite de pesquisa (o token), `widget.js` e a marca da tela de
+login (o slug), e o expurgo da LGPD (percorre todas).
+
+#### Ergonomia sem abrir mão da garantia
+
+O campo tem `@default("")` no schema. Sem ele, o TypeScript exigiria a organização em cada uma das 41
+chamadas de criação; com ele, a extensão preenche em tempo de execução. Sozinho isso seria trocar um
+risco por outro — linha órfã com string vazia, em silêncio. Por isso cada tabela ganhou um **CHECK**
+recusando o valor vazio: se a extensão for contornada, o banco recusa com o nome da constraint. O
+caminho de falha deixou de ser silencioso.
+
+`upsert` é a única operação em que a extensão **não** injeta o filtro: o `where` precisa ser chave
+única. Nesses cinco pontos a organização aparece no código de propósito, e o TypeScript cobra.
+
+#### Migração
+
+Quatro migrations escritas à mão, em passos que param no meio sem deixar o banco inconsistente:
+anulável → backfill → validação que diz *qual tabela* falhou → obrigatória → chaves estrangeiras →
+índices com a organização no prefixo (índice que não começa por ela não é usado, porque toda consulta
+filtra por ela primeiro). Depois, as unicidades globais viraram compostas, e a numeração de protocolo
+virou contador na linha da organização — a sequência do Postgres é por tabela e não sabe contar por
+organização; a segunda empresa a entrar abriria o protocolo nº 1.847 no primeiro dia.
+
+Conferido por censo de linhas antes e depois (`npm run censo:tenant`): 36 tabelas, nenhuma contagem
+alterada, zero linhas sem organização.
+
+#### Os quatro defeitos que apareceram no caminho
+
+Nenhum era o que eu fui procurar, e três só existiam por causa da virada.
+
+**A sala global do tempo real.** As salas do Socket.IO eram por usuário, fila e conversa — exceto
+`supervisao`, um nome fixo. Todo ADMIN e SUPERVISOR entrava nela ao conectar, então com duas empresas
+o supervisor de uma receberia em tempo real cada mensagem e cada transferência da outra, sem nenhuma
+requisição HTTP no caminho para filtrar. Toda sala passa a começar pela organização.
+
+**Evento de stream perde o contexto do `AsyncLocalStorage`.** O listener roda no escopo assíncrono de
+quem *emite* — o socket, criado no aceite da conexão, fora de qualquer `run()` — e não no de quem
+registrou o listener. O `multer` cai nisso: o upload de anexo respondia 500 com "sem organização
+ativa" enquanto a mesma rota sem arquivo funcionava. O contexto passou a ser reaberto no
+`asyncHandler`, por onde toda rota da API passa.
+
+**A fila de trabalho compartilhada entre instalações.** Produção e desenvolvimento usam o mesmo
+Upstash, e a fila é uma lista única (`fila:prontos`). O worker de produção consumia trabalho criado
+aqui, não achava o registro no banco dele e voltava em silêncio: o disparo de campanha ficava
+PENDENTE para sempre, sem erro em lugar nenhum. Prefixar por organização **não** resolveria — o id da
+organização inicial é fixo e igual nos dois bancos —, então a separação é por instalação, via
+`REDIS_PREFIXO` aplicado pelo próprio cliente do ioredis.
+
+**Escrita cruzada em `Activity`.** Encontrado pelo `smoke:tenant`, com um 201 onde esperava 404. A
+atividade se liga a contato, conta, oportunidade *ou* protocolo, e a regra "ao menos um vínculo" é
+validada no serviço, não no banco — então o Postgres aceitava uma atividade da empresa B apontando
+para o contato da A. É um furo que nenhum filtro de *leitura* pega, porque acontece na escrita. Ela
+ganhou coluna própria **e** validação de que todo vínculo pertence à mesma organização.
+
+#### Uma unicidade que o dado recusou
+
+A primeira versão da migration tornava `phoneNumberId`, `pageId` e `igUserId` únicos globalmente. O
+Postgres recusou: `page_id` repetia. E estava certo — o Instagram Direct é atrelado a uma página do
+Facebook, então a **mesma** organização tem o mesmo `pageId` nos canais FACEBOOK e INSTAGRAM. A
+unicidade correta é por *tipo de canal*, e é ela que permite ao webhook, cuja URL é compartilhada,
+descobrir de quem é a mensagem que chegou.
+
+#### Três tabelas deixaram de ser da instalação
+
+`Branding`, `RetentionPolicy` e `VoiceConfig` nasceram com `id @default("default")` e o comentário
+"registro único". A da LGPD importa por obrigação legal, não por arquitetura: prazo de guarda é
+responsabilidade de quem trata o dado, e uma política compartilhada apagaria dado que outra empresa é
+obrigada a manter.
+
+#### Arquivos
+
+A chave passou a ser `<organizacao>/<ano>/<mês>/<uuid>`, e a leitura confere o prefixo contra quem
+pede. A assinatura protegia contra adivinhação, mas não pertencia a ninguém: com o caminho antigo, um
+link válido servia venha de onde viesse. A chave antiga continua valendo **para a organização
+inicial** — recusá-la faria anexo de conversa que existe hoje deixar de abrir.
+
+#### O que impede a erosão
+
+`tenant.schema.test.ts` lê o próprio `schema.prisma` e falha se qualquer tabela nova não declarar de
+que lado está: raiz, filha (dizendo qual é o pai) ou global. Sem isso, a Fase 3 criaria `Proposal` sem
+a coluna meses depois desta decisão e nenhum teste reclamaria. Conferi que tem dentes removendo
+`Survey` da lista da extensão: falhou apontando o nome.
+
+#### Fora de escopo, por decisão
+
+Cobrança, planos, assinatura, cadastro público de empresa, troca de organização na sessão,
+distribuição justa da fila entre organizações e RLS ativo. As tabelas ficam prontas para RLS; ativar
+com uma organização só acrescentaria um modo de falha difícil de diagnosticar sem proteger contra
+nada que exista hoje.
+
+Dois limites conhecidos, registrados para não virarem surpresa: a fila compartilhada tem efeito de
+vizinhança (um lote grande de uma empresa atrasa as outras), e o login por e-mail fica ambíguo se a
+mesma pessoa existir em duas organizações — hoje isso responde 409 pedindo para informar qual, em vez
+de sortear uma.

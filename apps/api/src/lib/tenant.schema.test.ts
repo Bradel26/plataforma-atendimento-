@@ -39,7 +39,6 @@ const FILHAS: Record<string, string> = {
   TicketComment: 'Ticket',
   TicketAttachment: 'Ticket',
   TicketSchedule: 'Ticket',
-  Activity: 'Contact | Account | Opportunity | Ticket',
   PresenceLog: 'User',
 };
 

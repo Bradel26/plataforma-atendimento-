@@ -116,7 +116,7 @@ async function importarLinha(linha: LinhaCsv, dryRun: boolean) {
   // senao o dry run aprovaria linhas que a importacao real recusaria.
   const emailResponsavel = normalizar(linha.responsavel_email ?? '').toLowerCase();
   const responsavel = emailResponsavel
-    ? await prisma.user.findUnique({ where: { email: emailResponsavel } })
+    ? await prisma.user.findFirst({ where: { email: emailResponsavel } })
     : null;
   if (emailResponsavel && !responsavel) throw new Error(`Responsavel nao encontrado: ${emailResponsavel}`);
 

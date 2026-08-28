@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { Channel } from '@prisma/client';
 import { prisma, prismaSemIsolamento } from '../../lib/prisma';
-import { semOrganizacao } from '../../lib/tenant';
+import { organizacaoAtual, semOrganizacao } from '../../lib/tenant';
 import { badRequest, notFound } from '../../lib/errors';
 import { cifrar, decifrar } from '../../lib/crypto-box';
 
@@ -85,7 +85,7 @@ export async function salvarCanal(canal: CanalExterno, input: SalvarCanalInput) 
     if (!fila) throw notFound('Fila nao encontrada');
   }
 
-  const gravado = await prisma.channelConfig.findUnique({ where: { canal } });
+  const gravado = await prisma.channelConfig.findFirst({ where: { canal } });
   const atual = gravado ? aberto(gravado) : null;
   const futuro = { ...atual, ...input };
 
@@ -101,8 +101,11 @@ export async function salvarCanal(canal: CanalExterno, input: SalvarCanalInput) 
     if (valor) paraGravar[campo] = cifrar(valor);
   }
 
+  // A organizacao aparece aqui de proposito: `upsert` exige chave unica, entao a
+  // extensao nao pode injetar o filtro. Sem ela, o upsert de uma empresa
+  // encontraria e sobrescreveria a configuracao de canal da outra.
   await prisma.channelConfig.upsert({
-    where: { canal },
+    where: { organizacaoId_canal: { organizacaoId: organizacaoAtual(), canal } },
     update: paraGravar,
     create: { canal, ...paraGravar },
   });
