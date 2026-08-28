@@ -73,9 +73,17 @@ function AppRoutes() {
       {RotasPublicas()}
       <Route path="/login" element={<Navigate to={inicial} replace />} />
       <Route element={<AppShell />}>
-        {permitidos.map(({ rota }) => {
+        {permitidos.flatMap(({ rota, subrotas }) => {
           const Pagina = PAGINAS[rota];
-          return Pagina ? <Route key={rota} path={rota} element={<Pagina />} /> : null;
+          if (!Pagina) return [];
+          // A rota de detalhe usa a MESMA pagina do modulo e o mesmo filtro de
+          // perfil: `/contatos/:id` existe para quem ve `/crm` e para mais
+          // ninguem. Registrar uma pagina propria aqui seria abrir a porta para
+          // uma permissao divergir da do menu sem ninguem notar.
+          return [
+            <Route key={rota} path={rota} element={<Pagina />} />,
+            ...(subrotas ?? []).map((s) => <Route key={s} path={s} element={<Pagina />} />),
+          ];
         })}
       </Route>
       {/* Rota fora do perfil cai no primeiro modulo permitido, nao numa tela vazia. */}

@@ -70,7 +70,7 @@ backend na mesma origem (necessário para o cookie de refresh).
 | `npm run dev` | API e web em modo watch |
 | `npm run dev:api` / `npm run dev:web` | apenas um dos dois |
 | `npm run typecheck` | TypeScript nos dois apps |
-| `npm test` | suíte de unidade (124 testes, sem infraestrutura) |
+| `npm test` | suíte de unidade (131 testes, sem infraestrutura) |
 | `npm run build` | build de produção |
 | `npm run db:studio` | Prisma Studio |
 | `npm run infra:up` / `infra:down` | containers de dados |
@@ -89,7 +89,7 @@ backend na mesma origem (necessário para o cookie de refresh).
 | `npm run smoke:worker` | volta dos trabalhos mortos para a fila (12 checagens) |
 | `npm run smoke:ficha` | linha do tempo da ficha 360: ordem, cursor, filtro e atividades (48 checagens) |
 | `npm run smoke:ia` | ponte com o motor de IA externo, com webhook de verdade (46 checagens) |
-| `npm run smoke:tenant` | isolamento entre duas organizacoes: listagem, id direto, escrita cruzada, tempo real, arquivo, token de integracao, unicidades (47 checagens) |
+| `npm run smoke:tenant` | isolamento entre duas organizacoes: listagem, id direto, escrita cruzada, tempo real, arquivo, token de integracao, unicidades (49 checagens) |
 | `npm run censo:tenant` | censo do banco: migrations aplicadas, organizações e contador de protocolo, linhas e `organizacao_id` ausente por tabela (`--comparar` contra um censo salvo, `--env <arquivo>` para apontar a outro banco sem expor a credencial na linha de comando) |
 | `npm run backup:banco -- <arquivo .env> [destino.json]` | retrato logico do banco em JSON, antes de migration estrutural (esta maquina nao tem `pg_dump`) |
 | `npm run validar:producao -- <url> <arquivo .env> [saida.json]` | validação de produção por HTTP, somente leitura: login, permissões, contagens de 12 listagens, protocolo, arquivo, webchat, ponte de IA, Socket.IO (23 checagens) |
@@ -244,6 +244,25 @@ O módulo **CRM** tem cinco abas:
 
 O seed cria o funil *Funil de Vendas* (5 estágios) e o catálogo *Tabela Padrão* com 3 produtos —
 sem um funil não é possível abrir oportunidades.
+
+### Endereço próprio de cada registro
+
+Os três registros principais têm URL, e a URL é a fonte do que está aberto na tela — recarregar,
+usar o botão voltar e colar o link no chat funcionam.
+
+| Rota | Abre |
+|---|---|
+| `/crm` | a lista, aba Contatos |
+| `/crm?aba=contas` | a lista em outra aba (`contatos`, `contas`, `leads`, `oportunidades`, `produtos`, `dados`) |
+| `/clientes/:id` | ficha da empresa (aba Contas) |
+| `/contatos/:id` | ficha 360 da pessoa |
+| `/oportunidades/:id` | detalhe da oportunidade, com itens |
+
+`/clientes` usa a palavra de quem opera; no modelo de dados a entidade é `Account`/conta. As três
+rotas pertencem ao item **CRM** do menu (`subrotas` em `nav.ts`) e herdam dele a permissão — não
+existe lista de rotas em paralelo, justamente porque a URL digitada à mão é o caminho que não passa
+pelo menu. Registro inexistente, ou de outra organização, cai na mesma tela "não encontrado": a API
+responde 404 nos dois casos, para não confirmar que o registro existe.
 
 ## Canais externos (Meta)
 
@@ -578,7 +597,7 @@ barra, e quem quer o número exato também prefere a tabela.
 
 ```bash
 npm run dev            # em outro terminal: API, web, Postgres e Redis de pé
-npm run test:e2e       # 34 testes em Chromium
+npm run test:e2e       # 43 testes em Chromium
 npm run test:e2e:ui    # modo interativo, para depurar
 ```
 

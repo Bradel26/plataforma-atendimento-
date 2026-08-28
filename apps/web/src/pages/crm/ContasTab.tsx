@@ -20,7 +20,14 @@ const mascararCnpj = (cnpj: string | null) =>
     ? cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5')
     : (cnpj ?? '—');
 
-export function ContasTab() {
+type Props = {
+  /** Registro aberto, vindo da URL (`/clientes/:id`). Nulo em `/crm`. */
+  selecionadoId: string | null;
+  aoAbrir: (id: string) => void;
+  aoFechar: () => void;
+};
+
+export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   const [contas, setContas] = useState<Conta[]>([]);
   const [busca, setBusca] = useState('');
   const [ficha, setFicha] = useState<Ficha | null>(null);
@@ -59,9 +66,27 @@ export function ContasTab() {
       setIndicadores(resumo.indicadores);
       setErro(null);
     } catch (e) {
+      setFicha(null);
       setErro(e instanceof ApiError ? e.message : 'Falha ao abrir a conta');
     }
   }, []);
+
+  /**
+   * Carrega a ficha do registro que a URL pede.
+   *
+   * Antes, `abrir` era chamado no clique da lista e o registro morava aqui.
+   * Agora quem manda e a rota: acesso direto por URL e F5 entram por este
+   * efeito, e o clique so navega. Um unico caminho para carregar significa que
+   * o link colado no chat mostra exatamente o que o clique mostraria.
+   */
+  useEffect(() => {
+    if (!selecionadoId) {
+      setFicha(null);
+      setIndicadores(null);
+      return;
+    }
+    void abrir(selecionadoId);
+  }, [selecionadoId, abrir]);
 
   const atualizarFicha = () => {
     if (ficha) void abrir(ficha.conta.id);
@@ -102,9 +127,9 @@ export function ContasTab() {
                   <li key={c.id}>
                     <button
                       type="button"
-                      onClick={() => void abrir(c.id)}
+                      onClick={() => aoAbrir(c.id)}
                       className={`w-full py-2.5 text-left transition hover:bg-slate-50 ${
-                        ficha?.conta.id === c.id ? 'bg-slate-50' : ''
+                        selecionadoId === c.id ? 'bg-slate-50' : ''
                       }`}
                     >
                       <p className="text-sm font-medium text-slate-800">{c.nome}</p>
@@ -139,6 +164,13 @@ export function ContasTab() {
 
       {ficha ? (
         <div className="space-y-5">
+          <button
+            type="button"
+            onClick={aoFechar}
+            className="text-xs text-slate-500 underline-offset-2 transition hover:text-slate-700 hover:underline"
+          >
+            &larr; Todos os clientes
+          </button>
           <Card titulo={ficha.conta.nome} descricao={mascararCnpj(ficha.conta.cnpj)}>
             <dl className="grid gap-3 text-sm sm:grid-cols-3">
               <div>
@@ -239,10 +271,20 @@ export function ContasTab() {
         </div>
       ) : (
         <Card titulo="Ficha da conta">
-          <EmptyState
-            titulo="Selecione uma conta"
-            descricao="Contatos, leads, oportunidades e a linha do tempo da empresa aparecem aqui."
-          />
+          {/* URL com id que nao existe — ou que e de outra organizacao, caso em
+              que a API responde 404 justamente para nao revelar que existe. Os
+              dois chegam aqui iguais, e e assim que deve ser. */}
+          {selecionadoId ? (
+            <EmptyState
+              titulo="Cliente nao encontrado"
+              descricao="O endereco aponta para um registro que nao existe ou que voce nao pode ver."
+            />
+          ) : (
+            <EmptyState
+              titulo="Selecione uma conta"
+              descricao="Contatos, leads, oportunidades e a linha do tempo da empresa aparecem aqui."
+            />
+          )}
         </Card>
       )}
     </div>

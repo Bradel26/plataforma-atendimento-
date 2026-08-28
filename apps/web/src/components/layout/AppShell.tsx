@@ -1,11 +1,11 @@
 import { Outlet, useLocation } from 'react-router-dom';
-import { NAV } from './nav';
+import { itemDaRota } from './nav';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 
 export function AppShell() {
   const { pathname } = useLocation();
-  const atual = NAV.find((item) => pathname.startsWith(item.rota));
+  const atual = itemDaRota(pathname);
 
   return (
     <div className="flex h-full">

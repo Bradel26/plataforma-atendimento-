@@ -203,6 +203,10 @@ const diretos = [
   [`/oportunidades/${A.oportunidade.id}`, 'oportunidade'],
   [`/protocolos/${A.protocolo.id}`, 'protocolo'],
   [`/ficha/contato/${A.contato.id}`, 'ficha do contato'],
+  // A ficha da conta entrou na lista quando `/clientes/:id` ganhou endereco
+  // proprio: e a segunda chamada que a tela faz, e um 200 aqui abriria os
+  // indicadores da empresa de outra organizacao mesmo com o restante fechado.
+  [`/ficha/conta/${A.conta.id}`, 'ficha da conta'],
 ];
 
 for (const [rota, nome] of diretos) {

@@ -37,11 +37,19 @@ export function FichaContato({ contatoId }: { contatoId: string }) {
   const [contas, setContas] = useState<Conta[] | null>(null);
   const [vinculando, setVinculando] = useState(false);
 
+  /** 404 tem tela propria; qualquer outra falha vira alerta. */
+  const [naoEncontrado, setNaoEncontrado] = useState(false);
+
   const carregar = useCallback(async () => {
     setErro(null);
+    setNaoEncontrado(false);
     try {
       setFicha(await api.get<Ficha>(`/ficha/contato/${contatoId}`));
     } catch (e) {
+      if (e instanceof ApiError && e.status === 404) {
+        setNaoEncontrado(true);
+        return;
+      }
       setErro(e instanceof ApiError ? e.message : 'Falha ao carregar a ficha');
     }
   }, [contatoId]);
@@ -97,6 +105,23 @@ export function FichaContato({ contatoId }: { contatoId: string }) {
     }
   };
 
+  /*
+   * Registro que nao carrega tem duas causas indistinguiveis de proposito: id
+   * que nao existe e id de outra organizacao — a API responde 404 nos dois
+   * casos, para nao confirmar a existencia do que nao e seu. Com endereco
+   * proprio (`/contatos/:id`), isto virou uma tela que da para alcancar
+   * digitando, e nao so um erro de bastidor.
+   */
+  if (naoEncontrado) {
+    return (
+      <Card titulo="Ficha do contato">
+        <EmptyState
+          titulo="Contato nao encontrado"
+          descricao="O endereco aponta para um registro que nao existe ou que voce nao pode ver."
+        />
+      </Card>
+    );
+  }
   if (erro && !ficha) return <Alerta>{erro}</Alerta>;
   if (!ficha) return <Card titulo="Ficha do contato"><p className="text-sm text-slate-500">Carregando ficha...</p></Card>;
 

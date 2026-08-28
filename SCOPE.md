@@ -175,9 +175,26 @@ Feita entre a Fase 4 e a Fase 1 do CRM, por economia: a Fase 1 já traz o escopo
 2 contatos, 2 conversas, 5 mensagens), então quatro coisas não têm dado para testar sem escrever
 nela: abertura real de protocolo pelo contador novo, leitura de anexo com a chave antiga, sessão de
 webchat ponta a ponta e escopo de visibilidade de `AGENTE`/`SUPERVISOR` — o único usuário é `ADMIN`.
-As quatro são cobertas em desenvolvimento pelo `smoke:tenant` (47 checagens) contra o mesmo código.
+As quatro são cobertas em desenvolvimento pelo `smoke:tenant` (49 checagens) contra o mesmo código.
 A ponte de IA responde 401 sem token, o que prova a rota montada mas não o token de produção: essa
 conferência é o botão *Verificar ponte* do plugin.
+
+### Evolução do CRM — Fase 1 (em andamento)
+
+Transformar o CRM básico da Fase 1 original num CRM comercial completo, sem reconstruir nada. O
+Ploomes é referência conceitual, não modelo a copiar: o diferencial continua sendo CRM + atendimento
+omnichannel + automação + IA na mesma base. Protheus está fora de escopo nesta etapa.
+
+- [x] **1.1 Rotas próprias para os registros principais** — `/clientes/:id`, `/contatos/:id` e
+  `/oportunidades/:id`, com `/crm` preservado como lista. Ver decisão 50
+- [ ] 1.2 Perfis e escopo de visibilidade ("vejo só o que é meu") — menor agora, o mecanismo de
+  contexto já existe desde a Fundação de Organização
+- [ ] 1.3 Tags centralizadas
+- [ ] 1.4 Ficha 360 completa
+- [ ] 1.5 Atividades e follow-up
+- [ ] 1.6 Funil: "sem próxima atividade"
+- [ ] 1.7 Busca global
+- [ ] 1.8 Log de auditoria genérico
 
 ---
 
@@ -1299,3 +1316,67 @@ Terceira lição, menor: um contador de protocolo alimentado por número explíc
 numeração em uso, e o `censo:tenant` agora acusa isso. O `smoke:tenant`, que insere números
 explícitos de propósito, passou a alinhar o contador depois — um censo que nasce sujo não serve de
 diagnóstico.
+
+### 50. Cada registro do CRM ganha endereço, e a URL passa a ser o estado
+
+O CRM inteiro morava em `/crm`, com aba e registro aberto em `useState`. Três consequências que
+não apareciam como bug e eram sentidas todo dia: um F5 devolvia a tela em branco, um link colado
+no chat não abria nada, e o botão voltar do navegador saía do módulo em vez de fechar a ficha.
+
+`/clientes/:id`, `/contatos/:id` e `/oportunidades/:id` resolvem isso invertendo a fonte da
+verdade: **a URL manda, e a tela obedece**. `CrmPage` lê a rota e decide qual aba mostrar e qual
+registro carregar; as abas recebem `selecionadoId` por prop e perderam o estado próprio. Nenhum
+componente da ficha mudou — `FichaContato`, `Indicadores`, `LinhaDoTempo` e `RegistrarAtividade`
+são os mesmos, e é por isso que a mudança caberia em um dia.
+
+`/crm` continua existindo e continua sendo a lista. A aba agora vem de `?aba=`, então recarregar
+em `/crm?aba=contas` também devolve onde a pessoa estava.
+
+#### "Cliente" na URL, "conta" no modelo
+
+`/clientes/:id` abre a aba Contas. A palavra da URL é a de quem usa o sistema; `Account` é a do
+modelo de dados. Renomear a entidade seria uma migração inteira para ganhar coerência de
+vocabulário num lugar onde ninguém olha — a URL é onde essa coerência importa.
+
+#### A permissão não podia virar uma segunda lista
+
+A rota de detalhe é justamente o caminho que **não passa pelo menu**: quem digita a URL, ou clica
+num link recebido, entra sem nunca ter visto a barra lateral. Uma tabela de rotas paralela ao `NAV`
+permitiria a rota do módulo exigir ADMIN e a rota do registro não exigir nada, sem nada reclamar.
+
+Por isso as subrotas vivem **dentro** do item do menu (`subrotas: ['/contatos/:id', ...]`), e o
+`App.tsx` registra as duas coisas no mesmo laço, sob o mesmo filtro de perfil. `nav.test.ts` amarra
+a regra: para toda subrota declarada, `itemDaRota` tem de devolver o módulo que a declarou, com
+`perfis` idêntico. A verificação vale para as rotas de registro que as próximas etapas vão criar.
+
+De quebra, `itemDaRota` substituiu dois `startsWith` soltos — um no cabeçalho e o `isActive` do
+`NavLink` no menu. O do menu estava errado de um jeito visível: em `/contatos/abc` nenhum item
+casava e o menu ficava todo apagado, dizendo que a pessoa não estava em lugar nenhum.
+
+#### A oportunidade não tinha detalhe nenhum
+
+Ela só existia como cartão no kanban — o bastante para arrastar, e não o bastante para conversar
+sobre ela. `FichaOportunidade` é o único componente novo desta etapa, e não trouxe rota de API
+nova: `GET /oportunidades/:id` já devolvia valor, itens, responsável, dias na etapa e dias aberta.
+
+Duas decisões de tela: o painel **substitui** o kanban em vez de dividir espaço com ele (o quadro
+rola na horizontal e apertar um detalhe ao lado deixaria os dois ruins), e quem abre é o **título**,
+não o cartão — o cartão é arrastável, e clique em área de arraste erra com facilidade.
+
+#### 404 virou tela alcançável
+
+Antes, id inválido era erro de bastidor. Com endereço próprio, dá para chegar nele digitando — e a
+API responde 404 tanto para id inexistente quanto para registro de outra organização, de propósito,
+para não confirmar que existe. As duas causas chegam na mesma tela "não encontrado", e é assim que
+deve ser: uma mensagem diferente para cada caso seria o 403 disfarçado que a Fundação evitou.
+
+O `smoke:tenant` ganhou `/ficha/conta/:id` na lista de acesso direto (49 checagens): é a segunda
+chamada que a tela de cliente faz, e um 200 ali abriria os indicadores da empresa de outra
+organização mesmo com o resto fechado.
+
+#### Um teste que se pulava sozinho
+
+A primeira versão do caso da oportunidade usava `isVisible()` sem espera — que responde sobre o
+instante em que é chamada, e nesse instante o kanban ainda estava em voo. O teste caía no
+`test.skip` e a suíte reportava "skipped", que é a pior forma de falhar: parece verde. Agora ele
+espera o funil montar e cria uma oportunidade se o banco estiver vazio.

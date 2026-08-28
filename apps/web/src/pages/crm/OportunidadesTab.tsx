@@ -9,12 +9,20 @@ import {
   type MotivoPerda,
   type Oportunidade,
 } from '../../lib/types';
+import { FichaOportunidade } from './ficha/FichaOportunidade';
 
 const MOTIVOS: MotivoPerda[] = ['PRECO', 'SEM_INTERESSE', 'CONCORRENTE', 'SEM_BUDGET', 'SEM_RESPOSTA', 'OUTRO'];
 
 type Kanban = { funil: { id: string; nome: string }; colunas: ColunaFunil[] };
 
-export function OportunidadesTab() {
+type Props = {
+  /** Registro aberto, vindo da URL (`/oportunidades/:id`). Nulo em `/crm`. */
+  selecionadoId: string | null;
+  aoAbrir: (id: string) => void;
+  aoFechar: () => void;
+};
+
+export function OportunidadesTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   const [funis, setFunis] = useState<Funil[]>([]);
   const [funilId, setFunilId] = useState('');
   const [kanban, setKanban] = useState<Kanban | null>(null);
@@ -92,6 +100,28 @@ export function OportunidadesTab() {
   const previsao = kanban?.colunas.reduce((acc, c) => acc + c.valorPonderado, 0) ?? 0;
   const emAberto = kanban?.colunas.reduce((acc, c) => acc + c.valorTotal, 0) ?? 0;
 
+  /*
+   * Com registro na URL, o painel substitui o kanban em vez de dividir a tela.
+   *
+   * O kanban tem largura propria — rola na horizontal e cada coluna tem 288px —
+   * e apertar um painel de detalhe ao lado dele deixaria os dois ruins. Quem
+   * abriu uma oportunidade especifica quer ela, nao o quadro inteiro.
+   */
+  if (selecionadoId) {
+    return (
+      <div className="space-y-4">
+        <button
+          type="button"
+          onClick={aoFechar}
+          className="text-xs text-slate-500 underline-offset-2 transition hover:text-slate-700 hover:underline"
+        >
+          &larr; Todo o funil
+        </button>
+        <FichaOportunidade key={selecionadoId} oportunidadeId={selecionadoId} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <Card titulo="Funil" descricao={kanban ? kanban.funil.nome : 'Carregando...'}>
@@ -142,7 +172,17 @@ export function OportunidadesTab() {
                   onDragStart={() => setArrastando(o.id)}
                   className="cursor-grab rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm active:cursor-grabbing"
                 >
-                  <p className="truncate text-sm font-medium text-slate-800">{o.titulo}</p>
+                  {/* Titulo como botao, e nao o cartao inteiro: o cartao e
+                      arrastavel, e clique em area de arraste erra com facilidade
+                      — abrir a oportunidade por acidente ao mover o cartao
+                      seria pior do que precisar acertar o texto. */}
+                  <button
+                    type="button"
+                    onClick={() => aoAbrir(o.id)}
+                    className="block w-full truncate text-left text-sm font-medium text-slate-800 underline-offset-2 hover:underline"
+                  >
+                    {o.titulo}
+                  </button>
                   <p className="truncate text-xs text-slate-500">{o.conta.nome}</p>
                   <p className="mt-1 text-sm font-semibold text-slate-700">{moeda(o.valor)}</p>
                   {o.itens.length > 0 && (

@@ -209,6 +209,10 @@ export type Oportunidade = {
   responsavel: Referencia | null;
   itens: OportunidadeItem[];
   totalItens: number;
+  /** Contados na API, para os dois numeros virem do mesmo relogio. */
+  estagioDesde?: string;
+  diasNoEstagio?: number;
+  diasAberta?: number;
 };
 
 export type ColunaFunil = {

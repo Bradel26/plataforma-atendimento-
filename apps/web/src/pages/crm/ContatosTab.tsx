@@ -8,16 +8,25 @@ const ORIGENS: Canal[] = ['WEBCHAT', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'EMAIL
 
 const VAZIO = { nome: '', email: '', telefone: '', canalOrigem: 'WHATSAPP' as Canal };
 
+type Props = {
+  /** Registro aberto, vindo da URL (`/contatos/:id`). Nulo em `/crm`. */
+  selecionadoId: string | null;
+  /** Abrir e navegar: a selecao vive na URL, nao aqui dentro. */
+  aoAbrir: (id: string) => void;
+  /** Voltar para a lista sem registro aberto. */
+  aoFechar: () => void;
+};
+
 /**
  * Aba de contatos: lista a esquerda, a vida do cliente a direita.
  *
  * A lista carrega so o resumo e o painel busca a ficha ao abrir. Trazer tudo de
  * uma vez seria oito consultas por contato listado para mostrar uma.
  */
-export function ContatosTab() {
+export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   const [contatos, setContatos] = useState<Contato[]>([]);
   const [busca, setBusca] = useState('');
-  const [selecionado, setSelecionado] = useState<string | null>(null);
+  const selecionado = selecionadoId;
   const [erro, setErro] = useState<string | null>(null);
   const [novo, setNovo] = useState(VAZIO);
   /**
@@ -67,7 +76,7 @@ export function ContatosTab() {
       await carregar();
       // Abre a ficha do contato novo: quem cadastrou quer registrar algo nele
       // em seguida, e nao procurar o nome de volta na lista.
-      setSelecionado(contato.id);
+      aoAbrir(contato.id);
       if (possivelDuplicado) {
         setDuplicado(
           `Ja existe "${possivelDuplicado.nome}" com este e-mail ou telefone. ` +
@@ -163,7 +172,7 @@ export function ContatosTab() {
                 <li key={c.id}>
                   <button
                     type="button"
-                    onClick={() => setSelecionado(c.id)}
+                    onClick={() => aoAbrir(c.id)}
                     className={`w-full px-1 py-2.5 text-left transition hover:bg-slate-50 ${
                       selecionado === c.id ? 'bg-slate-50' : ''
                     }`}
@@ -200,6 +209,18 @@ export function ContatosTab() {
             Fechar
           </button>
         </div>
+      )}
+      {/* Com o registro na URL, o caminho de volta precisa existir na tela: sem
+          isto, sair de `/contatos/abc` para a lista limpa exigiria clicar no
+          menu, que recarrega o modulo inteiro. */}
+      {selecionado && (
+        <button
+          type="button"
+          onClick={aoFechar}
+          className="text-xs text-slate-500 underline-offset-2 transition hover:text-slate-700 hover:underline"
+        >
+          &larr; Todos os contatos
+        </button>
       )}
       {/* `key` no id: trocar de contato remonta a ficha e zera o cursor da linha
           do tempo. Sem isso, a primeira pagina do contato novo viria depois dos
