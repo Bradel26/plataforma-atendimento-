@@ -135,7 +135,11 @@ checar(salvo.status === 200, '4. canal salvo', `status ${salvo.status}`);
 
 const { PrismaClient } = await import('@prisma/client');
 const prisma = new PrismaClient();
-const noBanco = await prisma.channelConfig.findUnique({ where: { canal: 'FACEBOOK' } });
+// findFirst: o canal passou a ser unico POR organizacao, entao ele sozinho nao e
+// mais chave. O script fala com o banco direto, sem o filtro da extensao, e por
+// isso ve todas as organizacoes — o que aqui e proposital: ele confere o que
+// ficou GRAVADO.
+const noBanco = await prisma.channelConfig.findFirst({ where: { canal: 'FACEBOOK' } });
 checar(noBanco?.accessToken?.startsWith('v1:'), '   token gravado cifrado (AES-256-GCM)', noBanco?.accessToken?.slice(0, 22));
 checar(!noBanco?.accessToken?.includes(TOKEN_CANAL), '   texto em claro nao aparece no banco');
 checar(noBanco?.appSecret?.startsWith('v1:') && noBanco?.verifyToken?.startsWith('v1:'), '   app secret e verify token tambem');
