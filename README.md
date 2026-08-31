@@ -75,7 +75,7 @@ escopo de equipe — um gestor sem subordinado enxerga o mesmo que um comercial.
 | `npm run dev` | API e web em modo watch |
 | `npm run dev:api` / `npm run dev:web` | apenas um dos dois |
 | `npm run typecheck` | TypeScript nos dois apps |
-| `npm test` | suíte de unidade (149 testes, sem infraestrutura) |
+| `npm test` | suíte de unidade (158 testes, sem infraestrutura) |
 | `npm run build` | build de produção |
 | `npm run db:studio` | Prisma Studio |
 | `npm run infra:up` / `infra:down` | containers de dados |
@@ -95,6 +95,7 @@ escopo de equipe — um gestor sem subordinado enxerga o mesmo que um comercial.
 | `npm run smoke:ficha` | linha do tempo da ficha 360: ordem, cursor, filtro e atividades (48 checagens) |
 | `npm run smoke:ia` | ponte com o motor de IA externo, com webhook de verdade (46 checagens) |
 | `npm run smoke:tenant` | isolamento entre duas organizacoes: listagem, id direto, escrita cruzada, tempo real, arquivo, token de integracao, unicidades, vinculo apontando para usuario de outra organizacao (52 checagens) |
+| `npm run smoke:tags` | etiquetas: normalização na escrita e no filtro, semântica E, catálogo por escopo, fusão e remoção (23 checagens) |
 | `npm run smoke:visibilidade` | escopo **dentro** de uma organização: cinco perfis, listagem, id direto, fora do escopo, equipe, sem responsável, herança do responsável, escrita cruzada por id, configurabilidade do escopo (60 checagens) |
 | `npm run censo:tenant` | censo do banco: migrations aplicadas, organizações e contador de protocolo, linhas e `organizacao_id` ausente por tabela (`--comparar` contra um censo salvo, `--env <arquivo>` para apontar a outro banco sem expor a credencial na linha de comando) |
 | `npm run backup:banco -- <arquivo .env> [destino.json]` | retrato logico do banco em JSON, antes de migration estrutural (esta maquina nao tem `pg_dump`) |
@@ -621,7 +622,7 @@ barra, e quem quer o número exato também prefere a tabela.
 
 ```bash
 npm run dev            # em outro terminal: API, web, Postgres e Redis de pé
-npm run test:e2e       # 48 testes em Chromium
+npm run test:e2e       # 52 testes em Chromium
 npm run test:e2e:ui    # modo interativo, para depurar
 ```
 
@@ -649,7 +650,7 @@ quando não há o que renovar).
 
 Não roda no CI: precisa de Postgres, Redis e API de pé — as mesmas dependências dos smokes.
 
-O login tem limite de 30 tentativas por IP em 5 minutos. Rodar as 12 suítes de smoke e o e2e em
+O login tem limite de 30 tentativas por IP em 5 minutos. Rodar as 17 suítes de smoke e o e2e em
 sequência estoura esse limite, e o teste falha com a mensagem dizendo exatamente isso — espere a
 janela e rode de novo. O limite está fazendo o trabalho dele; é o teste que faz muitos logins.
 

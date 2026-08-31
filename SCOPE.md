@@ -199,7 +199,10 @@ omnichannel + automação + IA na mesma base. Protheus está fora de escopo nest
   `gestorId` para equipe direta, `responsavelId` em contato e cliente, e sete políticas de domínio
   sobre um contexto compartilhado. Ver decisão 51 e a regra arquitetural da decisão 52.
   **Concluído em produção: commit `fb07715`, implantado em 28/08/2026** (deploy manual)
-- [ ] 1.3 Tags centralizadas
+- [x] **1.3 Tags centralizadas** — normalização única para escrita e filtro, etiqueta em contato e
+  cliente, filtro com semântica **E**, catálogo derivado dos registros **visíveis** e gestão
+  (renomear com fusão, remover) restrita a ADMIN e SUPERVISOR. Ver decisão 53.
+  **Ainda não implantado**
 - [ ] 1.4 Ficha 360 completa
 - [ ] 1.5 Atividades e follow-up
 - [ ] 1.6 Funil: "sem próxima atividade"
@@ -1599,3 +1602,74 @@ Duas consequências que a varredura expôs e que valem como regra própria:
 Cobertura: `smoke:visibilidade` seções 10 e 11 (escrita cruzada por id e configurabilidade) e
 `smoke:tenant` seção 4 (vínculo apontando para usuário de outra organização). As duas suítes são
 parte obrigatória da regressão.
+
+### 53. Etiqueta é valor, não cadastro — e a normalização é a única garantia
+
+O campo `tags` existia em `Contact` desde a Fase 1 e não tinha nada em volta: nem filtro, nem
+cliente, nem forma de saber quais etiquetas já existem. Faltava tudo o que transforma um `String[]`
+em ferramenta de segmentação.
+
+#### Não existe tabela de tags, de propósito
+
+Tabela de tags obriga a cadastrar antes de usar, e etiqueta que precisa de cadastro não é usada — o
+vendedor no telefone não vai abrir Configurações para criar "revenda" antes de etiquetar o cliente.
+O preço dessa escolha é que o "catálogo" tem de ser **derivado** dos registros, e é o que
+`GET /tags` faz.
+
+#### A normalização é a peça central, e mora numa função só
+
+`trim`, espaços internos colapsados, minúsculas, sem duplicata. Máximo 30 caracteres e 20 por
+registro. Acento **fica**: `acougue` e `açougue` são palavras diferentes para quem lê a etiqueta, e
+remover acento tornaria a etiqueta pior do que quem a escreveu quis.
+
+O ponto que importa é *onde* ela é chamada: na **escrita e no filtro**. Normalizar só na escrita
+deixaria o registro salvo em minúsculas invisível para quem procura pela forma que digitou —
+`?tags=Revenda` não acharia `revenda`, e o filtro pareceria quebrado sem nenhum erro aparecer. Por
+isso a regra vive em `lib/tags.ts` e não repetida em cada rota: duas cópias divergem, e a divergência
+aqui é silenciosa.
+
+#### Filtro é E, não OU
+
+`?tags=revenda&tags=atacado` devolve quem tem **as duas**. OU cresceria a cada clique, o contrário do
+que quem filtra está fazendo. Detalhe de implementação que evitou um `if`: `hasEvery` com lista vazia
+não restringe nada, então o filtro entra sempre no `where` sem condicional — e `where: undefined`,
+que significaria "sem restrição", nunca aparece.
+
+#### O catálogo respeita o escopo do 1.2
+
+`GET /tags` sai dos registros **visíveis**, não de um `SELECT DISTINCT` na tabela. Ignorar isso
+vazaria o vocabulário comercial inteiro — nome de segmento, de campanha, de concorrente — para um
+agente que não acessa um único registro que os contenha. A contagem é feita em memória e não no
+banco: agrupar por elemento de array exige `unnest`, e em SQL cru o filtro de visibilidade (um objeto
+do Prisma) teria de ser reescrito à mão. Trocar a garantia de escopo por desempenho numa lista de
+etiquetas seria o pior negócio possível; se um dia doer, o caminho é view materializada por
+organização.
+
+#### Renomear e remover são de ADMIN e SUPERVISOR
+
+Agem sobre registros que quem chama talvez nem veja. Aplicar só no escopo de quem pede deixaria a
+base com as duas grafias — exatamente o problema que a normalização existe para evitar. Perfil que vê
+tudo não tem esse conflito. Renomear para uma etiqueta existente **funde** as duas, e é como se
+conserta `revenda` e `revendas`; há teste garantindo que a fusão não duplica a etiqueta no array.
+
+#### Dois defeitos que o navegador achou
+
+1. **Etiqueta criada na ficha não aparecia no filtro.** O `useEffect` do catálogo dependia só das
+   etiquetas ativas, que não mudam quando alguém etiqueta um registro — e o comentário no arquivo
+   afirmava o contrário do que o código fazia. A ficha passou a avisar quem a hospeda
+   (`aoMudarEtiquetas`), e a aba decide o que recarregar: a ficha não conhece a lista da esquerda e
+   não deveria.
+2. **O filtro escondia as etiquetas fora do topo, sem saída.** Mostrava as 12 mais usadas, e o resto
+   ficava inalcançável para sempre. Ganhou "+N etiquetas". Etiqueta que não dá para filtrar não serve
+   para nada.
+
+Vale registrar o padrão: nos dois casos o teste de navegador reprovou algo que o typecheck, o vitest
+e a API aprovavam — porque o defeito era de **ligação entre componentes**, e é a única camada onde
+isso aparece.
+
+#### Marcação que responde perguntas
+
+O rótulo do chip ganhou `span` próprio: dentro do `li` ele dividia o nó de texto com o `×` do botão, e
+"a etiqueta tal está na tela" deixava de ser uma pergunta respondível — por um teste ou por um leitor
+de tela. O botão de remover carrega o nome da etiqueta no `aria-label`, porque dez botões "Remover"
+não dizem qual é qual.
