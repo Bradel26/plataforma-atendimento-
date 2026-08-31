@@ -3,6 +3,7 @@ import { Alerta, Button, Card, EmptyState, Field, Input, Select } from '../../co
 import { ApiError, api } from '../../lib/api';
 import type { Canal, Contato } from '../../lib/types';
 import { FichaContato, FichaVazia } from './ficha/FichaContato';
+import { Etiquetas, FiltroEtiquetas } from './Etiquetas';
 
 const ORIGENS: Canal[] = ['WEBCHAT', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'EMAIL', 'VOZ'];
 
@@ -26,6 +27,10 @@ type Props = {
 export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   const [contatos, setContatos] = useState<Contato[]>([]);
   const [busca, setBusca] = useState('');
+  /** Etiquetas ligadas no filtro. Semantica E: cada uma estreita a lista. */
+  const [tags, setTags] = useState<string[]>([]);
+  /** Muda quando a ficha grava etiquetas: e o sinal para lista e filtro. */
+  const [versaoTags, setVersaoTags] = useState(0);
   const selecionado = selecionadoId;
   const [erro, setErro] = useState<string | null>(null);
   const [novo, setNovo] = useState(VAZIO);
@@ -41,14 +46,19 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   const [duplicado, setDuplicado] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
-    const qs = busca.trim() ? `?busca=${encodeURIComponent(busca.trim())}` : '';
+    // `URLSearchParams` em vez de concatenar: com dois filtros a montagem a mao
+    // erra o `?` e o `&` na primeira mudanca.
+    const params = new URLSearchParams();
+    if (busca.trim()) params.set('busca', busca.trim());
+    for (const tag of tags) params.append('tags', tag);
+    const qs = params.size ? `?${params}` : '';
     try {
       const { contatos: lista } = await api.get<{ contatos: Contato[] }>(`/contatos${qs}`);
       setContatos(lista);
     } catch (e) {
       setErro(e instanceof ApiError ? e.message : 'Falha ao carregar contatos');
     }
-  }, [busca]);
+  }, [busca, tags]);
 
   useEffect(() => {
     const t = setTimeout(() => void carregar(), 250);
@@ -155,6 +165,18 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
         />
+        <div className="mt-2">
+          <FiltroEtiquetas
+            ativas={tags}
+            versao={versaoTags}
+            campo="contatos"
+            aoAlternar={(tag) =>
+              setTags((atuais) =>
+                atuais.includes(tag) ? atuais.filter((t) => t !== tag) : [...atuais, tag],
+              )
+            }
+          />
+        </div>
         {erro && (
           <div className="mt-3">
             <Alerta>{erro}</Alerta>
@@ -164,7 +186,13 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
           {contatos.length === 0 ? (
             <EmptyState
               titulo="Nenhum contato"
-              descricao="Contatos nascem sozinhos quando alguem fala pela primeira vez. Use Novo contato para cadastrar a mao."
+              // Lista vazia por filtro nao e lista vazia por base vazia: sem
+              // essa distincao a tela sugere cadastrar alguem que ja existe.
+              descricao={
+                tags.length > 0 || busca.trim()
+                  ? 'Nenhum contato com esse filtro. Desligue uma etiqueta ou limpe a busca.'
+                  : 'Contatos nascem sozinhos quando alguem fala pela primeira vez. Use Novo contato para cadastrar a mao.'
+              }
             />
           ) : (
             <ul className="divide-y divide-slate-100">
@@ -183,6 +211,11 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
                       <p className="mt-1 text-xs text-slate-400">
                         {c.totalConversas} conversa{c.totalConversas === 1 ? '' : 's'}
                       </p>
+                    )}
+                    {c.tags && c.tags.length > 0 && (
+                      <div className="mt-1.5">
+                        <Etiquetas tags={c.tags} />
+                      </div>
                     )}
                   </button>
                 </li>
@@ -225,7 +258,18 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
       {/* `key` no id: trocar de contato remonta a ficha e zera o cursor da linha
           do tempo. Sem isso, a primeira pagina do contato novo viria depois dos
           eventos do anterior. */}
-      {selecionado ? <FichaContato key={selecionado} contatoId={selecionado} /> : <FichaVazia />}
+      {selecionado ? (
+        <FichaContato
+          key={selecionado}
+          contatoId={selecionado}
+          aoMudarEtiquetas={() => {
+            setVersaoTags((v) => v + 1);
+            void carregar();
+          }}
+        />
+      ) : (
+        <FichaVazia />
+      )}
       </div>
     </div>
   );

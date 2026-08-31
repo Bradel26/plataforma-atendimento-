@@ -150,6 +150,8 @@ export type Conta = {
   nome: string;
   cnpj: string | null;
   segmento: string | null;
+  /** Etiquetas do cliente, independentes das do contato. */
+  tags?: string[];
   site: string | null;
   telefone: string | null;
   email: string | null;

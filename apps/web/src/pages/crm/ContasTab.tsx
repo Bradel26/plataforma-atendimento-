@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alerta, Badge, Button, Card, EmptyState, Field, Input } from '../../components/ui';
 import { ApiError, api } from '../../lib/api';
+import { EditorEtiquetas, Etiquetas, FiltroEtiquetas } from './Etiquetas';
 import {
   LABEL_FASE_LEAD,
   moeda,
@@ -30,6 +31,10 @@ type Props = {
 export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   const [contas, setContas] = useState<Conta[]>([]);
   const [busca, setBusca] = useState('');
+  /** Etiquetas ligadas no filtro. Semantica E, igual a aba de contatos. */
+  const [tags, setTags] = useState<string[]>([]);
+  /** Muda quando a ficha grava etiquetas: e o sinal para o filtro rebuscar. */
+  const [versaoTags, setVersaoTags] = useState(0);
   const [ficha, setFicha] = useState<Ficha | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [nova, setNova] = useState({ nome: '', cnpj: '', segmento: '' });
@@ -38,7 +43,10 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   const [versao, setVersao] = useState(0);
 
   const carregar = useCallback(async () => {
-    const qs = busca.trim() ? `?busca=${encodeURIComponent(busca.trim())}` : '';
+    const params = new URLSearchParams();
+    if (busca.trim()) params.set('busca', busca.trim());
+    for (const tag of tags) params.append('tags', tag);
+    const qs = params.size ? `?${params}` : '';
     try {
       const { contas: lista } = await api.get<{ contas: Conta[] }>(`/contas${qs}`);
       setContas(lista);
@@ -46,7 +54,7 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
     } catch (e) {
       setErro(e instanceof ApiError ? e.message : 'Falha ao carregar contas');
     }
-  }, [busca]);
+  }, [busca, tags]);
 
   useEffect(() => {
     const t = setTimeout(() => void carregar(), 250);
@@ -117,10 +125,29 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
           />
+          <div className="mt-2">
+            <FiltroEtiquetas
+              ativas={tags}
+              versao={versaoTags}
+              campo="contas"
+              aoAlternar={(tag) =>
+                setTags((atuais) =>
+                  atuais.includes(tag) ? atuais.filter((t) => t !== tag) : [...atuais, tag],
+                )
+              }
+            />
+          </div>
           {erro && <div className="mt-3"><Alerta>{erro}</Alerta></div>}
           <div className="mt-3 max-h-[45vh] overflow-y-auto">
             {contas.length === 0 ? (
-              <EmptyState titulo="Nenhuma conta" descricao="Cadastre a primeira empresa no formulario abaixo." />
+              <EmptyState
+                titulo="Nenhuma conta"
+                descricao={
+                  tags.length > 0 || busca.trim()
+                    ? 'Nenhum cliente com esse filtro. Desligue uma etiqueta ou limpe a busca.'
+                    : 'Cadastre a primeira empresa no formulario abaixo.'
+                }
+              />
             ) : (
               <ul className="divide-y divide-slate-100">
                 {contas.map((c) => (
@@ -138,6 +165,11 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
                         {c.totalContatos ?? 0} contato(s) · {c.totalLeads ?? 0} lead(s) ·{' '}
                         {c.totalOportunidades ?? 0} oportunidade(s)
                       </p>
+                      {c.tags && c.tags.length > 0 && (
+                        <div className="mt-1.5">
+                          <Etiquetas tags={c.tags} />
+                        </div>
+                      )}
                     </button>
                   </li>
                 ))}
@@ -186,6 +218,21 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
                 <dd className="text-slate-800">{ficha.conta.telefone ?? '—'}</dd>
               </div>
             </dl>
+
+            <div className="mt-4">
+              <dt className="mb-1.5 text-xs text-slate-500">Etiquetas</dt>
+              <EditorEtiquetas
+                tags={ficha.conta.tags ?? []}
+                aoSalvar={async (tags) => {
+                  await api.patch(`/contas/${ficha.conta.id}`, { tags });
+                  setVersaoTags((v) => v + 1);
+                  // Recarrega a ficha E a lista: a etiqueta nova precisa
+                  // aparecer no cartao da esquerda e no filtro tambem.
+                  await abrir(ficha.conta.id);
+                  await carregar();
+                }}
+              />
+            </div>
 
             {/* Conversa e ligacao pertencem a pessoa, nao a empresa: por isso a
                 ficha da conta mostra quatro cartoes, e nao seis. */}

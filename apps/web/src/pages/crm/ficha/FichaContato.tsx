@@ -10,6 +10,7 @@ import {
 import { Indicadores } from './Indicadores';
 import { LinhaDoTempo } from './LinhaDoTempo';
 import { RegistrarAtividade } from './RegistrarAtividade';
+import { EditorEtiquetas } from '../Etiquetas';
 
 /**
  * A vida do cliente numa tela: quem e, o que esta em aberto, o que ficou
@@ -23,7 +24,20 @@ import { RegistrarAtividade } from './RegistrarAtividade';
 const dataHora = (iso: string) =>
   new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
-export function FichaContato({ contatoId }: { contatoId: string }) {
+type FichaProps = {
+  contatoId: string;
+  /**
+   * Avisa a aba que as etiquetas mudaram.
+   *
+   * A ficha nao conhece a lista da esquerda nem o filtro por etiqueta, e nao
+   * deveria: quem hospeda decide o que recarregar. Sem este aviso, a etiqueta
+   * gravada aqui nao aparecia no cartao da lista nem no filtro ate a pessoa
+   * recarregar a pagina.
+   */
+  aoMudarEtiquetas?: () => void;
+};
+
+export function FichaContato({ contatoId, aoMudarEtiquetas }: FichaProps) {
   const [ficha, setFicha] = useState<Ficha | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   // Contador de recargas: mudar este numero e o sinal para a linha do tempo
@@ -184,6 +198,21 @@ export function FichaContato({ contatoId }: { contatoId: string }) {
             </dd>
           </div>
         </dl>
+
+        <div className="mt-4">
+          <dt className="mb-1.5 text-xs text-slate-500">Etiquetas</dt>
+          <EditorEtiquetas
+            tags={contato.tags ?? []}
+            aoSalvar={async (tags) => {
+              await api.patch(`/contatos/${contatoId}`, { tags });
+              aoMudarEtiquetas?.();
+              // Recarrega a ficha em vez de mexer no estado local: a etiqueta
+              // gravada volta normalizada pelo servidor, e mostrar o que foi
+              // digitado deixaria a tela diferente do banco por um instante.
+              atualizar();
+            }}
+          />
+        </div>
 
         <div className="mt-4">
           <Indicadores dados={i} escopo="CONTATO" />
