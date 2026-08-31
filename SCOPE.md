@@ -202,7 +202,7 @@ omnichannel + automação + IA na mesma base. Protheus está fora de escopo nest
 - [x] **1.3 Tags centralizadas** — normalização única para escrita e filtro, etiqueta em contato e
   cliente, filtro com semântica **E**, catálogo derivado dos registros **visíveis** e gestão
   (renomear com fusão, remover) restrita a ADMIN e SUPERVISOR. Ver decisão 53.
-  **Ainda não implantado**
+  **Concluído em produção: commit `4ec9f6e`, implantado em 31/08/2026** (deploy manual)
 - [ ] 1.4 Ficha 360 completa
 - [ ] 1.5 Atividades e follow-up
 - [ ] 1.6 Funil: "sem próxima atividade"
@@ -1602,6 +1602,26 @@ Duas consequências que a varredura expôs e que valem como regra própria:
 Cobertura: `smoke:visibilidade` seções 10 e 11 (escrita cruzada por id e configurabilidade) e
 `smoke:tenant` seção 4 (vínculo apontando para usuário de outra organização). As duas suítes são
 parte obrigatória da regressão.
+
+#### Marco do 1.3 em produção
+
+Implantado em 31/08/2026, commit `4ec9f6e`, por **Deploy manual** no Coolify — terceira confirmação
+de que só o gatilho do auto-deploy está quebrado (pendência 4.12). Build 2m07s, rolling update 4s.
+
+| Verificação | Resultado |
+|---|---|
+| Commit implantado | Coolify reporta `4ec9f6e9670…`; bundle `index-DWrkhsZo.js` + `index-DuN3STq_.css`, **idênticos** ao que `4ec9f6e` compila localmente |
+| Migration | 20 → **21**, `20260831100000_tags_conta_e_indice` marcada `ok` (coluna `tags` em contas e os dois índices GIN) |
+| Contagens | **idênticas** linha por linha ao censo tirado antes do deploy — 36 tabelas comparadas |
+| Código novo ativo | `GET /api/tags` responde **200** com `{"tags":[]}`; `?tags=` filtra a listagem; `GET /api/contatos` passou a trazer o campo `tags`. As três dariam 404 ou campo ausente antes deste deploy |
+| Validação HTTP | 31 ok, 0 falhas |
+
+A prova de que o código é o novo veio de chamar rota que **só existe nestes commits**, e não de um
+endpoint de versão: `/api/health` responde igual antes e depois, e não expõe SHA. Nenhuma escrita foi
+feita em produção para validar — o catálogo vazio é a resposta correta para uma base sem etiqueta.
+
+Junto subiu o limite de refresh em 600 por 5 minutos. Não muda nada visível hoje, com um usuário: ele
+existe para o dia em que a equipe entrar, quando 120 por IP derrubaria gente legítima.
 
 ### 53. Etiqueta é valor, não cadastro — e a normalização é a única garantia
 
