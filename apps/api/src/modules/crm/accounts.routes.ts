@@ -4,6 +4,7 @@ import { asyncHandler } from '../../http/async-handler';
 import { requireAuth, requireRole } from '../../http/middleware/auth';
 import { filtroDe, politicaContatos, politicaContas } from '../../lib/politicas';
 import { apenasVisivel } from '../../lib/visibilidade';
+import { MAXIMO_POR_REGISTRO, TAMANHO_MAXIMO, normalizarTags } from '../../lib/tags';
 import { validateBody, validateQuery } from '../../http/middleware/validate';
 import { param } from '../../http/params';
 import { badRequest, conflict, notFound } from '../../lib/errors';
@@ -29,6 +30,7 @@ const criarSchema = z.object({
   telefone: z.string().trim().min(8).max(20).nullable().optional(),
   email: z.string().email().nullable().optional(),
   observacoes: z.string().trim().max(2000).nullable().optional(),
+  tags: z.array(z.string().trim().min(1).max(TAMANHO_MAXIMO)).max(MAXIMO_POR_REGISTRO).default([]),
   /** Responsavel principal pela carteira. Nulo devolve a conta para a carteira aberta. */
   responsavelId: z.string().uuid().nullable().optional(),
 });
@@ -39,16 +41,38 @@ const atualizarSchema = criarSchema
 
 const listarSchema = z.object({
   busca: z.string().trim().min(1).optional(),
+  /**
+   * Filtro por etiqueta, repetivel: `?tags=revenda&tags=atacado`.
+   *
+   * A semantica e **E**, nao OU: cada tag informada estreita o resultado. Quem
+   * filtra por duas etiquetas quer os registros que tem as duas — OU devolveria
+   * uma lista maior a cada clique, o contrario do que a pessoa esta fazendo.
+   */
+  tags: z
+    .union([z.string(), z.array(z.string())])
+    .optional()
+    .transform((v) => (v === undefined ? [] : normalizarTags(Array.isArray(v) ? v : [v]))),
   limite: z.coerce.number().int().min(1).max(200).default(100),
 });
 
 const vincularSchema = z.object({ contatoId: z.string().uuid() });
 
+/**
+ * Normaliza `tags` do corpo antes de gravar, se vier.
+ *
+ * Campo ausente e diferente de lista vazia: ausente nao mexe nas etiquetas
+ * atuais, vazia apaga todas. Sem esta distincao, qualquer PATCH de telefone
+ * limparia as tags do cliente.
+ */
+function comTagsNormalizadas<T extends { tags?: string[] }>(corpo: T): T {
+  return corpo.tags === undefined ? corpo : { ...corpo, tags: normalizarTags(corpo.tags) };
+}
+
 accountsRoutes.get(
   '/',
   validateQuery(listarSchema),
   asyncHandler(async (_req, res) => {
-    const { busca, limite } = res.locals.query as z.infer<typeof listarSchema>;
+    const { busca, tags, limite } = res.locals.query as z.infer<typeof listarSchema>;
     const escopo = await filtroDe(politicaContas);
     const contas = await prisma.account.findMany({
       // O escopo entra sempre; a busca, so quando ha termo. Antes o `where` era
@@ -67,6 +91,8 @@ accountsRoutes.get(
                 },
               ]
             : []),
+          // `hasEvery` com lista vazia nao filtra nada, entao nao precisa de `if`.
+          { tags: { hasEvery: tags } },
         ],
       },
       orderBy: { nome: 'asc' },
@@ -133,7 +159,9 @@ accountsRoutes.post(
       const existente = await prisma.account.findFirst({ where: { cnpj: req.body.cnpj } });
       if (existente) throw conflict('Ja existe uma conta com este CNPJ');
     }
-    res.status(201).json({ conta: await prisma.account.create({ data: req.body }) });
+    res.status(201).json({
+      conta: await prisma.account.create({ data: comTagsNormalizadas(req.body) }),
+    });
   }),
 );
 
@@ -160,7 +188,9 @@ accountsRoutes.patch(
      * `updateMany` nos contatos e exatamente a "melhoria" que alguem faria mais
      * tarde sem perceber o que quebra. Ha teste guardando este comportamento.
      */
-    res.json({ conta: await prisma.account.update({ where: { id }, data: req.body }) });
+    res.json({
+      conta: await prisma.account.update({ where: { id }, data: comTagsNormalizadas(req.body) }),
+    });
   }),
 );
 

@@ -26,6 +26,7 @@ import { escalasRoutes } from './modules/shifts/shifts.routes';
 import { pesquisasPublicasRoutes, pesquisasRoutes } from './modules/surveys/surveys.routes';
 import { catalogsRoutes, productsRoutes } from './modules/crm/catalog.routes';
 import { leadsRoutes } from './modules/crm/leads.routes';
+import { tagsRoutes } from './modules/crm/tags.routes';
 import { funnelsRoutes, opportunitiesRoutes } from './modules/crm/opportunities.routes';
 import { atividadesRoutes, fichaRoutes } from './modules/crm/ficha.routes';
 import { arquivosRoutes } from './modules/files/files.routes';
@@ -87,6 +88,7 @@ export function createApp() {
   app.use('/api/webchat', webchatRoutes);
   app.use('/api/contas', accountsRoutes);
   app.use('/api/leads', leadsRoutes);
+  app.use('/api/tags', tagsRoutes);
   app.use('/api/oportunidades', opportunitiesRoutes);
   app.use('/api/funis', funnelsRoutes);
   app.use('/api/produtos', productsRoutes);

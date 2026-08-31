@@ -271,6 +271,7 @@ model Contact {
   @@index([organizacaoId, email])
   @@index([organizacaoId, telefone])
   @@index([organizacaoId, responsavelId])
+  @@index([tags], type: Gin)
   @@map("contatos")
 }
 
@@ -372,6 +373,9 @@ model Account {
   nome          String
   cnpj          String?
   segmento      String?
+  /// Etiquetas livres, normalizadas em minusculas por `lib/tags.ts`. Cliente e
+  /// contato tem listas independentes: a empresa e revenda, a pessoa e decisora.
+  tags          String[] @default([])
   site          String?
   telefone      String?
   email         String?
@@ -395,6 +399,7 @@ model Account {
   @@unique([organizacaoId, cnpj])
   @@index([organizacaoId, nome])
   @@index([organizacaoId, responsavelId])
+  @@index([tags], type: Gin)
   @@map("contas")
 }
 

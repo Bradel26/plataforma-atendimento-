@@ -12,6 +12,7 @@ import { inclusaoResumo, toConversaResumo } from '../conversations/conversations
 
 import { exigirUsuarioDaOrganizacao, filtroDe, politicaContas, politicaContatos, politicaConversas } from '../../lib/politicas';
 import { apenasVisivel } from '../../lib/visibilidade';
+import { MAXIMO_POR_REGISTRO, TAMANHO_MAXIMO, normalizarTags } from '../../lib/tags';
 
 export const contactsRoutes = Router();
 
@@ -19,6 +20,17 @@ contactsRoutes.use(requireAuth);
 
 const listarSchema = z.object({
   busca: z.string().trim().min(1).optional(),
+  /**
+   * Filtro por etiqueta, repetivel: `?tags=revenda&tags=atacado`.
+   *
+   * A semantica e **E**: cada tag estreita o resultado. As tags do filtro
+   * passam pela mesma normalizacao da escrita — sem isso, `?tags=Revenda` nao
+   * acharia o registro salvo como `revenda`.
+   */
+  tags: z
+    .union([z.string(), z.array(z.string())])
+    .optional()
+    .transform((v) => (v === undefined ? [] : normalizarTags(Array.isArray(v) ? v : [v]))),
   limite: z.coerce.number().int().min(1).max(100).default(50),
   cursor: z.string().optional(),
 });
@@ -37,7 +49,7 @@ const criarSchema = z.object({
   telefone: z.string().trim().min(8).max(20).nullable().optional(),
   canalOrigem: z.enum(['WEBCHAT', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'EMAIL', 'VOZ']).default('WEBCHAT'),
   observacoes: z.string().trim().max(2000).nullable().optional(),
-  tags: z.array(z.string().trim().min(1).max(30)).max(20).default([]),
+  tags: z.array(z.string().trim().min(1).max(TAMANHO_MAXIMO)).max(MAXIMO_POR_REGISTRO).default([]),
   contaId: z.string().uuid().nullable().optional(),
   /** Ausente e diferente de nulo: ausente herda da conta, nulo deixa sem dono. */
   responsavelId: z.string().uuid().nullable().optional(),
@@ -49,7 +61,7 @@ const atualizarSchema = z
     email: z.string().email().nullable().optional(),
     telefone: z.string().trim().min(8).max(20).nullable().optional(),
     observacoes: z.string().trim().max(2000).nullable().optional(),
-    tags: z.array(z.string().trim().min(1).max(30)).max(20).optional(),
+    tags: z.array(z.string().trim().min(1).max(TAMANHO_MAXIMO)).max(MAXIMO_POR_REGISTRO).optional(),
     /**
      * Trocar o responsavel do contato.
      *
@@ -65,7 +77,7 @@ contactsRoutes.get(
   '/',
   validateQuery(listarSchema),
   asyncHandler(async (_req, res) => {
-    const { busca, limite, cursor } = res.locals.query as z.infer<typeof listarSchema>;
+    const { busca, tags, limite, cursor } = res.locals.query as z.infer<typeof listarSchema>;
     // O escopo entra como primeiro filtro, e nao como `undefined` quando nao ha
     // busca: `where: undefined` e "sem restricao", que aqui seria a base inteira.
     const filtros: Prisma.ContactWhereInput[] = [await filtroDe(politicaContatos)];
@@ -79,6 +91,9 @@ contactsRoutes.get(
         ],
       });
     }
+    // `hasEvery` com lista vazia nao restringe, entao nao precisa de condicional.
+    filtros.push({ tags: { hasEvery: tags } });
+
     const depois = apos('atualizadoEm', decodificarCursor(cursor));
     if (depois) filtros.push(depois);
 
@@ -168,7 +183,10 @@ contactsRoutes.post(
     });
 
     const contato = await prisma.contact.create({
-      data: herdado === undefined ? dados : { ...dados, responsavelId: herdado },
+      data: {
+        ...(herdado === undefined ? dados : { ...dados, responsavelId: herdado }),
+        tags: normalizarTags(dados.tags),
+      },
     });
     res.status(201).json({ contato, possivelDuplicado: duplicado });
   }),
@@ -186,6 +204,14 @@ contactsRoutes.patch(
     if (!existe) throw notFound('Contato nao encontrado');
     await exigirUsuarioDaOrganizacao((req.body as { responsavelId?: string | null }).responsavelId);
 
-    res.json({ contato: await prisma.contact.update({ where: { id }, data: req.body }) });
+    /*
+     * Ausente e diferente de lista vazia: ausente nao mexe nas etiquetas, vazia
+     * apaga todas. Sem a distincao, um PATCH que so troca o telefone limparia
+     * as tags do contato.
+     */
+    const corpo = req.body as z.infer<typeof atualizarSchema>;
+    const dados = corpo.tags === undefined ? corpo : { ...corpo, tags: normalizarTags(corpo.tags) };
+
+    res.json({ contato: await prisma.contact.update({ where: { id }, data: dados }) });
   }),
 );
