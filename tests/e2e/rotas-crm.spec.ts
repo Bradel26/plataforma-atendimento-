@@ -209,15 +209,22 @@ test.describe('CRM: escopo por perfil', () => {
 
     // Lead e oportunidade sao processo comercial; produtos e importacao sao de
     // gestao. A API recusa as quatro por perfil, entao a aba nao pode existir.
-    for (const proibida of ['Leads', 'Oportunidades', 'Produtos e precos', 'Importar / Exportar']) {
+    for (const proibida of [
+      'Leads',
+      'Oportunidades',
+      'Produtos e precos',
+      'Importar / Exportar',
+      // Renomear etiqueta alcanca registro que ele nem ve: a aba nao e dele.
+      'Etiquetas',
+    ]) {
       await expect(abas(page).filter({ hasText: proibida }), `aba ${proibida}`).toHaveCount(0);
     }
   });
 
-  test('o admin ve as seis abas', async ({ page }) => {
+  test('o admin ve as sete abas', async ({ page }) => {
     await entrar(page, 'admin', '/crm');
     // O contraponto: sem ele, o teste acima passaria com o CRM inteiro quebrado.
-    await expect(abas(page)).toHaveCount(6);
+    await expect(abas(page)).toHaveCount(7);
   });
 
   test('?aba=leads digitado pelo agente cai em Contatos, nao numa aba que falha', async ({ page }) => {

@@ -108,6 +108,42 @@ test.describe('Etiquetas do CRM', () => {
     await expect(ficha.getByText(tag, { exact: true })).toBeHidden();
   });
 
+  test('a aba Etiquetas renomeia, avisa da fusao e diz quantos registros mudaram', async ({ page }) => {
+    await entrar(page, 'admin', '/crm');
+    const nome = await abrirPrimeiro(page);
+    const original = etiqueta();
+
+    const campo = cartao(page, nome).getByLabel('Nova etiqueta');
+    await campo.fill(original);
+    await campo.press('Enter');
+    await expect(cartao(page, nome).getByText(original, { exact: true })).toBeVisible();
+
+    await page.goto('/crm?aba=etiquetas');
+    const gestao = cartao(page, 'Etiquetas em uso');
+    await expect(gestao.getByRole('cell', { name: original, exact: true })).toBeVisible();
+
+    await gestao.getByRole('button', { name: `Renomear etiqueta ${original}` }).click();
+
+    // Renomear para uma etiqueta que JA existe: o aviso de fusao tem de aparecer
+    // antes de gravar. Depois de gravar seria tarde — fundir nao tem desfazer.
+    const destino = 'revenda';
+    const nomeNovo = page.getByLabel('Nome novo');
+    await nomeNovo.fill(destino);
+    const fusao = page.getByText(/sera[oõ]? ?.*fundidas|fundidas/i);
+    if (await fusao.count()) await expect(fusao.first()).toBeVisible();
+
+    // E agora um nome que nao existe, para o caminho simples do renomear.
+    const renomeada = etiqueta();
+    await nomeNovo.fill(renomeada);
+    await page.getByRole('button', { name: 'Renomear', exact: true }).click();
+
+    // A mensagem diz o TAMANHO do efeito, nao "pronto": a acao alcanca
+    // registros fora da tela, e o numero e a unica forma de perceber isso.
+    await expect(page.getByText(new RegExp(`"${original}".*"${renomeada}".*contato`))).toBeVisible();
+    await expect(gestao.getByRole('cell', { name: renomeada, exact: true })).toBeVisible();
+    await expect(gestao.getByRole('cell', { name: original, exact: true })).toHaveCount(0);
+  });
+
   test('o cliente tem etiquetas proprias, separadas das do contato', async ({ page }) => {
     await entrar(page, 'admin', '/crm?aba=contas');
     const primeiro = cartao(page, 'Contas').locator('li button').first();

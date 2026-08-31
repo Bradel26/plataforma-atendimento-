@@ -239,7 +239,7 @@ const semPermissao = await req('PATCH', '/tags', {
 });
 checar(semPermissao.status === 403, 'comercial nao renomeia etiqueta — 403', `HTTP ${semPermissao.status}`);
 
-const doAgenteTambem = await req('DELETE', '/tags', { token: tk.agente, corpo: { tag: 'revenda' } });
+const doAgenteTambem = await req('DELETE', '/tags/revenda', { token: tk.agente });
 checar(doAgenteTambem.status === 403, 'agente nao remove etiqueta — 403', `HTTP ${doAgenteTambem.status}`);
 
 const renomear = await req('PATCH', '/tags', {
@@ -286,7 +286,7 @@ checar(
   `HTTP ${mesmoNome.status}`,
 );
 
-const remover = await req('DELETE', '/tags', { token: tk.admin, corpo: { tag: 'supermercado' } });
+const remover = await req('DELETE', '/tags/supermercado', { token: tk.admin });
 const sobrou = await req('GET', '/contas?tags=supermercado', { token: tk.admin });
 checar(
   remover.status === 200 && colecao(sobrou.dados).length === 0,

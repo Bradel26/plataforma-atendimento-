@@ -6,6 +6,7 @@ import { DadosTab } from './DadosTab';
 import { ContatosTab } from './ContatosTab';
 import { LeadsTab } from './LeadsTab';
 import { OportunidadesTab } from './OportunidadesTab';
+import { EtiquetasTab } from './EtiquetasTab';
 import { ProdutosTab } from './ProdutosTab';
 
 /**
@@ -21,6 +22,9 @@ const ABAS = [
   { id: 'leads', label: 'Leads', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'] },
   { id: 'oportunidades', label: 'Oportunidades', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'] },
   { id: 'produtos', label: 'Produtos e precos', perfis: ['ADMIN', 'SUPERVISOR'] },
+  // Renomear e remover etiqueta alcancam registros que quem clica nao ve, entao
+  // a aba segue o mesmo perfil da rota: ADMIN e SUPERVISOR.
+  { id: 'etiquetas', label: 'Etiquetas', perfis: ['ADMIN', 'SUPERVISOR'] },
   { id: 'dados', label: 'Importar / Exportar', perfis: ['ADMIN', 'SUPERVISOR'] },
 ] as const satisfies ReadonlyArray<{ id: string; label: string; perfis?: readonly Perfil[] }>;
 
@@ -115,6 +119,7 @@ export function CrmPage() {
         />
       )}
       {aba === 'produtos' && <ProdutosTab />}
+      {aba === 'etiquetas' && <EtiquetasTab />}
       {aba === 'dados' && <DadosTab />}
     </div>
   );

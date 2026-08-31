@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../../http/async-handler';
 import { requireAuth, requireRole } from '../../http/middleware/auth';
+import { param } from '../../http/params';
 import { validateBody, validateQuery } from '../../http/middleware/validate';
 import { badRequest } from '../../lib/errors';
 import { prisma } from '../../lib/prisma';
@@ -121,15 +122,18 @@ tagsRoutes.patch(
   }),
 );
 
-const removerSchema = z.object({ tag: z.string().trim().min(1).max(TAMANHO_MAXIMO) });
-
-/** Remove a etiqueta de todos os registros da organizacao. */
+/**
+ * Remove a etiqueta de todos os registros da organizacao.
+ *
+ * A etiqueta vem na URL, e nao no corpo: corpo em DELETE e aceito pelo Express
+ * mas descartado por parte dos proxies, e a falha apareceria como "removeu zero
+ * registros" sem erro nenhum. Espaco na etiqueta viaja como `%20`.
+ */
 tagsRoutes.delete(
-  '/',
+  '/:tag',
   requireRole('ADMIN', 'SUPERVISOR'),
-  validateBody(removerSchema),
   asyncHandler(async (req, res) => {
-    const tag = normalizarTag((req.body as z.infer<typeof removerSchema>).tag);
+    const tag = normalizarTag(param(req, 'tag'));
     if (!tag) throw badRequest('Informe a etiqueta');
 
     const alterados = await aplicar(tag, (tags) => tags.filter((t) => t !== tag));
