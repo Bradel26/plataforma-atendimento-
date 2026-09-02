@@ -215,29 +215,36 @@ direto:
 
 Só roda em `push` para `main` — pull request não implanta.
 
-### O que você precisa fazer (uma vez)
+### Verificado em 02/09/2026
 
-**1. Criar o token no Coolify.** *Keys & Tokens* → *API tokens* → *Create New Token*. Precisa da
-permissão de deploy (`deploy` ou `root`, dependendo da versão). Copie o valor: ele só aparece uma
-vez.
+Funcionando de ponta a ponta. Execução #16: `verificar` verde em 49s, `implantar` verde em 2m37s, e
+as 31 verificações do `npm run validar:producao` passando depois, contra o container novo.
 
-**2. Guardar como segredo no GitHub.** No repositório `Bradel26/plataforma-atendimento-`:
-*Settings* → *Secrets and variables* → *Actions* → *New repository secret*.
+O UUID `zios6of26x7kizkh57fxw62t` foi **confirmado pela API**, não mais deduzido do domínio: é o
+único dos 18 recursos do painel apontando para `Bradel26/plataforma-atendimento- @ main`. Nenhuma
+*variable* `COOLIFY_UUID` é necessária.
 
-| Nome | Valor |
-|---|---|
-| `COOLIFY_TOKEN` | o token do passo 1 |
+### Já configurado (não precisa repetir)
 
-**Enquanto esse segredo não existir, a Action avisa e não falha.** Um X vermelho em todo push antes
-de o token existir ensina a ignorar o resultado do CI — que é justamente o hábito que causa deploy
-esquecido.
+**O token.** *Keys & Tokens* → *API Tokens*, com as permissões **`deploy` e `read` juntas**.
+Cuidado: na tela do Coolify, marcar uma **desmarca** a outra — confira a coluna PERMISSIONS em
+*Issued Tokens* antes de sair. Só `deploy` dispara o build mas cega o acompanhamento, e a Action
+terminaria vermelha depois de um deploy bem-sucedido.
 
-**3. Conferir o UUID do recurso.** A Action assume `zios6of26x7kizkh57fxw62t`, deduzido do domínio
-automático do Coolify (`<uuid>.<ip>.sslip.io`). **Isso não foi verificado contra a API** — sem
-token, não havia como. Se o primeiro deploy pela Action falhar com recurso não encontrado, pegue o
-UUID na URL do recurso no painel e crie a *variable* (não segredo) `COOLIFY_UUID` com ele.
+O valor está no segredo `COOLIFY_TOKEN` do repositório (*Settings* → *Secrets and variables* →
+*Actions*). Ele expira em **02/09/2027** — quando chegar perto, crie outro e atualize o segredo pelo
+ícone de lápis.
 
-**4. Desligar o *Auto Deploy* no recurso** (opcional). Se algum dia o webhook nativo voltar a
+> **Copie o token com Ctrl+C da tela, nunca transcrevendo de uma captura.** As duas primeiras
+> execuções falharam com `401` exatamente por isso: o valor foi lido de um print, e `O`/`0` e
+> `1`/`l`/`I` são indistinguíveis em pixels. O defeito não estava na Action.
+
+**Enquanto o segredo não existir, a Action avisa e não falha.** Um X vermelho em todo push antes de
+o token existir ensina a ignorar o resultado do CI — justamente o hábito que causa deploy esquecido.
+
+### O que ainda vale fazer
+
+**Desligar o *Auto Deploy* no recurso** (opcional). Se algum dia o webhook nativo voltar a
 funcionar, os dois gatilhos disparariam build no mesmo push. Como o nativo não filtra por CI verde,
 o melhor é deixar só a Action.
 
