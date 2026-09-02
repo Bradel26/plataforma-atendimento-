@@ -32,16 +32,17 @@ jobs:
       # entao ficam fora do CI: rodam no ambiente de desenvolvimento. O que roda
       # aqui e a suite de unidade, que nao precisa de infraestrutura.
 
-  # Deploy automatico por acao, e nao pelo webhook nativo do Coolify.
+  # Deploy automatico por acao, e nao pelo Auto Deploy do recurso no Coolify.
   #
-  # O webhook do GitHub para o recurso do Coolify nao dispara: tres pushes
-  # consecutivos (df5ffc5, fb07715, 4ec9f6e) foram acompanhados com zero trocas
-  # de container, e o Deploy manual funcionou nas tres vezes. Em vez de insistir
-  # no gatilho quebrado, a acao chama a API do Coolify diretamente.
+  # Historia curta, porque o diagnostico inicial estava errado: tres pushes
+  # (df5ffc5, fb07715, 4ec9f6e) nao dispararam build nenhum, e concluiu-se
+  # "webhook quebrado". Era mais simples — o interruptor `Auto Deploy` do
+  # recurso estava desmarcado. Nao havia gatilho quebrado; nao havia gatilho.
   #
-  # Ganho de lado: `needs: verificar` significa que o deploy so acontece com a
-  # suite verde. O webhook nativo subiria qualquer commit, inclusive um que nao
-  # compila.
+  # A acao continua sendo a escolha certa por outro motivo: `needs: verificar`
+  # significa que o deploy so acontece com a suite verde. Ligar o Auto Deploy
+  # subiria qualquer commit, inclusive um que nao compila — por isso ele fica
+  # desligado, e este job e o unico caminho para producao.
   implantar:
     needs: verificar
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

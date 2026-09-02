@@ -173,9 +173,8 @@ sinal de que algum serviço não está recolhendo os filhos dele.
 
 ## Atualizar depois
 
-Com o repositório conectado, cada `git push` para `main` **deveria** disparar deploy automático
-(*Auto Deploy* no recurso). **Não dispara** — ver a seção 8. O deploy automático desta plataforma
-passou a ser feito pela GitHub Action, não pelo webhook nativo.
+O deploy automático desta plataforma é feito pela **GitHub Action**, não pelo *Auto Deploy* do
+recurso — que fica desligado de propósito, porque não filtra por CI verde. Ver a seção 8.
 
 O ciclo é: eu mudo o código aqui, você dá `git push`, o CI verifica, e a Action manda o Coolify
 construir e subir. Nenhum comando no servidor.
@@ -184,11 +183,10 @@ construir e subir. Nenhum comando no servidor.
 
 ## 8. Deploy automático pela GitHub Action
 
-### O diagnóstico
+### O diagnóstico, e a correção dele
 
-O webhook do GitHub para o recurso do Coolify não dispara build. Três pushes consecutivos foram
-acompanhados com o `observar:deploy`, que detecta a troca de container pela queda da conexão
-Socket.IO:
+O sintoma: `git push` não disparava build. Três pushes consecutivos foram acompanhados com o
+`observar:deploy`, que detecta a troca de container pela queda da conexão Socket.IO:
 
 | Push | O que o push disparou | O que o Deploy manual fez |
 |---|---|---|
@@ -196,9 +194,22 @@ Socket.IO:
 | `fb07715` (passo 1.2) | nada | build em 1m45s, rolling update em 6s |
 | `4ec9f6e` (passo 1.3) | nada | build e subida em 2m11s |
 
-Três ocorrências idênticas: não é intermitência. A infraestrutura constrói e sobe bem — **só o
-gatilho falha**. Por isso a saída não foi consertar o gatilho, e sim trocá-lo por um que está sob
-controle do repositório.
+Três ocorrências idênticas, e a infraestrutura construindo e subindo bem nas três. A conclusão
+registrada na época foi "o webhook do GitHub está quebrado".
+
+> **Estava errada.** Em 02/09/2026, olhando *Configuration › Advanced › Deployment* no recurso, o
+> interruptor **Auto Deploy** estava **desmarcado** — e sempre esteve. Não havia gatilho quebrado:
+> não havia gatilho. Os três pushes não dispararam nada porque o recurso não estava configurado
+> para escutar, e o Deploy manual funcionava porque nada nele depende do webhook.
+>
+> Vale o registro do erro de raciocínio: três observações idênticas descartaram *intermitência*, o
+> que estava certo, mas foram lidas como prova de *defeito* — quando a explicação mais simples,
+> configuração desligada, explicava os mesmos três casos e nunca foi checada. Repetição confirma
+> que a causa é estável; não diz qual é.
+
+**A Action continua sendo a escolha certa**, e não por causa do webhook. Ela implanta somente com a
+suíte verde (`needs: verificar`); ligar o Auto Deploy agora subiria qualquer commit, inclusive um que
+não compila. O interruptor fica desligado de propósito.
 
 ### Como funciona
 
@@ -242,11 +253,11 @@ O valor está no segredo `COOLIFY_TOKEN` do repositório (*Settings* → *Secret
 **Enquanto o segredo não existir, a Action avisa e não falha.** Um X vermelho em todo push antes de
 o token existir ensina a ignorar o resultado do CI — justamente o hábito que causa deploy esquecido.
 
-### O que ainda vale fazer
+### Nada pendente
 
-**Desligar o *Auto Deploy* no recurso** (opcional). Se algum dia o webhook nativo voltar a
-funcionar, os dois gatilhos disparariam build no mesmo push. Como o nativo não filtra por CI verde,
-o melhor é deixar só a Action.
+O *Auto Deploy* do recurso está **desmarcado** (*Configuration › Advanced › Deployment*), conferido
+em 02/09/2026, e é assim que deve ficar: ligá-lo criaria um segundo gatilho no mesmo push, e um que
+não filtra por CI verde. Só a Action implanta.
 
 ### Sobrescrever sem mexer no código
 
