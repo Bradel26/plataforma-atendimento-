@@ -31,3 +31,79 @@ jobs:
       # Os smoke tests (`npm run smoke:*`) exigem Postgres, Redis e a API de pe,
       # entao ficam fora do CI: rodam no ambiente de desenvolvimento. O que roda
       # aqui e a suite de unidade, que nao precisa de infraestrutura.
+
+  # Deploy automatico por acao, e nao pelo webhook nativo do Coolify.
+  #
+  # O webhook do GitHub para o recurso do Coolify nao dispara: tres pushes
+  # consecutivos (df5ffc5, fb07715, 4ec9f6e) foram acompanhados com zero trocas
+  # de container, e o Deploy manual funcionou nas tres vezes. Em vez de insistir
+  # no gatilho quebrado, a acao chama a API do Coolify diretamente.
+  #
+  # Ganho de lado: `needs: verificar` significa que o deploy so acontece com a
+  # suite verde. O webhook nativo subiria qualquer commit, inclusive um que nao
+  # compila.
+  implantar:
+    needs: verificar
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      COOLIFY_URL: ${{ vars.COOLIFY_URL || 'https://coolify.bradel.com.br' }}
+      COOLIFY_UUID: ${{ vars.COOLIFY_UUID || 'zios6of26x7kizkh57fxw62t' }}
+      COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+      PRODUCAO: ${{ vars.PRODUCAO_URL || 'https://zios6of26x7kizkh57fxw62t.187.127.32.153.sslip.io' }}
+    steps:
+      - name: Disparar o deploy e aguardar o resultado
+        run: |
+          set -euo pipefail
+
+          # Sem o segredo, avisa em vez de falhar: um X vermelho em todo push
+          # antes de o token existir ensina a ignorar o resultado da acao.
+          if [ -z "${COOLIFY_TOKEN}" ]; then
+            echo "::warning title=Deploy nao disparado::O segredo COOLIFY_TOKEN nao esta configurado. O deploy continua manual. Veja COOLIFY.md secao 8."
+            exit 0
+          fi
+
+          resposta=$(curl -sS --fail-with-body \
+            -H "Authorization: Bearer ${COOLIFY_TOKEN}" \
+            "${COOLIFY_URL}/api/v1/deploy?uuid=${COOLIFY_UUID}&force=false")
+          echo "resposta do disparo: ${resposta}"
+
+          implantacao=$(echo "${resposta}" | jq -r '.deployments[0].deployment_uuid // empty')
+          if [ -z "${implantacao}" ]; then
+            echo "::error title=Deploy nao iniciou::A API aceitou a chamada mas nao devolveu deployment_uuid."
+            exit 1
+          fi
+          echo "implantacao ${implantacao} — acompanhando"
+
+          # Espera ativa com teto. 20 minutos cobre com folga o build observado
+          # (1m45s a 2m11s) mais o rolling update (6s a 8s); o teto existe para
+          # a acao nao ficar pendurada se o Coolify travar sem concluir.
+          for tentativa in $(seq 1 80); do
+            sleep 15
+            estado=$(curl -sS -H "Authorization: Bearer ${COOLIFY_TOKEN}" \
+              "${COOLIFY_URL}/api/v1/deployments/${implantacao}" | jq -r '.status // "desconhecido"')
+            echo "  [${tentativa}] ${estado}"
+            case "${estado}" in
+              finished)
+                echo "deploy concluido"
+                exit 0
+                ;;
+              failed|cancelled-by-user)
+                echo "::error title=Deploy falhou::Estado final ${estado}. Veja o log em ${COOLIFY_URL}."
+                exit 1
+                ;;
+            esac
+          done
+
+          echo "::error title=Deploy sem conclusao::20 minutos sem estado final. Confira o log no Coolify."
+          exit 1
+
+      # Um deploy que a API declara concluido, mas que subiu um container que nao
+      # atende, nao esta concluido. O health confere as tres dependencias.
+      - name: Conferir a producao depois do deploy
+        if: env.COOLIFY_TOKEN != ''
+        run: |
+          set -euo pipefail
+          saude=$(curl -sS --retry 6 --retry-delay 10 --retry-all-errors "${PRODUCAO}/api/health")
+          echo "${saude}"
+          echo "${saude}" | jq -e '.status == "ok" and .dependencias.postgres == "ok" and .dependencias.redis == "ok"'

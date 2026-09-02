@@ -173,8 +173,82 @@ sinal de que algum serviço não está recolhendo os filhos dele.
 
 ## Atualizar depois
 
-Com o repositório conectado, cada `git push` para `main` pode disparar deploy automático (ligue
-*Auto Deploy* no recurso). Sem isso, é clicar em **Redeploy**.
+Com o repositório conectado, cada `git push` para `main` **deveria** disparar deploy automático
+(*Auto Deploy* no recurso). **Não dispara** — ver a seção 8. O deploy automático desta plataforma
+passou a ser feito pela GitHub Action, não pelo webhook nativo.
 
-O ciclo passa a ser: eu mudo o código aqui, você dá `git push`, o Coolify constrói e sobe. Nenhum
-comando no servidor.
+O ciclo é: eu mudo o código aqui, você dá `git push`, o CI verifica, e a Action manda o Coolify
+construir e subir. Nenhum comando no servidor.
+
+---
+
+## 8. Deploy automático pela GitHub Action
+
+### O diagnóstico
+
+O webhook do GitHub para o recurso do Coolify não dispara build. Três pushes consecutivos foram
+acompanhados com o `observar:deploy`, que detecta a troca de container pela queda da conexão
+Socket.IO:
+
+| Push | O que o push disparou | O que o Deploy manual fez |
+|---|---|---|
+| `df5ffc5` (passo 1.1) | nada em 40 min de observação | rolling update, container novo em 8s |
+| `fb07715` (passo 1.2) | nada | build em 1m45s, rolling update em 6s |
+| `4ec9f6e` (passo 1.3) | nada | build e subida em 2m11s |
+
+Três ocorrências idênticas: não é intermitência. A infraestrutura constrói e sobe bem — **só o
+gatilho falha**. Por isso a saída não foi consertar o gatilho, e sim trocá-lo por um que está sob
+controle do repositório.
+
+### Como funciona
+
+O job `implantar` em [.github/workflows/ci.yml](.github/workflows/ci.yml) chama a API do Coolify
+direto:
+
+1. `needs: verificar` — o deploy só acontece com typecheck, testes e build verdes. **Isso é melhor
+   que o webhook nativo**, que subiria qualquer commit, inclusive um que não compila.
+2. `GET /api/v1/deploy?uuid=…` com o token no header dispara o build.
+3. A Action acompanha `GET /api/v1/deployments/<uuid>` a cada 15s até `finished` ou `failed`, com
+   teto de 20 minutos. Deploy que falha deixa a Action vermelha em vez de passar em silêncio.
+4. Por fim confere `/api/health` na produção: um deploy que a API declara concluído mas que subiu
+   um container que não atende não está concluído.
+
+Só roda em `push` para `main` — pull request não implanta.
+
+### O que você precisa fazer (uma vez)
+
+**1. Criar o token no Coolify.** *Keys & Tokens* → *API tokens* → *Create New Token*. Precisa da
+permissão de deploy (`deploy` ou `root`, dependendo da versão). Copie o valor: ele só aparece uma
+vez.
+
+**2. Guardar como segredo no GitHub.** No repositório `Bradel26/plataforma-atendimento-`:
+*Settings* → *Secrets and variables* → *Actions* → *New repository secret*.
+
+| Nome | Valor |
+|---|---|
+| `COOLIFY_TOKEN` | o token do passo 1 |
+
+**Enquanto esse segredo não existir, a Action avisa e não falha.** Um X vermelho em todo push antes
+de o token existir ensina a ignorar o resultado do CI — que é justamente o hábito que causa deploy
+esquecido.
+
+**3. Conferir o UUID do recurso.** A Action assume `zios6of26x7kizkh57fxw62t`, deduzido do domínio
+automático do Coolify (`<uuid>.<ip>.sslip.io`). **Isso não foi verificado contra a API** — sem
+token, não havia como. Se o primeiro deploy pela Action falhar com recurso não encontrado, pegue o
+UUID na URL do recurso no painel e crie a *variable* (não segredo) `COOLIFY_UUID` com ele.
+
+**4. Desligar o *Auto Deploy* no recurso** (opcional). Se algum dia o webhook nativo voltar a
+funcionar, os dois gatilhos disparariam build no mesmo push. Como o nativo não filtra por CI verde,
+o melhor é deixar só a Action.
+
+### Sobrescrever sem mexer no código
+
+Três *variables* do repositório, todas opcionais:
+
+| Variable | Padrão |
+|---|---|
+| `COOLIFY_URL` | `https://coolify.bradel.com.br` |
+| `COOLIFY_UUID` | `zios6of26x7kizkh57fxw62t` |
+| `PRODUCAO_URL` | `https://zios6of26x7kizkh57fxw62t.187.127.32.153.sslip.io` |
+
+Quando o item 1.4 (domínio próprio) for resolvido, `PRODUCAO_URL` é o único lugar a mudar.
