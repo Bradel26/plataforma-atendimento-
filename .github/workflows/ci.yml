@@ -63,10 +63,39 @@ jobs:
             exit 0
           fi
 
-          resposta=$(curl -sS --fail-with-body \
+          # Sem --fail-with-body de proposito: com `set -e`, o curl morreria com
+          # "curl: (22) error 401" e nada mais, escondendo qual das causas foi.
+          # Capturando o codigo, cada uma ganha a mensagem do seu conserto.
+          http=$(curl -sS -o resposta.json -w '%{http_code}' \
             -H "Authorization: Bearer ${COOLIFY_TOKEN}" \
-            "${COOLIFY_URL}/api/v1/deploy?uuid=${COOLIFY_UUID}&force=false")
-          echo "resposta do disparo: ${resposta}"
+            "${COOLIFY_URL}/api/v1/deploy?uuid=${COOLIFY_UUID}&force=false" || echo 000)
+          resposta=$(cat resposta.json 2>/dev/null || echo '{}')
+          echo "HTTP ${http} — ${resposta}"
+
+          case "${http}" in
+            200|201)
+              ;;
+            401)
+              echo "::error title=Token invalido::O Coolify nao reconheceu o COOLIFY_TOKEN. Crie outro em Keys & Tokens > API Tokens (permissoes deploy + read), copie com Ctrl+C da tela e atualize o segredo no GitHub. Nao transcreva de print: os caracteres O/0 e 1/l/I se confundem."
+              exit 1
+              ;;
+            403)
+              echo "::error title=Token sem permissao::O token existe mas nao pode implantar. Ele precisa das permissoes `deploy` e `read` — marcar uma desmarca a outra na tela do Coolify, confira a coluna PERMISSIONS em Issued Tokens."
+              exit 1
+              ;;
+            404)
+              echo "::error title=Recurso nao encontrado::UUID ${COOLIFY_UUID} nao existe. Abra o recurso no Coolify e pegue o UUID da barra de endereco, depois crie a variable COOLIFY_UUID (variable, nao secret) com o valor certo."
+              exit 1
+              ;;
+            000)
+              echo "::error title=Coolify inalcancavel::Nao houve resposta de ${COOLIFY_URL}. O painel pode estar fora."
+              exit 1
+              ;;
+            *)
+              echo "::error title=Coolify recusou o disparo::HTTP ${http}. Corpo acima."
+              exit 1
+              ;;
+          esac
 
           implantacao=$(echo "${resposta}" | jq -r '.deployments[0].deployment_uuid // empty')
           if [ -z "${implantacao}" ]; then
