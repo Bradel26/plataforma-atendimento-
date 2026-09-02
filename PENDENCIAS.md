@@ -82,18 +82,23 @@ Nada disso está no `SCOPE.md`. Só entra se você decidir.
 
 ## Ordem que eu recomendo
 
-Atualizado em 25/08/2026. **Todo o grupo 4 está feito, exceto 4.4** (precisa de Docker) — não há
-mais nada nesta lista que eu consiga fazer sozinho nesta máquina.
+Atualizado em 02/09/2026. **Todo o grupo 4 está feito, exceto 4.4 e 4.11.** O 4.4 precisa de Docker,
+que não roda nesta máquina; o 4.11 é limpeza de dev, sem efeito em produção. Fora isso, **não há
+mais nada nesta lista que eu consiga fazer sozinho** — o que sobra depende de credencial, contrato
+ou decisão sua.
 
 1. **1.1** — rotacionar Neon e Upstash. É o único item urgente por segurança, não por prazo: as
-   credenciais atuais passaram por conversa de texto.
-2. **1.4 e 1.6** — domínio com certificado e migrations no banco de produção. Depois disso a
-   plataforma sobe.
-3. **1.5** — build da imagem Docker. É o único artefato de deploy que nunca rodou, então é o único
-   que pode revelar surpresa. Faça antes de marcar data.
-4. **2.1 e 2.2** — credencial Meta e templates aprovados: é o que prova que a plataforma atende
-   cliente de verdade.
-5. **2.3 e o grupo 3** — contratar provedor de voz e, com ele, softphone, ramais, URA, monitoria e
+   credenciais atuais passaram por conversa de texto. O token do Coolify criado em 02/09/2026
+   passou pelo mesmo caminho e entra na mesma rotação.
+2. **1.4** — domínio próprio com certificado. A produção funciona no domínio automático do Coolify,
+   mas o recurso carrega os dois nomes ao mesmo tempo, e é isso que faz o Let's Encrypt reclamar no
+   log. Também é o desbloqueio caso a Meta recuse hostname `sslip.io` no cadastro do webhook.
+3. **2.1 e 2.2** — credencial Meta e templates aprovados: é o que prova que a plataforma atende
+   cliente de verdade. O caminho está em [CANAIS-META.md](CANAIS-META.md) e o `verificar:meta`
+   confere tudo que dá para conferir sem mensagem real.
+4. **2.3 e o grupo 3** — contratar provedor de voz e, com ele, softphone, ramais, URA, monitoria e
    transcrição passam a ser construíveis e testáveis.
-6. **Grupo 5** — só depois de a operação estar rodando. A lista muda quando você vê o que o time
-   pede no dia a dia; hoje ela é palpite informado, não necessidade observada.
+5. **Grupo 5** — só depois de a operação estar rodando. A lista muda quando você vê o que o time
+   pede no dia a dia; hoje ela é palpite informado, não necessidade observada. Se quiser começar
+   antes, o 5.2 é o mais barato: a maquinaria de etiquetas (normalização, índice GIN, chip na tela,
+   aba de administração) já existe para contato e conta — falta ligá-la em conversa.
