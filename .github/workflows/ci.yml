@@ -80,7 +80,7 @@ jobs:
               exit 1
               ;;
             403)
-              echo "::error title=Token sem permissao::O token existe mas nao pode implantar. Ele precisa das permissoes `deploy` e `read` — marcar uma desmarca a outra na tela do Coolify, confira a coluna PERMISSIONS em Issued Tokens."
+              echo "::error title=Token sem permissao::O token existe mas nao pode implantar. Ele precisa das permissoes deploy e read juntas — marcar uma desmarca a outra na tela do Coolify, confira a coluna PERMISSIONS em Issued Tokens."
               exit 1
               ;;
             404)
