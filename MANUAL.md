@@ -73,6 +73,26 @@ recarregar a página.
 Conversas longas carregam as 50 mensagens mais recentes; o botão **Carregar mensagens anteriores**
 traz o resto.
 
+**Etiquetas: classificar o assunto.** Acima das mensagens há uma faixa de etiquetas. Digite e dê
+Enter; a plataforma sugere as que já existem enquanto você escreve. Serve para dizer *sobre o que*
+foi o atendimento — `boleto`, `troca`, `orçamento`.
+
+Não confunda com o **assunto** da conversa, que é texto livre daquele atendimento. A etiqueta é o
+que agrupa: "boleto", "Boleto em atraso" e "2ª via do boleto" viram três linhas diferentes em
+qualquer relatório, e `boleto` vira uma.
+
+Três coisas que valem saber:
+
+- A etiqueta é a mesma do CRM. Etiquetar uma conversa com `revenda` usa a mesma palavra que o
+  cliente `revenda` — e renomear numa Configurações › Etiquetas renomeia em todo lugar.
+- **Conversa finalizada aceita etiqueta.** Classificar quase sempre acontece ao encerrar, e dá para
+  corrigir depois.
+- Clique numa etiqueta na coluna da esquerda para **filtrar** a lista por ela. Duas etiquetas ligadas
+  mostram só as conversas que têm as duas.
+
+Se você não etiquetar, nada quebra — mas o atendimento entra no relatório como "sem etiqueta", e o
+supervisor vê a cobertura cair.
+
 **Ao finalizar**, a plataforma manda ao cliente, pelo mesmo canal, um link de pesquisa de
 satisfação. Se o canal recusar (janela de 24 h do WhatsApp fechada, por exemplo), a plataforma
 tenta de novo sozinha — e se não conseguir, o convite não entregue não entra na conta da pesquisa,
@@ -154,8 +174,29 @@ Embaixo, quatro gráficos: conversas por canal, agentes por status, protocolos p
 por direção. Cada um tem o botão **Ver como tabela**, que mostra os mesmos dados com número exato e
 participação no total.
 
-O seletor de **Período** vale para o que é do período (conversas novas, mensagens, chamadas). Fila
-de espera e agentes por status são o *agora* — não mudam com o período.
+Depois deles, dois cartões de **assunto**, alimentados pelas etiquetas que os atendentes põem nas
+conversas:
+
+- **Atendimentos por assunto** — quantos atendimentos tocaram cada assunto no período.
+- **Tempo médio por assunto** — quanto tempo de atendente cada assunto custa, ordenado pelo mais
+  demorado.
+
+São dois cartões e não um gráfico só de propósito: volume e tempo têm escalas diferentes, e juntá-los
+faria a barra mais alta parecer "a maior" das duas coisas ao mesmo tempo. E a leitura que muda decisão
+costuma ser a segunda — um assunto com 5% do volume e o triplo do tempo pede mais atenção que o mais
+frequente.
+
+**Olhe a linha de cobertura.** O cartão diz quantos atendimentos do período estão classificados. Com
+30% de cobertura, as barras descrevem esses 30% — não a operação. Se o número estiver baixo, o
+problema não é o relatório: é etiqueta que ninguém está pondo.
+
+Duas contas que parecem erradas e não são: a soma das barras pode passar do total, porque conversa
+com duas etiquetas conta nas duas; e o tempo médio ignora atendimento que foi encerrado sem nunca ter
+sido assumido (bot resolveu, ou o cliente desistiu na fila), senão o assunto pareceria rápido de
+atender justamente quando ninguém o atendeu.
+
+O seletor de **Período** vale para o que é do período (conversas novas, mensagens, chamadas, assunto).
+Fila de espera e agentes por status são o *agora* — não mudam com o período.
 
 ### Monitoramento
 

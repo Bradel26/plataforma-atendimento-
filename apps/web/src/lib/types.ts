@@ -93,6 +93,11 @@ type ConversaBase = {
   canal: Canal;
   status: ConversaStatus;
   assunto: string | null;
+  /**
+   * Etiquetas de assunto. Compartilham o vocabulario com contato e conta —
+   * `assunto` continua sendo o texto livre daquele atendimento.
+   */
+  tags: string[];
   naoLidas: number;
   criadoEm: string;
   atribuidoEm: string | null;
@@ -113,6 +118,27 @@ export type ConversaDetalhe = ConversaBase & {
 };
 
 export type Contadores = Record<ConversaStatus, number>;
+
+/** Uma linha do relatorio de atendimentos por assunto (etiqueta da conversa). */
+export type LinhaAssunto = {
+  tag: string;
+  conversas: number;
+  finalizadas: number;
+  /** TMA das finalizadas com esta etiqueta, em segundos. Nulo sem finalizada. */
+  tmaSegundos: number | null;
+};
+
+export type RelatorioAssuntos = {
+  assuntos: LinhaAssunto[];
+  /**
+   * Atendimentos do periodo sem etiqueta nenhuma.
+   *
+   * Vem junto de proposito: as linhas descrevem so o que foi classificado, e sem
+   * este numero um relatorio com 10% de cobertura parece igual a um com 100%.
+   */
+  semEtiqueta: number;
+  total: number;
+};
 
 export const LABEL_CONVERSA_STATUS: Record<ConversaStatus, string> = {
   EM_ESPERA: 'Em espera',

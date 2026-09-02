@@ -35,6 +35,27 @@ async function filtroDaEtiqueta(lista: ReturnType<typeof cartao>, tag: string) {
   return botao;
 }
 
+/**
+ * Remove a etiqueta que o teste criou.
+ *
+ * Nao e higiene opcional. O maximo e 20 etiquetas por registro, e um teste que
+ * deixa a sua para tras gasta uma vaga a cada execucao — chegando a 20, a
+ * escrita passa a ser recusada com 400 e o teste falha por acumulo, nao por
+ * defeito. Quando isto foi escrito, o primeiro cliente da base de
+ * desenvolvimento ja tinha 16 vagas ocupadas por etiquetas `teste NNNNNN` de
+ * execucoes antigas — a quatro execucoes de quebrar em definitivo.
+ */
+async function limpar(page: Page, tag: string) {
+  const remover = page.getByRole('button', { name: `Remover etiqueta ${tag}` });
+  // Espera o botao em vez de checar `count()` e desistir: a ficha recarrega
+  // depois de gravar, e um `count()` avaliado nesse intervalo devolve zero. A
+  // primeira versao desta funcao fazia isso e vazava uma etiqueta em silencio —
+  // limpeza que falha calada e pior que limpeza nenhuma, porque ninguem procura.
+  await expect(remover).toBeVisible();
+  await remover.click();
+  await expect(remover).toHaveCount(0);
+}
+
 /** Abre o primeiro contato da lista e devolve o nome dele. */
 async function abrirPrimeiro(page: Page) {
   const primeiro = cartao(page, 'Contatos').locator('li button').first();
@@ -63,6 +84,8 @@ test.describe('Etiquetas do CRM', () => {
     // O filtro da lista se atualiza sem recarregar a pagina: a etiqueta nova
     // esta alcancavel na coluna da esquerda.
     await expect(await filtroDaEtiqueta(cartao(page, 'Contatos'), tag)).toBeVisible();
+
+    await limpar(page, tag);
   });
 
   test('ligar o filtro estreita a lista, e limpar devolve', async ({ page }) => {
@@ -89,6 +112,8 @@ test.describe('Etiquetas do CRM', () => {
 
     await lista.getByRole('button', { name: 'limpar' }).click();
     await expect(lista.locator('li button')).toHaveCount(antes);
+
+    await limpar(page, tag);
   });
 
   test('remover a etiqueta tira o chip da ficha', async ({ page }) => {
@@ -142,6 +167,12 @@ test.describe('Etiquetas do CRM', () => {
     await expect(page.getByText(new RegExp(`"${original}".*"${renomeada}".*contato`))).toBeVisible();
     await expect(gestao.getByRole('cell', { name: renomeada, exact: true })).toBeVisible();
     await expect(gestao.getByRole('cell', { name: original, exact: true })).toHaveCount(0);
+
+    // Limpeza pela propria aba de gestao — este teste nao volta a ficha, e a
+    // etiqueta renomeada ficaria para tras a cada execucao (ver `limpar`).
+    await gestao.getByRole('button', { name: `Remover etiqueta ${renomeada}` }).click();
+    await page.getByRole('button', { name: 'Remover mesmo assim' }).click();
+    await expect(gestao.getByRole('cell', { name: renomeada, exact: true })).toHaveCount(0);
   });
 
   test('o cliente tem etiquetas proprias, separadas das do contato', async ({ page }) => {
@@ -162,5 +193,7 @@ test.describe('Etiquetas do CRM', () => {
     // E aparece no cartao da lista tambem, que e o que faz a etiqueta servir
     // para varrer a carteira sem abrir cada cliente.
     await expect(cartao(page, 'Contas').getByText(tag, { exact: true })).toBeVisible();
+
+    await limpar(page, tag);
   });
 });

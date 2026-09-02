@@ -6,7 +6,7 @@ import { param } from '../../http/params';
 import { validateBody, validateQuery } from '../../http/middleware/validate';
 import { badRequest } from '../../lib/errors';
 import { prisma } from '../../lib/prisma';
-import { filtroDe, politicaContas, politicaContatos } from '../../lib/politicas';
+import { filtroDe, politicaContas, politicaContatos, politicaConversas } from '../../lib/politicas';
 import { MAXIMO_POR_REGISTRO, TAMANHO_MAXIMO, normalizarTag } from '../../lib/tags';
 
 /**
@@ -42,13 +42,21 @@ tagsRoutes.get(
     const { busca, limite } = res.locals.query as z.infer<typeof listarSchema>;
     const prefixo = busca ? normalizarTag(busca) : '';
 
-    const [contatos, contas] = await Promise.all([
+    const [contatos, contas, conversas] = await Promise.all([
       prisma.contact.findMany({
         where: { AND: [await filtroDe(politicaContatos), { tags: { isEmpty: false } }] },
         select: { tags: true },
       }),
       prisma.account.findMany({
         where: { AND: [await filtroDe(politicaContas), { tags: { isEmpty: false } }] },
+        select: { tags: true },
+      }),
+      // Conversa entra no mesmo catalogo, e nao num separado: o vocabulario e um
+      // so. "boleto" etiquetando uma conversa e "boleto" etiquetando um contato
+      // sao a mesma palavra, e dois catalogos fariam a mesma etiqueta ser
+      // renomeada num lugar e nao no outro.
+      prisma.conversation.findMany({
+        where: { AND: [await filtroDe(politicaConversas), { tags: { isEmpty: false } }] },
         select: { tags: true },
       }),
     ]);
@@ -62,20 +70,27 @@ tagsRoutes.get(
      * etiquetas seria o pior negocio possivel; se um dia doer, o caminho e uma
      * view materializada por organizacao, nao SQL cru com filtro reescrito a mao.
      */
-    const contagem = new Map<string, { contatos: number; contas: number }>();
-    const somar = (tags: string[], campo: 'contatos' | 'contas') => {
+    const contagem = new Map<string, { contatos: number; contas: number; conversas: number }>();
+    const somar = (tags: string[], campo: 'contatos' | 'contas' | 'conversas') => {
       for (const tag of tags) {
-        const atual = contagem.get(tag) ?? { contatos: 0, contas: 0 };
+        const atual = contagem.get(tag) ?? { contatos: 0, contas: 0, conversas: 0 };
         atual[campo] += 1;
         contagem.set(tag, atual);
       }
     };
     for (const { tags } of contatos) somar(tags, 'contatos');
     for (const { tags } of contas) somar(tags, 'contas');
+    for (const { tags } of conversas) somar(tags, 'conversas');
 
     const tags = [...contagem.entries()]
       .filter(([tag]) => !prefixo || tag.includes(prefixo))
-      .map(([tag, { contatos: c, contas: a }]) => ({ tag, contatos: c, contas: a, total: c + a }))
+      .map(([tag, { contatos: c, contas: a, conversas: v }]) => ({
+        tag,
+        contatos: c,
+        contas: a,
+        conversas: v,
+        total: c + a + v,
+      }))
       // Mais usadas primeiro: e o que serve tanto ao filtro quanto a gestao.
       // Empate pelo nome, para a ordem nao mudar entre duas chamadas iguais.
       .sort((x, y) => y.total - x.total || x.tag.localeCompare(y.tag, 'pt-BR'))
@@ -152,9 +167,10 @@ tagsRoutes.delete(
  * consulta a menos e o tipo de atalho que a decisao 49 existe para recusar.
  */
 async function aplicar(tag: string, transformar: (tags: string[]) => string[]) {
-  const [contatos, contas] = await Promise.all([
+  const [contatos, contas, conversas] = await Promise.all([
     prisma.contact.findMany({ where: { tags: { has: tag } }, select: { id: true, tags: true } }),
     prisma.account.findMany({ where: { tags: { has: tag } }, select: { id: true, tags: true } }),
+    prisma.conversation.findMany({ where: { tags: { has: tag } }, select: { id: true, tags: true } }),
   ]);
 
   await prisma.$transaction([
@@ -164,7 +180,24 @@ async function aplicar(tag: string, transformar: (tags: string[]) => string[]) {
     ...contas.map((a) =>
       prisma.account.update({ where: { id: a.id }, data: { tags: transformar(a.tags) } }),
     ),
+    ...conversas.map((v) =>
+      prisma.conversation.update({ where: { id: v.id }, data: { tags: transformar(v.tags) } }),
+    ),
   ]);
 
-  return { contatos: contatos.length, contas: contas.length };
+  /*
+   * Conversa entra na mesma transacao dos outros dois, e nao numa segunda.
+   *
+   * Renomear e uma operacao de vocabulario: `revenda` -> `revendas` tem de
+   * valer em todo lugar ou em lugar nenhum. Duas transacoes deixariam a base
+   * com a etiqueta antiga nas conversas e a nova nos contatos se a segunda
+   * falhasse — o estado exato que a normalizacao existe para impedir.
+   *
+   * Diferente das outras escritas de conversa, esta nao notifica o WebSocket:
+   * renomear pode tocar milhares de conversas de uma vez, e um evento por
+   * conversa afogaria o painel de todos os atendentes. Quem estiver com a tela
+   * aberta ve o nome antigo ate recarregar, e isso e aceitavel para uma acao de
+   * administracao que ADMIN e SUPERVISOR fazem raramente.
+   */
+  return { contatos: contatos.length, contas: contas.length, conversas: conversas.length };
 }

@@ -4,6 +4,7 @@ import { filtroDe, politicaConversas } from '../../lib/politicas';
 import { apenasVisivel } from '../../lib/visibilidade';
 import { salvar } from '../../lib/storage';
 import { apos, decodificarCursor, fatiar } from '../../lib/paginacao';
+import { normalizarTags } from '../../lib/tags';
 import { badRequest, forbidden, notFound } from '../../lib/errors';
 import { notificarConversaAtualizada, notificarMensagem } from '../../realtime/hub';
 import { enviarArquivoParaCanal, enviarParaCanal, exigeEnvioExterno } from '../channels/outbound.service';
@@ -49,6 +50,10 @@ export async function listarConversas(solicitante: Solicitante, query: ListarCon
       ],
     });
   }
+
+  // `hasEvery` com lista vazia nao restringe nada, entao dispensa condicional —
+  // mesma forma usada no filtro de contato e conta.
+  filtros.push({ tags: { hasEvery: query.tags } });
 
   const cursor = decodificarCursor(query.cursor);
   const limiteCursor = apos('ultimaMensagemEm', cursor);
@@ -127,6 +132,42 @@ async function carregarOuFalhar(id: string) {
 export async function obterConversa(solicitante: Solicitante, id: string) {
   const conversa = await carregarOuFalhar(id);
   return toConversaDetalhe(conversa);
+}
+
+/**
+ * Substitui as etiquetas da conversa.
+ *
+ * Tres decisoes que valem registro:
+ *
+ * **Conversa finalizada aceita etiqueta.** `enviarMensagem` recusa finalizada, e
+ * esta funcao nao — classificar acontece justamente ao encerrar, e um relatorio
+ * por assunto que nao pudesse ser corrigido depois seria um relatorio que erra
+ * para sempre. Etiqueta descreve o atendimento; nao fala com o cliente.
+ *
+ * **Nao exige ser o dono.** Qualquer perfil que veja a conversa pode
+ * classifica-la, pela politica de visibilidade e nada mais. Supervisor
+ * reclassificando atendimento que nao atendeu e o caso normal de quem cuida do
+ * relatorio, nao uma excecao.
+ *
+ * **Nao grava evento no historico.** As outras acoes gravam (`assumiu`,
+ * `transferiu`, `finalizou`) porque mudam **de quem e** o atendimento, e isso
+ * pertence a leitura da conversa. Etiqueta nao muda responsavel, e um evento por
+ * ajuste de chip encheria de ruido justamente a transcricao que o atendente le
+ * para entender o cliente.
+ */
+export async function definirTags(solicitante: Solicitante, id: string, tags: readonly string[]) {
+  const conversa = await carregarOuFalhar(id);
+  const novas = normalizarTags(tags);
+
+  // Sem mudanca, sem escrita e sem notificacao. Salvar a mesma lista faria o
+  // painel de todo mundo repintar a conversa por nada — e a tela salva ao
+  // fechar o editor, inclusive quando ninguem mexeu em nada.
+  const iguais =
+    novas.length === conversa.tags.length && novas.every((t, i) => t === conversa.tags[i]);
+  if (iguais) return toConversaDetalhe(conversa);
+
+  await prisma.conversation.update({ where: { id }, data: { tags: novas } });
+  return publicar(id, { filaAnteriorId: conversa.filaId });
 }
 
 /** Registra evento do sistema no historico (atribuicao, transferencia, encerramento). */

@@ -293,6 +293,16 @@ model Conversation {
   /// Identificador do interlocutor no canal externo (wa_id, PSID, IGSID).
   enderecoExterno  String?   @map("endereco_externo")
 
+  /// Etiquetas de assunto, normalizadas por `lib/tags.ts` e compartilhando o
+  /// vocabulario com contato e conta.
+  ///
+  /// `assunto` ja existe e continua sendo texto livre — o que a pessoa escreveu
+  /// naquele atendimento. Texto livre nao agrupa: "boleto", "Boleto em atraso" e
+  /// "2a via do boleto" sao a mesma coisa para quem le e tres linhas diferentes
+  /// em qualquer relatorio. A etiqueta e a dimensao que agrupa; as duas
+  /// coexistem porque respondem perguntas diferentes.
+  tags             String[]  @default([])
+
   contato     Contact     @relation(fields: [contatoId], references: [id], onDelete: Cascade)
   fila        Queue?      @relation(fields: [filaId], references: [id], onDelete: SetNull)
   agente      User?       @relation(fields: [agenteId], references: [id], onDelete: SetNull)
@@ -305,6 +315,7 @@ model Conversation {
   @@index([organizacaoId, status, ultimaMensagemEm])
   @@index([organizacaoId, agenteId, status])
   @@index([organizacaoId, filaId, status])
+  @@index([tags], type: Gin)
   @@map("conversas")
 }
 

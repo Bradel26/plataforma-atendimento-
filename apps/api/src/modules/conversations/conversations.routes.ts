@@ -7,6 +7,7 @@ import { badRequest } from '../../lib/errors';
 import { limiteBytes } from '../../lib/storage';
 import { validateBody, validateQuery } from '../../http/middleware/validate';
 import {
+  definirTagsSchema,
   enviarMensagemSchema,
   listarConversasSchema,
   listarMensagensSchema,
@@ -15,6 +16,7 @@ import {
 import {
   assumirConversa,
   contarPorStatus,
+  definirTags,
   enviarArquivo,
   enviarMensagem,
   finalizarConversa,
@@ -121,5 +123,21 @@ conversationsRoutes.post(
   '/:id/ler',
   asyncHandler(async (req, res) => {
     res.json({ conversa: await marcarComoLida(quem(req), param(req, 'id')) });
+  }),
+);
+
+/**
+ * Etiquetas da conversa. `PUT` porque substitui a lista inteira.
+ *
+ * As outras acoes desta rota sao `POST /:id/<verbo>` — assumir, transferir,
+ * finalizar — porque sao eventos: acontecem, nao tem estado proprio e repetir
+ * nao e a mesma coisa que fazer uma vez. Etiqueta e o oposto: e um valor do
+ * registro, e mandar a mesma lista duas vezes tem de deixar a conversa igual.
+ */
+conversationsRoutes.put(
+  '/:id/etiquetas',
+  validateBody(definirTagsSchema),
+  asyncHandler(async (req, res) => {
+    res.json({ conversa: await definirTags(quem(req), param(req, 'id'), req.body.tags) });
   }),
 );

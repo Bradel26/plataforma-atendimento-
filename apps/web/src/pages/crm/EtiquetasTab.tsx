@@ -51,7 +51,7 @@ export function EtiquetasTab() {
     setOcupado(true);
     setErro(null);
     try {
-      const r = await api.patch<{ de: string; para: string; contatos: number; contas: number }>(
+      const r = await api.patch<{ de: string; para: string; contatos: number; contas: number; conversas: number }>(
         '/tags',
         { de: alvo.tag, para: novoNome },
       );
@@ -59,7 +59,7 @@ export function EtiquetasTab() {
       // alcanca registros que quem clicou nao esta vendo, e o numero e a unica
       // forma de perceber que ela pegou mais do que se esperava.
       setAviso(
-        `"${r.de}" virou "${r.para}" em ${r.contatos} contato(s) e ${r.contas} cliente(s).`,
+        `"${r.de}" virou "${r.para}" em ${r.contatos} contato(s), ${r.contas} cliente(s) e ${r.conversas} conversa(s).`,
       );
       fechar();
       await carregar();
@@ -75,11 +75,11 @@ export function EtiquetasTab() {
     setOcupado(true);
     setErro(null);
     try {
-      const r = await api.del<{ tag: string; contatos: number; contas: number }>(
+      const r = await api.del<{ tag: string; contatos: number; contas: number; conversas: number }>(
         `/tags/${encodeURIComponent(alvo.tag)}`,
       );
       setAviso(
-        `"${r.tag}" removida de ${r.contatos} contato(s) e ${r.contas} cliente(s).`,
+        `"${r.tag}" removida de ${r.contatos} contato(s), ${r.contas} cliente(s) e ${r.conversas} conversa(s).`,
       );
       fechar();
       await carregar();
@@ -135,7 +135,7 @@ export function EtiquetasTab() {
               descricao={
                 tags.length > 0
                   ? 'Nenhuma etiqueta com esse filtro.'
-                  : 'Etiquete um contato ou cliente na ficha dele e a etiqueta aparece aqui.'
+                  : 'Etiquete um contato, um cliente ou uma conversa e a etiqueta aparece aqui.'
               }
             />
           ) : (
@@ -146,6 +146,7 @@ export function EtiquetasTab() {
                   <th scope="col" className="py-2">Etiqueta</th>
                   <th scope="col" className="py-2 text-right">Contatos</th>
                   <th scope="col" className="py-2 text-right">Clientes</th>
+                  <th scope="col" className="py-2 text-right">Conversas</th>
                   <th scope="col" className="py-2 text-right">Acoes</th>
                 </tr>
               </thead>
@@ -160,6 +161,9 @@ export function EtiquetasTab() {
                     </td>
                     <td className="py-2 text-right tabular-nums text-slate-600 dark:text-slate-400">
                       {t.contas}
+                    </td>
+                    <td className="py-2 text-right tabular-nums text-slate-600 dark:text-slate-400">
+                      {t.conversas}
                     </td>
                     <td className="py-2 text-right">
                       <div className="flex justify-end gap-2">
@@ -244,8 +248,9 @@ export function EtiquetasTab() {
             <p className="text-sm text-slate-600 dark:text-slate-400">
               A etiqueta sai de{' '}
               <strong>
-                {tags.find((t) => t.tag === alvo.tag)?.contatos ?? 0} contato(s) e{' '}
-                {tags.find((t) => t.tag === alvo.tag)?.contas ?? 0} cliente(s)
+                {tags.find((t) => t.tag === alvo.tag)?.contatos ?? 0} contato(s),{' '}
+                {tags.find((t) => t.tag === alvo.tag)?.contas ?? 0} cliente(s) e{' '}
+                {tags.find((t) => t.tag === alvo.tag)?.conversas ?? 0} conversa(s)
               </strong>
               . Nao ha como desfazer.
             </p>

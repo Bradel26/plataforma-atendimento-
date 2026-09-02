@@ -1693,3 +1693,124 @@ O rótulo do chip ganhou `span` próprio: dentro do `li` ele dividia o nó de te
 "a etiqueta tal está na tela" deixava de ser uma pergunta respondível — por um teste ou por um leitor
 de tela. O botão de remover carrega o nome da etiqueta no `aria-label`, porque dez botões "Remover"
 não dizem qual é qual.
+
+### 54. Etiqueta em conversa: o mesmo vocabulário, uma dimensão nova
+
+Contato e conta descrevem **quem**. A conversa descreve **sobre o que** — e era essa dimensão que
+faltava para responder "quantos atendimentos foram sobre boleto neste mês".
+
+#### `assunto` já existia e não servia
+
+`Conversation.assunto` é texto livre desde a Fase 1, e continua sendo. Ele não foi substituído porque
+responde outra pergunta: o que aquele atendimento específico tratou, escrito por quem atendeu. O que
+ele não faz é agrupar — "boleto", "Boleto em atraso" e "2ª via do boleto" são a mesma coisa para quem
+lê e três linhas em qualquer relatório. A etiqueta é normalizada, então agrupa. As duas coexistem.
+
+#### Um vocabulário, não dois
+
+A etiqueta de conversa entra no **mesmo** `GET /tags` e no mesmo renomear/remover. Dois catálogos
+separados fariam "boleto" ser renomeado num lugar e não no outro, e o relatório contaria a mesma
+coisa duas vezes com nomes diferentes — precisamente o que a decisão 53 existe para impedir.
+
+Consequência estrutural: conversa entrou na **mesma transação** do `aplicar`, junto de contato e
+conta. Renomear é operação de vocabulário — `revenda` → `revendas` vale em todo lugar ou em lugar
+nenhum. Duas transações deixariam a etiqueta antiga nas conversas e a nova nos contatos se a segunda
+falhasse.
+
+Nessa mesma função ficou uma assimetria deliberada: as outras escritas de conversa avisam o
+WebSocket, e o renomear **não**. Ele pode tocar milhares de conversas de uma vez, e um evento por
+conversa afogaria o painel de todos os atendentes. Quem estiver com a tela aberta vê o nome antigo até
+recarregar — aceitável para uma ação de administração que ADMIN e SUPERVISOR fazem raramente.
+
+#### `PUT /conversas/:id/etiquetas`, no meio de rotas `POST /:id/<verbo>`
+
+As outras ações da conversa são `POST` — assumir, transferir, finalizar — porque são **eventos**:
+acontecem, não têm estado próprio, e repetir não é a mesma coisa que fazer uma vez. Etiqueta é o
+oposto: um valor do registro. Mandar a mesma lista duas vezes tem de deixar a conversa igual, e há
+teste de idempotência garantindo isso.
+
+Substitui a lista inteira em vez de `POST /etiquetas` + `DELETE /etiquetas/:tag`: a tela edita um
+conjunto, e o par de rotas geraria duas requisições por chip arrastado, com estado intermediário
+visível para os outros atendentes pelo WebSocket.
+
+#### Três permissões que divergem do resto do módulo, cada uma por um motivo
+
+**Conversa finalizada aceita etiqueta.** `enviarMensagem` recusa finalizada; esta rota não.
+Classificar acontece justamente ao encerrar, e um relatório por assunto que não pudesse ser corrigido
+depois erraria para sempre. Etiqueta descreve o atendimento e não fala com o cliente.
+
+**Não exige ser o dono.** Qualquer perfil que veja a conversa pode classificá-la, pela política de
+visibilidade e nada mais. Supervisor reclassificando atendimento que não atendeu é o caso normal de
+quem cuida do relatório, não uma exceção.
+
+**Não grava evento no histórico.** As outras ações gravam porque mudam **de quem é** o atendimento, e
+isso pertence à leitura da conversa. Etiqueta não muda responsável, e um evento por ajuste de chip
+encheria de ruído justamente a transcrição que o atendente lê para entender o cliente.
+
+#### O filtro tinha de entrar no ouvinte do WebSocket, não só na consulta
+
+O defeito que a decisão 53 registra — bug de **ligação entre componentes**, invisível para typecheck,
+vitest e API — tem irmão aqui. O evento de conversa atualizada chega para todas as conversas da fila,
+e `aplicarEvento` inseria qualquer uma cujo status batesse com a aba. Com filtro de etiqueta ativo,
+isso põe na lista filtrada uma conversa que não tem a etiqueta: a tela mostrando o oposto do que o
+filtro pede. A checagem entrou no ouvinte, e vale nos dois sentidos — retirar a etiqueta faz a
+conversa sair da lista na hora.
+
+#### Duas medidas, dois cartões
+
+O relatório por assunto responde duas perguntas: "sobre o que falam mais" e "qual assunto consome
+mais tempo de atendente". A segunda é a que muda decisão — um assunto com 5% do volume e o triplo do
+TMA merece mais atenção que o mais frequente.
+
+Elas **não** foram para o mesmo gráfico. Volume e tempo têm escalas diferentes: 40 atendimentos e 900
+segundos não cabem no mesmo eixo, e o eixo duplo faria a barra mais alta parecer "a maior" das duas
+coisas ao mesmo tempo. Cada um tem cartão, eixo e ordenação própria — o de tempo ordena por tempo, e
+não por volume, porque o cartão ao lado já responde a outra pergunta.
+
+Uma cor só em cada: etiqueta não é série com identidade, e a pergunta é magnitude. Cor por etiqueta
+sugeriria que "boleto" é sempre laranja em toda a tela, o que não é verdade nem seria útil.
+
+#### O relatório declara a própria cobertura
+
+`semEtiqueta` e `total` vão na resposta, não apenas as linhas. Um relatório de assunto que mostra só o
+que foi etiquetado **parece completo e não é**: com 5% dos atendimentos classificados, os percentuais
+descrevem a amostra e ninguém na tela percebe. A tela escreve a cobertura em texto.
+
+Duas contas que de propósito não fecham, e ambas estão certas:
+
+- a soma das linhas passa do total, porque conversa com duas etiquetas conta nas duas — a pergunta é
+  "quantos atendimentos tocaram este assunto";
+- o TMA ignora finalizada que nunca foi atribuída. Isso existe: bot resolveu, ou o cliente desistiu e
+  ela foi encerrada da fila. Contar zero puxaria a média para baixo e faria o assunto parecer rápido
+  de atender justamente quando ninguém o atendeu.
+
+O agrupamento saiu da função que consulta o banco para poder ser testado: essas três regras são
+exatamente o tipo de coisa que quebra em silêncio e produz relatório plausível e errado. São nove
+casos no vitest, um por forma de mentir.
+
+#### Um `ul` que não podia existir
+
+O cartão da lista de conversas é um `<button>` inteiro, clicável em qualquer ponto, e lista dentro de
+botão é HTML inválido. Daí `EtiquetasCompactas`, com `span` — conteúdo de frase, que cabe ali. Ela
+também corta em três etiquetas com o resto contado: o cartão tem 320px, e um atendimento com seis
+etiquetas empurraria o nome do contato e a prévia da mensagem para fora da tela, quebrando o que a
+lista existe para mostrar. O `+2` carrega as escondidas no `title`, senão seria uma informação que não
+leva a nenhuma outra.
+
+#### Um vazamento que a suíte de navegador tinha, e agora não tem
+
+Ao rodar a suíte inteira, um teste antigo do CRM falhou uma vez e passou nas duas execuções
+seguintes — intermitência, não regressão. A causa daquela falha não foi determinada: o
+`test-results` já tinha sido limpo pelas execuções posteriores, e chutar causa a partir de evidência
+apagada é pior que dizer que não se sabe.
+
+O que a investigação achou foi outro defeito, este explicável e pior: **cada execução da suíte
+deixava a etiqueta que criou no registro**. O primeiro cliente da base de desenvolvimento estava com
+16 das 20 vagas ocupadas por etiquetas `teste NNNNNN` de execuções antigas — a quatro execuções de o
+teste passar a falhar sempre, com 400, por acúmulo e não por defeito. Cada teste que cria etiqueta
+agora remove a sua; foram 57 etiquetas de teste apagadas do banco de desenvolvimento.
+
+A primeira versão dessa limpeza guardava o clique atrás de um `if (await remover.count())`, e vazou
+uma etiqueta em silêncio: a ficha recarrega depois de gravar, e o `count()` avaliado nesse intervalo
+devolve zero. Trocado por espera explícita. **Limpeza que falha calada é pior que limpeza nenhuma**,
+porque ninguém vai procurar por ela.

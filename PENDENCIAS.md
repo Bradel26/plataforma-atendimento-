@@ -72,7 +72,7 @@ Nada disso está no `SCOPE.md`. Só entra se você decidir.
 | # | Recurso | O que resolve |
 |---|---|---|
 | 5.1 | Respostas rápidas / atalhos do agente | O agente digita a mesma resposta vinte vezes por dia |
-| 5.2 | Etiquetas em conversa | Hoje não há como classificar assunto para relatório |
+| 5.2 | ~~Etiquetas em conversa~~ | **feito** em 02/09/2026 — mesmo vocabulário de contato e conta: chip na lista, editor no painel, filtro por etiqueta e relatório por assunto com TMA em Dashboards. O renomear/remover alcança conversa na mesma transação. Ver decisão 54 do SCOPE.md |
 | 5.3 | SLA de atendimento por fila | O SLA existe em protocolo, não em conversa |
 | 5.4 | Chat interno entre agentes | Pedir ajuda ao supervisor hoje é fora da plataforma |
 | 5.5 | Discador preditivo / power dialer | Campanha por voz é recusada hoje: a telefonia existe, mas o disparo em lote nunca foi ligado a ela. Discagem automática precisa de ritmo, janela de horário permitido e desistência por número. |

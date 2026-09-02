@@ -4,6 +4,7 @@ import { ListaConversas } from '../features/atendimento/ListaConversas';
 import { PainelChat } from '../features/atendimento/PainelChat';
 import { useConversas } from '../features/atendimento/useConversas';
 import { useAuth } from '../features/auth/AuthProvider';
+import { FiltroEtiquetas } from './crm/Etiquetas';
 import { ApiError, api } from '../lib/api';
 import {
   ABAS_ATENDIMENTO,
@@ -17,6 +18,16 @@ export function AtendimentoPage() {
   const { temPerfil } = useAuth();
   const [aba, setAba] = useState<ConversaStatus>('EM_ESPERA');
   const [busca, setBusca] = useState('');
+  const [tags, setTags] = useState<string[]>([]);
+  /**
+   * Muda quando alguem etiqueta uma conversa, para o catalogo do filtro ser
+   * buscado de novo.
+   *
+   * Sem isto, a etiqueta recem-criada no painel nao apareceria na lista de
+   * filtros ate recarregar a pagina — o mesmo defeito que o teste de navegador
+   * achou na aba de contatos.
+   */
+  const [versaoTags, setVersaoTags] = useState(0);
   const [aberta, setAberta] = useState<ConversaDetalhe | null>(null);
   const [erroAberta, setErroAberta] = useState<string | null>(null);
   const [agentes, setAgentes] = useState<Usuario[]>([]);
@@ -33,7 +44,7 @@ export function AtendimentoPage() {
     inscreverMensagens,
     focarConversa,
     recarregarContadores,
-  } = useConversas(aba);
+  } = useConversas(aba, tags);
 
   // A lista de destinos de transferencia so e visivel para admin e supervisor.
   useEffect(() => {
@@ -83,8 +94,17 @@ export function AtendimentoPage() {
     (detalhe: ConversaDetalhe) => {
       setAberta(detalhe);
       aplicarEvento(detalhe);
+      // Qualquer mudanca na conversa aberta pode ter sido uma etiqueta nova.
+      // Incrementar sempre e mais barato que comparar as listas, e o custo e uma
+      // consulta ao catalogo — que a tela ja faria ao mudar de filtro.
+      setVersaoTags((v) => v + 1);
     },
     [aplicarEvento],
+  );
+
+  const alternarTag = useCallback(
+    (tag: string) => setTags((atual) => (atual.includes(tag) ? atual.filter((t) => t !== tag) : [...atual, tag])),
+    [],
   );
 
   const filtradas = busca.trim()
@@ -122,6 +142,17 @@ export function AtendimentoPage() {
             </button>
           ))}
         </nav>
+
+        {/*
+          O filtro fica fora da area que rola, junto da busca e das abas: ele
+          descreve o que a lista mostra, e rolar junto com o resultado o
+          esconderia justamente quando a pessoa procura por que a lista esta
+          curta. `FiltroEtiquetas` devolve null quando nao ha etiqueta nenhuma,
+          entao nao ocupa espaco antes de existir a primeira.
+        */}
+        <div className="border-b border-slate-100 px-3 py-2 empty:hidden">
+          <FiltroEtiquetas ativas={tags} aoAlternar={alternarTag} campo="conversas" versao={versaoTags} />
+        </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
           {erro ? (

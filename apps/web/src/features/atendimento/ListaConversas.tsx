@@ -1,4 +1,5 @@
 import { Badge } from '../../components/ui';
+import { EtiquetasCompactas } from '../../pages/crm/Etiquetas';
 import type { ConversaResumo } from '../../lib/types';
 
 function horaCurta(iso: string) {
@@ -69,6 +70,14 @@ export function ListaConversas({
                   </span>
                 )}
               </div>
+              {/* Linha propria, abaixo de canal e fila: aquela linha ja disputa
+                  espaco com o contador de nao lidas, e uma etiqueta longa
+                  empurraria o contador para fora do cartao. */}
+              {c.tags.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  <EtiquetasCompactas tags={c.tags} />
+                </div>
+              )}
             </button>
           </li>
         );

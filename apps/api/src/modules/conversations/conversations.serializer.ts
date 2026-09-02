@@ -46,6 +46,9 @@ export function toConversaResumo(c: ConversaResumo) {
     canal: c.canal,
     status: c.status,
     assunto: c.assunto,
+    // Vai no resumo, e nao so no detalhe: o chip aparece na propria lista, que e
+    // onde o atendente decide qual conversa abrir.
+    tags: c.tags,
     naoLidas: c.naoLidas,
     criadoEm: c.criadoEm,
     atribuidoEm: c.atribuidoEm,
@@ -69,6 +72,7 @@ export function toConversaDetalhe(c: ConversaDetalhe) {
     canal: c.canal,
     status: c.status,
     assunto: c.assunto,
+    tags: c.tags,
     naoLidas: c.naoLidas,
     criadoEm: c.criadoEm,
     atribuidoEm: c.atribuidoEm,

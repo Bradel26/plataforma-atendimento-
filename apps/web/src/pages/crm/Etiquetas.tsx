@@ -12,7 +12,13 @@ import { ApiError, api } from '../../lib/api';
  * coisa — e a etiqueta so serve se quem le a associa de imediato.
  */
 
-export type TagEmUso = { tag: string; contatos: number; contas: number; total: number };
+export type TagEmUso = {
+  tag: string;
+  contatos: number;
+  contas: number;
+  conversas: number;
+  total: number;
+};
 
 const CHIP =
   'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors';
@@ -33,6 +39,50 @@ export function Etiquetas({ tags, vazio }: { tags: readonly string[]; vazio?: st
         </li>
       ))}
     </ul>
+  );
+}
+
+/**
+ * Etiquetas dentro de um `<button>` — o cartao da lista de conversas.
+ *
+ * Existe separada de `Etiquetas` por dois motivos, e nenhum deles e estetico:
+ *
+ * `Etiquetas` renderiza `ul`/`li`, e lista dentro de `button` e HTML invalido —
+ * o cartao da conversa e um botao inteiro, clicavel em qualquer ponto. `span`
+ * e conteudo de frase e cabe ali.
+ *
+ * E o cartao tem 320px. Um atendimento com seis etiquetas empurraria o nome do
+ * contato e a previa da mensagem para fora da tela, quebrando o que a lista
+ * existe para mostrar. Por isso o corte em `LIMITE`, com o resto contado.
+ */
+const LIMITE_COMPACTO = 3;
+
+export function EtiquetasCompactas({ tags }: { tags: readonly string[] }) {
+  if (tags.length === 0) return null;
+  const mostradas = tags.slice(0, LIMITE_COMPACTO);
+  const escondidas = tags.length - mostradas.length;
+
+  return (
+    <>
+      {mostradas.map((tag) => (
+        <span
+          key={tag}
+          className={`${CHIP} max-w-24 truncate border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300`}
+        >
+          {tag}
+        </span>
+      ))}
+      {escondidas > 0 && (
+        // O titulo lista as escondidas: sem ele, "+2" e uma informacao que nao
+        // leva a nenhuma outra, e obrigaria a abrir a conversa para descobrir.
+        <span
+          title={tags.slice(LIMITE_COMPACTO).join(', ')}
+          className="text-xs text-slate-400 dark:text-slate-500"
+        >
+          +{escondidas}
+        </span>
+      )}
+    </>
   );
 }
 
@@ -176,7 +226,7 @@ type FiltroProps = {
   ativas: readonly string[];
   aoAlternar: (tag: string) => void;
   /** Onde contar: a aba de contatos nao mostra etiqueta que so existe em cliente. */
-  campo: 'contatos' | 'contas';
+  campo: 'contatos' | 'contas' | 'conversas';
   /**
    * Contador que muda quando alguem etiqueta um registro na ficha.
    *

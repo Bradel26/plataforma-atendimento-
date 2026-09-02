@@ -5,7 +5,12 @@ import { StatTile } from '../components/viz/StatTile';
 import { ApiError, api, getAccessToken } from '../lib/api';
 import { EVENTOS, conectar } from '../lib/realtime';
 import { COR_CANAL, COR_STATUS_AGENTE, ESTADO, SERIES, duracao } from '../lib/viz';
-import { LABEL_STATUS, LABEL_STATUS_PROTOCOLO, type Indicadores } from '../lib/types';
+import {
+  LABEL_STATUS,
+  LABEL_STATUS_PROTOCOLO,
+  type Indicadores,
+  type RelatorioAssuntos,
+} from '../lib/types';
 
 const JANELAS = [
   { valor: '1', label: 'Ultima hora' },
@@ -27,14 +32,22 @@ function estadoDaTaxa(taxa: number | null) {
 
 export function DashboardsPage() {
   const [dados, setDados] = useState<Indicadores | null>(null);
+  const [assuntos, setAssuntos] = useState<RelatorioAssuntos | null>(null);
   const [horas, setHoras] = useState('24');
   const [erro, setErro] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
     try {
       const desde = new Date(Date.now() - Number(horas) * 60 * 60 * 1000).toISOString();
-      const { indicadores } = await api.get<{ indicadores: Indicadores }>(`/metricas/indicadores?desde=${desde}`);
+      // As duas consultas em paralelo e com a mesma janela: assunto que aparece
+      // num periodo diferente do resto da tela seria comparado por engano com os
+      // outros cartoes.
+      const [{ indicadores }, relatorio] = await Promise.all([
+        api.get<{ indicadores: Indicadores }>(`/metricas/indicadores?desde=${desde}`),
+        api.get<RelatorioAssuntos>(`/metricas/assuntos?desde=${desde}&limite=8`),
+      ]);
       setDados(indicadores);
+      setAssuntos(relatorio);
       setErro(null);
     } catch (e) {
       setErro(e instanceof ApiError ? e.message : 'Falha ao carregar indicadores');
@@ -144,6 +157,71 @@ export function DashboardsPage() {
         </Card>
         <Card titulo="Chamadas por direcao" descricao={`${dados?.voz.total ?? 0} chamada(s) no periodo`}>
           <BarList itens={chamadas} vazio="Nenhuma chamada no periodo" />
+        </Card>
+      </div>
+
+      {/*
+        Assunto em DOIS cartoes, e nao um com duas medidas.
+
+        Volume e tempo tem escalas diferentes — 40 atendimentos e 900 segundos
+        nao cabem no mesmo eixo, e um grafico de eixo duplo faria a barra mais
+        alta parecer "a maior" das duas coisas ao mesmo tempo. Separados, cada um
+        tem um eixo e uma leitura.
+
+        Uma cor so em cada: a etiqueta nao e uma serie com identidade, e a
+        pergunta e magnitude. Cor por etiqueta sugeriria que "boleto" e sempre
+        laranja em toda a tela, o que nao e verdade nem seria util.
+      */}
+      <div className="grid gap-5 lg:grid-cols-2">
+        <Card
+          titulo="Atendimentos por assunto"
+          descricao={
+            assuntos
+              ? `${assuntos.total} atendimento(s) no periodo · ${assuntos.semEtiqueta} sem etiqueta`
+              : 'Etiquetas das conversas no periodo'
+          }
+        >
+          <BarList
+            itens={(assuntos?.assuntos ?? []).map((a) => ({
+              rotulo: a.tag,
+              valor: a.conversas,
+              cor: SERIES[0],
+            }))}
+            vazio="Nenhuma conversa etiquetada no periodo. Etiquete no painel de atendimento."
+          />
+          {/*
+            A cobertura fica escrita, e nao so no descricao acima: um relatorio de
+            assunto com 5% dos atendimentos classificados parece igual a um com
+            95%, e quem le tiraria conclusao da amostra achando que e o total.
+          */}
+          {assuntos && assuntos.total > 0 && assuntos.semEtiqueta > 0 && (
+            <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+              {Math.round(((assuntos.total - assuntos.semEtiqueta) / assuntos.total) * 100)}% dos
+              atendimentos do periodo estao classificados. As barras descrevem apenas essa parte.
+            </p>
+          )}
+        </Card>
+
+        <Card titulo="Tempo medio por assunto" descricao="Da atribuicao ao encerramento, das conversas finalizadas">
+          <BarList
+            itens={(assuntos?.assuntos ?? [])
+              .filter((a) => a.tmaSegundos !== null)
+              // Reordenado por tempo, nao por volume: o cartao ao lado ja
+              // responde "qual e o mais frequente". Aqui a pergunta e outra —
+              // qual assunto consome mais atendente por atendimento — e um
+              // assunto de pouco volume e TMA alto e justamente o que se procura.
+              .sort((a, b) => (b.tmaSegundos ?? 0) - (a.tmaSegundos ?? 0))
+              .map((a) => ({
+                rotulo: a.tag,
+                // Minutos, e nao segundos: TMA de atendimento humano fica na casa
+                // dos milhares de segundos, e numero que ninguem le de relance
+                // nao informa.
+                valor: Math.round((a.tmaSegundos ?? 0) / 60),
+                cor: SERIES[0],
+              }))}
+            unidade="min"
+            vazio="Nenhum atendimento etiquetado foi finalizado no periodo"
+          />
         </Card>
       </div>
 

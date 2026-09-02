@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alerta, Badge, Button, Select } from '../../components/ui';
+import { EditorEtiquetas } from '../../pages/crm/Etiquetas';
 import { ApiError, api } from '../../lib/api';
 import { LABEL_CONVERSA_STATUS, type ConversaDetalhe, type Mensagem, type Usuario } from '../../lib/types';
 
@@ -245,6 +246,30 @@ export function PainelChat({
           )}
         </div>
       </header>
+
+      {/*
+        Barra propria entre o cabecalho e as mensagens.
+        Nao entrou no cabecalho porque o editor cresce — o campo de texto abre
+        uma lista de sugestoes por baixo, e dentro de um `flex-wrap` com os
+        botoes de acao ela empurraria "Finalizar" para outra linha no meio do
+        atendimento. Fica acima das mensagens, e nao no rodape, porque
+        classificar e contexto do atendimento, nao parte de responder.
+      */}
+      <div className="flex items-start gap-2 border-b border-slate-100 bg-white px-5 py-2">
+        <span className="mt-1 shrink-0 text-xs font-medium text-slate-500">Etiquetas</span>
+        <div className="min-w-0 flex-1">
+          <EditorEtiquetas
+            tags={conversa.tags}
+            aoSalvar={async (tags) => {
+              const { conversa: nova } = await api.put<{ conversa: ConversaDetalhe }>(
+                `/conversas/${conversa.id}/etiquetas`,
+                { tags },
+              );
+              onMudou(nova);
+            }}
+          />
+        </div>
+      </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50 px-5 py-4">
         {(conversa.temHistoricoAnterior ?? false) && !fimDoHistorico && (

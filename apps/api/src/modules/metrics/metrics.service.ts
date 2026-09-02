@@ -105,6 +105,115 @@ export async function indicadores(periodo: Periodo) {
 const media = (valores: number[]) =>
   valores.length === 0 ? null : Math.round((valores.reduce((a, b) => a + b, 0) / valores.length) * 100) / 100;
 
+export type LinhaAssunto = {
+  tag: string;
+  conversas: number;
+  finalizadas: number;
+  /** Tempo medio de atendimento das finalizadas com esta etiqueta, em segundos. */
+  tmaSegundos: number | null;
+};
+
+/**
+ * Atendimentos por assunto no periodo — o relatorio que o item 5.2 pedia.
+ *
+ * O `assunto` da conversa e texto livre e nunca serviu para isto: "boleto",
+ * "Boleto em atraso" e "2a via do boleto" sao o mesmo assunto para quem le e
+ * tres linhas em qualquer agrupamento. A etiqueta e normalizada, entao agrupa.
+ *
+ * Traz o **TMA por etiqueta** junto da contagem porque as duas perguntas andam
+ * juntas: "sobre o que falam mais" e util, mas "qual assunto consome mais tempo
+ * de atendente" e o que muda a decisao — um assunto com 5% do volume e o triplo
+ * do TMA merece mais atencao que o mais frequente.
+ */
+export async function assuntos(periodo: Periodo, limite = 20) {
+  /*
+   * A contagem nao usa `groupBy`.
+   *
+   * `groupBy` do Prisma nao agrupa por elemento de array; agrupar por etiqueta
+   * em SQL exigiria `unnest`, e o mesmo motivo do catalogo de etiquetas vale
+   * aqui: consulta crua nao passa pela extensao multi-tenant, e um relatorio que
+   * escapa do filtro de organizacao mostraria numero de outra empresa. Se um dia
+   * o volume doer, o caminho e view materializada por organizacao — nao SQL cru.
+   */
+  const conversas = await prisma.conversation.findMany({
+    where: { criadoEm: { gte: periodo.desde, lte: periodo.ate } },
+    select: { tags: true, status: true, atribuidoEm: true, finalizadoEm: true },
+  });
+
+  return agruparAssuntos(conversas, limite);
+}
+
+/** O que o agrupamento precisa saber de uma conversa. */
+export type ConversaParaAssunto = {
+  tags: string[];
+  status: string;
+  atribuidoEm: Date | null;
+  finalizadoEm: Date | null;
+};
+
+/**
+ * O agrupamento, separado da consulta para poder ser testado.
+ *
+ * Vive fora de `assuntos` porque as regras dele — conversa com duas etiquetas
+ * contando nas duas, TMA so das que tem atribuicao e encerramento, a fatia sem
+ * etiqueta ficando de fora das linhas mas dentro do total — sao exatamente o
+ * tipo de coisa que quebra em silencio e produz relatorio plausivel e errado.
+ */
+export function agruparAssuntos(conversas: readonly ConversaParaAssunto[], limite = 20) {
+  const porTag = new Map<string, { conversas: number; finalizadas: number; duracoes: number[] }>();
+  let semEtiqueta = 0;
+
+  for (const c of conversas) {
+    if (c.tags.length === 0) {
+      semEtiqueta += 1;
+      continue;
+    }
+    /*
+     * TMA so existe com atribuicao E encerramento.
+     *
+     * Conversa finalizada sem nunca ter sido atribuida existe — bot resolveu, ou
+     * o cliente desistiu e ela foi encerrada da fila. Contar zero para ela
+     * puxaria a media para baixo e faria o assunto parecer rapido de atender
+     * justamente quando ninguem o atendeu.
+     */
+    const duracao =
+      c.atribuidoEm && c.finalizadoEm
+        ? Math.round((c.finalizadoEm.getTime() - c.atribuidoEm.getTime()) / 1000)
+        : null;
+
+    for (const tag of c.tags) {
+      const atual = porTag.get(tag) ?? { conversas: 0, finalizadas: 0, duracoes: [] };
+      atual.conversas += 1;
+      if (c.status === 'FINALIZADO') atual.finalizadas += 1;
+      if (duracao !== null) atual.duracoes.push(duracao);
+      porTag.set(tag, atual);
+    }
+  }
+
+  const linhas: LinhaAssunto[] = [...porTag.entries()]
+    .map(([tag, v]) => ({
+      tag,
+      conversas: v.conversas,
+      finalizadas: v.finalizadas,
+      tmaSegundos: v.duracoes.length === 0 ? null : Math.round(media(v.duracoes)!),
+    }))
+    // Empate pelo nome, para duas chamadas iguais devolverem a mesma ordem.
+    .sort((a, b) => b.conversas - a.conversas || a.tag.localeCompare(b.tag, 'pt-BR'))
+    .slice(0, limite);
+
+  /*
+   * `semEtiqueta` e `total` vao na resposta, e nao so as linhas.
+   *
+   * Um relatorio de assunto que mostra apenas o que foi etiquetado parece
+   * completo e nao e: se metade dos atendimentos nao tem etiqueta, os
+   * percentuais das linhas descrevem a outra metade e ninguem na tela percebe.
+   * A soma das linhas tambem nao fecha com o total de proposito — conversa com
+   * duas etiquetas conta nas duas, que e o comportamento certo para "quantos
+   * atendimentos tocaram este assunto".
+   */
+  return { assuntos: linhas, semEtiqueta, total: conversas.length };
+}
+
 /** NPS = %promotores (9-10) menos %detratores (0-6). Escala de -100 a 100. */
 function calcularNps(notas: number[]) {
   if (notas.length === 0) return null;

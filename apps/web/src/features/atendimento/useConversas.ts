@@ -30,7 +30,7 @@ function paraResumo(c: ConversaDetalhe | ConversaResumo): ConversaResumo {
  * Estado do painel de atendimento: lista da aba ativa, contadores e conversa
  * aberta, mantidos em sincronia por WebSocket.
  */
-export function useConversas(aba: ConversaStatus) {
+export function useConversas(aba: ConversaStatus, tags: readonly string[] = []) {
   const [conversas, setConversas] = useState<ConversaResumo[]>([]);
   const [contadores, setContadores] = useState<Contadores>(CONTADORES_ZERADOS);
   const [carregando, setCarregando] = useState(true);
@@ -42,27 +42,47 @@ export function useConversas(aba: ConversaStatus) {
   const abaRef = useRef(aba);
   abaRef.current = aba;
 
+  /*
+   * As etiquetas ativas viram uma string, e e ela que entra nas dependencias.
+   *
+   * O array chega novo em cada render de quem chama, entao usa-lo direto
+   * recarregaria a lista a cada tecla digitada em qualquer campo da pagina. A
+   * string muda somente quando o filtro muda de verdade.
+   */
+  const chaveTags = tags.join(',');
+  const tagsRef = useRef<readonly string[]>(tags);
+  tagsRef.current = tags;
+
+  /** Trecho de query das etiquetas: `&tags=a&tags=b`, ou vazio. */
+  const queryTags = useCallback(
+    () => tagsRef.current.map((t) => `&tags=${encodeURIComponent(t)}`).join(''),
+    [],
+  );
+
   const carregarContadores = useCallback(async () => {
     const { contadores: c } = await api.get<{ contadores: Contadores }>('/conversas/contadores');
     setContadores(c);
   }, []);
 
-  const carregarLista = useCallback(async (status: ConversaStatus) => {
-    setCarregando(true);
-    try {
-      const { conversas: lista, proximoCursor: proximo } = await api.get<{
-        conversas: ConversaResumo[];
-        proximoCursor: string | null;
-      }>(`/conversas?status=${status}`);
-      setConversas(lista.sort(porAtividade));
-      setCursor(proximo);
-      setErro(null);
-    } catch {
-      setErro('Nao foi possivel carregar as conversas');
-    } finally {
-      setCarregando(false);
-    }
-  }, []);
+  const carregarLista = useCallback(
+    async (status: ConversaStatus) => {
+      setCarregando(true);
+      try {
+        const { conversas: lista, proximoCursor: proximo } = await api.get<{
+          conversas: ConversaResumo[];
+          proximoCursor: string | null;
+        }>(`/conversas?status=${status}${queryTags()}`);
+        setConversas(lista.sort(porAtividade));
+        setCursor(proximo);
+        setErro(null);
+      } catch {
+        setErro('Nao foi possivel carregar as conversas');
+      } finally {
+        setCarregando(false);
+      }
+    },
+    [queryTags],
+  );
 
   /**
    * Proxima pagina da aba. Concatena em vez de substituir, e descarta repetido
@@ -75,7 +95,7 @@ export function useConversas(aba: ConversaStatus) {
       const { conversas: lista, proximoCursor: proximo } = await api.get<{
         conversas: ConversaResumo[];
         proximoCursor: string | null;
-      }>(`/conversas?status=${abaRef.current}&cursor=${encodeURIComponent(cursor)}`);
+      }>(`/conversas?status=${abaRef.current}&cursor=${encodeURIComponent(cursor)}${queryTags()}`);
       setConversas((atual) => {
         const vistos = new Set(atual.map((c) => c.id));
         return [...atual, ...lista.filter((c) => !vistos.has(c.id))].sort(porAtividade);
@@ -84,26 +104,41 @@ export function useConversas(aba: ConversaStatus) {
     } catch {
       setErro('Nao foi possivel carregar mais conversas');
     }
-  }, [cursor]);
+  }, [cursor, queryTags]);
 
+  // `chaveTags` nas dependencias, e nao `tags`: ver o comentario na declaracao.
   useEffect(() => {
     void carregarLista(aba);
-  }, [aba, carregarLista]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aba, chaveTags, carregarLista]);
 
   useEffect(() => {
     void carregarContadores().catch(() => undefined);
   }, [carregarContadores]);
 
-  /** Insere ou remove a conversa da aba ativa conforme o status dela mudou. */
-  const aplicarEvento = useCallback((detalhe: ConversaDetalhe) => {
-    const resumo = paraResumo(detalhe);
-    setConversas((atual) => {
-      const semEla = atual.filter((c) => c.id !== resumo.id);
-      if (resumo.status !== abaRef.current) return semEla;
-      return [...semEla, resumo].sort(porAtividade);
-    });
-    void carregarContadores().catch(() => undefined);
-  }, [carregarContadores]);
+  /**
+   * Insere ou remove a conversa da aba ativa conforme o status dela mudou.
+   *
+   * O filtro de etiqueta entra aqui tambem, e nao so na consulta: um evento de
+   * WebSocket chega para todas as conversas da fila, e sem esta checagem uma
+   * conversa sem a etiqueta filtrada apareceria na lista filtrada — a tela
+   * mostrando o oposto do que o filtro pede. Vale nos dois sentidos: retirar a
+   * etiqueta de uma conversa a faz sair da lista na hora.
+   */
+  const aplicarEvento = useCallback(
+    (detalhe: ConversaDetalhe) => {
+      const resumo = paraResumo(detalhe);
+      setConversas((atual) => {
+        const semEla = atual.filter((c) => c.id !== resumo.id);
+        if (resumo.status !== abaRef.current) return semEla;
+        const cabeNoFiltro = tagsRef.current.every((t) => resumo.tags.includes(t));
+        if (!cabeNoFiltro) return semEla;
+        return [...semEla, resumo].sort(porAtividade);
+      });
+      void carregarContadores().catch(() => undefined);
+    },
+    [carregarContadores],
+  );
 
   // Um unico socket para todo o painel, reconectado se o token mudar.
   useEffect(() => {
