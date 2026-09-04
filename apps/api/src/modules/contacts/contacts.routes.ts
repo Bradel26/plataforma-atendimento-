@@ -11,6 +11,12 @@ import { apos, decodificarCursor, fatiar } from '../../lib/paginacao';
 import { inclusaoResumo, toConversaResumo } from '../conversations/conversations.serializer';
 
 import { exigirUsuarioDaOrganizacao, filtroDe, politicaContas, politicaContatos, politicaConversas } from '../../lib/politicas';
+import {
+  cicloDoContato,
+  ciclosDosContatos,
+  funilDeCiclo,
+} from '../crm/cicloDeVida.service';
+import { CICLOS } from '../crm/cicloDeVida';
 import { apenasVisivel } from '../../lib/visibilidade';
 import { MAXIMO_POR_REGISTRO, TAMANHO_MAXIMO, normalizarTags } from '../../lib/tags';
 
@@ -19,6 +25,15 @@ export const contactsRoutes = Router();
 contactsRoutes.use(requireAuth);
 
 const listarSchema = z.object({
+  /*
+   * Ciclo de vida (item E.4). Lista, e nao valor unico: "clientes e em
+   * negociacao" e uma pergunta comum, e obrigar duas consultas para uniao faria
+   * a tela somar dois totais que se sobrepoem.
+   */
+  ciclo: z
+    .union([z.enum(CICLOS), z.array(z.enum(CICLOS))])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : Array.isArray(v) ? v : [v])),
   busca: z.string().trim().min(1).optional(),
   /**
    * Filtro por etiqueta, repetivel: `?tags=revenda&tags=atacado`.
@@ -77,7 +92,7 @@ contactsRoutes.get(
   '/',
   validateQuery(listarSchema),
   asyncHandler(async (_req, res) => {
-    const { busca, tags, limite, cursor } = res.locals.query as z.infer<typeof listarSchema>;
+    const { busca, tags, limite, cursor, ciclo } = res.locals.query as z.infer<typeof listarSchema>;
     // O escopo entra como primeiro filtro, e nao como `undefined` quando nao ha
     // busca: `where: undefined` e "sem restricao", que aqui seria a base inteira.
     const filtros: Prisma.ContactWhereInput[] = [await filtroDe(politicaContatos)];
@@ -94,6 +109,24 @@ contactsRoutes.get(
     // `hasEvery` com lista vazia nao restringe, entao nao precisa de condicional.
     filtros.push({ tags: { hasEvery: tags } });
 
+    /*
+     * Filtro por ciclo de vida (item E.4).
+     *
+     * O ciclo e DERIVADO, entao nao ha coluna para o Postgres filtrar: o filtro
+     * resolve os ids primeiro e os passa como restricao. Isso e aceitavel porque
+     * a derivacao ja passa pela politica de visibilidade — o conjunto e o da
+     * carteira de quem pergunta, e nao a base inteira — e porque o alternativo
+     * seria guardar o ciclo numa coluna que apodrece.
+     *
+     * A paginacao continua funcionando: o `IN` entra antes do cursor.
+     */
+    if (ciclo && ciclo.length > 0) {
+      const mapa = await ciclosDosContatos({ AND: [...filtros] });
+      const desejados = new Set(ciclo);
+      const ids = [...mapa.entries()].filter(([, c]) => desejados.has(c)).map(([id]) => id);
+      filtros.push({ id: { in: ids } });
+    }
+
     const depois = apos('atualizadoEm', decodificarCursor(cursor));
     if (depois) filtros.push(depois);
 
@@ -105,10 +138,45 @@ contactsRoutes.get(
     });
 
     const { itens, proximoCursor } = fatiar(registros, limite, (c) => c.atualizadoEm);
+
+    /*
+     * O ciclo vai na LISTA, e nao so na ficha.
+     *
+     * E a licao registrada na propria ordem recomendada do plano: dado que
+     * aparece no lugar errado se parece muito com dado que nao existe. Ciclo de
+     * vida serve para varrer a carteira — "quantos clientes tenho aqui?" — e
+     * isso nao se faz abrindo um contato por vez.
+     *
+     * Calculado so para a pagina servida: derivar a base inteira para mostrar
+     * vinte linhas seria trabalho jogado fora.
+     */
+    const ciclos = await ciclosDosContatos({ id: { in: itens.map((c) => c.id) } });
+
     res.json({
-      contatos: itens.map(({ _count, ...c }) => ({ ...c, totalConversas: _count.conversas })),
+      contatos: itens.map(({ _count, ...c }) => ({
+        ...c,
+        totalConversas: _count.conversas,
+        cicloDeVida: ciclos.get(c.id) ?? null,
+      })),
       proximoCursor,
     });
+  }),
+);
+
+/**
+ * O funil de ciclo de vida (item E.4).
+ *
+ * Sem `requireRole`: passa pela politica de contatos como qualquer leitura, e o
+ * numero que cada um ve e o da carteira dele. Reservar a gestao faria o vendedor
+ * nao poder responder "quantos clientes eu tenho" sem pedir relatorio.
+ *
+ * Vem ANTES de `/:id` no arquivo de proposito: `/ciclo-de-vida` casaria com
+ * `/:id` e a rota nunca seria alcancada.
+ */
+contactsRoutes.get(
+  '/ciclo-de-vida',
+  asyncHandler(async (_req, res) => {
+    res.json({ funil: await funilDeCiclo() });
   }),
 );
 
@@ -132,7 +200,10 @@ contactsRoutes.get(
       take: 50,
     });
 
-    res.json({ contato, conversas: conversas.map(toConversaResumo) });
+    res.json({
+      contato: { ...contato, cicloDeVida: await cicloDoContato(id) },
+      conversas: conversas.map(toConversaResumo),
+    });
   }),
 );
 

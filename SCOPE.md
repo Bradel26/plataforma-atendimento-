@@ -1814,3 +1814,1937 @@ A primeira versão dessa limpeza guardava o clique atrás de um `if (await remov
 uma etiqueta em silêncio: a ficha recarrega depois de gravar, e o `count()` avaliado nesse intervalo
 devolve zero. Trocado por espera explícita. **Limpeza que falha calada é pior que limpeza nenhuma**,
 porque ninguém vai procurar por ela.
+
+### 55. Cartão parado: o aviso é "existe próximo passo?", não "está parado há N dias"
+
+Item 1.1 do plano em [ANALISE-CRM.md](ANALISE-CRM.md), seção 8.2 — os dois cronômetros do cartão do
+funil e o aviso de cartão sem próxima ação.
+
+**O que já existia, e por que isso muda o tamanho do trabalho.** `Opportunity.estagioDesde` é
+gravado desde o início, `crm.serializers.ts` já devolvia `diasNoEstagio` e `diasAberta`, e a ficha da
+oportunidade já mostrava os dois. O que faltava era o **cartão do kanban** — a tela em que o número
+serve para agir. Um vendedor varre o quadro; não abre 28 fichas para descobrir qual apodreceu. Vale
+como aviso geral: dado que existe e não aparece onde se decide é indistinguível de dado que não
+existe, e nenhuma camada de teste acusa isso — a API estava certa, o serializer estava testado, e o
+recurso não existia na prática.
+
+**Não há limiar de dias, de propósito.** A tentação era marcar o cartão como "parado" depois de N
+dias na etapa. Qualquer N seria inventado: há negócio que legitimamente dorme um mês esperando
+orçamento aprovado, e há ciclo que apodrece em três dias. Os dois cronômetros já respondem *quanto
+tempo faz* — quem lê o quadro sabe o que é muito para o funil dele. O aviso responde a pergunta que
+não depende de arbítrio: **existe próximo passo marcado?** Um limiar arbitrário produziria alarme
+falso em massa, e alarme que erra muito é alarme que se aprende a ignorar.
+
+**Só conta atividade com prazo.** A `Activity` é um modelo para duas coisas: prazo nulo é registro do
+que aconteceu, prazo preenchido é tarefa a fazer (ver o comentário do modelo). Contar nota como
+"próxima ação" apagaria o aviso exatamente nos cartões que mais precisam dele — os que têm muito
+histórico e nenhum passo marcado adiante. É a diferença entre "essa conta foi bem trabalhada" e
+"essa conta vai ser trabalhada".
+
+**Dois avisos, duas gravidades, mutuamente exclusivos.** `Tarefa atrasada` (âmbar) tem precedência
+sobre `Sem próxima ação` (cinza), porque só no primeiro alguém descumpriu um compromisso. Cinza para
+o segundo é deliberado: não é falha de ninguém ainda. Os dois no mesmo cartão se contradiriam, e o
+teste de navegador afirma que isso não acontece.
+
+**`undefined` não é zero.** Se a API não mandar `tarefasAbertas`, a função cala em vez de afirmar
+"sem próxima ação". Um aviso errado é pior que aviso nenhum: quem vê "sem próxima ação" num cartão
+que tem tarefa deixa de confiar no aviso nos cartões em que ele está certo.
+
+**A contagem sai de um `groupBy` de topo, não de um `include` aninhado.** Duas razões, e a primeira é
+de segurança: a extensão de multi-tenant filtra a operação consultada, não o que vem por `include`.
+`Activity` é a única tabela filha que carrega `organizacao_id` justamente porque uma atividade pode
+acabar apontando para a oportunidade de outra organização — o furo que o `smoke:tenant` provou antes
+de existir cliente para sofrer com ele. `groupBy` está na lista de operações filtradas; `include` não
+passaria por ela. A segunda razão é custo: um include traria todas as atividades de todos os cartões
+do quadro, sem teto, para produzir dois números. Uma consulta por quadro, não por coluna.
+
+**Verificação.** Sete casos de unidade sobre a função de sinal, incluindo as fronteiras (prazo
+exatamente agora não é atraso; campo ausente cala). Dez asserções contra a API de desenvolvimento,
+com uma tarefa criada e apagada — porque um zero não prova nada sozinho: pode ser "não há tarefa" ou
+"a consulta não encontrou nada", e só virar o dado distingue as duas. Três testes de navegador, que
+são os únicos que provam que o cartão *renderiza*.
+
+A primeira versão desses testes de navegador decidia o `test.skip` com um `count()` avaliado antes de
+`/oportunidades/kanban` responder: **dois dos três pularam em silêncio** por falta de dado que
+existia. É o mesmo erro da decisão 54, agora em `skip` em vez de limpeza — e com o mesmo remédio,
+espera explícita pelo fim do carregamento. Teste pulado não é teste verde; é teste que ninguém lê.
+
+### 56. Leitura comercial: quatro relatórios sem migration, e o nulo que não pode virar zero
+
+Itens 1.2 a 1.5 do plano em [ANALISE-CRM.md](ANALISE-CRM.md), seção 8.2 — conversão etapa a etapa,
+cartões de risco, indicadores com variação e Win/Loss por motivo.
+
+**Nenhuma tabela nova.** Os quatro saem de dado que a plataforma já gravava: `OpportunityStageLog`
+(passagem de etapa, com `segundosNoEstagio`), `Opportunity` (`fechadoEm`, `motivoPerda`,
+`previsaoFechamento`) e `Activity` (`prazo`). O comentário do próprio `OpportunityStageLog` no schema
+pedia dois destes desde o primeiro commit: *"Alimenta dois relatorios que hoje nao existem"*.
+
+**Módulo separado do `metrics`.** Aquele mede atendimento — TME, TMA, CSAT, fila, agente. Este mede
+venda. Juntos, a próxima pessoa procuraria conversão de funil entre indicadores de fila. Mesma razão
+para a tela ser aba do CRM e não bloco no Dashboards.
+
+#### O nulo é uma resposta, e trocá-lo por zero é a mentira mais fácil deste painel
+
+Cinco lugares onde o relatório devolve `null` de propósito, e o que cada zero afirmaria de errado:
+
+- **taxa de avanço de etapa sem entrada.** Zero diria "ninguém avançou"; a verdade é "ninguém
+  entrou". Um funil recém-criado apareceria com 0% de conversão em todas as etapas.
+- **variação com período anterior em zero.** Crescer de 0 para 5 não é `+500%` nem `+100%` — é
+  divisão por zero. O painel diz "sem base de comparação".
+- **ticket médio sem venda ganha.** Zero sugeriria venda de valor nenhum.
+- **ciclo médio sem fechamento.** Zero diria "fecha no mesmo dia".
+- **tempo médio de etapa sem saída medida.** O primeiro registro do histórico tem
+  `segundosNoEstagio` nulo (não havia etapa de origem). Contar nulo como zero puxaria toda média
+  para baixo e faria o funil parecer mais rápido do que é.
+
+O contraponto está testado junto: **conversão zero com denominador é zero de verdade.** Três
+oportunidades decididas e nenhuma ganha é 0%, e trocar isso por nulo esconderia um mês ruim.
+
+#### Três armadilhas de contagem do funil
+
+1. **`entrou` e `avancou` são fluxos da janela e não se fecham entre si.** Um cartão pode ter entrado
+   antes dela e saído dentro. O relatório não promete que os números somem, e a tela diz isso onde
+   eles aparecem.
+2. **Retrocesso não é avanço.** Arrastar o cartão para trás é uma saída; contá-la como avanço
+   inflaria a conversão exatamente nos funis mal trabalhados — os que mais precisam do número
+   verdadeiro.
+3. **Ganhar não gera passagem de etapa.** `fecharOportunidade` só muda status; a ganha fica parada na
+   última etapa por onde passou. Sem contar fechamento em separado, a etapa final apareceria com 0%
+   de avanço e 100% de abandono.
+
+#### Os baldes de risco se sobrepõem, e isso está no nome de cada um
+
+`vencendo` é subconjunto de `emForecast`; uma oportunidade atrasada e sem próxima ação entra nos
+dois. Baldes exclusivos esconderiam justamente a pior combinação. A tela avisa que um cartão pode
+entrar em mais de um, porque o instinto de quem lê cinco números lado a lado é somá-los.
+
+`semProximaAcao` reusa a definição da **decisão 55** — só conta atividade com prazo. Se o painel e o
+cartão do kanban divergissem, o supervisor veria dois números para a mesma pergunta.
+
+#### Previsão ponderada fica fora do bloco comparado
+
+Ela é foto do momento, não fluxo do período. Comparar a previsão de hoje com "a do mês passado"
+exigiria histórico de previsão, que não existe; o que se teria é a previsão de hoje sobre as
+oportunidades fechadas no mês passado, que não quer dizer nada. Separar em "foto do momento — sem
+comparação com período anterior" é a única forma honesta, e é por isso que o bloco tem título
+próprio na tela.
+
+O período anterior tem a **mesma duração** do atual e termina onde ele começa. Um "mês anterior" de
+calendário compararia 28 com 31 dias e faria fevereiro parecer sempre pior.
+
+#### Escopo de tabela filha entra à mão
+
+`OpportunityStageLog` não está na lista de tabelas que a extensão de multi-tenant filtra — é tabela
+filha, sem `organizacao_id`. E a extensão filtra a operação **consultada**, não o filtro por relação:
+`where: { oportunidade: { ... } }` também não passa por ela. Por isso o `organizacaoId` explícito
+neste relatório, e só neste. É a mesma classe de furo que o `smoke:tenant` provou em `Activity`.
+
+#### Verificação
+
+29 casos de unidade sobre as cinco funções puras, e cada um é uma forma de o relatório mentir de modo
+plausível — não "a função roda". 24 asserções contra a API de desenvolvimento, incluindo três
+invariantes que só o dado real prova: `atrasadas + emForecast + semPrevisao` fecha o total de
+abertas, `previsaoPonderada` nunca passa do valor em aberto, e nenhuma variação virou `Infinity`.
+Mais o 403 do perfil AGENTE. Cinco testes de navegador, dos quais um afirma que **as ressalvas estão
+na tela** — nos três casos em que o número mente se lido sem elas, o texto é parte do recurso, não
+redação.
+
+#### Duas coisas que a suíte de navegador ensinou de novo
+
+A aba nova quebrou `rotas-crm.spec.ts`, que afirmava `toHaveCount(7)` nas abas do admin. Contagem crua
+falha dizendo "esperava 7, recebeu 8" e manda quem lê contar botão na tela. Trocada pelo **conjunto de
+rótulos**, que diz qual aba entrou ou saiu.
+
+E `tags.spec.ts` tinha um localizador que casava com dois elementos — o botão do filtro e o chip do
+cartão — mas só quando a etiqueta nova nascia visível no filtro em vez de escondida atrás de "+N
+etiquetas". Falhava na suíte completa e passava sozinho: o pior dos dois mundos, porque convida a
+chamar de intermitência. Passou a apontar o único item de lista cujo texto inteiro é a etiqueta.
+
+### 57. Item da proposta: o item manda, único não soma com mensal, e nulo não é zero
+
+Item 2.1 do plano em [ANALISE-CRM.md](ANALISE-CRM.md), seção 8.3 — desconto, acréscimo, recorrência
+e custo na linha da proposta. **Inverte a decisão 11.**
+
+#### O que mudou, e por quê a decisão 11 não sobrevivia ao desconto
+
+A decisão 11 dizia: valor explícito manda, e sem ele soma-se os itens. Com desconto na linha isso
+deixa de funcionar — a proposta impressa soma as linhas, e um total digitado por cima faria o
+documento discordar de si mesmo na frente do cliente. Agora: **havendo item, o item manda.**
+
+O digitado não se perde. Vai para `valorInformado`, e a ficha avisa quando ele discorda do que os
+itens somam. Apagar em silêncio o número que alguém negociou por telefone seria pior que ignorá-lo;
+mostrar os dois sem dizer qual vale seria pior ainda. Sem item nenhum, o digitado é a única fonte e
+vira também o `valorUnico` — sem isso o funil mostraria R$ 0 numa oportunidade que tem valor.
+
+#### Único e mensal são dois campos, porque não se somam
+
+R$ 1.000 de equipamento e R$ 500/mês de manutenção são receitas de natureza diferente. Empilhar as
+duas num campo daria R$ 1.500, que não é o valor de nada. O total usa o horizonte da própria
+oportunidade: `valorUnico + valorMensal × mesesRecorrencia`.
+
+O horizonte é **por oportunidade**, e não uma constante global, porque contrato de manutenção de 24
+meses vale o dobro de um de 12 e essa diferença é a própria venda. Doze é o padrão por ser o
+horizonte de meta anual — não por acaso, e trocável em cada negócio.
+
+`Opportunity.valor` continua existindo como coluna e continua sendo o número que todo relatório,
+total de coluna do funil e previsão ponderada lê. Ele passou a ser **derivado**, mas gravado: como
+cálculo na leitura, cada consulta do funil somaria os itens de todos os cartões.
+
+#### Desconto em valor, não em percentual
+
+Quem negocia diz "tira duzentos reais". Guardar 6,6667% para reproduzir R$ 200 de R$ 3.000 perde
+centavo no arredondamento, e o total deixa de fechar com a soma das linhas — que é exatamente o que
+o cliente confere. A tela pode oferecer o percentual e converter na entrada.
+
+#### Nulo não é zero, de novo — agora no custo
+
+`custoUnitario` nulo significa "não informado"; zero afirma "não custa nada". A tela do Néctar
+mostrava **Lucro 100%** porque o custo estava zerado, e é o mesmo erro visto do outro lado. Sem
+custo, a margem é nula e a tela mostra travessão.
+
+E a margem é **parcial** quando só parte dos itens tem custo: ela se calcula sobre o líquido de quem
+tem custo, e `itensComCusto` diz de quantos. Usar o líquido total inflaria a margem com receita cujo
+custo ninguém informou — uma proposta com custo em 1 de 10 linhas mostraria uma margem que parece ser
+do todo.
+
+Margem é sobre o líquido, não sobre o custo: sobre o custo seria markup, que dá número maior (500/500
+= 100% em vez de 500/1.000 = 50%) e a tela mentiria para cima.
+
+#### Onde o desconto abusivo é recusado, e onde não é
+
+A função de total deixa o líquido **negativo** quando o desconto passa do bruto, de propósito: uma
+linha de menos-cem-reais aparece na tela e alguém corrige, enquanto uma linha aparada em zero produz
+um total que ninguém entende. Recusar é papel da borda de escrita, com 400 e mensagem que diz o teto.
+
+A checagem não mora no schema Zod porque `precoUnitario` pode vir omitido para o catálogo resolver —
+lá não há bruto com que comparar. Fica no serviço, depois de resolver o preço.
+
+#### A migration não mexeu em nenhum valor
+
+`valor` não muda em nenhum registro. Quem tinha item recebeu `valorUnico` = soma dos itens, e o
+digitado que divergia foi para `valorInformado`; quem não tinha item teve o `valor` copiado para os
+dois. Nenhum relatório lê número diferente depois dela do que lia antes.
+
+Isso foi conferido, e o furo da conferência vale registro: **a base de desenvolvimento tem 83
+oportunidades e zero itens**, então o ramo "quem tem item" da migration não tocou uma linha. Foi
+provado depois com dado sintético, rodando o SQL dos dois `UPDATE` dentro de uma transação com
+rollback — incluindo o caso que importa, o de um valor digitado por cima dos itens que precisava ser
+preservado.
+
+#### O defeito que só a conferência contra a API pegou
+
+`definirItens` grava os itens e recalcula o total na mesma transação. O recálculo saía como se não
+houvesse item nenhum: a proposta ficava certa na tabela e o funil somava o valor antigo. **Nada
+quebrava.**
+
+A causa, reproduzida e não suposta: dentro de uma transação interativa, com o cliente estendido de
+multi-tenant, `findUniqueOrThrow` com `select` aninhado devolve a relação **vazia**, enquanto
+`findFirst` com o mesmo `select` devolve as linhas. No mesmo `tx`, após um `createMany` de item:
+
+```
+findUniqueOrThrow + nested select -> {"itens":[]}
+findFirst + nested select         -> {"itens":[{"quantidade":3}]}
+opportunityItem.count            -> 1
+```
+
+O pai é encontrado; os filhos gravados na mesma transação, não. O recálculo passou a usar
+`findFirstOrThrow`, que é o que a própria extensão já indicava — ela reescreve `findUnique` como
+`findFirst` por outro motivo, e usar `findFirst` direto evita o caminho inteiro.
+
+Vale como regra: **em transação interativa com este cliente, não usar `findUnique*` com relação
+aninhada.** Teste de unidade não alcança isso — a função pura de cálculo estava correta em todos os
+22 casos.
+
+#### O editor faz parte do item
+
+Antes disto o navegador não editava item nenhum: a tabela era só leitura e itens só entravam pela
+API. Um desconto que ninguém consegue digitar não é um recurso. O editor substitui a lista inteira
+num PUT, espelhando a rota — salvar linha por linha abriria a janela em que a proposta está metade
+nova e metade velha, e é nessa janela que alguém imprime.
+
+O resumo do editor é `role="status"`: o total muda enquanto se digita, e leitor de tela anuncia o
+número novo sem roubar o foco do campo. De quebra resolveu um problema de teste — "Uma vez" também é
+rótulo de uma opção do seletor de cobrança, e localizar o resumo por texto casava com os dois.
+
+#### Uma lacuna que fica registrada
+
+**Não existe caminho para remover todos os itens de uma proposta.** O `PUT` exige ao menos um, e não
+há `DELETE`. Por isso o teste de navegador deste item **não salva**: sem poder limpar, ele deixaria
+proposta e valor alterados para sempre na base de desenvolvimento, poluindo o funil e os quatro
+relatórios da onda 1. A aritmética gravada tem prova própria contra a API, com a oportunidade de
+prova apagada no fim; o navegador cobre o que só ele alcança — a prévia reagindo ao desconto antes de
+salvar, e o aviso de linha negativa.
+
+E o mesmo erro da decisão 55 apareceu de novo neste arquivo de teste: `count()` avaliado antes de a
+ficha renderizar fez **3 de 4 testes pularem em silêncio**, com todo o dado no lugar. A espera foi
+para dentro do helper que abre a oportunidade. Terceira vez que essa forma de erro aparece; da
+próxima, o helper já nasce esperando.
+
+### 58. Alçada de desconto: acima do teto vai para aprovação, não é recusado
+
+Item 2.3 do plano em [ANALISE-CRM.md](ANALISE-CRM.md), seção 8.3 — vem do banner "Regras de
+negociação" do HotSales.
+
+**Aprovar, não recusar.** Desconto acima do teto do vendedor não volta com erro: a proposta é
+gravada e marcada como pendente. Recusar pararia a negociação no meio, e o efeito real seria o
+vendedor fechar por fora do sistema — o que custa mais que o desconto.
+
+**O teto mora na organização, com padrão 100 (sem restrição).** Um padrão restritivo faria a
+migration transformar em "pendente" toda proposta existente com desconto, e a regra nova apareceria
+como se a plataforma tivesse quebrado. Ligar a alçada é uma decisão que a empresa toma na tela.
+
+E há tela: o card **Política de desconto** na aba Leitura comercial. Sem ela o teto nunca sairia de
+100 e a alçada seria uma regra que não existe na prática — o mesmo raciocínio que fez o editor de
+itens entrar no 2.1.
+
+#### Quem aprova não tem teto
+
+ADMIN, SUPERVISOR e GESTOR passam sem restrição; sobra COMERCIAL, que é quem negocia. Pedir que o
+gestor aprove o desconto que ele mesmo acabou de conceder só adicionaria clique — ele aprovaria em
+seguida de qualquer forma.
+
+Perfil desconhecido cai no teto **restritivo**, não no livre. Se um dia a rota mudar de perfil por
+descuido, o padrão seguro é o que exige aprovação.
+
+E **quem escreve a política não é quem aprova**: mudar o teto é ADMIN/SUPERVISOR, aprovar é
+ADMIN/SUPERVISOR/GESTOR. Aprovar é decidir um caso; mudar o teto é decidir todos os casos futuros.
+
+#### A base do percentual é o bruto, e o acréscimo fica fora
+
+R$ 200 de desconto sobre R$ 1.000 de tabela é 20%. Dividir pelo líquido (R$ 800) daria 25% e
+apertaria a alçada de um jeito que ninguém consegue explicar.
+
+O acréscimo **não** entra na base — e essa é a parte que importa. Se entrasse, dar um acréscimo
+aumentaria o teto disponível, e seria o caminho óbvio para furar a regra: sobe o preço, desce o
+desconto, o percentual cai e a aprovação desaparece.
+
+Passa do teto **estritamente**: teto de 10% aceita exatamente 10% sem aprovação. E a comparação
+acontece em percentual inteiro arredondado, porque `0,1 × 100` não é exatamente 10 em binário — sem
+isso, um desconto de exatamente 10% com teto 10 ficaria pendente por resto de ponto flutuante, e
+seria o primeiro caso que alguém tentaria na vida real.
+
+#### A assimetria entre ganhar e perder
+
+Pendente ou reprovada **não pode ser marcada como ganha**. Pode ser marcada como perdida.
+
+Barrar a perda deixaria a oportunidade viva no funil por causa de uma aprovação que ninguém vai dar
+— o negócio acabou, e o funil tem de refletir isso. Barrar o ganho é o que impede a venda de se
+registrar com um desconto que a empresa não autorizou.
+
+**Reprovar não desfaz o desconto.** Quem reprova está dizendo "reduza"; apagar o número por conta
+própria tiraria do vendedor a chance de renegociar a partir do que já estava conversado.
+
+#### Editar a proposta invalida a aprovação
+
+Mudar itens zera `aprovadoPor` e `aprovadoEm` e recalcula a situação. Manter o "aprovado por" de um
+desconto que não existe mais faria o registro dizer que alguém autorizou um número que nunca viu.
+
+`NAO_REQUER` e `APROVADA` são estados **diferentes** de propósito: o primeiro diz que o desconto
+caiu dentro do teto, o segundo que alguém com alçada olhou e liberou. Juntar os dois apagaria o
+registro de quem autorizou o quê.
+
+#### A alçada se decide junto do total, não numa função à parte
+
+São a mesma verdade: o desconto que muda o valor é o desconto que dispara a aprovação. Separados, um
+caminho de escrita atualizaria o total e esqueceria a situação — e a proposta ficaria com 40% de
+desconto marcada como `NAO_REQUER`, que é pior que não ter a regra.
+
+Mudar o teto **não recalcula as propostas existentes**. Baixar de 20% para 5% marcaria como pendente
+toda proposta em negociação, e o vendedor descobriria isso na hora de fechar, sem ninguém por perto
+para aprovar. A regra nova vale na próxima edição de cada proposta — que é quando alguém está
+olhando aquele desconto de novo.
+
+#### Verificação
+
+11 casos de unidade sobre as três funções puras (base do percentual, teto por perfil, comparação com
+o teto), e 17 asserções contra a API de desenvolvimento cobrindo o fluxo inteiro: 40% liberado pelo
+ADMIN, exatamente 10% aceito, 15% virando pendência, o 400 do fechamento, o **403 do COMERCIAL
+tentando aprovar o próprio desconto**, o registro de quem aprovou, a invalidação ao reeditar, o 400
+de aprovar o que não precisa, e a perda passando mesmo pendente. O teto original é restaurado no fim
+e a oportunidade de prova apagada.
+
+Quatro testes de navegador na política, com o valor original restaurado em `finally` — uma asserção
+que falha no meio não pode deixar a base de desenvolvimento com alçada de 10%.
+
+**Um erro do próprio roteiro de conferência vale registro**, porque ele mostra a regra funcionando:
+a primeira versão punha a proposta em pendência usando a sessão do ADMIN, e o `aprovar` seguinte
+respondeu 400. Estava certo duas vezes — ADMIN não tem teto, então uma edição dele nunca gera
+pendência; e aprovar o que não precisa é recusado. O defeito era do teste.
+
+### 59. Tarefa obrigatória por etapa: barra o avanço, não o retorno
+
+Item 3.1 do plano em [ANALISE-CRM.md](ANALISE-CRM.md), seção 8.4 — vem do processo de vendas do
+Néctar, o único dos CRMs avaliados que mostrou isso funcionando.
+
+Sem isso o funil registra **por onde** o negócio passou e nada sobre **o que foi feito** lá.
+
+**A exigência é o título da tarefa, não um sim/não.** `FunnelStage.tarefaObrigatoria` guarda
+"Registrar a visita técnica"; nulo é etapa sem exigência, que é o padrão e o que a migration deixa em
+todas as etapas existentes. Um booleano diria ao vendedor que falta algo sem dizer o que.
+
+**A tarefa é criada na entrada da etapa, como atividade de verdade** — tem responsável, aparece na
+lista e entra na linha do tempo. Uma exigência que só existisse como checagem no momento de mover
+seria invisível até a hora em que atrapalha.
+
+Ela nasce **sem prazo**, de propósito: um prazo inventado apareceria como "tarefa atrasada" dias
+depois sem ninguém ter combinado data alguma. Isso teve duas consequências que precisaram de
+conserto:
+
+- o cartão do kanban ganhou um sinal próprio, **"Etapa exige tarefa"**, à frente de "sem próxima
+  ação". `tarefasAbertas` conta só o que tem prazo, então sem essa precedência o cartão barrado
+  mostraria "sem próxima ação" — o contrário da verdade, no cartão que mais precisa do aviso;
+- a API ganhou `situacao=pendentes` em `/atividades`. "Aberta" ali significava "com prazo e não
+  concluída", então a tarefa que bloqueia o funil seria a única que nenhuma lista mostraria.
+
+**`TipoAtividade` ganhou `TAREFA`.** Os valores existentes eram todos canal ou registro (nota,
+ligação, reunião, visita, proposta): toda tarefa do sistema tinha de se disfarçar de uma delas, e o
+filtro por tipo passava a mentir.
+
+#### A assimetria: avançar é barrado, voltar é livre
+
+A conferência olha a etapa de **origem** — o que a etapa exige é condição para sair dela, não para
+entrar na seguinte. Olhar o destino faria a exigência pular uma etapa de lugar.
+
+E movimento para trás não é barrado. Quase todo retorno é correção de engano — alguém arrastou o
+cartão para a coluna errada — e exigir a tarefa para poder desfazer o próprio erro prenderia o cartão
+justamente onde ninguém quis pôr.
+
+**Ganhar também é barrado; perder, não.** É a mesma assimetria da decisão 58, pela mesma razão: sem
+barrar o ganho, a exigência teria uma porta aberta do tamanho do funil — bastaria clicar em "Ganhou"
+no primeiro estágio. Barrar a perda deixaria a oportunidade viva por causa de uma tarefa que ninguém
+vai fazer, porque o negócio acabou.
+
+#### Reentrar não duplica; desligar não apaga
+
+Ir e voltar é comum, e criar uma tarefa a cada passagem poria quatro cópias de "Registrar a visita
+técnica" na agenda. A criação é **idempotente por par (oportunidade, etapa)**: existindo a atividade
+obrigatória daquela etapa — concluída ou não — nada é criado.
+
+Desligar a exigência **não apaga tarefa já criada**. Ela foi combinada com alguém, tem responsável, e
+apagar em massa faria desaparecer trabalho pendente de gente que não foi avisada. O bloqueio lê a
+atividade, não o texto da etapa, então a tarefa continua valendo; desligar vale para quem entrar na
+etapa dali em diante — o mesmo raciocínio de "mudar o teto não recalcula proposta existente".
+
+#### Quem define o processo
+
+Escrita de ADMIN/SUPERVISOR, como criar funil: definir o processo é decidir por todo mundo que usa o
+funil. O COMERCIAL vê o quadro e não vê o card — não faz sentido oferecer um campo que a pessoa não
+consegue salvar. Confirmado nos dois lados: 403 na API, card ausente na tela.
+
+E a coluna do quadro anuncia "Exige: ..." no cabeçalho. Descobrir a exigência só quando o cartão não
+anda faz a regra parecer defeito.
+
+`Activity.estagioId` amarra a tarefa à etapa que a exigiu, com FK `SET NULL`: apagar a etapa não pode
+apagar o registro do que foi feito nela, e uma atividade órfã deixa de barrar qualquer coisa — o
+comportamento certo, já que a etapa não existe mais.
+
+#### Verificação
+
+12 casos de unidade nas funções puras (só avanço é avanço, a mensagem nomeia a tarefa, tarefa de
+etapa que o cartão já deixou não conta, órfã não conta, nada vaza entre oportunidades) e 4 no sinal
+do cartão, incluindo a precedência sobre "sem próxima ação". **28 asserções contra a API**: a tarefa
+nascendo com a oportunidade, sem prazo e com responsável; a prova de que ela fica fora de `abertas`;
+o 400 do avanço com o título na mensagem; o 400 do "ganhou"; concluir destravando; voltar livre;
+reentrar criando uma e só uma; a perda passando; o texto vazio desligando; a tarefa sobrevivendo ao
+desligamento; e o 403 do comercial. 3 no navegador.
+
+**O teste de navegador achou um defeito real**: salvar a exigência recarregava os funis mas não o
+quadro, e a coluna continuava sem o "Exige: ..." até alguém recarregar a página — a configuração
+parecia não ter pegado. Nenhuma das duas camadas anteriores podia ver isso: a API respondia certo e a
+função pura não sabe que existe um segundo estado na tela.
+
+### 60. Trilha de auditoria da oportunidade: o que mudou, de quanto para quanto, por quem
+
+Item 3.2 do plano em [ANALISE-CRM.md](ANALISE-CRM.md), seção 8.4 — vem da aba Feedbacks e do
+relatório Auditoria do Néctar.
+
+A oportunidade guardava o estado atual e a mudança de etapa. Nada respondia "o valor caiu de 40 para
+28 mil — quem baixou, e quando?", que é a pergunta que aparece quando o mês fecha longe da previsão.
+
+**A trilha não grava mudança de etapa.** Isso já vive em `OpportunityStageLog`, com o tempo gasto no
+estágio; duplicar daria dois registros do mesmo fato e a leitura contaria duas vezes. A tela mostra a
+**união das duas fontes**, ordenada em conjunto — em blocos separados a história sairia trocada.
+
+**`de` e `para` são JSONB, não texto.** `RESPONSAVEL` guarda `{id, nome}`: só o id deixaria a trilha
+ilegível depois de o usuário ser removido, que é justamente quando alguém vai querer ler. A proposta
+guarda `{quantidade, total}`, não "3 itens · R$ 1.000" — texto pronto poria formatação dentro do
+banco e impediria qualquer leitura numérica depois. A FK do autor é `SET NULL` pelo mesmo motivo: a
+auditoria não pode desaparecer junto com o funcionário que ela documenta.
+
+**O campo auditado é enum.** Texto livre viraria `valor`, `Valor` e `valor_informado` na mesma tabela,
+e o filtro por campo passaria a mentir. O preço é migrar o enum quando um campo novo entrar em
+auditoria — que é exatamente o momento em que alguém devia estar pensando nisso.
+
+#### As três regras que impedem a trilha de mentir
+
+- **Campo ausente no PATCH não gera linha.** Ausente significa "não mandei", nunca "apague". É o
+  clássico defeito de PATCH, aqui com o agravante de virar registro permanente: editar só o título
+  registraria que o responsável e a previsão foram removidos.
+- **Campo que não mudou não gera linha.** "De X para X" é ruído, e ruído em auditoria é pior que em
+  tela — ele esconde a mudança real no meio de dez linhas iguais.
+- **Nulo é um valor**, não ausência: limpar a previsão é uma mudança e tem de aparecer. E `0` não é
+  nulo — o caminho óbvio (comparar por veracidade) confundiria valor zerado com campo vazio.
+
+Referência compara **por id**: um administrador corrigindo "João" para "João Silva" no cadastro não é
+edição da oportunidade, e geraria uma linha afirmando uma mudança que ninguém fez.
+
+#### Gravar dentro da transação, ler depois de conferir o escopo
+
+A gravação entra na mesma transação da mudança — trilha gravada fora pode registrar uma edição que
+acabou revertida, e auditoria que afirma o que não aconteceu é pior que auditoria nenhuma. Isso
+obrigou o caminho "editou sem mudar de etapa" a virar transação também, que antes era um `update`
+solto.
+
+A leitura confere a oportunidade com o filtro de visibilidade **antes** de ler a trilha:
+`oportunidade_auditoria` e `oportunidade_historico_estagio` não carregam `organizacao_id`, e a
+extensão de multi-tenant filtra a operação consultada, não a relação. Sem essa conferência, um id
+válido de outra organização devolveria a trilha dela. O teste de schema do projeto — o que exige
+classificar todo modelo novo em `COM_ORGANIZACAO`, `FILHAS` ou `GLOBAIS` — cobrou essa decisão
+sozinho, e é o tipo de guarda que se paga.
+
+**Sem perfil extra na leitura**: quem vê a oportunidade vê o histórico dela. Restringir à gestão faria
+o vendedor perguntar "quem mudou meu valor?" por mensagem, e o dono do registro é quem mais precisa
+da resposta.
+
+**A decisão de desconto entra na trilha** além de `aprovadoPor`. Aquele campo guarda só a *última*
+decisão: uma proposta reprovada, reeditada e aprovada depois perderia a reprovação — que é a parte
+que alguém vai querer ler.
+
+#### Na tela
+
+Entrada no funil aparece como **"entrou em Prospecção"**, não "— → Prospecção": o primeiro registro
+nasce sem estágio de origem de propósito, e escrever a mudança faria parecer que alguém mexeu em algo
+que não existia. Nulo vira travessão, nunca zero — `moeda(null)` daria "R$ 0,00" e afirmaria um preço
+que ninguém escreveu. Autor nulo lê "automático", não vazio: uma linha sem sujeito.
+
+#### Verificação
+
+16 casos de unidade nas funções puras da API (as três regras acima, referência por id, proposta
+reordenada com o mesmo total, zero ≠ nulo, e a ordenação intercalando as duas fontes com desempate
+estável para o caso em que a transação grava etapa e campo no mesmo milissegundo) e 14 na formatação
+do front. **22 asserções contra a API**, incluindo o PATCH que não inventa linha, o reenvio que não
+gera nada, a proposta com quantidade e total, a etapa sem duplicar, a ordem e o 404 fora do escopo.
+3 no navegador, sem escrever nada — toda oportunidade da base já tem o evento de entrada no funil.
+
+### 61. Proposta em PDF: o único documento que o cliente lê
+
+Item 2.2 do plano em [ANALISE-CRM.md](ANALISE-CRM.md), seção 8.3 — vem do CPQ do Ploomes, do modelo
+de cinco páginas do Néctar e do botão "Gerar proposta" do Agendor.
+
+Esta é a primeira coisa que a plataforma produz para fora. Um número errado aqui não vira um gráfico
+estranho: vira um preço que a empresa vai ter de honrar.
+
+**Documento próprio, não a tabela dos relatórios.** `reports/pdf.ts` despeja uma tabela larga em
+paisagem para conferência interna; a proposta é retrato, com bloco de cliente, tabela de itens,
+totais e condições. O que se reaproveita é o `pdfkit` e a injeção da marca — o nome e a cor saem de
+`getBranding()`, porque quem manda a proposta é a empresa, não a plataforma.
+
+**Conteúdo e desenho separados.** `proposta.ts` monta o documento (que blocos, em que ordem, com que
+texto) e `proposta.pdf.ts` desenha. A parte que erra em silêncio é a do conteúdo, e ela fica
+testável sem abrir um PDF. O total sai da **mesma** função que grava o valor no funil
+(`totaisDaOportunidade`): recalcular por outro caminho deixaria o papel e o funil discordando, e a
+discordância apareceria na frente do cliente.
+
+#### Duas recusas, as duas sobre o que iria para o cliente
+
+- **Sem itens**: uma proposta sem linha nenhuma é uma folha com o nome do cliente e um total de zero.
+  O valor digitado à mão não serve — ele não diz o que está sendo vendido, e o cliente não tem o que
+  conferir. A mensagem diz o que fazer ("Monte a proposta antes de gerar o PDF"), não "erro".
+- **Desconto fora da alçada**, pendente ou reprovado: imprimir seria pôr na frente do cliente um
+  preço que a empresa não autorizou. Barrar o "ganhou" (decisão 58) e deixar a proposta sair pelo PDF
+  seria um cadeado com a janela aberta ao lado. O botão também não aparece nesse estado — oferecer um
+  download que volta 400 convida ao erro, e quem clica já decidiu mandar ao cliente.
+
+**Oportunidade fechada continua imprimível.** Segunda via do que já foi negociado é uso legítimo, e o
+número da proposta é estável entre gerações — o cliente cita esse número ao telefone.
+
+**Não há numeração sequencial**, e a ausência é deliberada: um contador exige unicidade transacional
+e, com várias organizações, ou vira gargalo ou vira número repetido. Numeração fiscal não vem do CRM,
+vem do ERP.
+
+#### O que não entrou
+
+**Foto e ficha técnica do produto ficaram de fora.** `Product` não tem imagem, e pôr foto numa
+proposta é recurso de *modelo de documento* — não um campo. Fazer isso exigiria armazenamento de
+imagem de produto e um editor de modelo; é outro item, não um detalhe deste. Está registrado como
+exclusão explícita na linha 2.2 do plano.
+
+**Parcelas não viraram estrutura.** "30/60/90 dias" e "entrada de 30% + 3x" são os dois válidos e não
+cabem no mesmo campo numérico. Estruturar em parcelas exigiria um modelo de cobrança que a plataforma
+não tem — e o que o cliente lê é a frase, não o modelo.
+
+**Validade sai da previsão de fechamento, e só existe se ela existir.** Escrever "válida por 15 dias"
+quando ninguém definiu prazo seria a plataforma assumindo compromisso comercial pela empresa, num
+documento que pode ser cobrado depois. Pelo mesmo motivo, condição de pagamento não preenchida sai do
+documento inteiro em vez de virar "a combinar".
+
+#### A tela que faltava, descoberta no meio do caminho
+
+Condição de pagamento e prazo de entrega precisavam de onde ser escritos — e aí apareceu que
+**nenhum campo da oportunidade tinha tela de edição**: o único PATCH que a interface fazia era o
+arraste de etapa. Título, valor, responsável e previsão existiam na API desde a Fase 2 e só podiam
+ser mudados por quem chamasse a rota direto. Consequência dupla: os campos novos nasceriam
+inalcançáveis, e a **trilha de auditoria da decisão 60** — construída para registrar edição de campo
+— nasceria sem nada para registrar.
+
+Por isso entrou o `EditorDaOportunidade`. Ele manda **só o que mudou**, e isso não é economia de
+bytes: a API grava uma linha de auditoria por campo que chega diferente, e reenviar o formulário
+inteiro criaria "Título: X para X" a cada salvamento, deixando a trilha ilegível por excesso de
+registro. Abrir e salvar sem mexer em nada não chama a API.
+
+Editar é operação de oportunidade **aberta**: mexer em título ou responsável de negócio fechado
+reescreveria o histórico que a trilha existe para preservar.
+
+#### Três defeitos que só apareceram fora do teste de unidade
+
+- **A linha do item quebrava em duas dentro de uma faixa de altura fixa.** O nome real de um produto
+  — "Ar-condicionado split 12.000 BTUs Philco (PH-AC12)" — não cabe na coluna, e a segunda linha
+  encostava na linha seguinte com a faixa zebrada cortando o texto. A linha passou a crescer com a
+  descrição, medida antes de desenhar. Cortar o nome com reticências seria pior: é a descrição do que
+  está sendo vendido, no documento que o cliente usa para conferir o pedido.
+- **Os dois campos novos não estavam no serializador.** O PATCH gravava, a auditoria registrava, o
+  PDF saía certo — e a resposta da API voltava sem os campos, então a ficha ficava vazia. Só o
+  roteiro contra a API podia ver isso: o PDF lê do banco direto.
+- **O rótulo do histórico saía vazio** para os campos novos: a união de tipos do front é sempre mais
+  estreita que o enum da API, e o TypeScript não avisa. A linha aparecia como ": — → 10 dias úteis",
+  sem dizer de que campo falava. Agora um campo desconhecido mostra o código cru — a linha continua
+  legível e a falta fica visível. Achado pelo teste de navegador.
+
+Também vale registrar um defeito **do meu próprio leitor de PDF**: para conferir diagramação sem
+visualizador eu extraio texto e coordenadas do arquivo. A primeira versão concatenava as páginas e
+ordenava por `y`, o que misturou os itens da página 2 com os totais da página 1 e *pareceu*
+sobreposição. Não era. Separadas as páginas, a paginação está correta: cabeçalho da marca e da tabela
+repetidos, totais no fim, nada fora da área útil.
+
+#### Verificação
+
+18 casos de unidade no documento (total igual ao do funil, bruto e líquido por linha, horizonte da
+recorrência por extenso com singular, validade ausente quando não há previsão, texto em branco como
+não preenchido, número estável). **23 asserções contra a API**, incluindo a assinatura `%PDF-`, o
+`%%EOF` do fim (arquivo completo, não truncado), o nome do arquivo com o número, a segunda via com o
+mesmo número, as duas recusas, o 403 do agente e as condições entrando na trilha. 2 no navegador para
+o editor, com o campo restaurado a nulo no `finally`, e 1 confirmando que o botão de PDF **não**
+aparece quando não há itens. E a inspeção do documento gerado, em uma e em duas páginas.
+
+### 62. Meta mensal: rampa mês a mês, e nulo não é zero
+
+Item 4.1 do plano em [ANALISE-CRM.md](ANALISE-CRM.md), seção 8.5 — vem da tela de Usuários /
+Equipes do Néctar, que define meta por nível e departamento com rampa mês a mês.
+
+Até aqui o dashboard mostrava o que aconteceu e não tinha contra o que comparar.
+
+**A rampa mensal é o recurso, não um detalhe dele.** Quem vende ar-condicionado tem meta de dezembro
+diferente da de junho, e uma meta anual dividida por doze descreve mal o ano todo: em junho a equipe
+parece heroica e em dezembro parece fracassada, sem nada ter mudado. Por isso a gravação é de um
+intervalo inteiro numa chamada — uma rota que gravasse um mês por vez tornaria isto doze visitas ao
+formulário, e ninguém faria.
+
+**"Equipe" não é conceito novo.** É `equipeIds` de `lib/visibilidade.ts`: o gestor mais quem aponta
+para ele em `gestorId`. Inventar aqui uma segunda definição faria a meta medir um grupo diferente do
+que as telas mostram — e ninguém descobriria pela tela, só pela conta que não fecha. Meta de equipe
+existe só para GESTOR: nos outros perfis a "equipe" seria a própria pessoa, e a meta de equipe
+viraria uma cópia silenciosa da individual.
+
+**As duas listas ficam separadas na resposta.** A equipe inclui o próprio gestor, então somar a
+tabela de equipes com a de individuais contaria a venda dele duas vezes. Juntar num total só
+apagaria também a informação que a diferença carrega: meta de equipe acima da soma dos individuais é
+desafio declarado, abaixo é folga.
+
+#### O que conta como realizado
+
+Oportunidade **GANHA**, pela data de `fechadoEm`. Não é o valor em aberto no funil, e a distinção é o
+ponto: previsão ponderada já existe no kanban e serve para planejar; meta se mede com venda fechada.
+Um progresso que subisse com proposta em aberto mostraria meta batida em mês que fechou sem faturar.
+A venda pertence ao mês em que fechou, mesmo que a negociação tenha começado em março. Venda sem
+responsável não entra em meta de ninguém — atribuir seria inventar autoria.
+
+#### Os nulos, de novo
+
+A regra da decisão 56 reaparece em quatro lugares, e cada um deles seria uma mentira plausível se
+virasse zero:
+
+- **mês sem meta** vem como `null` na rampa, não `0`. Zero é "meta de não vender nada", e o
+  formulário gravaria isso; nulo é "ninguém definiu";
+- **percentual** é nulo quando não há meta. `0%` afirmaria "não atingiu nada";
+- **projeção** é nula em mês futuro (não há ritmo de que extrapolar) e é **igual ao realizado** em
+  mês encerrado — projetar um mês que já acabou inventaria futuro para o passado;
+- **ritmo necessário** é nulo quando não há dia restante, e nunca negativo: um número negativo ali
+  não significaria nada na tela.
+
+A projeção é linear **pelo dia do mês**, não por dia útil. Dia útil exigiria calendário de feriados
+que a plataforma não tem, e um calendário errado produziria uma projeção pior que a linear com
+aparência de mais precisa. No dia 1 já projeta — começar no dia 2 esconderia o mês exatamente no dia
+em que alguém abre a tela para ver se começou bem.
+
+**Quem vendeu e não tem meta aparece numa lista própria**, com nome e valor. Esconder faria o total da
+tela discordar do funil, e a primeira conclusão de quem olhasse seria que a plataforma perdeu venda.
+
+#### As duas alçadas, e o botão que faltava
+
+**Ler** o painel é trabalho de gestão (ADMIN/SUPERVISOR/GESTOR); **definir** meta é ADMIN/SUPERVISOR.
+Mesmo corte da política de desconto e do processo do funil: decidir um caso é diferente de decidir o
+compromisso de todos. O vendedor não vê o painel da equipe, mas vê a própria meta por uma rota sem
+restrição de perfil — o próprio número é dele.
+
+O mês chega como `AAAA-MM`, nunca como data completa. Aceitar data completa convidaria a mandar
+`2026-09-30T23:00:00-03:00`, que em UTC cai em outubro.
+
+**O teste de navegador cobrou um botão que não existia.** A rota de apagar meta existia sem tela, e a
+primeira versão do teste não tinha como limpar o que escreveu — sinal do mesmo problema que fez o
+editor de itens entrar no 2.1: sem tela, voltar uma meta para "não definida" seria impossível, e um
+valor digitado errado ficaria para sempre. Gravar zero no lugar significaria "meta de não vender
+nada", que é outra afirmação. Entrou o botão Remover em cada linha do painel.
+
+#### Verificação
+
+21 casos de unidade na aritmética (rampa com intervalo invertido devolvendo vazio, teto de 36 meses
+para data digitada errada, fevereiro bissexto, os quatro nulos acima, projeção no dia 1 sem divisão
+por zero) e **36 asserções contra a API**. Entre elas, a que importa mais: uma venda criada, conferida
+como **não** contando enquanto aberta, fechada como GANHA, conferida no realizado e no percentual, e
+apagada no fim — sem isso o zero da base de dev faria um painel que sempre mostra zero passar como
+correto. Também o 403 do gestor tentando definir meta, o 403 do comercial no painel geral e o 200 na
+própria meta. 3 no navegador, com as metas criadas removidas pelo próprio botão da tela e a base
+conferida em zero metas depois.
+
+### 63. Quadro societário e enriquecimento por CNPJ: preenche o que está em branco, nunca o que alguém digitou
+
+Item 5.2 do plano em [ANALISE-CRM.md](ANALISE-CRM.md), seção 8.6 — vem da tela do Néctar (contatos
+relacionados com código de QSA ao lado) e da "varinha de enriquecimento" do Ploomes. Absorve o item
+B10 e parte do B11.
+
+#### O papel é da pessoa **na conta**
+
+`Contact.papelNaConta` responde a pergunta que a tela do cliente faz: com quem eu falo, e sobre o
+quê. Os valores misturam duas origens de propósito — `SOCIO` e `ADMINISTRADOR` vêm do registro
+público, `DECISOR`, `TECNICO`, `FINANCEIRO` e `COMPRAS` vêm do que o vendedor descobre na conversa.
+Cabem no mesmo campo porque a pergunta é uma só.
+
+**Duas colunas, não uma.** `papelNaConta` é a classificação da plataforma; `qualificacaoQsa` é o
+texto da Receita, palavra por palavra ("49-Sócio-Administrador"). Guardar só uma perderia a nossa
+leitura ou perderia a prova. Na tela as duas aparecem juntas, e a da Receita fica em cinza abaixo.
+
+Papel exige conta: "sócio" de quem não está ligado a nenhuma empresa não significa nada, e a tela
+que lista papéis é a da própria conta — o dado ficaria gravado e invisível. E a escrita confere as
+**duas pontas** pela política de visibilidade, como o vínculo de contato já fazia: sem isso, um
+comercial classificaria o contato da carteira do colega por um caminho que a listagem nunca mostra.
+
+#### O enriquecimento tem duas etapas, e a segunda não confia na primeira
+
+`GET` devolve a **prévia** e não escreve nada; `POST` aplica. Enriquecimento é a única operação da
+plataforma em que dado de fora entra no cadastro do cliente, e ver antes é o que transforma "varinha
+mágica" em decisão.
+
+O `POST` **recalcula** a prévia em vez de receber o plano do navegador: um plano vindo de fora seria
+uma forma de escrever qualquer coisa no cadastro pela porta do enriquecimento. O custo é refazer a
+consulta pública; o ganho é que se aplica o cadastro de agora, não o que a tela leu há dez minutos.
+
+**A decisão inteira do recurso: só preenche o que está em branco.** Um enriquecimento que sobrescreve
+é uma varinha que apaga trabalho, e quem perdeu o dado não vai saber por quê. Onde a consulta discorda
+do que está gravado, a divergência é **reportada e não aplicada** — se o vendedor digitou um telefone
+e a Receita traz outro, o dele é provavelmente o celular de quem atende, e o cadastro público é
+frequentemente o do contador. Sobrescrever destruiria o dado mais útil dos dois; esconder esconderia
+a chance de corrigir.
+
+Duas exceções deliberadas: **situação cadastral e atividade principal são sempre atualizadas**. Elas
+não são dado do cliente — são o estado do registro público hoje. Uma empresa que estava ATIVA e foi
+BAIXADA precisa aparecer como BAIXADA; manter o valor antigo por respeito ao que já estava gravado
+esconderia exatamente o fato que muda a negociação.
+
+**Classificação humana não é reclassificada.** Alguém marcou aquela pessoa como DECISOR porque
+descobriu na conversa; o quadro societário dizer que ela é sócia não torna a outra informação falsa.
+A qualificação da Receita entra de qualquer forma, porque ali não havia nada escrito para perder.
+
+**Sócio criado herda o responsável da conta.** Contato sem dono não aparece em lista nenhuma e morre —
+e aqui o efeito seria pior que o normal: a plataforma criaria cinco sócios invisíveis e o vendedor
+concluiria que o enriquecimento não fez nada.
+
+**CPF de sócio é descartado.** A consulta às vezes traz o CPF mascarado; não há uso para ele no CRM, e
+guardar dado pessoal que ninguém vai usar só aumenta o que a plataforma tem de proteger.
+
+#### A dependência externa tratada como o que é
+
+O dígito verificador é conferido **antes** de sair para a rede: sem isso, um CNPJ digitado errado
+viraria uma consulta que responde 404 e uma mensagem de "empresa não encontrada" — quando o problema
+é o número. Dígitos todos iguais também são recusados: passam na conta do DV e não existem na Receita.
+
+Cada forma de falhar tem status e mensagem próprios, porque as ações são diferentes: número errado se
+corrige digitando (400), empresa inexistente se confere no cadastro (404), limite de uso e serviço
+fora do ar só pedem paciência (429/502). Tempo limite de oito segundos — uma consulta que passa disso
+já não serve para quem está com o cliente na linha. E resposta 200 num formato que não reconhecemos é
+**recusada**: aproveitar "o que der" escreveria metade dos campos vazia sem ninguém saber que a
+leitura falhou.
+
+#### Três defeitos, um deles instrutivo
+
+- **A consulta pública respondia 403.** O `fetch` do Node não envia `user-agent`, e o serviço recusa
+  cliente anônimo. O mesmo endereço no `curl` respondia 200, o que fazia o defeito parecer bloqueio
+  de rede da máquina — e teria feito o recurso ser entregue "funcionando, mas a rede aqui não deixa".
+  A investigação que separou as duas hipóteses foi chamar o mesmo endereço pelo Node com e sem o
+  cabeçalho. Serviço público gratuito tem todo o direito de saber quem está chamando.
+- **`FalhaNaConsulta` não era um `AppError`.** A primeira versão lançava um `Error` com `.status`
+  colado e traduzia na rota; o `errorHandler` reconhece `AppError` e nada mais, então devolvia 500
+  para tudo — apagando justamente a distinção entre os quatro motivos acima.
+- **O teste de navegador lia a seção errada.** Usei `page.locator('section').first()` para descobrir
+  se o cliente tinha CNPJ, e aquele é o cartão de filtros da lista — que contém os CNPJs dos *outros*
+  clientes. O teste concluía "este cliente tem CNPJ" olhando o CNPJ de outro.
+
+E uma asserção minha do roteiro contra a API terminava em `|| true`, passando sempre. Substituída pela
+comparação que ela devia fazer — o responsável do contato criado contra o da conta — e o cliente de
+prova passou a nascer **com** responsável, porque comparar nulo com nulo também não provava nada.
+
+#### Verificação
+
+27 casos de unidade na parte pura (dígito verificador, payload sem CNPJ recusado inteiro, sócio sem
+nome ignorado, `qsa` que não é lista, CPF descartado, conflito reportado, situação sempre atualizada,
+classificação humana preservada) e **26 asserções contra a API**, com a consulta pública real: prévia
+que não escreve, aplicação preenchendo, sócio virando contato com papel e qualificação, aplicar duas
+vezes sem duplicar, telefone digitado sobrevivendo como divergência, papel editável e reversível, e o
+400 do contato de outro cliente. 2 no navegador, com o papel restaurado no `finally`.
+
+### 64. Custo e classificação da ligação: as duas colunas juntas respondem uma pergunta
+
+Item 6.6 do plano em [ANALISE-CRM.md](ANALISE-CRM.md), seção 8.7 — as colunas CUSTO e ÁUDIO da lista
+de chamadas do Néctar.
+
+O `custo` **já existia** no modelo `Call` desde a Fase 4 e nunca apareceu em tela nenhuma. Faltava a
+outra metade: custo sozinho não responde a pergunta que a gestão faz ao olhar a lista de chamadas —
+*o que a gente pagou por isso valeu?*
+
+**Nota de 1 a 5, e nulo é "ninguém ouviu ainda", não "ruim".** Um padrão de 0 ou de 3 faria a
+plataforma emitir opinião no lugar de quem ouviu a ligação. `null` também é o que permite existir a
+fila de trabalho de quem classifica — o indicador diz quantas faltam.
+
+**Retirar a nota limpa autor e data junto.** Nota lançada por engano precisa poder ser retirada, e não
+existe número que signifique "retiro o que eu disse" — zero seria uma nota, não a ausência dela.
+Manter "classificado por" de uma nota que não existe mais faria o registro mentir.
+
+**A faixa é conferida no banco, além do schema da rota.** `CHECK (classificacao BETWEEN 1 AND 5)` é a
+única trava que vale também para migration de dados e script solto — e o roteiro de conferência prova
+justamente isso, tentando gravar 9 por fora da API.
+
+**Sem `requireRole` na classificação**: quem atendeu é quem melhor sabe como foi a ligação, e reservar
+a nota à gestão transformaria a coluna em auditoria em vez de leitura.
+
+#### As duas médias saem de bases diferentes, e a tela declara quais
+
+Custo médio sobre as chamadas **que têm custo**; nota média sobre as **que têm nota**. Misturar
+produziria um número que não descreve nem uma coisa nem outra — e dividir o custo pelo total diria que
+ligar custa menos do que custa. Cada indicador mostra o tamanho da sua base: "nota média 5" com uma
+chamada avaliada de cem parece resultado da operação inteira, e o detalhe é o que impede essa leitura.
+
+**Custo nulo em todas não vira gasto zero.** "O provedor não informou" é diferente de "foi de graça",
+e somar como zero faria a tela afirmar que a operação de voz não custa nada.
+
+**Quatro casas decimais.** Tarifa de voz é cobrada em fração de centavo; arredondar para duas zeraria
+o custo de chamada curta, e a coluna passaria a dizer que ligar é grátis.
+
+Os números entraram nos **mesmos** indicadores da telefonia, e não numa rota própria: quem abre a tela
+para ver se a operação está perdendo chamada é quem quer saber quanto isso custou.
+
+#### Dois erros meus na verificação, os dois instrutivos
+
+- **A chamada de prova nasceu na organização errada.** A base de dev tem 46 organizações, resto de
+  testes de multi-tenant ("Smoke A", "Visib …"), e eu usei `findFirst` para achar "a" organização.
+  Nove asserções falharam apontando para um defeito que não existia — o isolamento estava
+  funcionando exatamente como devia. Passou a ler a organização **do próprio admin**.
+- **O teste de navegador tinha um ramo silencioso, e depois pulou por contar cedo.** A primeira versão
+  saía com `return` quando não havia tabela: passava verde sem verificar coluna nenhuma. Troquei por
+  `test.skip`, e aí o teste **pulou** — revelando que o "verde" anterior nunca havia checado nada. A
+  causa do skip era `count()` avaliado antes da renderização, com a API devolvendo cinco chamadas.
+  **É a quarta vez que este mesmo defeito aparece no projeto**, e a forma certa é sempre a mesma:
+  esperar pelo elemento, e só então decidir.
+
+Vale registrar também que a suíte completa falhou 12 casos em bloco no fim de uma execução, e a causa
+fui eu: derrubei a API de desenvolvimento no meio da suíte para rodar `prisma generate`. Não era rate
+limit nem defeito do produto — o sinal era `Unexpected end of JSON input` no `/auth/refresh`, que é
+como uma API ausente aparece do lado do navegador.
+
+#### Verificação
+
+6 casos de unidade na agregação (as duas bases separadas, custo nulo não virando zero, fração de
+centavo preservada, "sem nota" fechando com a conta) e **21 asserções contra a API**, incluindo a nota
+recusada em 0, 6, -1 e 2,5, o `CHECK` do banco barrando por fora da rota, e autor e data limpos junto
+com a nota. 2 no navegador, com a chamada de prova apagada no fim.
+
+### 65. Paleta de comando: a busca global respeita as quatro políticas de visibilidade
+
+Item 6.2 do plano em [ANALISE-CRM.md](ANALISE-CRM.md), seção 8.7 — o "Explorar" do Néctar, atrás de
+`Ctrl+K`.
+
+**Duas coisas na mesma caixa**: ir para uma tela e achar um registro. Separadas em dois atalhos,
+ninguém decoraria os dois — e a pergunta de quem aperta `Ctrl+K` é a mesma nos dois casos: *me leva
+até isso*.
+
+#### O escopo é a decisão de segurança do item
+
+Uma busca que atravessa quatro domínios de uma vez é a porta mais fácil da plataforma para ver o que
+não é seu. Cada consulta passa pela política do seu domínio — `politicaContatos`, `politicaContas`,
+`politicaOportunidades`, `politicaProtocolos` — e não há filtro nenhum no navegador, de propósito:
+filtrar na tela seria esconder o que já veio pela rede.
+
+A asserção que prova isso não é "o comercial não vê X", e sim **o resultado do comercial contido no do
+admin**, para o mesmo termo. Um teste que só verificasse ausência passaria com a lista vazia.
+
+**Os comandos de navegação saem do mesmo `NAV` que desenha o menu lateral.** Uma segunda lista
+divergiria em silêncio no dia em que um módulo mudasse de perfil, e a paleta passaria a oferecer uma
+tela que responde 403. `nav.test.ts` já guarda o `NAV`; a paleta herda a garantia de graça.
+
+#### As decisões de comportamento
+
+- **Comando antes de registro.** Não é estética: comando é previsível, registro é achado. "Ir para
+  CRM" acima de um contato chamado "CRM Teste" é o palpite certo.
+- **Duas letras no mínimo** para buscar registro. Com uma letra, "resultado" seria uma amostra
+  arbitrária de quatro tabelas, e a pessoa aprenderia a ignorar a paleta nas primeiras teclas — que é
+  justamente quando ela está aberta.
+- **A ordem é o recurso.** Três faixas: título que começa com o termo, título que contém, e o que
+  casou pelo detalhe (telefone, e-mail, empresa). Empate desempata pelo título mais curto — "Bradel"
+  antes de "Bradel Filial Anápolis Centro" — e depois por id, para a lista não "piscar" quando alguém
+  redigita a mesma letra.
+- **Busca adiada em 200ms, com guarda de resposta velha.** Sem o adiamento, "acougue" dispara sete
+  consultas a quatro tabelas; sem a guarda, a resposta da quarta letra pode chegar depois da sétima e
+  a lista mostraria o resultado de um termo já apagado.
+- **A seleção não circula nas pontas.** Circular do fim para o começo faz a seleção pular para longe
+  do olhar, e a tecla que a pessoa usa para voltar é a seta de cima. Lista vazia devolve índice zero,
+  não -1: o índice destaca a linha, e -1 destacaria a última.
+- **Protocolo por número, com e sem `#`.** `numero` é inteiro e não aceita `contains`; sem tratamento,
+  procurar "#1024" não acharia o protocolo 1024 — a busca mais óbvia daquele domínio.
+
+#### Um defeito de produto que o teste de navegador achou
+
+O aviso "digite ao menos duas letras" estava amarrado à **lista vazia**. Com uma letra digitada, os
+comandos de navegação já casam ("a" acha Atendimento), então a lista não estava vazia e o aviso nunca
+aparecia: quem digitasse uma letra veria só telas e concluiria que a busca de registro não funciona.
+O aviso passou a ser independente da lista.
+
+#### Uma bissecção minha que apontou para o inocente
+
+Um teste de outra suíte (`ficha.spec.ts`, vincular empresa) falhou depois destas mudanças. Desliguei a
+paleta e ele passou; desliguei metade do atalho e ele passou. Concluí "é a paleta" — e estava **errado**:
+com a paleta inteira ligada, o mesmo teste passou três vezes seguidas. O sinal era ruído, e eu quase
+registrei um diagnóstico inventado no comentário do código.
+
+O que ficou: o teste tolera o seletor não abrir na primeira tentativa, e o comentário diz o que se
+sabe (o cartão abre por estado local e a ficha é remontada por `key`, então um remonte entre o clique
+e a renderização explicaria o sintoma) e o que **não** se sabe (o que causaria esse remonte). Uma
+explicação plausível e não verificada num comentário é pior que a dúvida registrada.
+
+Também vale registrar, do mesmo dia: uma execução da suíte falhou 12 casos em bloco e a causa fui eu
+— derrubei a API de desenvolvimento no meio dela para rodar `prisma generate`. O sintoma era
+`Unexpected end of JSON input` no `/auth/refresh`, que é como uma API ausente aparece do lado do
+navegador. Nem rate limit, nem defeito.
+
+#### Verificação
+
+7 casos de unidade na ordenação (as três faixas, título mais curto, desempate estável, termo vazio
+não reordenando, lista de entrada intacta) e 11 nos comandos por perfil — inclusive o contraponto do
+admin, sem o qual "não vê o que não é dele" seria satisfeito por não ver nada. **18 asserções contra a
+API**, incluindo o subconjunto do comercial, o agente sem oportunidade, o 401 sem sessão, o protocolo
+por número com e sem `#`, e o teto de cinco por tipo conferido sobre uma lista que de fato tem
+resultado. 4 no navegador: o atalho de qualquer tela, as setas, o Enter navegando e o agente sem
+comando que não é dele.
+
+### 66. Check-in de visita: o registro existe mesmo sem GPS
+
+Item 6.7 do plano em [ANALISE-CRM.md](ANALISE-CRM.md), seção 8.7 — aparece nos três CRMs (Néctar,
+HotSales, Ploomes) e, como o próprio plano registra, vale mais para o técnico de campo que para o
+vendedor: quem instala ar-condicionado precisa provar que esteve no lugar.
+
+**Os campos ficam na atividade, porque uma visita é uma atividade.** Um modelo separado obrigaria a
+manter os dois em sincronia e permitiria visita sem tarefa — que é a forma de o registro desaparecer
+da agenda de quem vai.
+
+#### A decisão que define o recurso: coordenada é opcional
+
+O técnico pode estar num subsolo, com GPS negado pelo navegador ou sem sinal. Recusar o check-in
+nesse caso impediria o registro **justamente na visita mais difícil**. Sem coordenada o registro vale
+menos, mas existe — e a tela diz "sem localização" em vez de omitir, porque quem lê depois precisa
+saber que o dado não existe, e não supor que ninguém clicou.
+
+`0,0` é descartado: é o que alguns navegadores mandam quando o GPS falha, e o Golfo da Guiné não é
+onde a visita aconteceu. Latitude fora de faixa também cai fora — gravar 91 poria um alfinete no mapa
+em lugar nenhum. O pedido de localização desiste em oito segundos, porque quem está na porta do
+cliente não vai esperar mais que isso.
+
+#### Os estados, e o que cada recusa protege
+
+- **Check-in duas vezes é recusado, não sobrescrito.** Sobrescrever apagaria a hora real da chegada —
+  exatamente o dado que o check-in existe para guardar. Quem apertou duas vezes por engano continua
+  com a primeira hora, que é a verdadeira.
+- **Check-out exige check-in**, e o banco garante isso com `CHECK`, não só a rota: uma visita com só
+  a saída preenchida produziria duração negativa ou nula em qualquer relatório futuro. Um segundo
+  `CHECK` impede saída anterior à chegada.
+- **Só `VISITA` tem check-in.** Permitir em qualquer tipo pareceria generoso e produziria "check-in de
+  e-mail" — um dado que ninguém sabe ler depois, no meio dos que importam.
+- **O check-out conclui a tarefa**, se ela ainda estava aberta. Visita encerrada é tarefa feita; pedir
+  os dois cliques deixaria a agenda cheia de visitas realizadas e "pendentes", e seria o próprio
+  técnico a pagar por essa distinção, no fim do dia, no celular. Se alguém já havia concluído antes, a
+  hora original fica — duas verdades diferentes, e a primeira é a que foi registrada.
+
+**Duração é nula enquanto a visita não termina**, não zero: uma visita em andamento não durou zero
+minuto, e um zero ali entraria em qualquer média futura arrastando o número para baixo. Visita de
+segundos conta como um minuto — "0 min" descreveria mal uma visita que aconteceu.
+
+#### Onde fica na tela
+
+Na própria linha da tarefa, nas duas fichas onde ela aparece (contato e oportunidade). Um segundo
+lugar para registrar a mesma coisa seria um segundo lugar para esquecer. Os botões são grandes e são
+dois, sem menu: a operação acontece no celular, na porta do cliente, muitas vezes com uma mão.
+
+#### Verificação
+
+21 casos de unidade nas regras (os três estados, duração nula em andamento, piso de um minuto, as
+três recusas do check-in, as três do check-out, `0,0` e fora de faixa, e a média que ignora as não
+concluídas) e **22 asserções contra a API**: o 400 do check-out sem chegada, a hora não sobrescrita no
+segundo check-in, a tarefa concluída pelo check-out, o `0,0` descartado sem impedir o registro, o
+check-in sem coordenada nenhuma funcionando, o 400 no tipo errado, o 404, e o `CHECK` do banco barrando
+saída sem chegada por fora da rota. As atividades de prova são apagadas no fim.
+
+#### Um erro meu, repetido
+
+Derrubei a API de desenvolvimento no meio de uma execução da suíte de navegador — **de novo**, depois
+de já ter registrado o mesmo erro nesta mesma sessão. Sete casos falharam por ausência de servidor. A
+execução foi descartada e a regra ficou explícita: nenhuma reinicialização de API enquanto a suíte
+roda; todas as mudanças de código primeiro, suíte por último.
+
+### 67. Medidor de IA: o estado vazio é a decisão
+
+Item 6.8 do plano em [ANALISE-CRM.md](ANALISE-CRM.md), seção 8.7 — o medidor de crédito do Néctar. O
+próprio plano condiciona o item: *"só faz sentido se a IA for ligada de verdade"*.
+
+**Procurei a IA antes de medi-la.** Não há provedor generativo configurado, e a coluna `transcricao`
+de `chamadas` nunca é preenchida — quase concluí que o item mediria o vazio. Mas existe
+`modules/bots/ia.routes.ts`: um **motor de IA externo** que posta respostas na plataforma por token de
+integração. Cada resposta que o plugin posta é um uso que a plataforma vê, e isso dá ao medidor um
+produtor real hoje.
+
+**O que a plataforma sabe e o que ela não sabe.** Ela sabe que houve uma resposta de IA; não sabe
+preço de token — quem sabe é o motor. Então o corpo da rota ganhou um `consumo` **opcional**
+(`unidades`, `custo`). Opcional de propósito: exigir o campo faria a plataforma recusar a resposta de
+um plugin mais antigo, quebrando a conversa do cliente por causa de contabilidade. Sem ele, o uso é
+registrado com custo nulo — e nulo diz "o motor não informou", não "foi de graça".
+
+**O medidor não derruba o que ele mede.** `registrarConsumo` engole o próprio erro e segue: um medidor
+que impede a resposta de IA de chegar ao cliente é pior que um medidor que perde um registro.
+
+A medição acontece **no caminho que usa a IA**, não numa rotina que varre log depois: consumo medido
+em lote perde a referência do que originou o uso, que é o que permite responder "por que gastamos
+tanto na terça".
+
+#### O estado vazio, que é o coração do item
+
+Enquanto **não existir nenhum** registro de consumo — em nenhum mês —, a tela diz que nenhum recurso
+de IA está ligado nesta instalação. Não mostra "R$ 0,00": um mostrador zerado convidaria a acreditar
+que a IA roda e é gratuita. O campo `ligado` na resposta existe só para separar dois estados que um
+zero não separa: *não está ligada* e *está ligada e este mês não teve uso*.
+
+#### Os nulos, pela terceira vez
+
+As mesmas regras das decisões 56 e 62, porque o erro possível é o mesmo — um número plausível e
+errado que ninguém confere de cabeça:
+
+- **custo nulo não vira zero**, e a tela diz sobre **quantos usos** o total fala. Sem isso, um total
+  calculado sobre dois de dez usos pareceria cobrir os dez;
+- **sem consumo, projeção nula**, e o estado tem nome (`SEM_CONSUMO`). Zero afirmaria que o mês vai
+  fechar sem gasto;
+- **mês encerrado não projeta** (o gasto real é o resultado) e **mês futuro também não** (não há ritmo
+  de que extrapolar);
+- **sem teto não há fração nem estouro**: "0% de 0" não significa nada. Teto ausente é o padrão de
+  quem nunca configurou.
+
+**Teto zero é recusado pela rota**, e a distinção importa: "não pode gastar nada" não é "sem teto", e
+gravar zero faria toda projeção estourar. Nulo remove.
+
+**Custo com seis casas decimais**, pelo mesmo motivo da tarifa de voz no item 6.6: preço de token é
+cotado em fração pequena, e arredondar para centavo zeraria o custo de uma chamada curta.
+
+**A quebra por recurso ordena do maior gasto para o menor**, e recurso sem custo informado vai para o
+fim: "gastamos demais" não é acionável, "a transcrição é 80% do gasto" é.
+
+#### Alçadas
+
+Ler é ADMIN/SUPERVISOR — é informação de custo da instalação, não de operação, e o GESTOR fica fora
+(403 conferido). Definir o teto é só ADMIN: o mesmo raciocínio da política de desconto, do processo do
+funil e das metas — decidir o limite é decidir por todos os ciclos futuros.
+
+Também houve uma colisão de nome a resolver: `iaRoutes` já existia para a ponte do motor externo em
+`/api/bots/ia`. O medidor virou `consumoIaRoutes` em `/api/ia`, e o comentário no `app.ts` diz qual é
+qual — dois routers chamados igual seria a próxima pessoa montando o errado.
+
+#### Verificação
+
+14 casos de unidade (custo nulo não virando zero, soma só do que tem custo com o contador da base,
+quebra por recurso ordenada, fração pequena preservada, e as cinco regras da projeção) e **27
+asserções contra a API**: o `ligado: false` do estado vazio, os três usos com só dois custos, o
+`SEM_TETO` sem fração, o aviso antes da fatura, o 400 do teto zero, o mês futuro sem projeção, o 400
+da data completa, o 403 do gestor na leitura e o 403 do supervisor na escrita. O consumo de prova é
+apagado e o teto restaurado.
+
+### 68. Temperatura e origem no cartão: nulo não é um degrau
+
+Item que a lista numerada tinha esquecido, e que estava na tabela de telas da demonstração
+sem estar na fila (agora registrado como **E.1** na seção 8.10 de
+[ANALISE-CRM.md](ANALISE-CRM.md)). O Néctar imprime origem e temperatura no cartão do kanban,
+e o vendedor varre o quadro sem abrir cartão nenhum.
+
+**Três degraus, e não cinco.** A diferença entre "morno" e "morno-quente" não é uma
+informação que alguém mantenha honesta num funil de cem cartões: escala fina vira ruído e
+todo mundo marca o meio. Um teste de unidade trava a decisão, para "só um degrau a mais" não
+entrar sem discussão.
+
+**Nulo é um valor, e o mais importante dos três estados.** As oportunidades que existiam
+antes destas colunas nunca foram lidas por ninguém — e cartão sem leitura **não mostra
+etiqueta nenhuma**. Um `default 'MORNA'` na migração faria o funil inteiro nascer com uma
+leitura que nenhum vendedor fez; um `default 'WEBCHAT'` atribuiria procedência inventada a
+todas elas, e o relatório por origem passaria a mentir com aparência de completo. Nulo
+também precisa ser **escrevível**: quem marcou "quente" por engano tem de poder retirar a
+leitura, e nenhum dos três degraus significa "retiro o que eu disse".
+
+**Origem é auditada; temperatura não.** Origem é fato sobre a procedência do negócio, e
+mudá-la em silêncio reescreveria de onde a venda veio — base de qualquer decisão de
+investimento em canal. Temperatura é leitura subjetiva que muda toda semana: registrar cada
+mudança encheria a trilha e esconderia as linhas que importam. As duas metades da decisão
+estão no mesmo caso de navegador de propósito, porque separá-las deixaria a segunda passar
+por esquecimento em vez de por regra.
+
+**Origem usa o vocabulário de lead e contato** (`Channel`), e não um enum próprio: "de onde
+veio" é a mesma pergunta nos três, e dois vocabulários fariam o relatório por origem precisar
+de tradução no meio. Os seis canais foram conferidos um a um contra a API.
+
+#### A discordância é a informação
+
+Temperatura **não substitui** a probabilidade da etapa, e juntar as duas apagaria justamente
+o que interessa: a etapa diz onde o processo está, a temperatura diz o que o vendedor sente e
+não cabe na etapa ("está na proposta, mas o cliente sumiu"). O cartão avisa quando as duas
+discordam — e só numa direção: **frio na etapa mais avançada do funil**, que é o cartão que
+infla a previsão. Quente em etapa inicial é otimismo comum e não muda decisão nenhuma.
+
+Não há limiar inventado nisso. "Etapa mais avançada" é lida **das etapas do próprio funil**, e
+não de um número como 70% que eu teria escolhido sozinho: 60% é a ponta de um funil que para
+em 60 e não é a ponta de outro que vai a 90. Um teste prova que o mesmo cartão muda de resposta
+conforme o funil, que é o comportamento correto.
+
+**Sobre a cor:** as três etiquetas trazem a palavra escrita, então quem não distingue os tons
+— e quem imprime o quadro — lê o mesmo que todo mundo. Frio e morno ficam cinza e só "quente"
+ganha o tom da marca. Âmbar está reservado neste projeto para *compromisso descumprido* (ver
+`sinalDeAcao`), e negócio frio não é compromisso descumprido: ninguém prometeu nada.
+
+#### Uma guarda nova, por defeito repetido
+
+A trilha de auditoria já falhou duas vezes do mesmo jeito: o servidor passa a conhecer um
+campo e a tela não tem nome para ele. Na primeira, condição de pagamento apareceu como
+": — → 10 dias úteis"; nesta, o caso de navegador falhou procurando "Origem" numa linha que
+dizia "ORIGEM". Agora um teste compara o enum do Prisma com a lista de rótulos do front e
+falha se um lado ganhar um valor sozinho. Conferi que a guarda **pega** o defeito, removendo
+`ORIGEM` da lista e vendo o teste falhar — guarda que nunca foi vista falhando não é guarda.
+
+#### Verificação
+
+17 casos de unidade (ausência não virando etiqueta, ordem fixa das duas etiquetas, os três
+degraus travados, a discordância dependente do funil, e o zero de probabilidade não sendo
+confundido com ausência), **13 asserções contra a API** (o kanban trazendo os campos no
+cartão, gravar, desmarcar de volta para nulo, degrau inventado recusado, os seis canais, o
+PATCH não zerando o campo vizinho, e a origem na trilha sem a temperatura) e **3 casos de
+navegador** — o percurso completo de marcar na ficha e ler no quadro, a ausência de etiqueta
+em cartão sem leitura, e as duas metades da regra de auditoria.
+
+Uma asserção do primeiro rascunho do roteiro foi **removida em vez de corrigida**: ela
+conferia "o comercial recebe 200 ou 403", que passa sempre. Temperatura e origem não criam
+alçada nova — entram pelo mesmo PATCH que o título e o valor, cuja política já tem asserção
+própria.
+
+### 69. Assistente da ligação: a plataforma não transcreve
+
+Item **E.2**. A demonstração mostrava, pendurado na ligação, um player com resumo, transcrição,
+análise de sentimento e **próximas ações executáveis**.
+
+**Procurei o motor antes de construir a tela**, como no item 6.8 — e a resposta foi a mesma:
+não há provedor generativo nesta plataforma, e a coluna `transcricao` de `chamadas` nunca foi
+preenchida. Então o item não é "ligar IA": é **receber** a análise de quem a produz e torná-la
+acionável. Quem transcreve, resume e lê sentimento é um motor externo, que posta pela ponte de
+integração — a mesma arquitetura do agente de IA que responde conversa, e pelo mesmo motivo:
+preço de token, escolha de modelo e qualidade de áudio são problemas de quem processa.
+
+#### Nulo não é NEUTRO
+
+A decisão central, e o erro que este item existe para não cometer. Chamada sem análise **não
+entra em nenhum dos três degraus** — entra num contador próprio (`semAnalise`). Dobrá-la em
+"neutra" faria a gestão ler um mar de neutralidade que é, na verdade, ausência de transcrição,
+e concluir que o atendimento é morno quando o que existe é uma fila que ninguém ouviu.
+
+Daí saem as outras regras:
+
+- **a fração de negativas usa a base de analisadas**, não o total de chamadas. Uma negativa em
+  duas analisadas é 50%, mesmo com oito não analisadas na lista; dividir pelo total daria 10% e
+  esconderia o problema;
+- **sem nada analisado, fração nula** — zero afirmaria que nenhuma ligação correu mal, quando o
+  que se sabe é que ninguém ouviu nenhuma;
+- **o motor pode dizer "não consegui ler"** (nulo explícito em sentimento). Forçado a escolher
+  um dos três, ele escolheria NEUTRO, e a incerteza dele viraria neutralidade na tela;
+- **ausente ≠ nulo** no corpo da rota: motor que só transcreve não manda `resumo`, e não deve
+  por isso apagar o resumo que outro escreveu. Nulo apaga; ausência preserva;
+- **o painel sem análise diz isso com palavras**, em vez de mostrar campos vazios — que se
+  parecem com falha de carregamento — e a coluna da lista diz "sem análise" no lugar do botão.
+
+#### As próximas ações viram tarefa, ou são enfeite
+
+Foi o que a gravação mostrou e é o que separa este item de um resumo bonito. Cada sugestão é
+uma linha com destino: virar `Activity` do tipo `TAREFA`, na agenda de alguém.
+
+- **A tarefa nasce sem prazo.** O motor não sabe quando a pessoa pode fazer, e um prazo
+  inventado apareceria como atrasado no dia seguinte — o sinal de atraso do funil perderia
+  sentido se pudesse vir de um palpite de máquina.
+- **Fica com quem atendeu** quando se sabe: a ação é continuação da conversa que ele teve.
+- **Uma sugestão gera no máximo uma tarefa**, com índice único no banco e não só validação de
+  rota: clicar duas vezes não pode encher a agenda de duplicatas.
+- **Chamada sem contato explica em vez de falhar.** Toda atividade exige um vínculo, e ligação
+  de número desconhecido não tem nenhum. O motivo aparece no lugar do botão — botão que falha
+  depois do clique ensina a não clicar.
+- **Descartar é registro, com autor.** Sugestão apagada em silêncio voltaria igual na próxima
+  análise, e ninguém saberia que já tinha sido recusada.
+- **Reanálise não desfaz decisão de pessoa.** Ela substitui apenas as sugestões *pendentes*: as
+  que viraram tarefa e as que foram descartadas sobrevivem, e sugestão idêntica a uma já
+  decidida não reaparece.
+
+#### Duas recusas deliberadas
+
+**Análise anterior ao fim da ligação é recusada** (400). Resumo de metade da conversa é pior que
+resumo nenhum: ele parece completo, e quem lê não tem como saber que faltou o trecho em que o
+cliente decidiu. Chamada que ainda não encerrou também não passa — não há como saber se o áudio
+acabou.
+
+**Nenhum limiar de sentimento no mostrador.** O indicador de negativas não ganha tom âmbar por
+faixa, ao contrário da taxa de atendimento: "acima de 20% é ruim" seria um número que eu
+escolheria sozinho, sem base nenhuma, e um âmbar inventado ensina a ignorar o âmbar dos outros
+indicadores. O primeiro rascunho tinha esse limiar; foi retirado.
+
+**A análise tem autor** (`analisadoPor`, o nome do motor) e data. Resumo sem autor não se
+discute, e trocar de motor sem registro faria duas análises incomparáveis parecerem a mesma
+coisa. O uso também alimenta o medidor de IA (item 6.8), com `TRANSCRICAO` e `RESUMO`
+separados: os dois têm preço muito diferente por unidade, e somá-los faria a quebra por recurso
+perder justamente a resposta que ela existe para dar.
+
+#### Verificação
+
+28 casos de unidade (normalização das sugestões — repetido por caixa e por espaço, item vazio,
+o que não é texto, o teto de leitura, a ordem do motor preservada; os três estados da sugestão;
+os impedimentos; e as cinco regras do resumo de sentimento), **36 asserções contra a API** e 3
+casos de navegador. O roteiro cria token de integração, chamada e tarefa, e apaga tudo no fim.
+
+Uma asserção do roteiro estava **passando pela metade**: o bloco dos indicadores rodava depois
+de a análise ser limpa, e por isso caía sempre no ramo "nada analisado" — a verificação da
+fração nunca via um número. Foi movido para antes da limpeza e agora crava os dois lados,
+inclusive que a fração é `negativo / analisadas`.
+
+### 70. Ciclo de vida derivado: o campo que não existe
+
+Item **E.4** — o "funil de ciclo de vida (Leads → Suspects)" do dashboard da demonstração.
+
+**Não há coluna, não há migração e não há seletor.** É a decisão inteira do item, e ela evita a
+doença clássica desse campo em CRM: um menu "Lead / Suspect / Cliente" que alguém preenche uma
+vez e nunca mais atualiza. Seis meses depois a base tem "leads" com contrato assinado e
+"clientes" que nunca compraram, e o relatório por ciclo de vida vira ficção com aparência de
+dado. A plataforma **já sabe** a resposta — existe oportunidade ganha? negociação aberta?
+houve conversa? — e guardar uma segunda versão disso cria duas verdades que divergem, sendo a
+exibida sempre a errada, porque é a que ninguém mantém.
+
+O preço está assumido por escrito: não é possível marcar à mão "este é cliente antigo, de antes
+da plataforma". Quando essa necessidade aparecer, ela entra como **fato** (uma oportunidade
+ganha histórica) e não como rótulo — o fato responde também "quanto ele comprou", que o rótulo
+nunca responderia.
+
+#### A escada, e por que cada degrau vem onde vem
+
+`CLIENTE → EM_NEGOCIACAO → PERDIDO → QUALIFICADO → CONTATADO → LEAD`. A ordem **é** a
+precedência: um contato satisfaz vários ao mesmo tempo (quem comprou também conversou), e vale o
+mais avançado. Sem uma ordem explícita, o mesmo contato cairia em degraus diferentes conforme a
+ordem dos `if`.
+
+- **CLIENTE** não expira. Cliente que sumiu continua sendo alguém que já comprou.
+- **EM_NEGOCIACAO vem antes de PERDIDO** porque descreve o presente: quem tem proposta em
+  análise e uma perda antiga é, hoje, uma negociação.
+- **PERDIDO é degrau próprio**, e não um qualificado. Campanha para quem disse "não" é campanha
+  diferente, e juntá-los faria a lista de qualificados prometer mais do que tem.
+- **CONTATADO** é o "suspect" da gravação: houve conversa, ou existe lead na entrada.
+
+**Não existe degrau "INATIVO"**, e a ausência é deliberada: ele exigiria um limiar de dias que
+eu escolheria sozinho, e "sem comprar há 90 dias" é uma frase sobre ar-condicionado muito
+diferente do que é sobre software. Um teste de unidade trava isso pelo tipo — os fatos de
+entrada são só contagens, sem data nenhuma para um limiar se apoiar.
+
+#### A oportunidade é da conta, e o contato herda
+
+A oportunidade se liga à **conta**, não ao contato, então o caminho é indireto: os contatos da
+conta herdam o que ela negociou. É proposital — quem compra é a empresa, e classificar o
+comprador como "lead" porque a oportunidade estava no nome do colega seria errado sobre o mesmo
+fato.
+
+#### Cinco `groupBy`, e não mil consultas
+
+Derivar tem custo, e onde ele aparece é aqui. A implementação óbvia — para cada contato, contar
+oportunidades — são mil consultas numa base de mil contatos. São cinco agregações que voltam
+"contato X tem N disso", cruzadas em memória. E a lista calcula o degrau **só da página
+servida**: derivar a base inteira para mostrar vinte linhas seria trabalho jogado fora.
+
+O filtro por ciclo resolve os ids antes e os passa como `IN`. Aceitável porque a derivação já
+passa pela política de visibilidade — o conjunto é a carteira de quem pergunta, nunca a base
+inteira — e porque a alternativa é a coluna que apodrece. `contatosNosCiclos` existe para o
+público de campanha (item E.3) reusar exatamente esta derivação: duas implementações da mesma
+pergunta produziriam um público diferente da lista que o usuário acabou de conferir.
+
+#### O gráfico é o filtro
+
+O funil fica ao lado da lista de contatos e **clicar num degrau estreita a lista**. Gráfico que
+só se olha vira enfeite; este responde "quantos clientes eu tenho" e leva até eles. Filtro entre
+degraus é **união**, ao contrário das etiquetas, que são interseção: um contato está em um degrau
+só, e exigir dois nunca traria ninguém.
+
+Sobre a forma: **barras horizontais, e não um funil em trapézio** — a área do trapézio mente
+sobre a proporção, e a barra mede o que mostra. Cada barra tem o número ao lado, nunca só a
+barra, e a largura é relativa ao **maior degrau** e não ao total: com a base concentrada num
+degrau, todas as outras barras ficariam invisíveis. Uma cor de marca com opacidade decrescente,
+nunca arco-íris. **Fração nula quando não há base** (0% afirmaria que o degrau está vazio, quando
+o que falta é a base), mas **zero quando há base e o degrau está vazio** — aí o zero é verdade.
+
+A tela também diz, com palavras, que o degrau é derivado. Sem isso, quem procura o seletor
+"mudar para Cliente" e não encontra conclui que falta recurso.
+
+#### Verificação
+
+17 casos de unidade (cada degrau, as precedências, o funil somando o total da base, os seis
+degraus preservados, as duas regras da fração) e **16 asserções contra a API**, entre elas a que
+prova a derivação: criar uma conversa muda o contato de `LEAD` para `CONTATADO`, abrir uma
+oportunidade o leva a `EM_NEGOCIACAO` e ganhá-la a `CLIENTE` — sem ninguém editar campo algum.
+Mandar `cicloDeVida` no `PATCH` do contato é recusado com 400, porque não é campo. Mais 3 casos
+de navegador, incluindo o clique no degrau filtrando a lista e o filtro desligando.
+
+### 71. Público de campanha: o total é quem recebe
+
+Item **E.3**. A demonstração montava o público com **os mesmos filtros do CRM**. A plataforma
+tinha um botão só — "adicionar todos os contatos" —, que é a única opção que ninguém quer: ou
+dispara para a base inteira, ou não dispara.
+
+#### As três contas separadas
+
+O número do público é a forma mais fácil de uma campanha mentir, e ele mente por omissão. Quem
+casou com o filtro **não** é quem vai receber:
+
+- **contato sem telefone numa campanha de WhatsApp** entraria no total e nunca receberia — vira
+  item `PENDENTE` que falha no disparo, barulho que esconde as falhas de verdade;
+- **contato anonimizado por pedido de LGPD** teve os dados apagados, e disparar para o que
+  sobrou seria usar um cadastro que a pessoa pediu para remover.
+
+Então a prévia mostra três linhas: quantos casaram com o filtro, quantos ficaram de fora por
+falta do campo que o canal exige, e quantos são anonimizados. **O total em destaque é quem
+recebe.** As três listas particionam o filtrado — ninguém se perde nem conta duas vezes, e um
+teste garante isso.
+
+A ordem das exclusões importa: **anonimizado sai antes** da conta de endereço. Se caísse em "sem
+telefone", a tela convidaria a "completar o cadastro" de quem pediu para ser esquecido.
+
+Quem falta dado aparece com nomes, porque é **lista de trabalho e não erro**: "complete o
+telefone destes 40" é acionável. E o campo cobrado depende do canal — WhatsApp e voz pedem
+telefone, e-mail pede e-mail. Webchat, Instagram e Facebook **não montam público**: não há
+endereço próprio no cadastro, e o cliente precisa escrever primeiro. Dizer isso é melhor que
+montar uma lista de 300 pessoas que nenhuma linha do sistema alcança.
+
+#### Sem filtro não monta
+
+A API recusa filtro vazio, e lista vazia conta como vazio. Um clique acidental com tudo desligado
+selecionaria a base inteira, e **mensagem enviada não volta atrás** — é a operação mais caro de
+desfazer que existe aqui. A tela nem oferece o botão, e diz o motivo antes do clique: botão que
+responde 400 depois de clicado ensina a não clicar.
+
+`responsavelId: null` **é** um filtro — significa "carteira aberta", pergunta legítima. Tratá-lo
+como ausência recusaria o pedido sem motivo.
+
+#### Prévia e gravação são a mesma conta
+
+O botão que grava só existe depois de a prévia voltar, e **qualquer mudança no filtro invalida a
+prévia**: número velho ao lado de filtro novo é como alguém dispara para o público errado
+acreditando ter conferido.
+
+A primeira versão do serviço tinha duas consultas parecidas — uma para mostrar, outra para gravar
+—, e isso contradizia o próprio motivo de existir a prévia: duas contas divergem, e a que a
+pessoa aprovou não seria a que disparou. Agora as duas chamam `resolverPublico`.
+
+#### O filtro é o do CRM, e não um paralelo
+
+Ciclo de vida vem de `ciclosDosContatos` (decisão 70), etiquetas passam pela mesma normalização
+da escrita — sem isso `Revenda` no filtro não acha o registro salvo como `revenda` —, e origem e
+papel na conta são as colunas que a lista já filtra. Um filtro paralelo produziria um público
+diferente da lista que a pessoa acabou de conferir, e ela só descobriria pelo relatório de envio.
+A **política de visibilidade vale aqui também**: sem isso, montar campanha seria a porta dos
+fundos para o vendedor alcançar a base inteira.
+
+O ciclo é aplicado **depois** do banco, porque não é coluna. A ordem não é estética: filtrar no
+Postgres primeiro reduz o conjunto que precisa de derivação, que é a parte caro.
+
+#### O que ficou de fora, e por quê
+
+**Não há filtro por região.** A demonstração filtrava por mesorregião e a plataforma não guarda
+endereço de contato nenhum — oferecer o filtro exigiria inventar o dado, e um filtro que devolve
+zero sempre é pior que a falta dele. A tela diz isso com palavras, para quem procura não concluir
+que o dado existe em outra aba.
+
+**"Adicionar todos os contatos" continua no lugar**, mas deixou de ser a única opção: virou o
+atalho de quem quer mesmo a carteira inteira.
+
+#### Verificação
+
+18 casos de unidade (as três partições, o campo por canal, telefone em branco contando como
+ausente, o anonimizado saindo primeiro, filtro vazio, a descrição do filtro) e **25 asserções
+contra a API** com três pessoas de prova — uma alcançável, uma sem telefone, uma anonimizada —,
+provando que só uma entra, que trocar o canal troca quem é alcançável, que o ciclo derivado
+funciona como filtro, que gravar produz exatamente o número da prévia, que repetir não manda duas
+mensagens e que público vazio é recusado com motivo. Mais 2 casos de navegador para a ordem da
+tela.
+
+Um defeito meu apareceu no próprio teste: o construtor de pessoa de prova usava
+`over.telefone ?? padrao`, e `??` trata nulo como ausência — três casos passaram a testar o
+contrário do que diziam. É a mesma confusão entre "não informado" e "nulo" que este módulo
+existe para evitar, cometida no arquivo que a vigia.
+
+### 72. Agenda da semana: o atrasado não fica fora
+
+Item **E.5** — a agenda embutida no dashboard da demonstração. Última das cinco linhas que a
+grade numerada tinha esquecido.
+
+#### Três coisas que a agenda não pode esconder
+
+**O atrasado.** Uma agenda que mostra apenas segunda a domingo esconde a tarefa que venceu na
+semana passada — e ela é o trabalho mais urgente que existe. Atrasadas têm faixa própria, **antes**
+dos dias, e um caso de navegador confere a posição pela coordenada na tela, não pela ordem do DOM
+(que poderia coincidir por acidente).
+
+**A tarefa sem prazo.** Ela não cabe em dia nenhum e é contada à parte, nunca empurrada para
+"hoje": inventar um dia faria a tela afirmar um compromisso que ninguém marcou. É exatamente o
+caso da tarefa que a etapa do funil exige (decisão 59), que nasce sem prazo de propósito.
+
+**O dia livre.** Os sete dias aparecem sempre, inclusive os vazios: dia livre é informação para
+quem vai marcar visita, e sumiria justamente quando importa.
+
+Tarefa concluída **continua no dia dela** — a agenda também serve para olhar para trás ("o que eu
+fiz na terça?"), e esconder o concluído faria a semana passada parecer vazia. Mas concluída nunca
+entra em atrasadas: atraso é sobre compromisso ainda em aberto.
+
+#### O fuso vem de quem pergunta
+
+O servidor não adivinha. O início da semana chega como `AAAA-MM-DD` e o deslocamento em minutos
+vem do navegador (`getTimezoneOffset()`) — o mesmo raciocínio das metas, que recebem `AAAA-MM`
+justamente para não existir fuso a errar.
+
+Sem isso, a tarefa de **sábado às 22h** (domingo 01h em UTC) apareceria no domingo, e ninguém
+entenderia por que ela sumiu do sábado. Duas asserções fixam o comportamento nos dois sentidos: com
+o fuso do Brasil ela fica no sábado, com `offset=0` ela cai no domingo — o que prova que o
+parâmetro é usado, e não decorativo.
+
+A semana **começa na segunda**, não no domingo: é agenda de trabalho, e a semana comercial
+brasileira começa na segunda. Domingo fecha a semana anterior, e não abre a seguinte.
+
+#### Uma consulta, não três
+
+O que cai na semana, o atrasado de antes dela e o pendente sem prazo vêm numa consulta só. Em três
+consultas, os três poderiam ver versões diferentes do banco — a tarefa concluída entre a primeira
+e a terceira apareceria em duas faixas.
+
+#### A aba, e o que não mudou
+
+A agenda é a **primeira aba** do CRM: é a única que responde "o que eu faço agora?", enquanto as
+outras respondem "quem é essa pessoa" e "como está o funil". Mas a aba **padrão continua sendo
+contatos**, de propósito: `/crm` é o endereço que a navegação e os atalhos já abrem, e trocar o
+destino mudaria o comportamento de quem digita de cor.
+
+**Sem perfil restrito.** O agente tem tarefa como qualquer um, e o escopo do que ele vê continua
+sendo a política de atividades. Uma agenda só para gestão seria uma agenda que ninguém usa. O
+gestor que quiser a agenda de alguém passa `responsavelId` — e a política dele já permite ver a
+equipe, ou não permite, sem esta rota decidir nada à parte.
+
+Concluir tarefa acontece **na própria agenda**: abrir a ficha para marcar uma tarefa feita é o tipo
+de passo que faz a agenda ser abandonada.
+
+A base de dev revelou um problema de tela que a conta não mostrava: há **196 pendentes sem data**.
+Despejar todas empurraria os sete dias — que são o assunto — para fora da vista. A tela mostra as
+oito primeiras e diz quantas faltam; o número completo fica no cabeçalho da faixa.
+
+#### Verificação
+
+22 casos de unidade (os sete dias sem buraco nem sobreposição, a virada de mês, a segunda-feira de
+qualquer dia da semana, o domingo pertencendo à semana que começou, o sábado às 22h, as quatro
+regras de partição e a ordenação por horário) e **19 asserções contra a API**, com quatro
+atividades de prova apagadas no fim. Mais 4 casos de navegador.
+
+Um defeito meu no teste de navegador: comparei `innerText()` (que preserva quebras de linha) com
+`toHaveText` (que normaliza), então "seg 31/08
+
+livre" nunca casava com "seg 31/08livre". O
+comportamento estava certo e o teste, errado — passou a comparar só o rótulo do dia.
+
+### 73. WhatsApp nos dois modos: a ponte é externa, e o aviso é da tela
+
+O último item da lista, e o único que não vem da grade numerada: o pedido foi **WhatsApp no
+mesmo modelo do concorrente, com API oficial e sem API oficial**.
+
+O caminho oficial (Cloud API da Meta) já existia. O que faltava era o outro — e ele é o que
+pequenas operações usam de verdade, porque funciona com qualquer número, sem WABA verificada e
+sem custo por conversa.
+
+#### O aviso, primeiro
+
+O modo não oficial se conecta como WhatsApp Web e **viola os termos de uso do WhatsApp**: o
+número pode ser bloqueado sem aviso nem recurso. Isso está escrito no schema, no módulo, na
+migração, na tela de configuração e aqui. Não para desencorajar — a decisão é do negócio e foi
+tomada —, mas para que ela seja **tomada** por quem tem autoridade, em vez de descoberta no dia
+em que o número da empresa para de funcionar. A tela mostra o aviso **antes de gravar**, e só no
+modo que tem risco: aviso permanente nos dois modos seria ignorado nos dois.
+
+#### A plataforma não embute a biblioteca
+
+Ela fala HTTP com uma **ponte externa** (Baileys, WPPConnect e afins), do mesmo jeito que fala
+com o motor de IA. Três razões concretas:
+
+- a sessão vive de QR Code, reconexão e estado em disco — coisas de processo longo, que morreriam
+  a cada `deploy` da API;
+- a biblioteca acompanha mudanças do protocolo do WhatsApp e quebra sozinha; embutida, ela
+  pararia a plataforma inteira quando quebrasse;
+- o risco de bloqueio pertence ao número, não ao sistema: em processo separado, dá para desligar
+  a ponte sem tocar no atendimento.
+
+#### Um caminho por modo, e nenhum lugar a mais
+
+**A saída escolhe o driver dentro de `enviarParaCanal`**, não em quem chama. O atendente, o
+disparo de campanha e o motor de IA mandam mensagem do mesmo jeito e nenhum deles sabe o modo —
+espalhar essa pergunta pelos chamadores garantiria que um ficaria para trás, e a mensagem sairia
+pelo caminho errado no canal mais usado.
+
+**A entrada tem rota própria** (`/api/webhooks/ponte/whatsapp/:organizacaoId`), e não a da Meta:
+o corpo é outro (`{numero, texto, idExterno}` contra a árvore `entry/changes/value`), e aceitar
+os dois na mesma rota exigiria adivinhar o formato — adivinhar errado entrega mensagem no lugar
+errado. A organização vem na URL porque a ponte não tem nada equivalente ao `phone_number_id`,
+que é um id global da Meta. O id na URL **não é segredo**: ele diz *para quem*, e a assinatura
+diz *se pode*.
+
+Mas a mensagem entra por `registrarMensagemEntrante`, o **mesmo** caminho do webhook oficial:
+idempotência por `idExterno`, reaproveitamento da conversa aberta, fila do canal, entrega à IA. A
+conversa que chega pela ponte é indistinguível da que chega pela Cloud API para todo o resto do
+sistema — e é isso que permite trocar de modo sem perder histórico.
+
+#### O que a plataforma recusa
+
+- **Sem segredo configurado, a rota de entrada recusa** (503) em vez de aceitar sem assinatura.
+  Aceitar seria abrir um endereço público por onde qualquer um injeta mensagem na conversa de um
+  cliente, e o "só até configurar" é exatamente como isso ficaria para sempre. Por isso ativar o
+  modo sem segredo também é recusado: um canal que envia e nunca recebe tem sintoma difícil de
+  ligar à causa.
+- **`idExterno` é obrigatório** no corpo. É ele que evita mensagem duplicada quando a ponte
+  reentrega — e reentrega é o caso comum, não a exceção.
+- **Número que não parece telefone é recusado com motivo**, nunca "consertado". E a normalização
+  **não adivinha o nono dígito**: inserir um 9 num número antigo de oito dígitos criaria um
+  número que pode ser de outra pessoa.
+- **Modo só existe no WhatsApp**, com CHECK no banco e mensagem própria na rota — Instagram e
+  Facebook não têm essa pergunta.
+- **Cada modo cobra a credencial dele**, e a mensagem diz qual. "Canal não configurado" para os
+  dois faria quem está na ponte procurar um token da Meta que nunca vai ter.
+
+#### Nulo é oficial, e desconhecido não é desconectado
+
+O WhatsApp que já estava configurado tem `modo` nulo, e nulo vale como `OFICIAL`: ele foi
+configurado antes de a pergunta existir, e reescrever isso afirmaria uma escolha que ninguém fez.
+
+O diagnóstico da sessão tem **três** estados, não dois. `CONECTADO` e `DESCONECTADO` vêm da
+ponte; `DESCONHECIDO` é quando não conseguimos falar com ela ou não entendemos o formato da
+resposta — e aí o envio continua sendo tentado, porque bloquear o atendimento por não entender um
+diagnóstico troca um problema pequeno por um grande. Cada ponte responde diferente
+(`{connected:true}`, `{status:'CONNECTED'}`, `{state:'open'}`), então as formas conhecidas são
+aceitas e o resto é DESCONHECIDO em vez de um dos dois extremos.
+
+`ponteToken` e `ponteSegredo` entram na lista de campos **cifrados em repouso** e voltam
+mascarados pela API: quem tem o primeiro manda mensagem pelo número da empresa, e quem tem o
+segundo injeta mensagem numa conversa. Valem o que vale o `accessToken` da Meta.
+
+#### Verificação
+
+24 casos de unidade e **31 asserções contra a API** com uma **ponte falsa** subida dentro do
+próprio roteiro — um servidor HTTP que responde como as pontes reais respondem. Isso prova o
+caminho inteiro sem nenhum número real: a mensagem entra assinada, a resposta sai pela ponte com
+o número normalizado e o token no cabeçalho, a reentrega não duplica, a ponte fora do ar dá 502
+dizendo que é a ponte, e voltar ao modo oficial faz a rota de entrada recusar. A configuração do
+canal é restaurada no fim.
+
+Mais 4 casos de navegador, e eles **encontraram dois defeitos que a leitura não encontrou**:
+
+1. A URL que a ponte deve chamar só aparecia depois de o modo ser gravado — justamente quem está
+   escolhendo o modo não a via. O caminho passou a ser buscado sempre.
+2. Uma **corrida silenciosa**: o carregamento que terminava depois do clique no rádio reescrevia a
+   escolha com o valor gravado, e o formulário voltava sozinho para o outro modo. A primeira
+   correção usou `useState` para a trava e **não corrigiu nada** — `carregar` é criada a cada
+   render e a chamada em voo lê o valor do render em que nasceu, que era o `false` inicial. Com
+   `useRef` a trava passou a valer. O segundo teste falhando foi o que mostrou isso.
+
+### 74. Base instalada: garantia por componente, e por que ela veio antes dos outros
+
+Com os onze itens pedidos, os cinco esquecidos e o WhatsApp nos dois modos prontos (decisões 57
+a 73), a fila seguinte reúne os itens que não tinham sido pedidos: 4.2, 6.3, 3.3, 5.1, 6.1, 6.5,
+6.4 e 6.9. A ordem sugerida inicialmente privilegiava entrega rápida (4.2 primeiro, 5.1 na
+quarta posição). Trocada por **5.1 primeiro**: é o único item de toda a lista que nenhum dos
+seis concorrentes avaliados entrega, é o que a operação sente falta *hoje* — garantia de
+ar-condicionado por componente, hoje em planilha —, e os outros sete melhoram algo que já
+funciona. Valor de negócio na frente de facilidade de entrega.
+
+**O modelo**: `ProdutoDoCliente` (raiz, pendurado na conta — o equipamento pertence à empresa, não
+à pessoa que assinou a compra, mesma lógica de leads e oportunidades) e `ComponenteGarantia`
+(filha, um registro por garantia daquele equipamento). Duas tabelas, e não uma com colunas
+`prazoLegal`/`prazoContratual`/`prazoCompressor`, porque a regra do treinamento Philco — legal 90
+dias, contratual mais 270 (360 no total), compressor 10 anos — é a regra de **hoje**; outra marca
+de equipamento na base instalada amanhã teria garantias diferentes em número e em nome, e colunas
+fixas não abririam espaço para isso sem migração nova a cada exceção.
+
+**Os prazos em si não são constante no código.** `prazoDias` é campo do componente, preenchido
+por quem cadastra. O que é fixo é a *lógica* de estados em `lib/garantia.ts`, não o número — para
+o dia em que a base instalada guardar equipamento de outra marca com outra regra.
+
+**Cinco estados, não dois.** `VIGENTE` e `VENCIDA` seriam suficientes se toda garantia sempre
+existisse e sempre tivesse data — nenhuma das duas premissas vale aqui:
+
+- `SEM_DATA_INICIO`: sem data de instalação, nenhum vencimento é calculável. Nunca "vencida" —
+  ausência de dado não é um degrau negativo, é um degrau com nome próprio.
+- `REQUISITO_NAO_INFORMADO`: a garantia CONTRATUAL exige instalador credenciado, e ninguém
+  disse ainda se ele é credenciado. Diferente de "não é credenciado".
+- `NAO_APLICAVEL`: instalador confirmadamente não credenciado, ou sem nota fiscal — a garantia
+  contratual nunca chegou a existir, então não faz sentido calcular quando ela venceria.
+
+A ordem de checagem importa: primeiro o requisito da CONTRATUAL (que descarta VIGENTE/VENCIDA
+sem olhar data nenhuma), depois a data de início. Um componente CONTRATUAL sem instalador
+credenciado informado e sem data de instalação é `REQUISITO_NAO_INFORMADO`, não
+`SEM_DATA_INICIO` — o requisito que falta é o motivo mais específico.
+
+**Bug pego pelo roteiro, não pela suíte de unidade**: a rota de criação usava
+`exigirVinculosVisiveis({ contaId })`, o atalho que várias escritas do CRM usam para conferir
+vínculo. Ele **pula a própria consulta** para quem enxerga tudo (ADMIN/SUPERVISOR) — otimização
+correta para vínculo que já existe, e defeito para vínculo que não existe: um `contaId`
+inexistente não era pego em lugar nenhum e só estourava como violação de FK no Postgres, virando
+500 sem handler. `opportunities.service.ts` já resolve isso com um `findFirst` explícito antes de
+criar; `produtos-instalados.routes.ts` passou a fazer o mesmo, e o roteiro (`smoke:base-instalada`)
+ganhou o caso que pegou o defeito, para não regredir.
+
+Testado nas três camadas: `garantia.test.ts` (11 casos, incluindo o limite exato de vencimento —
+no instante exato ainda é `VIGENTE`, um milissegundo depois já é `VENCIDA`), `smoke:base-instalada`
+contra a API em `localhost:3333` (22 checks, dado de teste apagado no fim) e dois specs em
+`tests/e2e/base-instalada.spec.ts`.
+
+### 75. CSV completo: exportar contas, importar contatos/contas/oportunidades
+
+O que faltava do item 6.3, corrigido depois de eu mesmo relatar errado o quanto já existia:
+exportação já cobria leads, contatos, oportunidades, protocolos e conversas; importação só
+cobria leads. Faltava exportar contas e importar contatos, contas e oportunidades.
+
+**Reuso, sem infraestrutura nova.** `csv.ts` (separador `;`, BOM, decisão 14) não mudou. O padrão
+de `importarLeads` — erro por linha isolado num `try/catch`, sem abortar a planilha inteira, mais
+`dryRun` que roda toda validação que depende do banco *antes* do corte, para a prévia nunca
+aprovar o que a gravação recusaria — virou a função `executarImportacao`, extraída para as três
+novas importações não repetirem a mesma contagem de `criados`/`ignorados`/`erros`. `importarLeads`
+em si não foi tocada, para não arriscar o que já funcionava.
+
+**Deduplicação**: contato por email ou telefone, conta por nome ou CNPJ — encontrar e **recusar**
+a linha (`ignorados`, com motivo), e não sobrescrever silenciosamente o que já existe. Reenviar a
+mesma planilha duas vezes não duplica nada, mas também não teria como atualizar um cadastro
+existente por CSV — está fora do que foi pedido; se aparecer a necessidade de "importar para
+atualizar", é decisão nova.
+
+**Oportunidade por CSV resolve funil e estágio por nome**, não por id — é o que faz sentido numa
+planilha preenchida por gente. Vazio cai no funil ativo mais antigo e no primeiro estágio dele,
+mesmo padrão de `criarOportunidade` na tela. A conta é criada se o nome não existir, do mesmo jeito
+que a importação de leads já fazia — consistência entre as duas, e não um comportamento novo.
+
+**A única exportação com política de visibilidade é a nova.** As cinco que já existiam (leads,
+contatos, oportunidades, protocolos, conversas) exportam tudo dentro da organização sem
+`filtroDe()` — um AGENTE autenticado pode baixar a base inteira de oportunidades por essa rota,
+mesmo sem poder ver o funil na tela. `exportarContas`, que eu escrevi agora, passou por
+`filtroDe(politicaContas)` porque a regra do projeto é clara (*"toda leitura nova passa por
+filtroDe()"*) — mas eu **não** apliquei retroativamente nas outras cinco, porque isso mudaria
+comportamento existente por fora do que foi pedido. Fica registrado como inconsistência a decidir
+separadamente, e não corrigida por conta própria no meio de outro item.
+
+**Bug real encontrado pelo próprio roteiro de teste, e não relacionado a CSV**: a busca de contas
+(`GET /contas?busca=`) filtra por `nome OR cnpj OR segmento`, e quando o termo buscado não tem
+nenhum dígito, `busca.replace(/\D/g, '')` vira `''`, e `cnpj: { contains: '' }` bate com **qualquer
+conta que tenha CNPJ preenchido** — a busca por texto puro virava, na prática, "sem filtro" para
+toda conta com CNPJ. Meu primeiro roteiro de smoke usava essa busca para limpar dado de teste no
+fim e **apagou uma conta real do banco de dev** ("Supermercado Rio Verde LTDA") por causa disso.
+Corrigido em `accounts.routes.ts`: a cláusula do CNPJ só entra no `OR` quando sobra pelo menos um
+dígito do termo buscado. O roteiro ganhou um caso de regressão para isso, e a limpeza do próprio
+roteiro passou a rastrear os ids que ele mesmo criou, nunca mais apagar por busca ampla.
+
+Frontend: a aba "Importar / Exportar" ganhou "Contas" na lista de exportação, e o card de
+importação — antes fixo em "leads" — virou um seletor de recurso; trocar de recurso limpa o
+arquivo carregado e a prévia, para não misturar planilha de um tipo com formulário de outro.
+
+Testado nas três camadas: suíte de unidade sem mudança (a lógica nova é integração, como
+`importarLeads` já era — sem função pura nova para isolar), `smoke:dados` contra a API (23 checks,
+incluindo a regressão da busca, dado de teste rastreado por id e removido no fim) e
+`tests/e2e/dados-csv.spec.ts` (3 specs: download real de exportação, troca de recurso, e prévia
+com erro por linha antes da gravação real).
+
+### 76. Matriz de produtividade: agendada é ter prazo, célula sem dado é nula
+
+Item 3.3 — usuário × tipo de atividade, `feitas / agendadas` com percentual e drill-down. Sem
+migração: `Activity` já tinha tudo (`tipo`, `prazo`, `concluidoEm`, `responsavelId`).
+
+**Reusa a definição de "agendada" da agenda da semana (item E.5)**, em vez de inventar uma
+segunda: `prazo !== null`. Uma nota ou ligação só registrada — sem prazo — nunca foi um
+compromisso, e não entra nem no numerador nem no denominador, do mesmo jeito que `montarAgenda`
+a tira da agenda em vez de fingir que era pendente. `matrizProdutividade` (nova, em
+`produtividade.ts`) é função pura, sem noção de "agora": só olha `prazo`/`concluidoEm` como
+presença ou ausência, o que a deixa testável com objetos simples, sem relógio para mockar.
+
+**Célula sem nenhuma atividade agendada é `null` no JSON**, não `{feitas:0, agendadas:0,
+percentual:0}`. É o mesmo raciocínio do TMA nulo em `metrics.service.ts`: zero por cento afirmaria
+"combinou tarefas e não cumpriu nenhuma", e aqui não há nada combinado para medir. `0%` de
+verdade (agendou e não cumpriu nenhuma) e `null` (não agendou nada) são estados diferentes, e o
+teste de unidade guarda a diferença entre os dois (`'0% quando nenhuma agendada foi feita —
+diferente de nula'`).
+
+**A linha da matriz é quem apareceu como responsável de alguma atividade agendada no período**,
+não a lista de usuários da organização. Buscar todos os usuários e zerar quem não tem nada
+criaria uma linha de travessões que não diz nada — pior que não aparecer. Consequência: a matriz
+nunca lista ninguém que não teve atividade agendada naquele mês, e isso é o comportamento certo,
+não uma lacuna.
+
+**Sem migração, sem tabela nova**: `matrizProdutividade` monta tudo a partir de uma única consulta
+(`prisma.activity.findMany` com `prazo` no intervalo do mês, via `filtroDe(politicaAtividades)`).
+GESTOR vê só a própria equipe porque a política já resolve isso — a rota não decide visibilidade
+de novo, só o corte de perfil (`requireRole('ADMIN','SUPERVISOR','GESTOR')`, mesmo de metas e
+leitura comercial).
+
+**Drill-down embutido na resposta**, e não uma segunda rota: cada célula carrega a lista das
+próprias atividades agendadas (id, título, prazo, concluído-em), então o clique na tela não faz
+outra chamada — evita estender o schema de `GET /atividades` com filtros de tipo e período que
+mais nada usa.
+
+**Formato do mês (`AAAA-MM`) igual ao de metas** (decisão 33): sem hora, não existe fuso a errar
+numa tarefa que cai na virada do mês.
+
+Testado nas três camadas: `produtividade.test.ts` (11 casos, incluindo célula nula vs. 0% vs.
+100%, duas pessoas com números independentes, e ordenação por nome), `smoke:produtividade` contra
+a API (22 checks, incluindo mês inválido recusado e AGENTE barrado com 403) e
+`tests/e2e/produtividade.spec.ts` — que pegou uma corrida de verdade: clicar em "Concluir" e
+seguir direto para a aba Produtividade, sem esperar a resposta do `POST /concluir`, produzia
+"0/2" em vez de "1/2" — não porque o clique falhasse, mas porque nada no teste garantia que o
+servidor já tinha processado a conclusão antes da consulta seguinte. Corrigido esperando a
+resposta da requisição antes de prosseguir, o mesmo problema que a decisão 73 já tinha visto do
+lado da tela (ali era o carregamento reescrevendo a escolha do usuário; aqui era o teste lendo
+estado do servidor cedo demais).
+
+### 77. Meta no dashboard: zero mudança de backend, uma barra, nunca dois eixos
+
+Item 4.2. Tão pequeno quanto o backlog previu: `GET /metas/minha` (decisão 62, item 4.1) já
+existia, pronta, sem nenhum consumidor no frontend — o dashboard é o primeiro a chamá-la. Nenhuma
+linha de backend mudou neste item.
+
+**Um card, uma série na barra.** "Realizado" é fluxo do período (quanto já vendeu), "meta" é alvo
+(quanto devia vender) — escalas diferentes, e a regra do projeto (repetida em `DashboardsPage.tsx`
+para o card de assuntos) é nunca combinar isso num eixo só. A barra mostra **um** número, o
+percentual, capado a 100% de largura mas rotulado com o real — exatamente como `MetasTab` já
+fazia. Realizado, meta, projeção e variação aparecem como números ao lado, nunca como uma segunda
+barra.
+
+**`Barra` saiu de `MetasTab.tsx` para `components/viz/BarraDeMeta.tsx`.** Era função local,
+amarrada ao tipo `LinhaDeMeta` (usuário, nome, escopo); passou a receber só `percentual` e
+`situacao`, que é tudo que a barra em si usa. Sem a extração, o dashboard reimplementaria a mesma
+barra com a mesma lógica de cor — e um ajuste de cor feito num lugar só divergiria do outro sem
+ninguém perceber até reparar visualmente.
+
+**Card só aparece para quem participa do processo comercial** (`ADMIN`, `SUPERVISOR`, `GESTOR`,
+`COMERCIAL` — mesmo corte das abas Leads/Oportunidades do CRM). Hoje isso é redundante com o
+próprio acesso a `/dashboards`, que já é `ADMIN`/`SUPERVISOR`/`GESTOR` só (`nav.ts`) — `COMERCIAL`
+nunca chega nesta tela. Fica mesmo assim, porque é a regra certa e barata de expressar, e o dia em
+que `COMERCIAL` ganhar acesso ao dashboard ela já está pronta, em vez de precisar ser lembrada.
+
+**Sem meta definida, o card avisa** ("Ninguém definiu uma meta para você neste mês") **em vez de
+mostrar 0%** — mesmo raciocínio de `SEM_META` em `metas.ts`, só que agora na tela de abertura em
+vez de escondido numa aba de gestão.
+
+Testado nas três camadas: suíte de unidade sem mudança (nenhuma lógica nova, só composição de UI
+com uma rota que já tinha teste), sem roteiro novo (rota e resposta já existentes, confirmado
+manualmente batendo em `/metas/minha`) e dois specs novos em `tests/e2e/dashboard.spec.ts` — um
+para o estado sem meta, outro que grava uma rampa pela aba Metas, confere que o dashboard reflete
+o mesmo número sem recarregar o app inteiro, e remove a meta de teste no fim.
+
+### 78. Visões salvas: guardam o filtro que já existe, não inventam um segundo
+
+Item 6.1 — visões com filtro e cor em contas, leads e oportunidades. A instrução foi explícita:
+reusar o filtro que cada tela já tem, não criar um vocabulário próprio. Isso definiu o desenho
+inteiro: `VisaoSalva.filtro` é `JSONB`, e o **formato varia por entidade** — `{busca?, tags?}` para
+conta (o que `ContasTab` já tem), `{tipo?, responsavelId?, atrasados?, busca?}` para lead (o card
+"Filtros" já existente), `{funilId?}` para oportunidade (o único filtro que o kanban já expõe
+hoje). Nenhum desses três formatos foi inventado — são exatamente os `useState` que cada tela já
+tinha antes deste item.
+
+**Validação por entidade com `z.discriminatedUnion`**: criar uma visão de conta com
+`responsavelId` no filtro é recusado (400) — não porque `responsavelId` seja um campo inválido em
+geral, mas porque a tela de Contas não tem esse filtro hoje, e aceitar um filtro que a tela não
+sabe preencher de volta deixaria a visão salva morta na prática. O PATCH tem o mesmo cuidado, só
+que valida contra o schema da **entidade já gravada** (que não muda por edição), e não contra um
+schema genérico.
+
+**Decisão sem precedente no código, registrada em vez de escondida**: não existe hoje nenhuma
+tabela com o contorno "pessoal vs. compartilhada" nesta plataforma — `criadoPorId` em `Campaign`,
+`Activity` e `IntegrationToken` é só autoria (`onDelete: SetNull`), nunca controla quem vê o quê.
+Decidi que `VisaoSalva` é **compartilhada pela organização inteira**, como `Funnel` — a alternativa
+(pessoal por padrão, com opção de compartilhar) exigiria a primeira política de visibilidade desse
+tipo no projeto, e nada no pedido indicava que visões deveriam ser privadas. Para não deixar a
+porta escancarada mesmo assim, editar ou apagar a visão de outra pessoa exige ser quem criou, ou
+ADMIN/SUPERVISOR — sem essa trava, uma visão compartilhada seria livre para qualquer um apagar por
+engano.
+
+**Cor é hexadecimal livre, no mesmo padrão de `Branding.corPrimaria`** — não um enum novo. A tela
+restringe a escolha a uma paleta fixa de 8 cores (nenhuma tela deveria virar um arco-íris sem
+critério), mas o banco aceita qualquer hex válido, então a paleta pode mudar sem migração.
+
+**Nome único por entidade, não por organização inteira**: duas visões de LEAD não podem se chamar
+igual, mas uma de LEAD e uma de CONTA podem — são vocabulários diferentes, e a colisão de nome só
+importa dentro da mesma lista de chips.
+
+Testado nas três camadas: `visoes.test.ts` (9 casos — cada entidade aceita o próprio vocabulário e
+recusa o alheio, cor fora do hexadecimal recusada, nome curto recusado), `smoke:visoes` contra a
+API (19 checks, incluindo a trava de edição por outro usuário) e `tests/e2e/visoes-salvas.spec.ts`
+(3 specs — Contas a fundo, Leads e Oportunidades confirmando que o mesmo componente aplica o
+filtro certo em cada tela).
+
+### 79. Filiais: classificação, não um segundo eixo de visibilidade
+
+Item 6.5 — "Filiais (hierarquia de empresa)", copiado do Ploomes sem nenhum detalhamento
+funcional em `ANALISE-CRM.md` além do nome da linha. Antes de desenhar o schema, o pedido foi
+explícito: checar como `lib/politicas.ts` e `equipeIds` (`lib/visibilidade.ts`) se comportam com
+hierarquia, porque **se filial mudar quem vê o quê, essa é a parte difícil — não o schema**.
+
+**O levantamento confirmou o risco**: hoje não existe nenhum eixo geográfico/organizacional entre
+tenant (`organizacaoId`) e pessoa (`gestorId`). Se filial virasse gate de visibilidade, ela entraria
+como **fator obrigatório dentro de cada política** (`politicaContas`, `politicaContatos`,
+`politicaLeads`, `politicaOportunidades`, e possivelmente `politicaConversas`/`politicaProtocolos`
+se fila pertencesse a filial) — um `AND` composto com o filtro de equipe/carteira já existente, não
+um filtro aplicado depois, porque `politicas.ts` já resolve tudo por composição e um filtro genérico
+pós-hoc quebraria esse padrão. Isso mudaria o comportamento de `contextoVisibilidade()` e
+`filtroCarteira()`, funções que hoje decidem quem vê o quê em toda a plataforma.
+
+Nenhum documento do produto confirma que a Bradel já opera com múltiplas unidades físicas segregando
+quem-vê-o-quê hoje — a linha do backlog é só a comparação competitiva. Reescrever o núcleo de
+visibilidade da plataforma para um requisito que ninguém confirmou não é prudente: **filial entrou
+como classificação, não como gate**. `Filial` é uma tabela raiz simples (`nome`, `cidade`, `uf`,
+`ativa`), sem hierarquia entre filiais (matriz com filiais-filhas) — "hierarquia de empresa" nunca
+foi detalhado além do nome do item, e uma lista plana por organização cobre o caso de uso conhecido
+(agrupar contas e pessoas por unidade, filtrar relatório por filial). `Account.filialId` e
+`User.filialId` são colunas anuláveis com `onDelete: SetNull`: remover uma filial não apaga quem
+estava classificado nela. `contextoVisibilidade()` e `politicas.ts` ficam **intocados** — se um gate
+de verdade for pedido depois, ele chega como requisito concreto, não como suposição.
+
+**Mesma classe de furo do item 5.1, corrigida de saída**: `filialId` recebeu uma checagem de
+existência (`exigirFilialDaOrganizacao`, no mesmo espírito de `exigirUsuarioDaOrganizacao` que já
+protege `gestorId`) antes de gravar em conta ou usuário — sem isso, um `filialId` inválido ou de
+outra organização bateria direto no FK do Postgres e viraria 500 em vez de 404.
+
+CRUD de filial (`/api/filiais`) segue o padrão de `Queue`: qualquer autenticado lê (para preencher
+os seletores de conta e usuário), só ADMIN cria/edita/remove. Frontend: aba nova "Filiais" em
+Configurações (`FiliaisTab.tsx`); seletor de filial na ficha de conta (edição imediata, mesmo padrão
+do papel na conta) e no formulário de nova conta; coluna de filial editável na tabela de Usuários —
+sem isso o campo existiria só mexendo no banco, o mesmo problema que `gestorId` já tinha antes deste
+item.
+
+Testado nas três camadas: `filiais.test.ts` (7 casos de validação — nome curto, UF normalizada para
+maiúscula, `.refine` do PATCH exigindo ao menos um campo), `smoke:filiais` contra a API (22 checks,
+incluindo os 404 de `filialId` inexistente em conta e usuário, e o SetNull ao remover a filial) e
+`tests/e2e/filiais.spec.ts` (2 specs — CRUD na tela de Configurações, e o seletor de Contas
+classificando e desclassificando uma conta de verdade).
+
+### 80. Campos customizados: tabela por entidade, e `valorUnico` que não vira constraint
+
+Item 6.4 — "Campos customizados por entidade (tipo, obrigatório, seção, valor único)", do Ploomes.
+Item grande, com instrução explícita de mostrar o desenho antes de escrever a migração — o desenho
+foi apresentado e aprovado antes de qualquer código.
+
+**As mesmas três entidades de `EntidadeVisao`** (CONTA, LEAD, OPORTUNIDADE) reaproveitadas, sem um
+enum paralelo idêntico. `CampoCustomizado` é raiz (`entidade`, `nome`, `chave` — slug gerado do
+nome —, `tipo`, `opcoes` para SELECAO, `obrigatorio`, `valorUnico`, `secao` livre para agrupar na
+tela, `ordem`, `ativo`). **`tipo` e `valorUnico` são imutáveis depois de criados** — não há rota de
+edição para eles: mudar o tipo de um campo com valor já gravado corromperia dado silenciosamente
+(um texto livre vira inválido como NUMERO), e mudar `valorUnico` depois exigiria auditar todo o
+histórico atrás de duplicata.
+
+**Três tabelas de valor, não um `Json` solto na conta/lead/oportunidade**: `ValorCampoCustomizadoConta`,
+`...Lead`, `...Oportunidade`, cada uma com FK real e `onDelete: Cascade` nos dois lados (apagar o
+registro dono OU apagar a definição do campo apaga o valor junto — comprovado pelo roteiro).
+A escolha contra `Json`: `valorUnico` precisa de uma consulta indexável
+(`@@index([campoCustomizadoId, valor])`), e um índice de expressão teria que ser criado por campo
+em runtime — exatamente o tipo de migração dinâmica que esta feature promete evitar.
+
+**`valorUnico` não vira constraint do banco — decisão exposta, não escondida.** O campo é definido
+em runtime pelo ADMIN; um índice único condicional por campo exigiria uma migration a cada campo
+novo, o oposto do que a feature promete. A checagem fica em código (`findFirst` antes de gravar,
+com o índice acima sustentando a consulta), com uma janela de corrida aceita sob escrita
+concorrente no mesmo campo único — baixo risco dado o uso esperado (cadastro manual, não import em
+massa simultâneo).
+
+**Validação e checagem de unicidade rodam ANTES de tocar no registro dono**, em duas etapas —
+`prepararValoresDoRegistro` (só lê e valida, sem gravar nada) e `confirmarValoresDoRegistro` (só
+grava o que já foi validado). Sem essa separação, um `valorUnico` duplicado descoberto DEPOIS de
+criar a conta deixaria uma conta órfã sem o campo obrigatório que a própria validação recusou, ou
+um PATCH pela metade — outros campos gravados, campos customizados não. A checagem de unicidade em
+si não precisa de transação: tanto na criação (sem registro próprio ainda, não exclui ninguém da
+busca) quanto na edição (registro já existe, exclui a si mesmo) ela roda antes de qualquer escrita
+no registro dono.
+
+**Obrigatoriedade só vale para criação.** Registro antigo sem o valor não fica bloqueado nem
+retroativamente "quebrado" — mesma filosofia de nulo-é-estado do resto da plataforma. `null`
+explícito apaga o valor de um campo (mesmo padrão de `tags` ausente-vs-vazio), mas é recusado num
+campo obrigatório: não dá para esvaziar depois o que a criação exigiu.
+
+**Frontend**: aba "Campos customizados" em Configurações (CRUD por entidade, só ADMIN), um
+componente único (`CamposCustomizadosCampos`) que renderiza os cinco tipos e serve tanto o
+formulário de criação (Nova conta/lead/oportunidade) quanto a ficha de cada uma. Texto/número/data
+confirmam no **blur**, não a cada tecla — um campo de texto salvando uma vez por letra digitada
+seria uma tela praticamente inutilizável; seleção e sim/não confirmam no `onChange`, por serem
+escolha discreta, no mesmo padrão do seletor de Filial. **Sem tela própria para o lead** (a aba de
+Leads é só o kanban, sem ficha de detalhe hoje) — o formulário de "Novo lead" ganhou os campos
+customizados, mas editá-los depois de criado fica para quando existir uma ficha de lead.
+
+Testado nas três camadas: `campos-customizados.test.ts` (8 casos das funções puras — geração de
+chave a partir do nome, validação por tipo, conversão de volta) e `campos-customizados.schemas.test.ts`
+(7 casos de schema), `smoke:campos-customizados` contra a API (27 checks, incluindo obrigatório
+bloqueando criação, valor único recusando duplicata entre registros mas aceitando regravar o mesmo
+valor no mesmo registro, campo desconhecido recusado, `null` limpando valor, e os dois CASCADEs) e
+`tests/e2e/campos-customizados.spec.ts` (1 spec — campo obrigatório criado em Configurações barrando
+a criação de conta sem ele, e a edição na ficha).
+
+### 81. Pergunta em linguagem natural sobre o CRM: adiado, não cortado
+
+Item 6.9 — "pergunta em linguagem natural sobre os dados do CRM", inspirado no Mentor IA (RD
+Station) e no resumo semanal do Néctar. A instrução foi explícita: se não existir hoje um provedor
+de IA generativa, dizer isso em vez de construir uma tela que responde perguntas para o vazio —
+mesmo precedente da decisão 67 (medidor de IA), que também partiu de "só faz sentido se a IA for
+ligada de verdade".
+
+**Não existe.** `modules/bots/ia.routes.ts` é uma ponte para um motor de IA **externo**: um plugin
+de terceiro posta respostas prontas na plataforma por token de integração — a plataforma nunca
+manda uma pergunta para um modelo e recebe uma resposta de volta. Não há chave de API de provedor
+generativo (OpenAI, Anthropic, etc.) configurada em nenhuma variável de ambiente, rota ou serviço.
+
+Perguntar em linguagem natural sobre dados do CRM ("quantas oportunidades fechamos essa semana",
+"quais contas estão sem contato há 30 dias") exige exatamente o que falta: alguém que interprete a
+pergunta e decida que consulta ela vira. Construir a tela sem isso significaria ou (a) simular com
+um conjunto fixo de perguntas pré-programadas fingindo ser "linguagem natural" — o tipo de
+constatação que o item 67 rejeitou explicitamente (mostrar R$ 0,00 em vez de dizer que não há IA
+ligada) —, ou (b) integrar um provedor generativo por conta própria, decisão de custo recorrente e
+de escopo (qual provedor, que dado sai da plataforma, quem paga o token) que não é minha para tomar
+sozinho.
+
+**Diferença para os dois cortes já registrados no início desta rodada** (foto do produto na
+proposta, filtro de campanha por região): aqueles saíam do escopo porque o dado não existe na
+plataforma e ninguém pediu para passar a existir. Este é diferente — a dependência (provedor de IA
+generativa) é uma decisão de produto e de custo que cabe ser pedida explicitamente, não presumida.
+Por isso "adiado", e não "cortado": o item continua na lista, sem tachar, com a nota de por que
+está parado. Quando (e se) a Bradel decidir contratar um provedor de IA generativa, o item volta a
+fazer sentido — e nesse momento o desenho junta duas coisas que já existem na plataforma: os
+mesmos filtros de `filtroDe()`/políticas de visibilidade (a resposta não pode extrapolar o escopo
+de quem perguntou) e o vocabulário de campos que os relatórios já usam (metas, produtividade,
+funil) como o "esquema" que o provedor recebe para traduzir a pergunta em consulta.
+
+Nenhum código foi escrito para este item.

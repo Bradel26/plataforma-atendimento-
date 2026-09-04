@@ -113,6 +113,18 @@ export const politicaContas = {
   },
 };
 
+export const politicaProdutosDoCliente = {
+  /**
+   * Acessorio a conta: base instalada (item 5.1) nao tem regra propria de
+   * carteira — quem enxerga a conta enxerga o equipamento dela, no mesmo
+   * espirito de `politicaAtividades` derivar do registro-pai.
+   */
+  filtro(ctx: ContextoVisibilidade): Prisma.ProdutoDoClienteWhereInput {
+    if (ctx.veTudo) return {};
+    return { conta: politicaContas.filtro(ctx) };
+  },
+};
+
 export const politicaLeads = {
   /** Processo comercial: AGENTE nao participa. */
   filtro(ctx: ContextoVisibilidade): Prisma.LeadWhereInput {

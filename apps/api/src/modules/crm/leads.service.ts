@@ -4,6 +4,7 @@ import { exigirVinculosVisiveis, filtroDe, politicaContas, politicaContatos, pol
 import { apenasVisivel } from '../../lib/visibilidade';
 import { badRequest, notFound } from '../../lib/errors';
 import { inclusaoLead, toLead } from './crm.serializers';
+import { confirmarValoresDoRegistro, prepararValoresDoRegistro, valoresDoRegistro } from './campos-customizados.service';
 import { FASES, type AtualizarLeadInput, type CriarLeadInput, type ListarLeadsQuery } from './leads.schemas';
 
 const FASES_TERMINAIS = ['GANHO', 'PERDIDO'] as const;
@@ -70,7 +71,7 @@ export async function obterLead(id: string) {
     include: inclusaoLead,
   });
   if (!lead) throw notFound('Lead nao encontrado');
-  return toLead(lead);
+  return { ...toLead(lead), camposCustomizados: await valoresDoRegistro('LEAD', lead.id) };
 }
 
 export async function criarLead(input: CriarLeadInput) {
@@ -92,15 +93,21 @@ export async function criarLead(input: CriarLeadInput) {
     if (!responsavel) throw notFound('Responsavel nao encontrado');
   }
 
+  // Valida e checa unicidade dos campos customizados ANTES de criar o lead:
+  // se falhar, nao sobra lead sem o campo obrigatorio que a validacao recusou.
+  const { camposCustomizados, ...dados } = input;
+  const valores = await prepararValoresDoRegistro('LEAD', null, camposCustomizados);
+
   const lead = await prisma.lead.create({
     data: {
-      ...input,
+      ...dados,
       // O canal de origem do contato e um padrao melhor que o do schema.
       canalOrigem: input.canalOrigem ?? contato.canalOrigem,
     },
     include: inclusaoLead,
   });
-  return toLead(lead);
+  await confirmarValoresDoRegistro('LEAD', lead.id, valores);
+  return { ...toLead(lead), camposCustomizados: await valoresDoRegistro('LEAD', lead.id) };
 }
 
 export async function atualizarLead(id: string, input: AtualizarLeadInput) {
@@ -125,16 +132,22 @@ export async function atualizarLead(id: string, input: AtualizarLeadInput) {
   // fechadoEm acompanha a entrada e a saida das fases terminais.
   const fechadoEm = eTerminal(faseFinal) ? (atual.fechadoEm ?? new Date()) : null;
 
+  // Mesma ordem da criacao: valida os campos customizados ANTES do update, para
+  // um valor unico duplicado nao deixar as outras mudancas do PATCH pela metade.
+  const { camposCustomizados, ...dados } = input;
+  const valores = await prepararValoresDoRegistro('LEAD', id, camposCustomizados);
+
   const lead = await prisma.lead.update({
     where: { id },
     data: {
-      ...input,
+      ...dados,
       ...(faseFinal !== 'PERDIDO' ? { motivoPerda: null } : {}),
       fechadoEm,
     },
     include: inclusaoLead,
   });
-  return toLead(lead);
+  await confirmarValoresDoRegistro('LEAD', id, valores);
+  return { ...toLead(lead), camposCustomizados: await valoresDoRegistro('LEAD', id) };
 }
 
 export async function excluirLead(id: string) {

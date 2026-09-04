@@ -1,5 +1,6 @@
 import { prisma } from '../../lib/prisma';
 import { badRequest } from '../../lib/errors';
+import { filtroDe, politicaContas } from '../../lib/politicas';
 import { gerarCsv, lerCsv, type LinhaCsv } from './csv';
 import { FASES, MOTIVOS_PERDA, TIPOS } from '../crm/leads.schemas';
 
@@ -34,6 +35,57 @@ export const MODELO_LEADS_CSV = gerarCsv([...COLUNAS_LEAD], [
     valor_estimado: '15000.00',
     motivo_perda: '',
     observacoes: 'Pediu proposta',
+  },
+]);
+
+const COLUNAS_CONTATO = ['nome', 'email', 'telefone', 'conta', 'canal_origem', 'observacoes'] as const;
+
+export const MODELO_CONTATOS_CSV = gerarCsv([...COLUNAS_CONTATO], [
+  {
+    nome: 'Joao Souza',
+    email: 'joao@empresa.com',
+    telefone: '11988880000',
+    conta: 'Empresa Exemplo',
+    canal_origem: 'WHATSAPP',
+    observacoes: 'Indicado por cliente atual',
+  },
+]);
+
+const COLUNAS_CONTA = ['nome', 'cnpj', 'segmento', 'site', 'telefone', 'email', 'observacoes'] as const;
+
+export const MODELO_CONTAS_CSV = gerarCsv([...COLUNAS_CONTA], [
+  {
+    nome: 'Empresa Exemplo',
+    cnpj: '12345678000199',
+    segmento: 'Varejo',
+    site: 'https://empresa.example.com',
+    telefone: '1140000000',
+    email: 'contato@empresa.com',
+    observacoes: '',
+  },
+]);
+
+const COLUNAS_OPORTUNIDADE = [
+  'titulo',
+  'conta',
+  'funil',
+  'estagio',
+  'valor',
+  'responsavel_email',
+  'previsao_fechamento',
+  'canal_origem',
+] as const;
+
+export const MODELO_OPORTUNIDADES_CSV = gerarCsv([...COLUNAS_OPORTUNIDADE], [
+  {
+    titulo: 'Venda de 3 splits',
+    conta: 'Empresa Exemplo',
+    funil: '',
+    estagio: '',
+    valor: '15000.00',
+    responsavel_email: 'comercial@plataforma.local',
+    previsao_fechamento: '2026-12-31',
+    canal_origem: 'WHATSAPP',
   },
 ]);
 
@@ -168,6 +220,179 @@ async function importarLinha(linha: LinhaCsv, dryRun: boolean) {
   });
 }
 
+/**
+ * Roda a importacao linha a linha: cabecalho valido, teto de linhas, e cada
+ * linha isolada num `try/catch` — a mesma forma de `importarLeads`, extraida
+ * para nao repetir tres vezes a mesma contagem de criados/ignorados/erros.
+ */
+async function executarImportacao(
+  texto: string,
+  colunaObrigatoria: string,
+  processarLinha: (linha: LinhaCsv, dryRun: boolean) => Promise<void>,
+  dryRun: boolean,
+): Promise<ResultadoImportacao> {
+  const { colunas, linhas } = lerCsv(texto);
+  if (linhas.length === 0) throw badRequest('CSV vazio ou sem linhas de dados');
+  if (!colunas.includes(colunaObrigatoria)) {
+    throw badRequest(`O CSV precisa da coluna "${colunaObrigatoria}". Colunas recebidas: ${colunas.join(', ') || 'nenhuma'}`);
+  }
+  if (linhas.length > 2000) throw badRequest('Importe no maximo 2000 linhas por vez');
+
+  const resultado: ResultadoImportacao = { total: linhas.length, criados: 0, ignorados: 0, erros: [] };
+
+  for (const [indice, linha] of linhas.entries()) {
+    const numeroLinha = indice + 2;
+    try {
+      await processarLinha(linha, dryRun);
+      resultado.criados += 1;
+    } catch (err) {
+      resultado.ignorados += 1;
+      resultado.erros.push({
+        linha: numeroLinha,
+        motivo: err instanceof Error ? err.message : 'Erro desconhecido',
+      });
+    }
+  }
+
+  return resultado;
+}
+
+/**
+ * Importa contatos de CSV. Reaproveita o contato existente por email ou
+ * telefone em vez de duplicar — quem reenvia a mesma planilha corrigida nao
+ * quer ver o cliente aparecer duas vezes.
+ */
+export async function importarContatos(texto: string, dryRun: boolean): Promise<ResultadoImportacao> {
+  return executarImportacao(texto, 'nome', async (linha, dry) => {
+    const nome = normalizar(linha.nome ?? '');
+    if (nome.length < 2) throw new Error('Coluna "nome" vazia ou muito curta');
+
+    const email = normalizar(linha.email ?? '').toLowerCase();
+    const telefone = normalizar(linha.telefone ?? '');
+
+    const existente = email
+      ? await prisma.contact.findFirst({ where: { email } })
+      : telefone
+        ? await prisma.contact.findFirst({ where: { telefone } })
+        : null;
+    if (existente) throw new Error(`Contato ja existe (${email || telefone})`);
+
+    const nomeConta = normalizar(linha.conta ?? '');
+    const conta = nomeConta ? await prisma.account.findFirst({ where: { nome: nomeConta } }) : null;
+    if (nomeConta && !conta) throw new Error(`Conta nao encontrada: ${nomeConta}`);
+
+    if (dry) return;
+
+    await prisma.contact.create({
+      data: {
+        nome,
+        email: email || null,
+        telefone: telefone || null,
+        canalOrigem: enumOu(CANAIS, linha.canal_origem ?? '', 'EMAIL'),
+        contaId: conta?.id ?? null,
+        observacoes: normalizar(linha.observacoes ?? '') || null,
+      },
+    });
+  }, dryRun);
+}
+
+/** Guarda apenas digitos, igual ao schema de conta usado no resto do CRM. */
+const soDigitos = (valor: string) => valor.replace(/\D/g, '');
+
+/**
+ * Importa contas de CSV. Duplicidade e por nome OU CNPJ — a mesma planilha
+ * reenviada nao cria uma segunda empresa igual.
+ */
+export async function importarContas(texto: string, dryRun: boolean): Promise<ResultadoImportacao> {
+  return executarImportacao(texto, 'nome', async (linha, dry) => {
+    const nome = normalizar(linha.nome ?? '');
+    if (nome.length < 2) throw new Error('Coluna "nome" vazia ou muito curta');
+
+    const cnpjDigitos = soDigitos(linha.cnpj ?? '');
+    if (cnpjDigitos && cnpjDigitos.length !== 14) throw new Error('CNPJ precisa ter 14 digitos');
+
+    const existente = await prisma.account.findFirst({
+      where: cnpjDigitos ? { OR: [{ nome }, { cnpj: cnpjDigitos }] } : { nome },
+    });
+    if (existente) throw new Error(`Conta ja existe (${existente.nome})`);
+
+    if (dry) return;
+
+    await prisma.account.create({
+      data: {
+        nome,
+        cnpj: cnpjDigitos || null,
+        segmento: normalizar(linha.segmento ?? '') || null,
+        site: normalizar(linha.site ?? '') || null,
+        telefone: normalizar(linha.telefone ?? '') || null,
+        email: normalizar(linha.email ?? '').toLowerCase() || null,
+        observacoes: normalizar(linha.observacoes ?? '') || null,
+      },
+    });
+  }, dryRun);
+}
+
+/**
+ * Importa oportunidades de CSV. Conta e criada se nao existir (mesmo padrao
+ * do lead); funil e estagio sao resolvidos por nome, e vazios caem no funil
+ * ativo mais antigo e no primeiro estagio dele — o mesmo padrao de
+ * `criarOportunidade` na tela, so que por nome em vez de id.
+ */
+export async function importarOportunidades(texto: string, dryRun: boolean): Promise<ResultadoImportacao> {
+  return executarImportacao(texto, 'titulo', async (linha, dry) => {
+    const titulo = normalizar(linha.titulo ?? '');
+    if (titulo.length < 2) throw new Error('Coluna "titulo" vazia ou muito curta');
+
+    const nomeFunil = normalizar(linha.funil ?? '');
+    const funil = nomeFunil
+      ? await prisma.funnel.findFirst({ where: { nome: nomeFunil }, include: { estagios: { orderBy: { ordem: 'asc' } } } })
+      : await prisma.funnel.findFirst({
+          where: { ativo: true },
+          orderBy: { criadoEm: 'asc' },
+          include: { estagios: { orderBy: { ordem: 'asc' } } },
+        });
+    if (!funil) throw new Error(nomeFunil ? `Funil nao encontrado: ${nomeFunil}` : 'Nenhum funil configurado');
+    if (funil.estagios.length === 0) throw new Error('O funil nao tem estagios configurados');
+
+    const nomeEstagio = normalizar(linha.estagio ?? '');
+    const estagio = nomeEstagio ? funil.estagios.find((e) => e.nome === nomeEstagio) : funil.estagios[0];
+    if (!estagio) throw new Error(nomeEstagio ? `Estagio nao encontrado no funil "${funil.nome}": ${nomeEstagio}` : 'Funil sem estagios');
+
+    const emailResponsavel = normalizar(linha.responsavel_email ?? '').toLowerCase();
+    const responsavel = emailResponsavel ? await prisma.user.findFirst({ where: { email: emailResponsavel } }) : null;
+    if (emailResponsavel && !responsavel) throw new Error(`Responsavel nao encontrado: ${emailResponsavel}`);
+
+    const nomeConta = normalizar(linha.conta ?? '');
+    if (!nomeConta) throw new Error('Coluna "conta" e obrigatoria');
+
+    if (dry) return;
+
+    const conta =
+      (await prisma.account.findFirst({ where: { nome: nomeConta } })) ??
+      (await prisma.account.create({ data: { nome: nomeConta } }));
+
+    const valor = numeroOuNulo(linha.valor ?? '') ?? 0;
+
+    await prisma.opportunity.create({
+      data: {
+        titulo,
+        contaId: conta.id,
+        funilId: funil.id,
+        estagioId: estagio.id,
+        valor,
+        valorUnico: valor,
+        valorMensal: 0,
+        valorInformado: valor,
+        mesesRecorrencia: 12,
+        responsavelId: responsavel?.id ?? null,
+        previsaoFechamento: dataOuNula(linha.previsao_fechamento ?? ''),
+        canalOrigem: linha.canal_origem?.trim() ? enumOu(CANAIS, linha.canal_origem, 'EMAIL') : null,
+        historicoEstagio: { create: { paraEstagioId: estagio.id } },
+      },
+    });
+  }, dryRun);
+}
+
 const dataBr = (valor: Date | null) => (valor ? valor.toLocaleString('pt-BR') : '');
 
 /** Exportacao de leads com os campos que interessam ao acompanhamento comercial. */
@@ -234,6 +459,38 @@ export async function exportarContatos() {
       conta: c.conta?.nome ?? '',
       canal_origem: c.canalOrigem,
       conversas: c._count.conversas,
+      criado_em: dataBr(c.criadoEm),
+    })),
+  );
+}
+
+/**
+ * Exportacao de contas. E a unica exportacao deste modulo que passa por
+ * politica de visibilidade — as demais (leads, contatos, oportunidades,
+ * protocolos, conversas) sao anteriores a este item e exportam tudo dentro da
+ * organizacao, sem filtro de carteira; nao mexi nelas para nao mudar
+ * comportamento existente por fora do que foi pedido, mas fica registrado
+ * como inconsistencia a revisar.
+ */
+export async function exportarContas() {
+  const contas = await prisma.account.findMany({
+    where: await filtroDe(politicaContas),
+    include: { responsavel: { select: { nome: true } }, _count: { select: { contatos: true, oportunidades: true } } },
+    orderBy: { nome: 'asc' },
+  });
+
+  return gerarCsv(
+    ['nome', 'cnpj', 'segmento', 'site', 'telefone', 'email', 'responsavel', 'contatos', 'oportunidades', 'criado_em'],
+    contas.map((c) => ({
+      nome: c.nome,
+      cnpj: c.cnpj ?? '',
+      segmento: c.segmento ?? '',
+      site: c.site ?? '',
+      telefone: c.telefone ?? '',
+      email: c.email ?? '',
+      responsavel: c.responsavel?.nome ?? '',
+      contatos: c._count.contatos,
+      oportunidades: c._count.oportunidades,
       criado_em: dataBr(c.criadoEm),
     })),
   );

@@ -17,7 +17,18 @@ const mascarar = (valor: string | null) =>
  * consegue passar pela verificacao do webhook e assinar o canal em outro lugar;
  * `iaSegredo` porque com ele se forja uma entrega para o motor de IA.
  */
-const SEGREDOS = ['accessToken', 'appSecret', 'verifyToken', 'iaSegredo'] as const;
+const SEGREDOS = [
+  'accessToken',
+  'appSecret',
+  'verifyToken',
+  'iaSegredo',
+  // Credenciais da ponte nao oficial. `ponteToken` autentica a plataforma NA
+  // ponte (quem o tem manda mensagem pelo numero da empresa) e `ponteSegredo`
+  // assina o que a ponte manda para ca (quem o tem injeta mensagem na conversa
+  // de um cliente). Os dois valem exatamente o que vale o accessToken da Meta.
+  'ponteToken',
+  'ponteSegredo',
+] as const;
 
 /**
  * O que `salvarCanal` cifra. `iaSegredo` fica de fora porque nao entra por esta
@@ -25,13 +36,15 @@ const SEGREDOS = ['accessToken', 'appSecret', 'verifyToken', 'iaSegredo'] as con
  * em vez de uma para o tipo de entrada nao ter de aceitar um campo que a rota
  * de canal nao recebe.
  */
-const SEGREDOS_DO_CANAL = ['accessToken', 'appSecret', 'verifyToken'] as const;
+const SEGREDOS_DO_CANAL = ['accessToken', 'appSecret', 'verifyToken', 'ponteToken', 'ponteSegredo'] as const;
 
 type ComSegredos = {
   accessToken: string | null;
   appSecret: string | null;
   verifyToken: string | null;
   iaSegredo: string | null;
+  ponteToken: string | null;
+  ponteSegredo: string | null;
 };
 
 /** Decifra os segredos de um registro lido do banco. */
@@ -62,13 +75,41 @@ export async function listarCanais() {
     atualizadoEm: c.atualizadoEm,
     accessTokenMascarado: mascarar(c.accessToken),
     appSecretMascarado: mascarar(c.appSecret),
-    /** Pronto para receber webhook = tem segredo de assinatura e token de verificacao. */
-    configurado: Boolean(c.accessToken && c.appSecret && c.verifyToken),
+    /*
+     * Modo do WhatsApp e o que a ponte tem configurado (item do WhatsApp nos
+     * dois modos).
+     *
+     * `modo` sai nulo nos outros canais, e a tela trata nulo do WhatsApp como
+     * OFICIAL — o canal que ja existia foi configurado antes de a pergunta
+     * existir, e reescrever isso seria afirmar uma escolha que ninguem fez.
+     */
+    modo: c.modo,
+    ponteUrl: c.ponteUrl,
+    ponteSessao: c.ponteSessao,
+    ponteTokenMascarado: mascarar(c.ponteToken),
+    ponteSegredoMascarado: mascarar(c.ponteSegredo),
+    /*
+     * Pronto para operar, por modo.
+     *
+     * O oficial precisa das credenciais da Meta; o nao oficial, do endereco e do
+     * token da ponte MAIS o segredo de assinatura — sem o segredo a rota de
+     * entrada recusa, entao um canal sem ele nao esta configurado, mesmo
+     * conseguindo enviar.
+     */
+    configurado:
+      c.canal === 'WHATSAPP' && c.modo === 'NAO_OFICIAL'
+        ? Boolean(c.ponteUrl && c.ponteToken && c.ponteSegredo)
+        : Boolean(c.accessToken && c.appSecret && c.verifyToken),
   }));
 }
 
 type SalvarCanalInput = {
   ativo?: boolean;
+  modo?: 'OFICIAL' | 'NAO_OFICIAL' | null;
+  ponteUrl?: string | null;
+  ponteToken?: string | null;
+  ponteSegredo?: string | null;
+  ponteSessao?: string | null;
   phoneNumberId?: string | null;
   wabaId?: string | null;
   pageId?: string | null;
@@ -89,8 +130,30 @@ export async function salvarCanal(canal: CanalExterno, input: SalvarCanalInput) 
   const atual = gravado ? aberto(gravado) : null;
   const futuro = { ...atual, ...input };
 
-  if (futuro.ativo && !(futuro.accessToken && futuro.appSecret && futuro.verifyToken)) {
+  /*
+   * O que "ativar" exige depende do MODO (item do WhatsApp nos dois modos).
+   *
+   * Cobrar as credenciais da Meta de quem esta no modo nao oficial faria a tela
+   * pedir um token que aquela operacao nunca vai ter — e foi por isso que a
+   * mensagem de erro deixou de ser uma frase so.
+   */
+  if (canal === 'WHATSAPP' && futuro.modo === 'NAO_OFICIAL') {
+    if (futuro.ativo && !(futuro.ponteUrl && futuro.ponteToken)) {
+      throw badRequest('Para ativar o modo nao oficial informe o endereco e o token da ponte');
+    }
+    if (futuro.ativo && !futuro.ponteSegredo) {
+      // Sem segredo a rota de entrada recusa tudo: ativar assim daria um canal
+      // que envia e nunca recebe, e o sintoma ("o cliente respondeu e nao
+      // apareceu") e dificil de ligar a esta causa.
+      throw badRequest('Informe o segredo da ponte: sem ele a plataforma nao aceita mensagem recebida');
+    }
+  } else if (futuro.ativo && !(futuro.accessToken && futuro.appSecret && futuro.verifyToken)) {
     throw badRequest('Para ativar o canal informe accessToken, appSecret e verifyToken');
+  }
+
+  if (input.modo !== undefined && input.modo !== null && canal !== 'WHATSAPP') {
+    // O CHECK do banco tambem barra, mas a mensagem dele nao ajuda ninguem.
+    throw badRequest('Modo oficial/nao oficial existe so no WhatsApp');
   }
 
   // Cifra so o que veio nesta requisicao; campo ausente nao e reescrito, e

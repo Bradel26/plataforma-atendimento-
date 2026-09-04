@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Alerta, Badge, Button, Card, EmptyState, Field, Input, Select } from '../../components/ui';
 import { ApiError, api } from '../../lib/api';
-import { COR_STATUS, LABEL_PERFIL, LABEL_STATUS, type Perfil, type Usuario } from '../../lib/types';
+import { COR_STATUS, LABEL_PERFIL, LABEL_STATUS, type Filial, type Perfil, type Usuario } from '../../lib/types';
 
 const FORM_VAZIO = { nome: '', email: '', senha: '', perfil: 'AGENTE' as Perfil };
 
 export function UsuariosTab() {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [filiais, setFiliais] = useState<Filial[]>([]);
   const [form, setForm] = useState(FORM_VAZIO);
   const [erro, setErro] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
@@ -19,7 +20,21 @@ export function UsuariosTab() {
 
   useEffect(() => {
     void carregar().catch((e) => setErro(e instanceof ApiError ? e.message : 'Falha ao carregar usuarios'));
+    void api
+      .get<{ filiais: Filial[] }>('/filiais')
+      .then(({ filiais: lista }) => setFiliais(lista))
+      .catch(() => undefined);
   }, []);
+
+  const definirFilial = async (usuario: Usuario, filialId: string) => {
+    setErro(null);
+    try {
+      await api.patch(`/usuarios/${usuario.id}`, { filialId: filialId || null });
+      await carregar();
+    } catch (err) {
+      setErro(err instanceof ApiError ? err.message : 'Falha ao definir a filial');
+    }
+  };
 
   const criar = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,6 +77,7 @@ export function UsuariosTab() {
                 <tr>
                   <th className="pb-2 font-medium">Nome</th>
                   <th className="pb-2 font-medium">Perfil</th>
+                  <th className="pb-2 font-medium">Filial</th>
                   <th className="pb-2 font-medium">Status</th>
                   <th className="pb-2 font-medium">Situacao</th>
                   <th className="pb-2" />
@@ -76,6 +92,18 @@ export function UsuariosTab() {
                     </td>
                     <td className="py-3">
                       <Badge tom="marca">{LABEL_PERFIL[u.perfil]}</Badge>
+                    </td>
+                    <td className="py-3">
+                      <Select
+                        aria-label={`Filial de ${u.nome}`}
+                        value={u.filialId ?? ''}
+                        onChange={(e) => void definirFilial(u, e.target.value)}
+                      >
+                        <option value="">Sem filial</option>
+                        {filiais.map((f) => (
+                          <option key={f.id} value={f.id}>{f.nome}</option>
+                        ))}
+                      </Select>
                     </td>
                     <td className="py-3">
                       <span className="inline-flex items-center gap-2 text-slate-600">

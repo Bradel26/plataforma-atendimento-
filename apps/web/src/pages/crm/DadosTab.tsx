@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alerta, Badge, Button, Card, Field } from '../../components/ui';
+import { Alerta, Badge, Button, Card, Field, Select } from '../../components/ui';
 import { ApiError, api, baixarCsv } from '../../lib/api';
 
 type Resultado = {
@@ -12,21 +12,59 @@ type Resultado = {
 const EXPORTACOES = [
   { recurso: 'leads', label: 'Leads' },
   { recurso: 'contatos', label: 'Contatos' },
+  { recurso: 'contas', label: 'Contas' },
   { recurso: 'oportunidades', label: 'Oportunidades' },
   { recurso: 'protocolos', label: 'Protocolos' },
   { recurso: 'conversas', label: 'Conversas' },
+] as const;
+
+const IMPORTACOES = [
+  {
+    recurso: 'leads',
+    label: 'Leads',
+    colunas: 'nome (obrigatoria), email, telefone, conta, fase, tipo, canal_origem, responsavel_email, prazo, valor_estimado, motivo_perda, observacoes',
+  },
+  {
+    recurso: 'contatos',
+    label: 'Contatos',
+    colunas: 'nome (obrigatoria), email, telefone, conta, canal_origem, observacoes',
+  },
+  {
+    recurso: 'contas',
+    label: 'Contas',
+    colunas: 'nome (obrigatoria), cnpj, segmento, site, telefone, email, observacoes',
+  },
+  {
+    recurso: 'oportunidades',
+    label: 'Oportunidades',
+    colunas: 'titulo (obrigatoria), conta (obrigatoria), funil, estagio, valor, responsavel_email, previsao_fechamento, canal_origem',
+  },
 ] as const;
 
 const hoje = () => new Date().toISOString().slice(0, 10);
 
 /** Importacao e exportacao CSV (Fase 2). Excel pt-BR abre direto: BOM + separador ";". */
 export function DadosTab() {
+  const [recurso, setRecurso] = useState<(typeof IMPORTACOES)[number]['recurso']>('leads');
   const [csv, setCsv] = useState('');
   const [nomeArquivo, setNomeArquivo] = useState('');
   const [previa, setPrevia] = useState<Resultado | null>(null);
   const [importado, setImportado] = useState<Resultado | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
+
+  const importacaoAtual = IMPORTACOES.find((i) => i.recurso === recurso)!;
+
+  const mudarRecurso = (novo: (typeof IMPORTACOES)[number]['recurso']) => {
+    setRecurso(novo);
+    // Trocar de recurso sem limpar deixaria a previa de um tipo de planilha
+    // exibida por cima do formulario de outro — os campos nao tem nada a ver.
+    setCsv('');
+    setNomeArquivo('');
+    setPrevia(null);
+    setImportado(null);
+    setErro(null);
+  };
 
   const lerArquivo = async (arquivo: File) => {
     setErro(null);
@@ -40,7 +78,7 @@ export function DadosTab() {
     setErro(null);
     setOcupado(true);
     try {
-      const { resultado } = await api.post<{ resultado: Resultado }>('/dados/importar/leads', { csv, dryRun });
+      const { resultado } = await api.post<{ resultado: Resultado }>(`/dados/importar/${recurso}`, { csv, dryRun });
       if (dryRun) {
         setPrevia(resultado);
         setImportado(null);
@@ -103,13 +141,26 @@ export function DadosTab() {
         {erro && <div className="mt-3"><Alerta>{erro}</Alerta></div>}
       </Card>
 
-      <Card titulo="Importar leads" descricao="Somente admin e supervisor">
+      <Card titulo="Importar" descricao="Somente admin e supervisor">
         <div className="space-y-3">
-          <Button variante="neutro" onClick={() => void baixar('/dados/modelos/leads.csv', 'modelo-leads.csv')}>
+          <Field label="O que importar">
+            <Select value={recurso} onChange={(e) => mudarRecurso(e.target.value as typeof recurso)}>
+              {IMPORTACOES.map((i) => (
+                <option key={i.recurso} value={i.recurso}>
+                  {i.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
+          <Button
+            variante="neutro"
+            onClick={() => void baixar(`/dados/modelos/${recurso}.csv`, `modelo-${recurso}.csv`)}
+          >
             Baixar modelo em branco
           </Button>
 
-          <Field label="Arquivo CSV" hint="Colunas: nome (obrigatoria), email, telefone, conta, fase, tipo, canal_origem, responsavel_email, prazo, valor_estimado, motivo_perda, observacoes">
+          <Field label="Arquivo CSV" hint={`Colunas: ${importacaoAtual.colunas}`}>
             <input
               type="file"
               accept=".csv,text/csv"

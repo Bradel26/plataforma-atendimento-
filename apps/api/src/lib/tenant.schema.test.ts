@@ -33,13 +33,30 @@ const FILHAS: Record<string, string> = {
   FunnelStage: 'Funnel',
   OpportunityItem: 'Opportunity',
   OpportunityStageLog: 'Opportunity',
+  // A trilha de auditoria (item 3.2) e filha: toda leitura confere a
+  // oportunidade com o filtro de visibilidade ANTES de ler a trilha, porque a
+  // extensao de multi-tenant filtra a operacao consultada e nao a relacao.
+  OpportunityAudit: 'Opportunity',
   CatalogItem: 'PriceCatalog',
   CampaignItem: 'Campaign',
   BotStep: 'Bot',
   TicketComment: 'Ticket',
   TicketAttachment: 'Ticket',
   TicketSchedule: 'Ticket',
+  // As proximas acoes sugeridas pelo motor (item E.2) chegam sempre pela
+  // chamada: a rota confere a chamada com o filtro de organizacao antes de ler
+  // ou escrever qualquer sugestao.
+  CallSuggestedAction: 'Call',
   PresenceLog: 'User',
+  // Base instalada (item 5.1): o componente de garantia chega sempre pelo
+  // produto do cliente, que ja carrega a organizacao.
+  ComponenteGarantia: 'ProdutoDoCliente',
+  // Campos customizados (item 6.4): o valor sempre chega pelo registro dono
+  // (conta, lead ou oportunidade), que ja carrega a organizacao e passou pela
+  // politica de visibilidade antes de qualquer leitura ou escrita de valor.
+  ValorCampoCustomizadoConta: 'Account',
+  ValorCampoCustomizadoLead: 'Lead',
+  ValorCampoCustomizadoOportunidade: 'Opportunity',
 };
 
 /** Globais: existem acima ou fora de qualquer organizacao. */

@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { BotsTab } from './BotsTab';
+import { CamposCustomizadosTab } from './CamposCustomizadosTab';
 import { CanaisTab } from './CanaisTab';
 import { FilaTab } from './FilaTab';
 import { FilasTab } from './FilasTab';
+import { FiliaisTab } from './FiliaisTab';
 import { IaTab } from './IaTab';
 import { LgpdTab } from './LgpdTab';
 import { UsuariosTab } from './UsuariosTab';
@@ -11,6 +13,8 @@ import { WhiteLabelTab } from './WhiteLabelTab';
 
 const ABAS = [
   { id: 'usuarios', label: 'Usuarios e permissoes' },
+  { id: 'filiais', label: 'Filiais' },
+  { id: 'campos-customizados', label: 'Campos customizados' },
   { id: 'filas', label: 'Filas' },
   { id: 'canais', label: 'Canais' },
   { id: 'bots', label: 'Chatbot' },
@@ -46,6 +50,8 @@ export function ConfiguracoesPage() {
       </nav>
 
       {aba === 'usuarios' && <UsuariosTab />}
+      {aba === 'filiais' && <FiliaisTab />}
+      {aba === 'campos-customizados' && <CamposCustomizadosTab />}
       {aba === 'filas' && <FilasTab />}
       {aba === 'canais' && <CanaisTab />}
       {aba === 'bots' && <BotsTab />}

@@ -8,6 +8,7 @@ import { urlAssinada } from '../../lib/storage';
 import { organizacaoAtual } from '../../lib/tenant';
 import { notificarChamada } from '../../realtime/hub';
 import type { Credenciais, EventoChamada, Provedor } from './voice.provider';
+import { resumirSentimento } from './analise';
 import { twilio } from './twilio.provider';
 
 /** Drivers disponiveis. Provedor novo entra aqui e em nenhum outro lugar. */
@@ -252,6 +253,9 @@ const inclusao = {
   contato: { select: { id: true, nome: true } },
   agente: { select: { id: true, nome: true } },
   fila: { select: { id: true, nome: true } },
+  // Quem classificou entra na leitura (item 6.6): "nota 2" sem autor nao se
+  // discute com ninguem.
+  classificadoPor: { select: { id: true, nome: true } },
 } satisfies Prisma.CallInclude;
 
 type ChamadaDb = Prisma.CallGetPayload<{ include: typeof inclusao }> | Prisma.CallGetPayload<object>;
@@ -274,11 +278,89 @@ function serializar(c: ChamadaDb) {
     gravacaoUrl: c.gravacaoUrl ? urlAssinada(c.gravacaoUrl) : null,
     gravacaoDuracao: c.gravacaoDuracao,
     transcricao: c.transcricao,
+    /*
+     * Resumo e sentimento da ligacao (item E.2), com a procedencia deles.
+     *
+     * `analisadoPor` vai para a tela junto: resumo sem autor nao se discute, e
+     * trocar de motor sem registro faria duas analises incomparaveis parecerem a
+     * mesma coisa. Sentimento nulo e "ninguem analisou", nunca NEUTRO.
+     */
+    resumo: c.resumo,
+    sentimento: c.sentimento,
+    analisadoPor: c.analisadoPor,
+    analisadoEm: c.analisadoEm,
     custo: c.custo === null ? null : Number(c.custo),
+    /*
+     * Nulo em classificacao e "ninguem ouviu ainda", nao "ruim" (item 6.6).
+     *
+     * A tela mostra travessao, e nao zero nem tres estrelas: um valor padrao
+     * faria a plataforma emitir opiniao no lugar de quem ouviu a ligacao.
+     */
+    classificacao: c.classificacao,
+    classificadoEm: c.classificadoEm,
     motivoFalha: c.motivoFalha,
     contato: relacoes.contato ?? null,
     agente: relacoes.agente ?? null,
     fila: relacoes.fila ?? null,
+    classificadoPor: relacoes.classificadoPor ?? null,
+  };
+}
+
+/**
+ * Classifica uma ligacao de 1 a 5 (item 6.6).
+ *
+ * `null` limpa a nota. Voltar para "nao classificada" precisa existir: nota
+ * lancada por engano ficaria para sempre, e nao ha valor que signifique "retiro
+ * o que eu disse" — zero seria uma nota, nao a ausencia dela.
+ */
+export async function classificarChamada(id: string, classificacao: number | null, usuarioId: string) {
+  const chamada = await prisma.call.findFirst({ where: { id }, select: { id: true } });
+  if (!chamada) throw notFound('Chamada nao encontrada');
+
+  return serializar(
+    await prisma.call.update({
+      where: { id: chamada.id },
+      data: {
+        classificacao,
+        // Limpar a nota limpa o autor e a data junto: manter "classificado por"
+        // de uma nota que nao existe mais faria o registro mentir.
+        classificadoPorId: classificacao === null ? null : usuarioId,
+        classificadoEm: classificacao === null ? null : new Date(),
+      },
+      include: inclusao,
+    }),
+  );
+}
+
+/**
+ * Custo e classificacao agregados de um periodo (item 6.6).
+ *
+ * Funcao pura na conta, consulta fina no banco: o mesmo padrao dos relatorios
+ * comerciais. As duas medias sao calculadas sobre bases DIFERENTES de proposito
+ * — custo medio sobre as chamadas que tem custo, nota media sobre as que tem
+ * nota — porque misturar as bases produziria um numero que nao descreve nem uma
+ * coisa nem outra.
+ */
+export function resumirCustoEClassificacao(
+  chamadas: Array<{ custo: number | null; classificacao: number | null }>,
+) {
+  const comCusto = chamadas.filter((c) => c.custo !== null);
+  const comNota = chamadas.filter((c) => c.classificacao !== null);
+
+  const soma = comCusto.reduce((a, c) => a + (c.custo ?? 0), 0);
+  const somaNota = comNota.reduce((a, c) => a + (c.classificacao ?? 0), 0);
+
+  return {
+    total: chamadas.length,
+    /** Nulo quando NENHUMA chamada tem custo — zero afirmaria que foi de graca. */
+    custoTotal: comCusto.length === 0 ? null : Math.round(soma * 10000) / 10000,
+    custoMedio: comCusto.length === 0 ? null : Math.round((soma / comCusto.length) * 10000) / 10000,
+    /** Quantas chamadas o custo cobre: sem isso a media parece ser do todo. */
+    chamadasComCusto: comCusto.length,
+    notaMedia: comNota.length === 0 ? null : Math.round((somaNota / comNota.length) * 100) / 100,
+    chamadasComNota: comNota.length,
+    /** O que falta ouvir. E a fila de trabalho de quem classifica. */
+    semNota: chamadas.length - comNota.length,
   };
 }
 
@@ -286,7 +368,14 @@ function serializar(c: ChamadaDb) {
 export async function indicadoresVoz(desde: Date, ate: Date = new Date()) {
   const chamadas = await prisma.call.findMany({
     where: { iniciadoEm: { gte: desde, lte: ate } },
-    select: { direcao: true, status: true, duracao: true },
+    select: {
+      direcao: true,
+      status: true,
+      duracao: true,
+      custo: true,
+      classificacao: true,
+      sentimento: true,
+    },
   });
 
   const atendidas = chamadas.filter((c) => c.status === 'COMPLETADA' && (c.duracao ?? 0) > 0);
@@ -302,5 +391,28 @@ export async function indicadoresVoz(desde: Date, ate: Date = new Date()) {
     taxaAtendimento: chamadas.length === 0 ? null : Math.round((atendidas.length / chamadas.length) * 100),
     /** TMA de voz em segundos, so sobre chamadas que realmente conversaram. */
     tma: atendidas.length === 0 ? null : Math.round(somaDuracao / atendidas.length),
+    /*
+     * Custo e nota do periodo (item 6.6).
+     *
+     * Entram nos MESMOS indicadores em vez de numa rota propria: quem abre a
+     * telefonia para ver se a operacao esta perdendo chamada e quem quer saber
+     * quanto isso custou — duas chamadas para responder uma pergunta so seriam
+     * duas idas ao servidor e duas versoes do periodo.
+     */
+    // `total` sai do espalhamento: os dois falam da mesma contagem, e deixar os
+    // dois faria o TypeScript escolher em silencio qual sobrevive.
+    /*
+     * Sentimento do periodo (item E.2).
+     *
+     * `semAnalise` vem junto e nao e detalhe: sem ele, "70% neutro" pode ser 7
+     * de 10 chamadas ou 7 de 700 nao analisadas, e as duas frases pedem decisoes
+     * opostas. Chamada sem analise NAO entra em NEUTRO.
+     */
+    sentimento: resumirSentimento(chamadas.map((c) => ({ sentimento: c.sentimento }))),
+    ...(({ total: _ignorado, ...resto }) => resto)(
+      resumirCustoEClassificacao(
+        chamadas.map((c) => ({ custo: c.custo === null ? null : Number(c.custo), classificacao: c.classificacao })),
+      ),
+    ),
   };
 }

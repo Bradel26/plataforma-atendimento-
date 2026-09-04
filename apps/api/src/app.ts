@@ -15,6 +15,7 @@ import { iaRoutes } from './modules/bots/ia.routes';
 import { integracoesRoutes } from './modules/integrations/tokens.routes';
 import { campanhasRoutes } from './modules/campaigns/campaigns.routes';
 import { channelsRoutes } from './modules/channels/channels.routes';
+import { ponteRoutes } from './modules/channels/ponte.routes';
 import { webhooksRoutes } from './modules/channels/webhooks.routes';
 import { vozRoutes, vozWebhookRoutes } from './modules/voice/voice.routes';
 import { conversationsRoutes } from './modules/conversations/conversations.routes';
@@ -27,13 +28,22 @@ import { pesquisasPublicasRoutes, pesquisasRoutes } from './modules/surveys/surv
 import { catalogsRoutes, productsRoutes } from './modules/crm/catalog.routes';
 import { leadsRoutes } from './modules/crm/leads.routes';
 import { tagsRoutes } from './modules/crm/tags.routes';
+import { comercialRoutes } from './modules/crm/comercial.routes';
+import { metasRoutes } from './modules/crm/metas.routes';
+import { produtividadeRoutes } from './modules/crm/produtividade.routes';
+import { visoesRoutes } from './modules/crm/visoes.routes';
+import { camposCustomizadosRoutes } from './modules/crm/campos-customizados.routes';
+import { buscaRoutes } from './modules/busca/busca.routes';
+import { consumoIaRoutes } from './modules/ia/consumo.routes';
 import { funnelsRoutes, opportunitiesRoutes } from './modules/crm/opportunities.routes';
+import { produtosInstaladosRoutes } from './modules/crm/produtos-instalados.routes';
 import { atividadesRoutes, fichaRoutes } from './modules/crm/ficha.routes';
 import { arquivosRoutes } from './modules/files/files.routes';
 import { widgetRoutes } from './modules/widget/widget.routes';
 import { lgpdRoutes } from './modules/lgpd/lgpd.routes';
 import { healthRoutes } from './modules/health/health.routes';
 import { queuesRoutes } from './modules/queues/queues.routes';
+import { filiaisRoutes } from './modules/filiais/filiais.routes';
 import { usersRoutes } from './modules/users/users.routes';
 import { ticketsRoutes } from './modules/tickets/tickets.routes';
 import { webchatRoutes } from './modules/webchat/webchat.routes';
@@ -49,6 +59,14 @@ export function createApp() {
   app.use(cors({ origin: env.WEB_ORIGIN, credentials: true }));
   // O webhook da Meta valida assinatura sobre o corpo BRUTO — precisa vir antes
   // do express.json, que consumiria o stream e reserializaria o payload.
+  /*
+   * A ponte do WhatsApp nao oficial entra ANTES de `/api/webhooks`.
+   *
+   * `webhooksRoutes` casa `/:canal`, entao `/api/webhooks/ponte/...` cairia nele
+   * como se "ponte" fosse um canal — e a resposta seria "canal nao suportado" em
+   * vez da rota certa.
+   */
+  app.use('/api/webhooks/ponte', ponteRoutes);
   app.use('/api/webhooks', webhooksRoutes);
   // A assinatura do provedor de voz e sobre os parametros do formulario, nao
   // sobre o corpo bruto — mas a rota fica aqui junto dos outros webhooks para o
@@ -82,6 +100,7 @@ export function createApp() {
   app.use('/api/auth', authRoutes);
   app.use('/api/usuarios', usersRoutes);
   app.use('/api/filas', queuesRoutes);
+  app.use('/api/filiais', filiaisRoutes);
   app.use('/api/branding', brandingRoutes);
   app.use('/api/conversas', conversationsRoutes);
   app.use('/api/contatos', contactsRoutes);
@@ -90,7 +109,20 @@ export function createApp() {
   app.use('/api/leads', leadsRoutes);
   app.use('/api/tags', tagsRoutes);
   app.use('/api/oportunidades', opportunitiesRoutes);
+  app.use('/api/comercial', comercialRoutes);
+  app.use('/api/metas', metasRoutes);
+  // Matriz de produtividade (item 3.3).
+  app.use('/api/produtividade', produtividadeRoutes);
+  // Visoes salvas (item 6.1).
+  app.use('/api/visoes-salvas', visoesRoutes);
+  app.use('/api/campos-customizados', camposCustomizadosRoutes);
+  app.use('/api/busca', buscaRoutes);
+  // Medidor de consumo (item 6.8). Nome diferente do motor de IA em
+  // `/api/bots/ia`, que e a ponte para o plugin externo.
+  app.use('/api/ia', consumoIaRoutes);
   app.use('/api/funis', funnelsRoutes);
+  // Base instalada (item 5.1).
+  app.use('/api/produtos-instalados', produtosInstaladosRoutes);
   app.use('/api/produtos', productsRoutes);
   app.use('/api/catalogos', catalogsRoutes);
   app.use('/api/ficha', fichaRoutes);

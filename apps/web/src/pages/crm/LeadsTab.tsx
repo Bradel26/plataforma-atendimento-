@@ -7,13 +7,17 @@ import {
   LABEL_MOTIVO_PERDA,
   LABEL_TIPO_LEAD,
   moeda,
+  type CampoCustomizadoDef,
   type Contato,
+  type FiltroLeadSalvo,
   type Lead,
   type LeadFase,
   type LeadTipo,
   type MotivoPerda,
   type Usuario,
 } from '../../lib/types';
+import { CamposCustomizadosCampos } from './CamposCustomizados';
+import { VisoesSalvas } from './VisoesSalvas';
 
 type Colunas = Record<LeadFase, Lead[]>;
 
@@ -53,6 +57,9 @@ export function LeadsTab() {
   const [arrastando, setArrastando] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [novo, setNovo] = useState({ contatoId: '', tipo: 'INBOUND' as LeadTipo, valorEstimado: '', prazo: '' });
+  /** Campos customizados (item 6.4) do "Novo lead". */
+  const [camposDef, setCamposDef] = useState<CampoCustomizadoDef[]>([]);
+  const [novosCampos, setNovosCampos] = useState<Record<string, unknown>>({});
 
   const carregar = useCallback(async () => {
     const qs = new URLSearchParams();
@@ -84,6 +91,13 @@ export function LeadsTab() {
         setContatos(c.contatos);
         setAgentes(u.usuarios.filter((x) => x.perfil !== 'ADMIN'));
       })
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    void api
+      .get<{ campos: CampoCustomizadoDef[] }>('/campos-customizados?entidade=LEAD')
+      .then(({ campos }) => setCamposDef(campos))
       .catch(() => undefined);
   }, []);
 
@@ -120,8 +134,10 @@ export function LeadsTab() {
         tipo: novo.tipo,
         ...(novo.valorEstimado ? { valorEstimado: Number(novo.valorEstimado) } : {}),
         ...(novo.prazo ? { prazo: novo.prazo } : {}),
+        ...(Object.keys(novosCampos).length ? { camposCustomizados: novosCampos } : {}),
       });
       setNovo({ contatoId: '', tipo: 'INBOUND', valorEstimado: '', prazo: '' });
+      setNovosCampos({});
       await carregar();
     } catch (err) {
       setErro(err instanceof ApiError ? err.message : 'Falha ao criar lead');
@@ -131,6 +147,26 @@ export function LeadsTab() {
   return (
     <div className="space-y-4">
       <Card titulo="Filtros">
+        <div className="mb-3">
+          <VisoesSalvas<FiltroLeadSalvo>
+            entidade="LEAD"
+            filtroAtual={{
+              ...(filtros.tipo ? { tipo: filtros.tipo as LeadTipo } : {}),
+              ...(filtros.responsavelId ? { responsavelId: filtros.responsavelId } : {}),
+              ...(filtros.atrasados ? { atrasados: true } : {}),
+              ...(filtros.busca.trim() ? { busca: filtros.busca.trim() } : {}),
+            }}
+            filtroVazio={!filtros.tipo && !filtros.responsavelId && !filtros.atrasados && !filtros.busca.trim()}
+            aoAplicar={(filtro) =>
+              setFiltros({
+                tipo: filtro.tipo ?? '',
+                responsavelId: filtro.responsavelId ?? '',
+                atrasados: filtro.atrasados ? 'true' : '',
+                busca: filtro.busca ?? '',
+              })
+            }
+          />
+        </div>
         <div className="grid gap-3 sm:grid-cols-4">
           <Field label="Tipo">
             <Select value={filtros.tipo} onChange={(e) => setFiltros({ ...filtros, tipo: e.target.value })}>
@@ -227,6 +263,23 @@ export function LeadsTab() {
           </Field>
           <Button type="submit" disabled={!novo.contatoId}>Criar lead</Button>
         </form>
+        {camposDef.length > 0 && (
+          <div className="mt-4 border-t border-slate-100 pt-4">
+            <CamposCustomizadosCampos
+              campos={camposDef}
+              valores={novosCampos}
+              aoMudar={(chave, valor) =>
+                setNovosCampos((atuais) => {
+                  if (valor === null) {
+                    const { [chave]: _removido, ...resto } = atuais;
+                    return resto;
+                  }
+                  return { ...atuais, [chave]: valor };
+                })
+              }
+            />
+          </div>
+        )}
       </Card>
     </div>
   );

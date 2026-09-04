@@ -1,9 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alerta, Button, Card, EmptyState, Field, Input, Select } from '../../components/ui';
+import { Alerta, Badge, Button, Card, EmptyState, Field, Input, Select } from '../../components/ui';
 import { ApiError, api } from '../../lib/api';
-import type { Canal, Contato } from '../../lib/types';
+import {
+  AJUDA_CICLO_DE_VIDA,
+  LABEL_CICLO_DE_VIDA,
+  type Canal,
+  type CicloDeVida,
+  type Contato,
+} from '../../lib/types';
 import { FichaContato, FichaVazia } from './ficha/FichaContato';
 import { Etiquetas, FiltroEtiquetas } from './Etiquetas';
+import { FunilDeCicloDeVida } from './FunilDeCicloDeVida';
 
 const ORIGENS: Canal[] = ['WEBCHAT', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'EMAIL', 'VOZ'];
 
@@ -29,6 +36,14 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   const [busca, setBusca] = useState('');
   /** Etiquetas ligadas no filtro. Semantica E: cada uma estreita a lista. */
   const [tags, setTags] = useState<string[]>([]);
+  /*
+   * Degraus de ciclo de vida ligados no filtro (item E.4).
+   *
+   * Semantica OU, ao contrario das etiquetas: um contato esta em UM degrau, e
+   * exigir dois ao mesmo tempo nunca traria ninguem. Clicar no degrau do funil e
+   * o mesmo que ligar o filtro — o grafico e o controle.
+   */
+  const [ciclos, setCiclos] = useState<CicloDeVida[]>([]);
   /** Muda quando a ficha grava etiquetas: e o sinal para lista e filtro. */
   const [versaoTags, setVersaoTags] = useState(0);
   const selecionado = selecionadoId;
@@ -51,6 +66,7 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
     const params = new URLSearchParams();
     if (busca.trim()) params.set('busca', busca.trim());
     for (const tag of tags) params.append('tags', tag);
+    for (const c of ciclos) params.append('ciclo', c);
     const qs = params.size ? `?${params}` : '';
     try {
       const { contatos: lista } = await api.get<{ contatos: Contato[] }>(`/contatos${qs}`);
@@ -58,7 +74,7 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
     } catch (e) {
       setErro(e instanceof ApiError ? e.message : 'Falha ao carregar contatos');
     }
-  }, [busca, tags]);
+  }, [busca, tags, ciclos]);
 
   useEffect(() => {
     const t = setTimeout(() => void carregar(), 250);
@@ -189,8 +205,8 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
               // Lista vazia por filtro nao e lista vazia por base vazia: sem
               // essa distincao a tela sugere cadastrar alguem que ja existe.
               descricao={
-                tags.length > 0 || busca.trim()
-                  ? 'Nenhum contato com esse filtro. Desligue uma etiqueta ou limpe a busca.'
+                tags.length > 0 || ciclos.length > 0 || busca.trim()
+                  ? 'Nenhum contato com esse filtro. Desligue uma etiqueta, um degrau do ciclo de vida, ou limpe a busca.'
                   : 'Contatos nascem sozinhos quando alguem fala pela primeira vez. Use Novo contato para cadastrar a mao.'
               }
             />
@@ -212,6 +228,16 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
                         {c.totalConversas} conversa{c.totalConversas === 1 ? '' : 's'}
                       </p>
                     )}
+                    {c.cicloDeVida && (
+                      // O degrau na LINHA, e nao so na ficha: ciclo de vida serve
+                      // para varrer a carteira, e varrer nao se faz abrindo um
+                      // contato por vez.
+                      <p className="mt-1" title={AJUDA_CICLO_DE_VIDA[c.cicloDeVida]}>
+                        <Badge tom={c.cicloDeVida === 'CLIENTE' ? 'sucesso' : 'neutro'}>
+                          {LABEL_CICLO_DE_VIDA[c.cicloDeVida]}
+                        </Badge>
+                      </p>
+                    )}
                     {c.tags && c.tags.length > 0 && (
                       <div className="mt-1.5">
                         <Etiquetas tags={c.tags} />
@@ -226,6 +252,16 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
       </Card>
 
       <div className="space-y-5">
+      {/* O funil fica na coluna da direita e serve de filtro: clicar num degrau
+          estreita a lista da esquerda. Grafico que so olha e grafico que vira
+          enfeite — este responde "quantos clientes tenho" e leva ate eles. */}
+      <FunilDeCicloDeVida
+        ativos={ciclos}
+        aoFiltrar={(c) =>
+          setCiclos((atuais) => (atuais.includes(c) ? atuais.filter((x) => x !== c) : [...atuais, c]))
+        }
+      />
+
       {duplicado && (
         /* Fechavel: o aviso fica acima da ficha e nao tem por que sobreviver ao
            proximo clique — quem conferiu quer a tela de volta. */

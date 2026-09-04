@@ -7,6 +7,12 @@ import { param } from '../../http/params';
 import { badRequest, notFound } from '../../lib/errors';
 import { prisma } from '../../lib/prisma';
 import {
+  coordenadaValida,
+  duracaoEmMinutos,
+  impedimentoDoCheckin,
+  impedimentoDoCheckout,
+} from './visita';
+import {
   filtroDe,
   politicaAtividades,
   politicaContas,
@@ -16,6 +22,7 @@ import {
 } from '../../lib/politicas';
 import { apenasVisivel } from '../../lib/visibilidade';
 import { TIPOS_EVENTO, fichaConta, fichaContato, timeline } from './ficha.service';
+import { diasDaSemana, montarAgenda, segundaDaSemana } from './agenda';
 
 export const fichaRoutes = Router();
 export const atividadesRoutes = Router();
@@ -97,7 +104,7 @@ fichaRoutes.get(
 
 /* ── Atividades ────────────────────────────────────────────────────────── */
 
-const TIPOS = ['NOTA', 'LIGACAO', 'WHATSAPP', 'EMAIL', 'REUNIAO', 'VISITA', 'PROPOSTA'] as const;
+const TIPOS = ['NOTA', 'TAREFA', 'LIGACAO', 'WHATSAPP', 'EMAIL', 'REUNIAO', 'VISITA', 'PROPOSTA'] as const;
 
 const vinculos = {
   contatoId: z.string().uuid().nullable().optional(),
@@ -137,8 +144,17 @@ const listarSchema = z.object({
   contaId: z.string().uuid().optional(),
   oportunidadeId: z.string().uuid().optional(),
   responsavelId: z.string().uuid().optional(),
-  /** abertas = com prazo e nao concluidas; atrasadas = abertas com prazo vencido. */
-  situacao: z.enum(['todas', 'abertas', 'atrasadas', 'concluidas']).default('todas'),
+  /*
+   * abertas = com prazo e nao concluidas; atrasadas = abertas com prazo vencido.
+   *
+   * `pendentes` e diferente de `abertas` e a diferenca importa: pendente e
+   * "nao concluida", com ou sem prazo. A tarefa que a etapa do funil exige
+   * (item 3.1) nasce **sem prazo** de proposito — um prazo inventado viraria
+   * "atrasada" dias depois sem ninguem ter combinado data — e por isso ela
+   * nao aparece em `abertas`. Sem este valor, a tarefa que bloqueia o funil
+   * seria a unica que nenhuma lista mostra.
+   */
+  situacao: z.enum(['todas', 'abertas', 'pendentes', 'atrasadas', 'concluidas']).default('todas'),
   limite: z.coerce.number().int().min(1).max(200).default(50),
 });
 
@@ -146,6 +162,76 @@ const inclusao = {
   responsavel: { select: { id: true, nome: true } },
   criadoPor: { select: { id: true, nome: true } },
 } as const;
+
+/**
+ * Agenda da semana (item E.5).
+ *
+ * Vem ANTES de `/` no arquivo por clareza, e o endereco proprio (`/semana`) nao
+ * colide com nada.
+ *
+ * **O fuso vem de quem pergunta.** `offset` e o `getTimezoneOffset()` do
+ * navegador, e sem ele a tarefa de sabado as 22h (domingo 01h UTC) apareceria no
+ * domingo — mesmo raciocinio das metas, que recebem `AAAA-MM` para nao existir
+ * fuso a errar.
+ *
+ * Sem `requireRole`: cada um ve a propria agenda pela politica de atividades. O
+ * gestor que quiser a agenda de alguem passa `responsavelId` — e a politica dele
+ * ja permite ver a equipe, ou nao permite, sem esta rota decidir nada a parte.
+ */
+atividadesRoutes.get(
+  '/semana',
+  validateQuery(
+    z.object({
+      /** Segunda-feira da semana, `AAAA-MM-DD`. Ausente = a semana de hoje. */
+      inicio: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use AAAA-MM-DD')
+        .optional(),
+      /** Minutos a subtrair do horario local para chegar ao UTC (Brasil: 180). */
+      offset: z.coerce.number().int().min(-840).max(840).default(0),
+      responsavelId: z.string().uuid().optional(),
+    }),
+  ),
+  asyncHandler(async (_req, res) => {
+    const q = res.locals.query as { inicio?: string; offset: number; responsavelId?: string };
+    const inicio = q.inicio ?? segundaDaSemana(new Date(), q.offset);
+    const dias = diasDaSemana(inicio, q.offset);
+
+    /*
+     * A consulta pega TRES conjuntos numa so: o que cai na semana, o atrasado de
+     * antes dela e o pendente sem prazo. Buscar em tres consultas abriria a porta
+     * para os tres verem versoes diferentes do banco — a tarefa concluida entre a
+     * primeira e a terceira apareceria em duas faixas.
+     */
+    const atividades = await prisma.activity.findMany({
+      where: {
+        AND: [
+          {
+            responsavelId: q.responsavelId,
+            OR: [
+              { prazo: { gte: dias[0]!.inicio, lt: dias[dias.length - 1]!.fim } },
+              { prazo: { lt: dias[0]!.inicio }, concluidoEm: null },
+              { prazo: null, concluidoEm: null },
+            ],
+          },
+          await filtroDe(politicaAtividades),
+        ],
+      },
+      orderBy: [{ prazo: { sort: 'asc', nulls: 'last' } }, { criadoEm: 'desc' }],
+      // Teto alto para a semana nao vir cortada em silencio, e a contagem de
+      // "sem prazo" nao virar um numero que depende do limite.
+      take: 500,
+      include: {
+        ...inclusao,
+        contato: { select: { id: true, nome: true } },
+        oportunidade: { select: { id: true, titulo: true } },
+      },
+    });
+
+    const agenda = montarAgenda(atividades, dias);
+    res.json({ inicio, agenda });
+  }),
+);
 
 atividadesRoutes.get(
   '/',
@@ -157,11 +243,13 @@ atividadesRoutes.get(
     const situacao =
       q.situacao === 'abertas'
         ? { concluidoEm: null, prazo: { not: null } }
-        : q.situacao === 'atrasadas'
-          ? { concluidoEm: null, prazo: { lt: agora } }
-          : q.situacao === 'concluidas'
-            ? { concluidoEm: { not: null } }
-            : {};
+        : q.situacao === 'pendentes'
+          ? { concluidoEm: null }
+          : q.situacao === 'atrasadas'
+            ? { concluidoEm: null, prazo: { lt: agora } }
+            : q.situacao === 'concluidas'
+              ? { concluidoEm: { not: null } }
+              : {};
 
     const atividades = await prisma.activity.findMany({
       where: {
@@ -329,6 +417,91 @@ atividadesRoutes.post(
     });
 
     res.json({ atividade });
+  }),
+);
+
+/* ── Check-in e check-out de visita (item 6.7) ────────────────────────────── */
+
+/**
+ * Coordenada opcional no corpo.
+ *
+ * Opcional de proposito: o tecnico pode estar num subsolo, com GPS negado ou sem
+ * sinal, e recusar o check-in nesse caso impediria o registro justamente na
+ * visita mais difícil. `coordenadaValida` descarta o `0,0` que alguns
+ * navegadores mandam quando o GPS falha.
+ */
+const localSchema = z.object({
+  lat: z.number().optional(),
+  lng: z.number().optional(),
+});
+
+atividadesRoutes.post(
+  '/:id/checkin',
+  validateBody(localSchema),
+  asyncHandler(async (req, res) => {
+    const id = param(req, 'id');
+    const atual = await prisma.activity.findFirst({
+      where: apenasVisivel(id, await filtroDe(politicaAtividades)),
+      select: { tipo: true, checkinEm: true, checkoutEm: true },
+    });
+    if (!atual) throw notFound('Atividade nao encontrada');
+
+    const impedimento = impedimentoDoCheckin(atual);
+    if (impedimento) throw badRequest(impedimento);
+
+    const local = coordenadaValida(req.body.lat, req.body.lng);
+    const atividade = await prisma.activity.update({
+      where: { id },
+      data: { checkinEm: new Date(), checkinLat: local?.lat ?? null, checkinLng: local?.lng ?? null },
+      include: inclusao,
+    });
+
+    res.json({ atividade });
+  }),
+);
+
+atividadesRoutes.post(
+  '/:id/checkout',
+  validateBody(localSchema),
+  asyncHandler(async (req, res) => {
+    const id = param(req, 'id');
+    const atual = await prisma.activity.findFirst({
+      where: apenasVisivel(id, await filtroDe(politicaAtividades)),
+      select: { tipo: true, checkinEm: true, checkoutEm: true, concluidoEm: true },
+    });
+    if (!atual) throw notFound('Atividade nao encontrada');
+
+    const impedimento = impedimentoDoCheckout(atual);
+    if (impedimento) throw badRequest(impedimento);
+
+    const local = coordenadaValida(req.body.lat, req.body.lng);
+    const agora = new Date();
+
+    const atividade = await prisma.activity.update({
+      where: { id },
+      data: {
+        checkoutEm: agora,
+        checkoutLat: local?.lat ?? null,
+        checkoutLng: local?.lng ?? null,
+        /*
+         * O check-out conclui a tarefa, se ela ainda estava aberta.
+         *
+         * Visita encerrada e tarefa feita: pedir os dois cliques deixaria a
+         * agenda cheia de visitas realizadas e "pendentes" — e seria o proprio
+         * tecnico a pagar por essa distincao, no fim do dia, no celular.
+         *
+         * `??` e nao sobrescrita: se alguem ja concluiu antes, a hora original
+         * fica. Duas verdades diferentes, e a primeira e a que foi registrada.
+         */
+        concluidoEm: atual.concluidoEm ?? agora,
+      },
+      include: inclusao,
+    });
+
+    res.json({
+      atividade,
+      duracaoMinutos: duracaoEmMinutos({ checkinEm: atividade.checkinEm, checkoutEm: atividade.checkoutEm }),
+    });
   }),
 );
 

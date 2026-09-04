@@ -6,7 +6,33 @@ const itemSchema = z.object({
   quantidade: z.number().int().min(1).default(1),
   /** Omitido: usa o preco do catalogo informado, ou o do primeiro catalogo ativo. */
   precoUnitario: z.number().nonnegative().optional(),
+  /**
+   * Acrescimo e desconto em VALOR absoluto, nao percentual (ver decisao 57).
+   *
+   * A regra "desconto nao passa do bruto" NAO cabe aqui: o bruto depende de
+   * `precoUnitario`, que pode vir omitido para o servico resolver no catalogo.
+   * Validar no schema recusaria desconto legitimo em item sem preco explicito, e
+   * aceitaria desconto absurdo quando o preco vem do catalogo. Fica no servico,
+   * depois de resolver o preco.
+   */
+  acrescimo: z.number().nonnegative().max(99_999_999).default(0),
+  desconto: z.number().nonnegative().max(99_999_999).default(0),
+  recorrencia: z.enum(['UNICO', 'MENSAL']).default('UNICO'),
+  /** Nulo explicito apaga o custo; omitido mantem. Zero e um custo de verdade. */
+  custoUnitario: z.number().nonnegative().nullable().optional(),
 });
+
+/**
+ * Horizonte da parte mensal, em meses.
+ *
+ * Teto de 120 (dez anos) por ser um numero que ninguem digita por acidente e que
+ * ainda cabe em contrato longo. Zero e valido: significa "considere so a parte
+ * unica", que e o que se quer ao orcar equipamento com manutencao opcional.
+ */
+const mesesRecorrenciaSchema = z.number().int().min(0).max(120);
+
+/** Item 6.4: `{chave: valor}`, validado em runtime contra as definicoes ativas. */
+const camposCustomizados = z.record(z.string(), z.unknown()).optional();
 
 export const criarOportunidadeSchema = z.object({
   titulo: z.string().trim().min(2).max(160),
@@ -18,7 +44,18 @@ export const criarOportunidadeSchema = z.object({
   previsaoFechamento: z.coerce.date().nullable().optional(),
   catalogoId: z.string().uuid().optional(),
   itens: z.array(itemSchema).max(50).optional(),
+  mesesRecorrencia: mesesRecorrenciaSchema.optional(),
+  camposCustomizados,
 });
+
+/**
+ * Canais de origem, no MESMO vocabulario de lead e contato.
+ *
+ * Repetido aqui como lista para o zod, mas os valores sao os do enum `Channel`
+ * do banco: "de onde veio" e a mesma pergunta nos tres, e dois vocabularios
+ * fariam o relatorio por origem precisar de traducao no meio.
+ */
+const CANAIS_ORIGEM = ['WEBCHAT', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'EMAIL', 'VOZ'] as const;
 
 export const atualizarOportunidadeSchema = z
   .object({
@@ -27,6 +64,24 @@ export const atualizarOportunidadeSchema = z
     valor: z.number().nonnegative().optional(),
     responsavelId: z.string().uuid().nullable().optional(),
     previsaoFechamento: z.coerce.date().nullable().optional(),
+    mesesRecorrencia: mesesRecorrenciaSchema.optional(),
+    /*
+     * Condicoes da proposta (item 2.2). Vazio vira nulo no servico: string vazia
+     * gravada imprimiria um rotulo "Condicao de pagamento" seguido de nada, o
+     * que num documento que vai ao cliente parece campo que ficou faltando.
+     */
+    condicaoPagamento: z.string().trim().max(200).nullable().optional(),
+    prazoEntrega: z.string().trim().max(120).nullable().optional(),
+    /*
+     * Temperatura e origem no cartao (item esquecido do plano).
+     *
+     * Nulo em ambos e um valor que se pode ESCREVER, e nao so um estado inicial:
+     * quem marcou "quente" por engano precisa poder desmarcar, e nao existe
+     * degrau que signifique "retiro minha leitura".
+     */
+    temperatura: z.enum(['FRIA', 'MORNA', 'QUENTE']).nullable().optional(),
+    canalOrigem: z.enum(CANAIS_ORIGEM).nullable().optional(),
+    camposCustomizados,
   })
   .refine((d) => Object.keys(d).length > 0, { message: 'Informe ao menos um campo' });
 
@@ -53,6 +108,7 @@ export const listarOportunidadesSchema = z.object({
 export const itensSchema = z.object({
   catalogoId: z.string().uuid().optional(),
   itens: z.array(itemSchema).min(1).max(50),
+  mesesRecorrencia: mesesRecorrenciaSchema.optional(),
 });
 
 export const criarFunilSchema = z.object({
@@ -73,3 +129,15 @@ export type AtualizarOportunidadeInput = z.infer<typeof atualizarOportunidadeSch
 export type FecharOportunidadeInput = z.infer<typeof fecharOportunidadeSchema>;
 export type ListarOportunidadesQuery = z.infer<typeof listarOportunidadesSchema>;
 export type ItensInput = z.infer<typeof itensSchema>;
+
+/**
+ * Exigencia da etapa (item 3.1). Nulo ou vazio desliga.
+ *
+ * O campo e o **titulo** da tarefa, nao um booleano: um sim/nao diria ao vendedor
+ * que falta algo sem dizer o que.
+ */
+export const tarefaDaEtapaSchema = z.object({
+  tarefaObrigatoria: z.string().trim().max(120).nullable(),
+});
+
+export type TarefaDaEtapaInput = z.infer<typeof tarefaDaEtapaSchema>;

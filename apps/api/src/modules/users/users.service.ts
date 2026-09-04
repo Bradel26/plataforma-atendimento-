@@ -1,6 +1,7 @@
 import type { AgentStatus, Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { exigirUsuarioDaOrganizacao } from '../../lib/politicas';
+import { exigirFilialDaOrganizacao } from '../filiais/filiais.service';
 import { conflict, notFound } from '../../lib/errors';
 import { hashPassword } from '../../lib/password';
 import { notificarStatusAgente } from '../../realtime/hub';
@@ -68,6 +69,8 @@ export async function updateUser(id: string, input: UpdateUserInput) {
     if (input.gestorId === id) throw conflict('Um usuario nao pode ser gestor de si mesmo');
     await exigirUsuarioDaOrganizacao(input.gestorId);
   }
+
+  if (input.filialId) await exigirFilialDaOrganizacao(input.filialId);
 
   const { senha, ...resto } = input;
   const user = await prisma.user.update({

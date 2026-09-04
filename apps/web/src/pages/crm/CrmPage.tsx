@@ -1,8 +1,12 @@
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../features/auth/AuthProvider';
 import type { Perfil } from '../../lib/types';
+import { ComercialTab } from './ComercialTab';
+import { MetasTab } from './MetasTab';
+import { ProdutividadeTab } from './ProdutividadeTab';
 import { ContasTab } from './ContasTab';
 import { DadosTab } from './DadosTab';
+import { AgendaDaSemana } from './AgendaDaSemana';
 import { ContatosTab } from './ContatosTab';
 import { LeadsTab } from './LeadsTab';
 import { OportunidadesTab } from './OportunidadesTab';
@@ -17,10 +21,34 @@ import { ProdutosTab } from './ProdutosTab';
  * aba que nao deveria estar la. Ausente = todos que ja chegaram ao CRM.
  */
 const ABAS = [
+  /*
+   * A agenda vem primeiro (item E.5).
+   *
+   * E a unica aba que responde "o que eu faco agora?" — as outras respondem "quem
+   * e essa pessoa" e "como esta o funil", que sao perguntas de consulta. Por isso
+   * ela e a primeira da fila.
+   *
+   * A aba PADRAO continua sendo contatos, e de proposito: `/crm` e o endereco que
+   * a navegacao e os atalhos ja abrem, e trocar o destino dele mudaria o
+   * comportamento de quem digita o endereco de cor. Quem quer a agenda clica nela
+   * ou usa `/crm?aba=agenda`.
+   *
+   * Sem perfil restrito: cada um ve a propria agenda pela politica de atividades.
+   */
+  { id: 'agenda', label: 'Agenda' },
   { id: 'contatos', label: 'Contatos' },
   { id: 'contas', label: 'Contas' },
   { id: 'leads', label: 'Leads', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'] },
   { id: 'oportunidades', label: 'Oportunidades', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'] },
+  // Mesmos perfis do `requireRole` das rotas `/comercial/*`: a aba que sempre
+  // recebe 403 e uma aba que nao deveria existir para aquele perfil.
+  { id: 'comercial', label: 'Leitura comercial', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR'] },
+  // Ler o painel de metas e trabalho de gestao (inclui GESTOR); DEFINIR meta e
+  // ADMIN/SUPERVISOR, e o formulario da rampa se esconde dentro da aba. Mesmo
+  // corte da politica de desconto e do processo do funil.
+  { id: 'metas', label: 'Metas', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR'] },
+  // Mesmo corte de leitura de metas e da leitura comercial: e painel de gestao.
+  { id: 'produtividade', label: 'Produtividade', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR'] },
   { id: 'produtos', label: 'Produtos e precos', perfis: ['ADMIN', 'SUPERVISOR'] },
   // Renomear e remover etiqueta alcancam registros que quem clica nao ve, entao
   // a aba segue o mesmo perfil da rota: ADMIN e SUPERVISOR.
@@ -96,6 +124,7 @@ export function CrmPage() {
         ))}
       </nav>
 
+      {aba === 'agenda' && <AgendaDaSemana />}
       {aba === 'contatos' && (
         <ContatosTab
           selecionadoId={registro?.base === '/contatos' ? (id ?? null) : null}
@@ -118,6 +147,9 @@ export function CrmPage() {
           aoFechar={fechar('oportunidades')}
         />
       )}
+      {aba === 'comercial' && <ComercialTab />}
+      {aba === 'metas' && <MetasTab />}
+      {aba === 'produtividade' && <ProdutividadeTab />}
       {aba === 'produtos' && <ProdutosTab />}
       {aba === 'etiquetas' && <EtiquetasTab />}
       {aba === 'dados' && <DadosTab />}

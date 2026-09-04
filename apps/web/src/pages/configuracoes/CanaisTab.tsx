@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alerta, Badge, Button, Card, Field, Input, Select } from '../../components/ui';
 import { ApiError, api } from '../../lib/api';
 import type { Canal, Fila } from '../../lib/types';
@@ -13,6 +13,21 @@ type CanalConfig = {
   fila: { id: string; nome: string } | null;
   accessTokenMascarado: string | null;
   configurado: boolean;
+  /*
+   * Modo do WhatsApp (item do WhatsApp nos dois modos). Nulo nos outros canais,
+   * e nulo no WhatsApp significa OFICIAL — o canal foi configurado antes de a
+   * pergunta existir.
+   */
+  modo?: 'OFICIAL' | 'NAO_OFICIAL' | null;
+  ponteUrl?: string | null;
+  ponteSessao?: string | null;
+  ponteTokenMascarado?: string | null;
+  ponteSegredoMascarado?: string | null;
+};
+
+type EstadoDaPonte = {
+  situacao: 'CONECTADO' | 'DESCONECTADO' | 'DESCONHECIDO';
+  detalhe: string | null;
 };
 
 const SUPORTADOS = ['WHATSAPP', 'INSTAGRAM', 'FACEBOOK'] as const;
@@ -25,6 +40,10 @@ const ROTULO: Record<CanalSuportado, string> = {
 };
 
 const vazio = {
+  ponteUrl: '',
+  ponteToken: '',
+  ponteSegredo: '',
+  ponteSessao: '',
   accessToken: '',
   appSecret: '',
   verifyToken: '',
@@ -43,6 +62,31 @@ export function CanaisTab() {
   const [erro, setErro] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  /** Modo escolhido no formulario. */
+  const [modo, setModo] = useState<'OFICIAL' | 'NAO_OFICIAL'>('OFICIAL');
+  /*
+   * O usuario ja mexeu no modo?
+   *
+   * Sem esta trava havia uma corrida silenciosa: se o carregamento terminasse
+   * DEPOIS do clique no radio, ele reescrevia a escolha com o valor gravado, e a
+   * pessoa via o formulario voltar sozinho para o outro modo. Foi o teste de
+   * navegador que expos isso — na leitura o codigo parecia correto, porque o
+   * carregamento "acontece antes".
+   *
+   * E `useRef`, e nao `useState`, por um motivo que custou uma segunda rodada de
+   * teste: `carregar` e criada a cada render e a chamada em voo captura o valor
+   * do render em que nasceu. Com estado, a trava lida por ela era sempre o
+   * `false` inicial — a correcao nao corrigia nada. O ref e uma caixa: quem tem a
+   * referencia le o valor de agora.
+   *
+   * Volta a falso depois de gravar: dali em diante o valor do servidor E a
+   * escolha da pessoa.
+   */
+  const modoTocado = useRef(false);
+  const [estadoPonte, setEstadoPonte] = useState<EstadoDaPonte | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
+  /** Caminho que a ponte deve chamar. Vem da API porque leva o id da organizacao. */
+  const [caminhoPonte, setCaminhoPonte] = useState<string | null>(null);
 
   const carregar = async () => {
     try {
@@ -52,6 +96,37 @@ export function CanaisTab() {
       ]);
       setCanais(c.canais);
       setFilas(f.filas);
+
+      const zap = c.canais.find((x) => x.canal === 'WHATSAPP');
+      if (!modoTocado.current) setModo(zap?.modo ?? 'OFICIAL');
+
+      /*
+       * O estado da ponte e buscado SEMPRE, e a falha e engolida.
+       *
+       * Duas razoes:
+       *
+       * - diagnostico que derruba a tela de configuracao impede justamente quem
+       *   esta tentando arrumar a sessao;
+       * - e o caminho do webhook precisa estar em mao ANTES de gravar o modo. A
+       *   primeira versao so buscava quando o modo JA estava gravado como nao
+       *   oficial, e o resultado era que quem estava escolhendo o modo nao via a
+       *   URL que ele precisa dar para a ponte — descobri isso pelo teste de
+       *   navegador, nao pela leitura.
+       *
+       * O estado da sessao so e exibido no modo nao oficial; no oficial a
+       * resposta diz "nao esta no modo nao oficial", que nao e informacao para
+       * ninguem.
+       */
+      try {
+        const e = await api.get<{ estado: EstadoDaPonte; aviso: string; caminhoWebhook: string }>(
+          '/canais/whatsapp/ponte/estado',
+        );
+        setAviso(e.aviso);
+        setCaminhoPonte(e.caminhoWebhook);
+        setEstadoPonte((zap?.modo ?? 'OFICIAL') === 'NAO_OFICIAL' ? e.estado : null);
+      } catch {
+        setEstadoPonte(null);
+      }
     } catch (e) {
       setErro(e instanceof ApiError ? e.message : 'Falha ao carregar canais');
     }
@@ -74,6 +149,15 @@ export function CanaisTab() {
       if (editando === 'WHATSAPP' && form.phoneNumberId) corpo.phoneNumberId = form.phoneNumberId;
       if (editando !== 'WHATSAPP' && form.pageId) corpo.pageId = form.pageId;
       if (editando === 'INSTAGRAM' && form.igUserId) corpo.igUserId = form.igUserId;
+      if (editando === 'WHATSAPP') {
+        // O modo vai SEMPRE que o canal e WhatsApp: e uma escolha de radio, e
+        // mandar so quando muda faria a primeira gravacao nao registrar nada.
+        corpo.modo = modo;
+        if (form.ponteUrl) corpo.ponteUrl = form.ponteUrl;
+        if (form.ponteToken) corpo.ponteToken = form.ponteToken;
+        if (form.ponteSegredo) corpo.ponteSegredo = form.ponteSegredo;
+        if (form.ponteSessao) corpo.ponteSessao = form.ponteSessao;
+      }
       if (ativo !== undefined) corpo.ativo = ativo;
 
       if (Object.keys(corpo).length === 0) {
@@ -83,6 +167,7 @@ export function CanaisTab() {
 
       await api.put(`/canais/${editando.toLowerCase()}`, corpo);
       setForm(vazio);
+      modoTocado.current = false;
       setOk('Canal atualizado.');
       await carregar();
     } catch (e) {
@@ -136,11 +221,140 @@ export function CanaisTab() {
             Em desenvolvimento a Meta exige HTTPS publico — use um tunel (ngrok, cloudflared) apontando
             para esta porta.
           </p>
+          {/* No modo nao oficial a URL e outra, e quem a cadastra e a ponte — nao
+              a Meta. Mostrar as duas juntas evita cadastrar a errada no lugar
+              errado, que produz um canal silencioso. */}
+          {editando === 'WHATSAPP' && modo === 'NAO_OFICIAL' && caminhoPonte && (
+            <>
+              <p className="mt-3 font-medium text-slate-700">No modo nao oficial</p>
+              <p className="mt-1">
+                Nada e cadastrado na Meta. Configure a PONTE para postar cada mensagem recebida em:
+              </p>
+              <code className="mt-2 block break-all rounded bg-white px-2 py-1 font-mono text-slate-800">
+                {window.location.origin}
+                {caminhoPonte}
+              </code>
+              <p className="mt-2">
+                Assinada com HMAC-SHA256 do corpo, no cabecalho <code>X-Ponte-Assinatura</code>, usando o
+                segredo configurado ao lado. Corpo:{' '}
+                <code>{'{ numero, texto, idExterno, nome? }'}</code> &mdash; o <code>idExterno</code> e
+                obrigatorio porque e ele que evita mensagem duplicada quando a ponte reentrega.
+              </p>
+            </>
+          )}
         </div>
       </Card>
 
       <Card titulo={`Configurar ${ROTULO[editando]}`} descricao="Campos em branco nao alteram o valor salvo">
         <div className="space-y-3">
+          {editando === 'WHATSAPP' && (
+            <div className="rounded-lg border border-slate-200 p-3">
+              <p className="text-xs font-medium text-slate-700">Como conectar</p>
+              <div className="mt-2 space-y-2">
+                {(['OFICIAL', 'NAO_OFICIAL'] as const).map((opcao) => (
+                  <label key={opcao} className="flex cursor-pointer items-start gap-2">
+                    <input
+                      type="radio"
+                      name="modo-whatsapp"
+                      value={opcao}
+                      checked={modo === opcao}
+                      onChange={() => {
+                        setModo(opcao);
+                        modoTocado.current = true;
+                      }}
+                      className="mt-0.5"
+                    />
+                    <span className="text-sm">
+                      <span className="font-medium text-slate-800">
+                        {opcao === 'OFICIAL' ? 'API oficial (Meta Cloud API)' : 'Sem API oficial (ponte externa)'}
+                      </span>
+                      <span className="block text-xs text-slate-500">
+                        {opcao === 'OFICIAL'
+                          ? 'Numero em uma WABA verificada. Custo por conversa, template para iniciar contato, e continuidade garantida pela Meta.'
+                          : 'Sessao de WhatsApp Web mantida por uma ponte externa (Baileys, WPPConnect). Funciona com qualquer numero e sem custo por mensagem.'}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+
+              {/* O aviso aparece SO no modo que tem risco, e diz o risco.
+                  Um aviso permanente nos dois modos seria ignorado nos dois. */}
+              {modo === 'NAO_OFICIAL' && (
+                <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                  <p className="font-medium">Leia antes de ligar</p>
+                  <p className="mt-1">
+                    {aviso ??
+                      'O modo nao oficial se conecta como WhatsApp Web e viola os termos de uso do WhatsApp: o numero pode ser bloqueado sem aviso. Use um numero que a operacao possa perder.'}
+                  </p>
+                  <p className="mt-1">
+                    A plataforma nao hospeda a ponte: ela conversa por HTTP com um servico separado, que
+                    mantem a sessao do QR Code. Trocar de modo depois nao apaga as credenciais do outro.
+                  </p>
+                </div>
+              )}
+
+              {estadoPonte && (
+                <p className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                  <span className="text-slate-500">Sessao da ponte:</span>
+                  <Badge
+                    tom={
+                      estadoPonte.situacao === 'CONECTADO'
+                        ? 'sucesso'
+                        : estadoPonte.situacao === 'DESCONECTADO'
+                          ? 'alerta'
+                          : 'neutro'
+                    }
+                  >
+                    {estadoPonte.situacao === 'CONECTADO'
+                      ? 'conectada'
+                      : estadoPonte.situacao === 'DESCONECTADO'
+                        ? 'desconectada'
+                        : 'nao confirmada'}
+                  </Badge>
+                  {/* Desconhecido nao e desconectado: a frase diz qual dos dois. */}
+                  {estadoPonte.detalhe && <span className="text-slate-400">{estadoPonte.detalhe}</span>}
+                </p>
+              )}
+            </div>
+          )}
+
+          {editando === 'WHATSAPP' && modo === 'NAO_OFICIAL' ? (
+            <>
+              <Field label="Endereco da ponte" hint="Ex.: http://wpp:3000/api — a plataforma chama /mensagens, /arquivos e /estado">
+                <Input
+                  value={form.ponteUrl}
+                  placeholder={atual?.ponteUrl ?? 'http://localhost:3000/api'}
+                  onChange={(e) => setForm({ ...form, ponteUrl: e.target.value })}
+                />
+              </Field>
+              <Field label="Token da ponte" hint="Com que a plataforma se autentica NA ponte">
+                <Input
+                  type="password"
+                  value={form.ponteToken}
+                  onChange={(e) => setForm({ ...form, ponteToken: e.target.value })}
+                />
+              </Field>
+              <Field
+                label="Segredo de assinatura"
+                hint="Com que a PONTE assina o que manda para ca (HMAC-SHA256, minimo 16 caracteres). Sem ele nada e recebido."
+              >
+                <Input
+                  type="password"
+                  value={form.ponteSegredo}
+                  onChange={(e) => setForm({ ...form, ponteSegredo: e.target.value })}
+                />
+              </Field>
+              <Field label="Sessao / instancia" hint="Se a ponte hospeda mais de um numero. Em branco = sessao unica">
+                <Input
+                  value={form.ponteSessao}
+                  placeholder={atual?.ponteSessao ?? ''}
+                  onChange={(e) => setForm({ ...form, ponteSessao: e.target.value })}
+                />
+              </Field>
+            </>
+          ) : (
+          <>
           <Field label="Access Token" hint="Token da Graph API (nunca e exibido de volta)">
             <Input
               type="password"
@@ -176,6 +390,9 @@ export function CanaisTab() {
             <Field label="Instagram User ID">
               <Input value={form.igUserId} onChange={(e) => setForm({ ...form, igUserId: e.target.value })} />
             </Field>
+          )}
+
+          </>
           )}
 
           <Field label="Fila de destino">

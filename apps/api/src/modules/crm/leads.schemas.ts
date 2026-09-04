@@ -15,6 +15,9 @@ const CANAIS = ['WEBCHAT', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'EMAIL', 'VOZ'] 
 const fase = z.enum(FASES);
 const dataOpcional = z.coerce.date().optional();
 
+/** Item 6.4: `{chave: valor}`, validado em runtime contra as definicoes ativas. */
+const camposCustomizados = z.record(z.string(), z.unknown()).optional();
+
 export const criarLeadSchema = z.object({
   contatoId: z.string().uuid('Informe um contato valido'),
   contaId: z.string().uuid().nullable().optional(),
@@ -25,6 +28,7 @@ export const criarLeadSchema = z.object({
   canalOrigem: z.enum(CANAIS).default('WEBCHAT'),
   valorEstimado: z.number().nonnegative().nullable().optional(),
   observacoes: z.string().trim().max(2000).nullable().optional(),
+  camposCustomizados,
 });
 
 export const atualizarLeadSchema = z
@@ -38,6 +42,7 @@ export const atualizarLeadSchema = z
     motivoPerda: z.enum(MOTIVOS_PERDA).nullable().optional(),
     valorEstimado: z.number().nonnegative().nullable().optional(),
     observacoes: z.string().trim().max(2000).nullable().optional(),
+    camposCustomizados,
   })
   .refine((d) => Object.keys(d).length > 0, { message: 'Informe ao menos um campo' })
   .refine((d) => d.fase !== 'PERDIDO' || d.motivoPerda !== null, {

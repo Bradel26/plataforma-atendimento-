@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alerta, Badge, Button, Card, Field, Input, Select } from '../components/ui';
 import { BarList } from '../components/viz/BarList';
+import { MontarPublico } from './campanhas/MontarPublico';
 import { ApiError, api } from '../lib/api';
 import { ESTADO, SERIES } from '../lib/viz';
 import {
@@ -185,6 +186,9 @@ export function CampanhasPage() {
             <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-700">{aberta.campanha.mensagem}</p>
 
             <div className="mt-4 flex flex-wrap gap-2">
+              {/* "Adicionar todos" continua, mas deixou de ser a unica opcao: o
+                  montador de publico (item E.3) e o caminho normal, e este botao
+                  vira o atalho de quem quer mesmo a lista inteira da carteira. */}
               <Button
                 variante="neutro"
                 disabled={ocupado || contatos.length === 0}
@@ -263,6 +267,15 @@ export function CampanhasPage() {
               )}
             </div>
           </Card>
+
+          {/* Montar publico pelos filtros do CRM (item E.3). Fica depois do
+              cartao da campanha porque a ordem de trabalho e essa: ler a
+              mensagem que vai sair, e so depois escolher para quem. */}
+          <MontarPublico
+            campanhaId={aberta.campanha.id}
+            canal={aberta.campanha.canal}
+            aoAplicar={() => void abrir(aberta.campanha.id)}
+          />
 
           <div className="grid gap-5 lg:grid-cols-2">
             <Card titulo="Situacao dos envios" descricao={`${aberta.campanha.total} contato(s)`}>

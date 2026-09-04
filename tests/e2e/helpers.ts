@@ -5,6 +5,10 @@ export const CONTAS = {
   admin: { email: 'admin@plataforma.local', senha: 'Admin@123' },
   supervisor: { email: 'supervisor@plataforma.local', senha: 'Super@123' },
   agente: { email: 'agente1@plataforma.local', senha: 'Agente@123' },
+  // COMERCIAL entrou aqui com o item 3.1: e o unico perfil que ve o funil e
+  // **nao** define o processo dele, o que faz dele o contraponto certo para
+  // "quem nao pode configurar nao ve o campo". Agente nem chega no CRM.
+  comercial: { email: 'comercial@plataforma.local', senha: 'Comer@123' },
 } as const;
 
 /** Itens do menu lateral visiveis para o perfil logado. */

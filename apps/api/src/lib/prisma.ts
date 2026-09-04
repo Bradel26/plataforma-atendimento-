@@ -36,6 +36,18 @@ const COM_ORGANIZACAO = new Set([
   'Survey',
   'LgpdLog',
   'Activity',
+  // Meta e tabela raiz (item 4.1): carrega organizacao e CHECK proprio.
+  'Meta',
+  // Consumo de IA (item 6.8): tabela raiz, com organizacao e CHECK proprio.
+  'ConsumoIA',
+  // Base instalada (item 5.1): tabela raiz, com organizacao e CHECK proprio.
+  'ProdutoDoCliente',
+  // Visoes salvas (item 6.1): tabela raiz, com organizacao e CHECK proprio.
+  'VisaoSalva',
+  // Filiais (item 6.5): tabela raiz, com organizacao e CHECK proprio.
+  'Filial',
+  // Campos customizados (item 6.4): tabela raiz, com organizacao e CHECK proprio.
+  'CampoCustomizado',
 ]);
 
 /** Operacoes que leem ou alteram por filtro: ganham `where`. */
@@ -172,3 +184,21 @@ export const prisma = base.$extends({
 
 /** Cliente sem a extensao. Uso restrito: migrations de dados e o proprio teste. */
 export const prismaSemIsolamento = base;
+
+/**
+ * O cliente que uma transacao interativa entrega ao callback.
+ *
+ * `Prisma.TransactionClient` **nao serve aqui**: aquele tipo descreve o cliente
+ * base, e o nosso e estendido — as assinaturas de cada modelo mudam, e o
+ * compilador recusa a atribuicao com um erro de dezenas de linhas sobre
+ * `message.findUnique` que nao diz nada sobre a causa.
+ *
+ * A forma correta e derivar do proprio cliente, tirando o que nao existe dentro
+ * de uma transacao. Uma funcao tipada assim aceita tanto o `tx` do callback
+ * quanto o `prisma` de fora, que e o que permite um helper de escrita servir aos
+ * dois casos sem duplicacao.
+ */
+export type ClienteDeEscrita = Omit<
+  typeof prisma,
+  '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'
+>;

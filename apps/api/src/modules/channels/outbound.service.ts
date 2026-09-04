@@ -1,6 +1,8 @@
 import type { Channel } from '@prisma/client';
 import { AppError, badRequest } from '../../lib/errors';
 import { obterConfig } from './channels.service';
+import { impedimentoDeEnvio, modoEfetivo } from './whatsapp.modo';
+import { enviarArquivoPelaPonte, enviarTextoPelaPonte } from './whatsapp.ponte';
 
 const GRAPH = 'https://graph.facebook.com/v21.0';
 
@@ -27,6 +29,28 @@ export async function enviarParaCanal(
   if (!enderecoExterno) throw badRequest('Conversa sem endereco externo — nao e possivel responder');
 
   const config = await obterConfig(canal);
+
+  /*
+   * WhatsApp tem DOIS caminhos de saida (item do WhatsApp nos dois modos).
+   *
+   * A escolha acontece aqui, e nao em quem chama: o atendente, o disparo de
+   * campanha e o motor de IA mandam mensagem do mesmo jeito, e nenhum deles
+   * precisa saber se a organizacao esta na Cloud API ou numa ponte. Espalhar essa
+   * pergunta pelos chamadores garantiria que um deles ficaria para tras — e a
+   * mensagem sairia pelo caminho errado exatamente no canal mais usado.
+   */
+  if (canal === 'WHATSAPP' && modoEfetivo(config?.modo) === 'NAO_OFICIAL') {
+    const impedimento = impedimentoDeEnvio(config?.modo, {
+      ativo: config?.ativo ?? false,
+      accessToken: config?.accessToken ?? null,
+      phoneNumberId: config?.phoneNumberId ?? null,
+      ponteUrl: config?.ponteUrl ?? null,
+      ponteToken: config?.ponteToken ?? null,
+    });
+    if (impedimento) throw new AppError(503, 'CANAL_INDISPONIVEL', impedimento);
+    return enviarTextoPelaPonte(config!, enderecoExterno, texto);
+  }
+
   if (!config?.ativo || !config.accessToken) {
     throw new AppError(503, 'CANAL_INDISPONIVEL', `Canal ${canal} nao esta configurado ou esta inativo`);
   }
@@ -117,6 +141,22 @@ export async function enviarArquivoParaCanal(
   if (!enderecoExterno) throw badRequest('Conversa sem endereco externo — nao e possivel responder');
 
   const config = await obterConfig(canal);
+
+  // O mesmo desvio do texto. A ponte recebe o binario direto, sem as duas etapas
+  // da Cloud API e sem a exigencia de URL publica do Instagram — e por isso este
+  // modo funciona em instalacao sem dominio, que e onde ele costuma estar.
+  if (canal === 'WHATSAPP' && modoEfetivo(config?.modo) === 'NAO_OFICIAL') {
+    const impedimento = impedimentoDeEnvio(config?.modo, {
+      ativo: config?.ativo ?? false,
+      accessToken: config?.accessToken ?? null,
+      phoneNumberId: config?.phoneNumberId ?? null,
+      ponteUrl: config?.ponteUrl ?? null,
+      ponteToken: config?.ponteToken ?? null,
+    });
+    if (impedimento) throw new AppError(503, 'CANAL_INDISPONIVEL', impedimento);
+    return enviarArquivoPelaPonte(config!, enderecoExterno, arquivo);
+  }
+
   if (!config?.ativo || !config.accessToken) {
     throw new AppError(503, 'CANAL_INDISPONIVEL', `Canal ${canal} nao esta configurado ou esta inativo`);
   }

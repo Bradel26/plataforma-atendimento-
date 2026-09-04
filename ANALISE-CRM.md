@@ -8,6 +8,10 @@ compartilhando a tela.
 em tela; nada foi inferido do que o vendedor falou. Onde a tela não mostrou, está escrito
 que não mostrou.
 
+**Atualizado em 02/09/2026** com a demonstração longa do Néctar (seção 7). O plano de
+construção vivo é a **seção 8** — ela funde os seis produtos numa fila única e parte do que
+já foi entregue. As seções 5 e 6 ficam como registro do raciocínio original.
+
 ---
 
 ## 1. O que cada arquivo é
@@ -21,6 +25,7 @@ que não mostrou.
 | `Nectar_CRM.mp4` | 24 min | Demonstração do Nectar por Milena Borges | sim |
 | `RD_STATION.mp4` | 19 min | Demonstração do RD Station CRM por Ana Flávia (**TOTVS Brasil Central**) | sim |
 | `HotSales.mp4` | 19 min | Demonstração do HotSales por Fabiano Silva | sim |
+| `Vídeos/2026-09-02 15-03-24.mkv` | 70 min | Demonstração guiada do Néctar por Milena Borges, com o produto navegado por dentro do minuto 22 ao 53 | sim — base da **seção 7** |
 
 ## 2. Contexto de negócio que os vídeos revelaram
 
@@ -211,7 +216,7 @@ serve à operação real da Bradel revelada no treinamento Philco, (c) custo de 
 
 | # | Recurso | De onde vem | Por que primeiro | Tamanho |
 |---|---|---|---|---|
-| A1 | **Base instalada** (`ProdutoDoCliente`: modelo, série, data de instalação, instalador credenciado, nota fiscal, vencimento de cada garantia) | Ploomes "Produtos do cliente" + garantia Philco | É requisito da operação, nenhum concorrente resolve, e destrava pós-venda e garantia | médio |
+| A1 | ~~**Base instalada** (`ProdutoDoCliente`: modelo, série, data de instalação, instalador credenciado, nota fiscal, vencimento de cada garantia)~~ — **pronto** (decisão 74) | Ploomes "Produtos do cliente" + garantia Philco | É requisito da operação, nenhum concorrente resolve, e destrava pós-venda e garantia | médio |
 | A2 | **Atividades/tarefas com tipo** (Nota, Ligação, WhatsApp, E-mail, Reunião, Visita, Proposta) ligadas a conta / lead / oportunidade, com prazo, responsável, selo de situação e conclusão | Agendor + RD + Ploomes | É o coração de todos os cinco. Sem isso o funil não tem disciplina | médio |
 | A3 | **Linha do tempo unificada** na ficha da conta e da oportunidade: conversas dos canais + atividades + mudanças de etapa + anotações com menção `@` | Ploomes, RD, Agendor | Nós já temos o dado das conversas; falta juntar num só lugar | médio |
 | A4 | **Tempo na etapa + alerta de parado** no cartão do kanban | Nectar (2 cronômetros) e Agendor (alerta vermelho) | Barato, e é o que faz o supervisor agir | pequeno |
@@ -221,17 +226,17 @@ serve à operação real da Bradel revelada no treinamento Philco, (c) custo de 
 
 | # | Recurso | De onde vem | Tamanho |
 |---|---|---|---|
-| B1 | Campos customizados por entidade (tipo, obrigatório, seção, valor único) | Ploomes | grande |
-| B2 | Visões salvas com filtro e cor ("abas") em contas, leads e oportunidades | Ploomes | médio |
+| B1 | ~~Campos customizados por entidade (tipo, obrigatório, seção, valor único)~~ — **pronto** (decisão 80) | Ploomes | grande |
+| B2 | ~~Visões salvas com filtro e cor ("abas") em contas, leads e oportunidades~~ — **pronto** (decisão 78) | Ploomes | médio |
 | B3 | Etiquetas (tags) em conta, lead e oportunidade + filtro por etiqueta | Nectar, RD | pequeno |
-| B4 | Relatório de produtividade: matriz usuário × tipo de atividade, `feitas / agendadas`, com drill-down | Agendor | médio |
+| B4 | ~~Relatório de produtividade: matriz usuário × tipo de atividade, `feitas / agendadas`, com drill-down~~ — **pronto** (decisão 76) | Agendor | médio |
 | B5 | Win/Loss e conversão etapa a etapa, com tempo médio de ciclo | Ploomes, Nectar | médio |
 | B6 | Metas mensais por usuário e por equipe, com acompanhamento | Nectar | médio |
 | B7 | Valor recorrente separado do valor único (MRR) na oportunidade | RD Station | pequeno |
 | B8 | Comparação com período anterior e variação % nos indicadores | Nectar | pequeno |
 | B9 | Importar/exportar CSV de contas, contatos e oportunidades | Agendor | pequeno |
 | B10 | Enriquecimento por CNPJ (preencher razão social, endereço, CNAE) | Ploomes | pequeno |
-| B11 | Filiais (hierarquia de empresa) | Ploomes | médio |
+| B11 | ~~Filiais (hierarquia de empresa)~~ — **pronto** (decisão 79) | Ploomes | médio |
 | B12 | Paleta de comando `Ctrl+K` com busca global | Nectar | pequeno |
 
 ### Bloco C — só se a operação pedir
@@ -242,7 +247,7 @@ serve à operação real da Bradel revelada no treinamento Philco, (c) custo de 
 | C2 | Regras de negociação e alçada de desconto com aprovação | HotSales |
 | C3 | Mapa de clientes e sugestão de rota | HotSales, Ploomes |
 | C4 | Sugestão de quantidade por histórico ("potencial de venda") | HotSales |
-| C5 | Pergunta em linguagem natural sobre os dados do CRM | RD Station (Mentor IA) |
+| C5 | Pergunta em linguagem natural sobre os dados do CRM — **adiado** (decisão 81: depende de um provedor de IA generativa que a plataforma não tem hoje) | RD Station (Mentor IA) |
 | C6 | Construtor de automação de processos | Ploomes (não foi mostrado em tela) |
 
 ### O que eu deliberadamente não copiaria
@@ -270,3 +275,187 @@ Protheus nativo — o Bloco A é um caminho defensável.
 
 Sugestão de ordem: **A4 → A2 → A3 → A1 → A5**. A4 primeiro porque é pequeno e dá resultado
 visível no mesmo dia; A5 por último porque é o maior e depende de A2/A3 estarem no lugar.
+
+> Esta ordem foi **substituída pela seção 8.9**. A2 e A3 já estão prontos, e a demonstração
+> de 02/09/2026 acrescentou itens que não estavam na lista — entre eles metas, tarefa
+> obrigatória por etapa e desconto no item da proposta.
+
+---
+
+## 7. Néctar em profundidade — demonstração de 02/09/2026
+
+A seção 3 descreveu o Néctar por telas soltas ("o mais limpo em leitura de funil"). Em
+02/09/2026 houve uma demonstração guiada de 1h10, e o produto foi visto por dentro, do
+minuto 22 ao 53. O que segue é o que **só essa gravação** mostrou, e que muda a lista de
+lacunas.
+
+### Telas novas, na ordem em que apareceram
+
+| Tela | O que a gravação mostrou |
+|---|---|
+| Dashboard "Visão comercial" | Meta comercial com MRR, gráfico Progresso × Meta × Forecast, **Análise do Funil com contagem e % por etapa**, quatro cartões de risco (Atrasadas, Acabando o prazo, Em forecast, **Sem Atividade**), indicadores (ticket médio, taxa de conversão, previsão de fechamento, **ciclo médio de vendas**), agenda da semana embutida, funil de ciclo de vida (Leads → Suspects) |
+| Nectar AI | Crédito do ciclo com **projeção de fim de mês**, "puxando o consumo" por tipo de uso, três agentes ligáveis (Enriquecedor de Contatos, Deal Coach, Salesman Coach), atividade recente com **custo em créditos por chamada** |
+| Ficha do contato | **Contatos relacionados (7)** com coluna VÍNCULOS e o papel de cada pessoa em código de QSA da Receita (`22-Sócio`, `05-Administrador`) — ou seja, preenchido por enriquecimento de CNPJ, não à mão |
+| Kanban | Contagem **e soma R$** por coluna, origem impressa no cartão (`Contato #61 \| Easyform #1122`), temperatura ("Fria"), **dois cronômetros: dias na etapa e idade total** — **pronto**: soma e cronômetros na decisão 55, temperatura e origem na decisão 68 |
+| Ficha da oportunidade | Barra de etapas com contador por etapa, aba **Feedbacks** = trilha de auditoria tipada ("Tarefa finalizada", "Tarefa alterada", "Editou oportunidade"), e **tarefa obrigatória para avançar de etapa** |
+| Editor de itens da proposta | Recorrência (Único/Mensal), **Acréscimo**, **Desconto**, Valor unitário final, Subtotal, **Lucro em R$ e %**, rodapé separando Mensal / Único / Total, "Vincular Tabela" (catálogo de preço), "Preencher com IA" |
+| Proposta gerada | PDF de 5 páginas montado de um modelo, com logo e ficha técnica do produto |
+| Assistente na ligação | Player de 3:15 + Resumo + Transcrição + **Próximas Ações executáveis** + Análise de Sentimento + Possíveis Erros, tudo pendurado na oportunidade |
+| Estatísticas de ligações | Total, atendidas, não atendidas, **classificação média**, duração média, com colunas CUSTO e ÁUDIO por chamada, e Exportar |
+| Metas | Por **Usuários** e por **Equipes**, meta por nível e por departamento, e **valor de meta diferente mês a mês** (julho R$5.000, outros meses R$10.000) |
+| Estatísticas de atendimento (NChat) | Conversas por status, barras empilhadas por período, **Conversas por Agentes** em tabela, TMA para responder e TMA para finalizar |
+| Nova campanha | Público montado com **os mesmos filtros do CRM** (ciclo de vida, cargo, origem, mesorregião, tags), cor de etiqueta, agendamento, e "Enviar para conversas em aberto" |
+| Mobile | **Check-in / check-out de visita** e notificação de chat no celular |
+
+### Duas lições de arquitetura, não de recurso
+
+**O CRM e o atendimento eram dois produtos costurados.** O funil roda em
+`app.nectarcrm.com.br/crm/crm/inicio#` e o atendimento em
+`insider.nectarcrm.com.br/v2#/nchat` — hosts diferentes, navegação diferente, perfil de
+navegador diferente. Em um momento a apresentadora abriu uma **terceira** tela de
+oportunidade, dentro do `insider`, com layout distinto da primeira. A nossa decisão 42 ("a
+ficha é uma tela só, e a conversa entra como uma linha") é justamente o contrário disso, e
+a gravação é a evidência de por que ela vale: a costura aparece para quem usa.
+
+**A "taxa de entrega" da campanha marcava acima de 100%** — 115,32%, 108,33%, 103,03% na
+própria tela. Uma taxa de entrega maior que o público é métrica quebrada (numerador conta
+tentativas, denominador conta pessoas). O nosso `CampaignItem` já grava `respondidoEm`, o
+que dá **taxa de resposta** — número menor, mais difícil de exibir e honesto. É o que
+devemos mostrar.
+
+---
+
+## 8. Plano de construção consolidado
+
+Esta seção substitui a ordem sugerida no fim da seção 6. Ela funde os seis produtos
+avaliados numa única fila, e parte do que **já foi construído** desde que a seção 5 foi
+escrita.
+
+### 8.1 O que já saiu da lista
+
+| Item da seção 5 | Situação |
+|---|---|
+| A2 — atividades/tarefas com tipo | **pronto**: `Activity` + `TipoAtividade` (NOTA, LIGACAO, WHATSAPP, EMAIL, REUNIAO, VISITA, PROPOSTA), com prazo, responsável, selo de atrasada e `RegistrarAtividade.tsx` |
+| A3 — linha do tempo unificada | **pronto**: `LinhaDoTempo.tsx` na ficha, conversa e atividade lado a lado |
+| B3 — etiquetas em conta, lead e oportunidade + filtro | **pronto e em produção**: etiquetas em contato, conta e conversa, filtro por etiqueta, aba de gestão (renomear/fundir/remover) e relatório por assunto |
+| A4 — tempo na etapa | **pronto** (decisão 55). Antes disto: o campo existia, a API já contava os dois números e só a *ficha* os mostrava — o cartão do kanban, que é onde se decide, não |
+
+### 8.2 Onda 1 — colher o que já está gravado
+
+Nenhum item desta onda pede tabela nova. O dado existe e ninguém lê.
+
+| # | O que construir | De onde vem | O que já existe | Tamanho |
+|---|---|---|---|---|
+| 1.1 | ~~**Dois cronômetros no cartão** (dias na etapa, idade total) e alerta de parado~~ — **pronto** (decisão 55) | Néctar (2 cronômetros) + Agendor (alerta vermelho) | `Opportunity.estagioDesde`, `criadoEm`, `Activity.prazo` | pequeno |
+| 1.2 | ~~**Análise do funil**: conversão etapa a etapa, % de avanço e de perda, tempo médio por etapa~~ — **pronto** (decisão 56) | Ploomes (tabela de conversão) + Néctar (Análise de conversão) | `OpportunityStageLog.segundosNoEstagio` — gravado desde o início e **nunca lido**; o comentário do próprio modelo pede este relatório | médio |
+| 1.3 | ~~**Quatro cartões de risco**: Atrasadas · Acabando o prazo · Em forecast · Sem atividade~~ — **pronto** (decisão 56) | Néctar | `previsaoFechamento`, `FunnelStage.probabilidade`, `Activity.prazo` | pequeno |
+| 1.4 | ~~**Indicadores comerciais** com comparação contra o período anterior e variação %: ticket médio, taxa de conversão, ciclo médio, previsão ponderada (Σ valor × probabilidade)~~ — **pronto** (decisão 56) | Néctar (variação %) + Ploomes (tempo médio para venda) | tudo derivável de `Opportunity` + `OpportunityStageLog` | médio |
+| 1.5 | ~~**Win/Loss por motivo de perda**~~ — **pronto** (decisão 56) | Néctar (relatório Win/Loss) | `Opportunity.motivoPerda` já é obrigatório ao perder | pequeno |
+
+Regra da casa ao montar estes painéis: **dois indicadores de escala diferente pedem dois
+gráficos**. O Néctar usa barra + linha com dois eixos no mesmo gráfico; é o erro de leitura
+mais comum, e a seção "o que eu deliberadamente não copiaria" já registra isso.
+
+### 8.3 Onda 2 — a proposta, que é onde o dinheiro passa
+
+| # | O que construir | De onde vem | Delta de schema | Tamanho |
+|---|---|---|---|---|
+| 2.1 | ~~**Item da proposta completo**: desconto, acréscimo, recorrência (único/mensal) e custo — com subtotal, margem em R$ e %, e rodapé separando Mensal / Único / Total~~ — **pronto** (decisão 57) | Néctar (editor de produtos) + Ploomes (desconto e total) + RD Station (valor único × recorrente) | `OpportunityItem` hoje só tem `quantidade` e `precoUnitario`: acrescentar `desconto`, `acrescimo`, `recorrencia`, `custoUnitario` | médio |
+| 2.2 | ~~**Gerador de proposta em PDF** a partir da oportunidade: modelo, itens, condição de pagamento, parcelas, prazo de entrega, foto e ficha técnica do produto~~ — **pronto** (decisão 61), **menos foto e ficha técnica do produto**, que exigem imagem de produto e não existem no schema | Ploomes (CPQ) + Néctar (5 páginas de um modelo) + Agendor (botão "Gerar proposta") | reaproveita `pdfkit`, mas em documento retrato proprio; `condicaoPagamento` e `prazoEntrega` novos na oportunidade | grande |
+| 2.3 | ~~**Alçada de desconto**: percentual máximo por perfil; acima disso a proposta vai para aprovação~~ — **pronto** (decisão 58) | HotSales ("Regras de negociação") | sai quase de graça junto com 2.1 | pequeno |
+
+`2.1` absorve o item **B7** (MRR separado): com recorrência no item, não é preciso um campo
+de valor recorrente na oportunidade — o total mensal é a soma dos itens mensais. Atenção à
+**decisão 11** (valor da oportunidade: itens × valor informado): a regra de precedência
+precisa ser revista quando o item passar a ter desconto.
+
+### 8.4 Onda 3 — processo, para o funil não ser decorativo
+
+| # | O que construir | De onde vem | Delta de schema | Tamanho |
+|---|---|---|---|---|
+| 3.1 | ~~**Tarefa obrigatória por etapa** — a oportunidade não avança sem concluir~~ — **pronto** (decisão 59) | Néctar (foi o único a mostrar isso funcionando, e é o argumento mais forte da demonstração) | `Activity` precisa de `obrigatoria` e de vínculo com `FunnelStage`; o gate entra no serviço que move etapa | médio |
+| 3.2 | ~~**Trilha de auditoria da oportunidade**: quem editou o quê e quando, em linha do tempo tipada~~ — **pronto** (decisão 60) | Néctar (aba Feedbacks + relatório Auditoria) | a linha do tempo já existe; falta gravar o evento de edição | pequeno/médio |
+| 3.3 | ~~**Matriz de produtividade** usuário × tipo de atividade, no formato `feitas / agendadas` com percentual e drill-down para a lista~~ — **pronto** (decisão 76) | Agendor — o melhor relatório dos seis avaliados | nenhum: `Activity` já tem `tipo`, `prazo`, `concluidoEm` e `responsavelId` | médio |
+
+### 8.5 Onda 4 — metas, que é o que a gestão abre primeiro
+
+| # | O que construir | De onde vem | Delta de schema | Tamanho |
+|---|---|---|---|---|
+| 4.1 | ~~**Meta por usuário e por equipe**, mensal, com **valor diferente por mês**~~ — **pronto** (decisão 62) | Néctar (Usuários / Equipes, meta por nível e departamento, rampa mês a mês) | modelo novo `Meta` — hoje não existe nada disso no schema | médio |
+| 4.2 | ~~**Meta no dashboard**: progresso, forecast e variação~~ — **pronto** (decisão 77) | Néctar (tela de abertura da demonstração) | depende de 4.1 e 1.4 | pequeno |
+
+A rampa mensal não é luxo aqui: quem vende ar-condicionado tem meta de dezembro diferente
+da de junho, e uma meta única anual dividida por doze descreve mal o ano todo.
+
+### 8.6 Onda 5 — a base que a operação exige
+
+| # | O que construir | De onde vem | Tamanho |
+|---|---|---|---|
+| 5.1 | ~~**Base instalada** (`ProdutoDoCliente`: modelo, série, data de instalação, instalador credenciado, nota fiscal, vencimento de cada garantia)~~ — **pronto** (decisão 74) | Ploomes ("Produtos do cliente") + regra de garantia do treinamento Philco | médio |
+| 5.2 | ~~**Vínculos entre pessoas da mesma conta** (sócio, administrador, decisor) + **enriquecimento por CNPJ** preenchendo o quadro societário~~ — **pronto** (decisão 63) | Néctar (7 contatos relacionados com código de QSA) + Ploomes (varinha de enriquecimento) | médio |
+
+`5.1` continua sendo o único item da lista que **nenhum dos seis concorrentes entrega** e
+que a operação de ar-condicionado exige. `5.2` absorve o item **B10** e parte do **B11**.
+
+### 8.7 Onda 6 — conforto, depois que o resto estiver de pé
+
+| # | O que construir | De onde vem | Tamanho |
+|---|---|---|---|
+| 6.1 | ~~Visões salvas com filtro e cor ("abas") em contas, leads e oportunidades~~ — **pronto** (decisão 78) | Ploomes | médio |
+| 6.2 | ~~Paleta de comando `Ctrl+K` com busca global~~ — **pronto** (decisão 65) | Néctar ("Explorar") | pequeno |
+| 6.3 | ~~Importar / exportar CSV de contas, contatos e oportunidades~~ — **pronto** (decisão 75) | Agendor | pequeno — o CSV com `;` e BOM já está resolvido pela decisão 14 |
+| 6.4 | ~~Campos customizados por entidade (tipo, obrigatório, seção, valor único)~~ — **pronto** (decisão 80) | Ploomes | grande |
+| 6.5 | ~~Filiais (hierarquia de empresa)~~ — **pronto** (decisão 79) | Ploomes | médio |
+| 6.6 | ~~Custo e classificação por ligação na lista de chamadas~~ — **pronto** (decisão 64) | Néctar (colunas CUSTO e ÁUDIO) | pequeno — o modelo `Call` já existe |
+| 6.7 | ~~Check-in / check-out de visita no mobile~~ — **pronto** (decisão 66) | Néctar + HotSales + Ploomes | médio — provavelmente vale mais para o técnico de campo que para o vendedor |
+| 6.8 | ~~Medidor de consumo de IA por ciclo, com projeção de fim de mês~~ — **pronto** (decisão 67) | Néctar | pequeno — só faz sentido se a IA for ligada de verdade |
+| 6.9 | Pergunta em linguagem natural sobre os dados do CRM — **adiado** (decisão 81: depende de um provedor de IA generativa que a plataforma não tem hoje) | RD Station (Mentor IA) + Néctar (resumo semanal da base) | grande |
+
+### 8.8 O que a demonstração acrescentou à lista de não-copiar
+
+Somando ao que a seção 5 já registrava (gráfico de dois eixos, WhatsApp por extensão,
+número em cada ponto do gráfico):
+
+- **Taxa de entrega de campanha**, pelo motivo do item 7 acima. Usar taxa de **resposta**,
+  que `CampaignItem.respondidoEm` já permite.
+- **Atendimento em produto separado do CRM**, com host e navegação próprios. A decisão 42
+  vai na direção oposta e deve continuar valendo.
+- **Créditos de IA que expiram no fim do mês.** Se um dia houver medidor de IA (6.8), o
+  saldo não deve virar prazo de validade.
+
+### 8.10 Os cinco itens que a lista numerada tinha esquecido
+
+A grade de 8.2 a 8.7 saiu das telas novas, mas cinco coisas que a gravação mostrou não
+tinham virado linha nenhuma — e uma delas (temperatura e origem no cartão) estava escrita na
+tabela de telas sem estar na fila de itens. A lista existe para elas não se perderem:
+
+| # | Item | Estado |
+|---|---|---|
+| E.1 | ~~**Temperatura e origem no cartão** do funil~~ | **pronto** (decisão 68) |
+| E.2 | ~~**Assistente da ligação**: transcrição, resumo, sentimento e próximas ações~~ | **pronto** (decisão 69) |
+| E.3 | ~~**Público de campanha pelos filtros do CRM**~~ | **pronto** (decisão 71) |
+| E.4 | ~~**Ciclo de vida** do contato/conta (Leads → Suspects)~~ | **pronto** (decisão 70) |
+| E.5 | ~~**Agenda da semana**~~ | **pronto** (decisão 72) |
+
+O WhatsApp **nos dois modos** (API oficial da Meta e ponte não oficial), pedido junto com esses
+cinco, saiu na **decisão 73**.
+
+### 8.9 Ordem recomendada
+
+> **Onda 1 concluída em 02/09/2026** (decisões 55 e 56). Os cinco itens saíram sem uma única
+> migration, como previsto. O que resta da fila começa em **2.1**.
+>
+> Uma correção do diagnóstico original: o item 1.1 estava descrito como "o campo existe e nenhuma
+> tela usa". Errado — a API já contava os dois números e a *ficha* já os mostrava. Faltava o cartão
+> do kanban, que é onde se decide. Vale como aviso para o resto da fila: antes de estimar um item,
+> conferir se ele já existe em outra tela, porque dado que aparece no lugar errado se parece muito
+> com dado que não existe.
+
+**1.1 → 1.3 → 1.2 → 1.4 → 1.5 → 2.1 → 2.3 → 3.1 → 3.2 → 2.2 → 3.3 → 4.1 → 4.2 → 5.1 → 5.2**
+
+O raciocínio: a onda 1 inteira sai de dado que já está no banco, então dá resultado visível
+sem migração — e `1.1` cabe num dia. A onda 2 vem antes da 3 porque a proposta é o
+entregável do vendedor, mas `2.2` (o PDF, o maior item da fila) espera até `3.1`/`3.2`
+estarem no lugar, para não gerar proposta a partir de uma oportunidade sem processo. Metas
+vêm depois de `1.4` porque meta sem indicador comparável é só um número na tela. A onda 5
+fecha com o que nenhum concorrente tem.

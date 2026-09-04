@@ -32,6 +32,24 @@ model Organizacao {
   slug  String  @unique
   ativa Boolean @default(true)
 
+  /// Desconto maximo, em percentual do bruto, que COMERCIAL concede sozinho.
+  ///
+  /// Cem por padrao — ou seja, **sem restricao**. Um padrao restritivo faria a
+  /// migration transformar em "pendente de aprovacao" toda proposta existente com
+  /// desconto, e a regra apareceria como se a plataforma tivesse quebrado.
+  /// Restringir e uma decisao que a empresa toma, nao um efeito colateral.
+  ///
+  /// ADMIN, SUPERVISOR e GESTOR nao passam por teto: quem aprova nao pede
+  /// aprovacao a si mesmo.
+  descontoMaximoPercentual Int @default(100) @map("desconto_maximo_percentual")
+
+  /// Teto mensal de gasto com IA, em reais (item 6.8). Nulo = sem teto.
+  ///
+  /// Nulo e nao zero: zero significaria "nao pode gastar nada", e teto ausente e
+  /// o padrao de quem nunca configurou — a projecao aparece sem percentual, e
+  /// nao como "0% de 0".
+  tetoIaMensal Decimal? @map("teto_ia_mensal") @db.Decimal(12, 2)
+
   /// Proximo numero de protocolo desta organizacao.
   ///
   /// Contador na propria linha da organizacao, e nao sequencia do banco: a
@@ -68,6 +86,12 @@ model Organizacao {
   pesquisas        Survey[]
   atividades       Activity[]
   registrosLgpd    LgpdLog[]
+  metas            Meta[]
+  consumoIa        ConsumoIA[]
+  produtosDoCliente ProdutoDoCliente[]
+  visoesSalvas     VisaoSalva[]
+  filiais          Filial[]
+  camposCustomizados CampoCustomizado[]
 
   @@map("organizacoes")
 }
@@ -103,33 +127,49 @@ model User {
   /// Gestor direto. Define a equipe do perfil GESTOR: equipe dele sao os
   /// usuarios que apontam para ele. Um nivel, sem arvore recursiva.
   gestorId      String?     @map("gestor_id")
+  /// Filial a que esta pessoa pertence (item 6.5). So classificacao — nao
+  /// afeta visibilidade: sem confirmacao de que a Bradel hoje segrega
+  /// quem-ve-o-que por unidade, reescrever `politicas.ts` seria resolver um
+  /// requisito que ninguem pediu.
+  filialId      String?     @map("filial_id")
   criadoEm      DateTime    @default(now()) @map("criado_em")
   atualizadoEm  DateTime    @updatedAt @map("atualizado_em")
 
-  filas             QueueAgent[]
-  conversas         Conversation[]
-  mensagensEnviadas Message[]
-  leads             Lead[]
-  oportunidades     Opportunity[]
-  protocolos        Ticket[]
-  escalas           WorkShift[]
-  presenca          PresenceLog[]
-  campanhas         Campaign[]
-  comentarios       TicketComment[]
-  anexos            TicketAttachment[]
-  agendamentos      TicketSchedule[]
-  registrosLgpd     LgpdLog[]
-  chamadas          Call[]
-  atividades        Activity[]            @relation("AtividadeResponsavel")
-  atividadesCriadas Activity[]            @relation("AtividadeAutor")
-  mudancasEstagio   OpportunityStageLog[]
-  tokensIntegracao  IntegrationToken[]
-  organizacao       Organizacao           @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  filas                 QueueAgent[]
+  conversas             Conversation[]
+  mensagensEnviadas     Message[]
+  leads                 Lead[]
+  oportunidades         Opportunity[]
+  protocolos            Ticket[]
+  escalas               WorkShift[]
+  presenca              PresenceLog[]
+  campanhas             Campaign[]
+  comentarios           TicketComment[]
+  anexos                TicketAttachment[]
+  agendamentos          TicketSchedule[]
+  registrosLgpd         LgpdLog[]
+  chamadas              Call[]
+  atividades            Activity[]            @relation("AtividadeResponsavel")
+  atividadesCriadas     Activity[]            @relation("AtividadeAutor")
+  mudancasEstagio       OpportunityStageLog[]
+  auditoriasFeitas      OpportunityAudit[]
+  descontosAprovados    Opportunity[]         @relation("DescontoAprovador")
+  tokensIntegracao      IntegrationToken[]
+  organizacao           Organizacao           @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
   /// SetNull: desligar o gestor nao pode apagar a equipe dele.
-  gestor            User?                 @relation("Equipe", fields: [gestorId], references: [id], onDelete: SetNull)
-  equipe            User[]                @relation("Equipe")
-  contatos          Contact[]             @relation("ContatoResponsavel")
-  contas            Account[]             @relation("ContaResponsavel")
+  gestor                User?                 @relation("Equipe", fields: [gestorId], references: [id], onDelete: SetNull)
+  equipe                User[]                @relation("Equipe")
+  /// SetNull: remover a filial nao pode apagar as pessoas dela.
+  filial                Filial?               @relation(fields: [filialId], references: [id], onDelete: SetNull)
+  contatos              Contact[]             @relation("ContatoResponsavel")
+  contas                Account[]             @relation("ContaResponsavel")
+  metas                 Meta[]
+  /// Ligacoes que esta pessoa classificou (item 6.6).
+  chamadasClassificadas Call[]                @relation("ChamadaClassificador")
+  acoesDescartadas      CallSuggestedAction[] @relation("AcaoDescartadaPor")
+  /// Visoes salvas que esta pessoa criou (item 6.1) — autoria, nao dono exclusivo:
+  /// a visao e compartilhada com a organizacao inteira, como o funil.
+  visoesSalvas          VisaoSalva[]
 
   /// E-mail unico POR ORGANIZACAO. A mesma pessoa em duas empresas sao dois
   /// registros, com senhas independentes — vinculo N-para-N e troca de
@@ -137,6 +177,7 @@ model User {
   @@unique([organizacaoId, email])
   @@index([organizacaoId, perfil])
   @@index([organizacaoId, gestorId])
+  @@index([organizacaoId, filialId])
   @@map("usuarios")
 }
 
@@ -251,12 +292,23 @@ model Contact {
   criadoEm        DateTime  @default(now()) @map("criado_em")
   atualizadoEm    DateTime  @updatedAt @map("atualizado_em")
 
-  contaId       String? @map("conta_id")
+  contaId         String?       @map("conta_id")
+  /// Papel desta pessoa na conta (item 5.2). Nulo = ninguem classificou ainda.
+  papelNaConta    PapelNaConta? @map("papel_na_conta")
+  /**
+   * O que a fonte publica disse, palavra por palavra.
+   * Guardado ao lado de `papelNaConta`, e nao no lugar dele, porque sao duas
+   * afirmacoes diferentes: "49-Socio-Administrador" e o que a Receita registra;
+   * `ADMINISTRADOR` e como a plataforma classificou. Sobrescrever a classificacao
+   * com o texto da fonte perderia a nossa leitura; sobrescrever o texto da fonte
+   * com a classificacao perderia a prova.
+   */
+  qualificacaoQsa String?       @map("qualificacao_qsa")
   /// Responsavel proprio do contato. Anulavel: contato nasce sozinho no webchat
   /// e ninguem o assume. Ao criar vinculado a uma conta, recebe o responsavel
   /// dela como valor INICIAL — depois os dois sao independentes, e trocar o
   /// responsavel da conta nao propaga.
-  responsavelId String? @map("responsavel_id")
+  responsavelId   String?       @map("responsavel_id")
 
   conta         Account?       @relation(fields: [contaId], references: [id], onDelete: SetNull)
   responsavel   User?          @relation("ContatoResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
@@ -271,6 +323,8 @@ model Contact {
   @@index([organizacaoId, email])
   @@index([organizacaoId, telefone])
   @@index([organizacaoId, responsavelId])
+  /// "Quem sao as pessoas desta conta, e o que cada uma faz nela."
+  @@index([organizacaoId, contaId, papelNaConta])
   @@index([tags], type: Gin)
   @@map("contatos")
 }
@@ -301,7 +355,7 @@ model Conversation {
   /// "2a via do boleto" sao a mesma coisa para quem le e tres linhas diferentes
   /// em qualquer relatorio. A etiqueta e a dimensao que agrupa; as duas
   /// coexistem porque respondem perguntas diferentes.
-  tags             String[]  @default([])
+  tags String[] @default([])
 
   contato     Contact     @relation(fields: [contatoId], references: [id], onDelete: Cascade)
   fila        Queue?      @relation(fields: [filaId], references: [id], onDelete: SetNull)
@@ -377,39 +431,78 @@ enum OportunidadeStatus {
   PERDIDA
 }
 
+/// Papel de uma pessoa dentro da conta (item 5.2).
+///
+/// Vem da tela do Nectar, que lista os contatos relacionados de uma empresa com o
+/// codigo de QSA ao lado. Os valores misturam duas origens de proposito:
+/// `SOCIO` e `ADMINISTRADOR` vem do quadro societario (fato publico, registrado
+/// na Receita), e `DECISOR`, `TECNICO`, `FINANCEIRO` e `COMPRAS` vem do que o
+/// vendedor descobre na conversa. As duas coisas cabem no mesmo campo porque a
+/// pergunta que a tela responde e uma so: **com quem eu falo, e sobre o que**.
+enum PapelNaConta {
+  SOCIO
+  ADMINISTRADOR
+  DECISOR
+  TECNICO
+  FINANCEIRO
+  COMPRAS
+  OUTRO
+}
+
 /// Conta/Empresa: agrupa contatos e oportunidades.
 model Account {
-  id            String   @id @default(uuid())
-  organizacaoId String   @default("") @map("organizacao_id")
-  nome          String
-  cnpj          String?
-  segmento      String?
+  id                 String    @id @default(uuid())
+  organizacaoId      String    @default("") @map("organizacao_id")
+  nome               String
+  cnpj               String?
+  segmento           String?
   /// Etiquetas livres, normalizadas em minusculas por `lib/tags.ts`. Cliente e
   /// contato tem listas independentes: a empresa e revenda, a pessoa e decisora.
-  tags          String[] @default([])
-  site          String?
-  telefone      String?
-  email         String?
-  observacoes   String?
+  tags               String[]  @default([])
+  site               String?
+  telefone           String?
+  email              String?
+  observacoes        String?
+  /**
+   * Dados que o enriquecimento por CNPJ preenche (item 5.2).
+   * Ficam em colunas proprias, e nao dentro de `observacoes`, porque sao dados
+   * consultaveis — razao social e o nome que aparece na nota, e situacao
+   * cadastral "BAIXADA" e o tipo de coisa que muda uma negociacao.
+   */
+  razaoSocial        String?   @map("razao_social")
+  situacaoCadastral  String?   @map("situacao_cadastral")
+  atividadePrincipal String?   @map("atividade_principal")
+  /// Quando a consulta publica foi feita. Nulo = nunca enriquecida.
+  enriquecidoEm      DateTime? @map("enriquecido_em")
   /// Responsavel principal pela carteira. Anulavel: conta sem responsavel e
   /// carteira aberta, visivel para os perfis comerciais e de gestao — esconder
   /// cliente sem dono impediria alguem de assumi-lo.
-  responsavelId String?  @map("responsavel_id")
-  criadoEm      DateTime @default(now()) @map("criado_em")
-  atualizadoEm  DateTime @updatedAt @map("atualizado_em")
+  responsavelId      String?   @map("responsavel_id")
+  /// Filial que atende esta conta (item 6.5). So classificacao — ver o
+  /// comentario em `User.filialId` sobre por que nao entra em `politicas.ts`.
+  filialId           String?   @map("filial_id")
+  criadoEm           DateTime  @default(now()) @map("criado_em")
+  atualizadoEm       DateTime  @updatedAt @map("atualizado_em")
 
-  contatos      Contact[]
-  leads         Lead[]
-  oportunidades Opportunity[]
-  protocolos    Ticket[]
-  atividades    Activity[]
-  responsavel   User?         @relation("ContaResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
-  organizacao   Organizacao   @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  contatos           Contact[]
+  leads              Lead[]
+  oportunidades      Opportunity[]
+  protocolos         Ticket[]
+  atividades         Activity[]
+  /// Base instalada (item 5.1): equipamentos entregues a esta conta.
+  produtosInstalados ProdutoDoCliente[]
+  responsavel        User?              @relation("ContaResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+  /// SetNull: remover a filial nao pode apagar a conta.
+  filial             Filial?            @relation(fields: [filialId], references: [id], onDelete: SetNull)
+  organizacao        Organizacao        @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  /// Campos customizados (item 6.4): apagar a conta apaga os valores junto.
+  camposCustomizados ValorCampoCustomizadoConta[]
 
   /// CNPJ unico por organizacao: o mesmo cliente pode ser de duas empresas.
   @@unique([organizacaoId, cnpj])
   @@index([organizacaoId, nome])
   @@index([organizacaoId, responsavelId])
+  @@index([organizacaoId, filialId])
   @@index([tags], type: Gin)
   @@map("contas")
 }
@@ -435,6 +528,8 @@ model Lead {
   conta       Account?    @relation(fields: [contaId], references: [id], onDelete: SetNull)
   responsavel User?       @relation(fields: [responsavelId], references: [id], onDelete: SetNull)
   organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  /// Campos customizados (item 6.4): apagar o lead apaga os valores junto.
+  camposCustomizados ValorCampoCustomizadoLead[]
 
   @@index([organizacaoId, fase, atualizadoEm])
   @@index([organizacaoId, responsavelId, fase])
@@ -467,8 +562,16 @@ model FunnelStage {
   /// Probabilidade de fechamento no estagio (0-100), usada em previsao.
   probabilidade Int    @default(0)
 
+  /// Titulo da tarefa que a etapa exige antes de a oportunidade avancar.
+  ///
+  /// Nulo = etapa sem exigencia, que e o padrao. O texto e o titulo da tarefa
+  /// criada na entrada ("Registrar a visita tecnica"), e nao um "sim/nao": um
+  /// booleano obrigaria o vendedor a adivinhar o que falta fazer.
+  tarefaObrigatoria String? @map("tarefa_obrigatoria")
+
   funil         Funnel                @relation(fields: [funilId], references: [id], onDelete: Cascade)
   oportunidades Opportunity[]
+  atividades    Activity[]
   saidas        OpportunityStageLog[] @relation("EstagioSaida")
   entradas      OpportunityStageLog[] @relation("EstagioEntrada")
 
@@ -476,15 +579,88 @@ model FunnelStage {
   @@map("funil_estagios")
 }
 
+/// Situacao da alcada de desconto da proposta.
+///
+/// `NAO_REQUER` e diferente de `APROVADA`: a primeira diz que o desconto caiu
+/// dentro do teto de quem o concedeu, a segunda que alguem com alcada olhou e
+/// liberou. Juntar as duas apagaria o registro de quem autorizou o que.
+enum AprovacaoDesconto {
+  NAO_REQUER
+  PENDENTE
+  APROVADA
+  REPROVADA
+}
+
+/// Quao quente esta a negociacao, na leitura de quem esta nela.
+///
+/// Tres degraus e nao cinco: a diferenca entre "morno" e "morno-quente" nao e
+/// uma informacao que alguem consiga manter honesta num funil de cem cartoes, e
+/// uma escala fina vira ruido — todo mundo marca o meio.
+///
+/// **Nao substitui a probabilidade da etapa.** A etapa diz onde o processo esta;
+/// a temperatura diz o que o vendedor sente que nao cabe na etapa ("esta na
+/// proposta, mas o cliente sumiu"). Sao dois numeros diferentes de proposito, e
+/// juntar os dois apagaria justamente a discordancia que interessa.
+enum Temperatura {
+  FRIA
+  MORNA
+  QUENTE
+}
+
 model Opportunity {
-  id                 String             @id @default(uuid())
-  organizacaoId      String             @default("") @map("organizacao_id")
-  titulo             String
-  contaId            String             @map("conta_id")
-  funilId            String             @map("funil_id")
-  estagioId          String             @map("estagio_id")
-  valor              Decimal            @default(0) @db.Decimal(14, 2)
+  id               String   @id @default(uuid())
+  organizacaoId    String   @default("") @map("organizacao_id")
+  titulo           String
+  contaId          String   @map("conta_id")
+  funilId          String   @map("funil_id")
+  estagioId        String   @map("estagio_id")
+  /// Valor usado em TODO relatorio, previsao e total de coluna do funil.
+  ///
+  /// Com recorrencia ele passou a ser derivado: `valorUnico + valorMensal *
+  /// mesesRecorrencia`. Continua existindo como coluna, e nao como calculo na
+  /// leitura, porque cada consulta do funil somaria itens de todos os cartoes.
+  valor            Decimal  @default(0) @db.Decimal(14, 2)
+  /// Soma liquida dos itens de cobranca unica.
+  valorUnico       Decimal  @default(0) @map("valor_unico") @db.Decimal(14, 2)
+  /// Soma liquida dos itens mensais — o MRR desta oportunidade.
+  valorMensal      Decimal  @default(0) @map("valor_mensal") @db.Decimal(14, 2)
+  /// Por quantos meses a parte mensal entra no valor total.
+  ///
+  /// Por oportunidade, e nao uma constante global, porque contrato de manutencao
+  /// de 24 meses e de 12 meses valem coisas diferentes e a diferenca e a propria
+  /// venda. Doze e o padrao por ser o horizonte de meta anual, nao por acaso.
+  mesesRecorrencia Int      @default(12) @map("meses_recorrencia")
+  /// Valor digitado a mao, quando houver.
+  ///
+  /// Guardado em separado para nao se perder quando os itens passam a mandar
+  /// (decisao 57). Sem ele, cadastrar o primeiro item apagaria em silencio o
+  /// numero que alguem negociou por telefone e anotou aqui.
+  valorInformado   Decimal? @map("valor_informado") @db.Decimal(14, 2)
+
+  /// Condicao de pagamento e prazo de entrega, como vao para a proposta impressa.
+  ///
+  /// Texto livre, e nao estrutura: "30/60/90 dias" e "entrada de 30% + 3x" sao
+  /// os dois validos e nao cabem no mesmo campo numerico. Estruturar isso em
+  /// parcelas exigiria um modelo de cobranca que a plataforma nao tem — e o que
+  /// o cliente le e a frase, nao o modelo.
+  /// Temperatura e origem, para o cartao do funil dizer o essencial sem clique.
+  ///
+  /// `temperatura` e nula ate alguem marcar: um padrao "MORNA" faria o funil
+  /// inteiro nascer com uma leitura que ninguem fez.
+  ///
+  /// `canalOrigem` copia o vocabulario de lead e contato (`Channel`), e nao um
+  /// enum proprio: "de onde veio" e a mesma pergunta nos tres, e dois enums
+  /// diferentes fariam o relatorio por origem precisar de traducao no meio.
+  temperatura Temperatura? @map("temperatura")
+  canalOrigem Channel?     @map("canal_origem")
+
+  condicaoPagamento  String?            @map("condicao_pagamento")
+  prazoEntrega       String?            @map("prazo_entrega")
   responsavelId      String?            @map("responsavel_id")
+  /// Alcada de desconto (decisao 58). Recalculada a cada mudanca de itens.
+  aprovacaoDesconto  AprovacaoDesconto  @default(NAO_REQUER) @map("aprovacao_desconto")
+  aprovadoPorId      String?            @map("aprovado_por_id")
+  aprovadoEm         DateTime?          @map("aprovado_em")
   status             OportunidadeStatus @default(ABERTA)
   motivoPerda        MotivoPerda?       @map("motivo_perda")
   previsaoFechamento DateTime?          @map("previsao_fechamento")
@@ -500,10 +676,14 @@ model Opportunity {
   funil            Funnel                @relation(fields: [funilId], references: [id])
   estagio          FunnelStage           @relation(fields: [estagioId], references: [id])
   responsavel      User?                 @relation(fields: [responsavelId], references: [id], onDelete: SetNull)
+  aprovadoPor      User?                 @relation("DescontoAprovador", fields: [aprovadoPorId], references: [id], onDelete: SetNull)
   itens            OpportunityItem[]
   atividades       Activity[]
   historicoEstagio OpportunityStageLog[]
+  auditoria        OpportunityAudit[]
   organizacao      Organizacao           @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  /// Campos customizados (item 6.4): apagar a oportunidade apaga os valores junto.
+  camposCustomizados ValorCampoCustomizadoOportunidade[]
 
   @@index([organizacaoId, status, atualizadoEm])
   @@index([organizacaoId, funilId, estagioId])
@@ -515,6 +695,13 @@ model Opportunity {
 /// o relatorio de "atividades feitas / agendadas por tipo" nao existe.
 enum TipoAtividade {
   NOTA
+  /// Compromisso a fazer, sem canal proprio.
+  ///
+  /// Faltava, e a falta aparecia no item 3.1: a tarefa que a etapa exige nao e
+  /// nota (nota e registro do que ja aconteceu) nem reuniao nem visita. Sem este
+  /// valor toda tarefa do sistema tinha de se disfarcar de uma das outras, e o
+  /// filtro por tipo passava a mentir.
+  TAREFA
   LIGACAO
   WHATSAPP
   EMAIL
@@ -552,22 +739,55 @@ model Activity {
   oportunidadeId String? @map("oportunidade_id")
   protocoloId    String? @map("protocolo_id")
 
+  /// Tarefa exigida por uma etapa do funil (item 3.1).
+  ///
+  /// `obrigatoria` sem `estagioId` nao existe: a exigencia e sempre de uma etapa,
+  /// e e a etapa que diz quando o bloqueio deixa de valer. Guardar o estagio na
+  /// atividade — em vez de reler `tarefaObrigatoria` na hora do avanco — e o que
+  /// faz o bloqueio sobreviver a alguem mudar o texto da exigencia depois.
+  obrigatoria Boolean @default(false)
+  estagioId   String? @map("estagio_id")
+
+  /// Check-in e check-out de visita (item 6.7).
+  ///
+  /// Ficam na propria atividade porque **uma visita e uma atividade** — um modelo
+  /// separado obrigaria a manter os dois em sincronia e permitiria visita sem
+  /// tarefa, que e a forma de o registro desaparecer da agenda de quem vai.
+  ///
+  /// Coordenada e OPCIONAL, e isso e decisao de produto: o tecnico pode estar num
+  /// subsolo, com GPS negado ou sem sinal, e recusar o check-in nesse caso
+  /// impediria o registro justamente na visita mais dificil. Sem coordenada o
+  /// registro vale menos, mas existe.
+  checkinEm   DateTime? @map("checkin_em")
+  checkinLat  Float?    @map("checkin_lat")
+  checkinLng  Float?    @map("checkin_lng")
+  checkoutEm  DateTime? @map("checkout_em")
+  checkoutLat Float?    @map("checkout_lat")
+  checkoutLng Float?    @map("checkout_lng")
+
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
-  responsavel  User?        @relation("AtividadeResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
-  criadoPor    User?        @relation("AtividadeAutor", fields: [criadoPorId], references: [id], onDelete: SetNull)
-  contato      Contact?     @relation(fields: [contatoId], references: [id], onDelete: Cascade)
-  conta        Account?     @relation(fields: [contaId], references: [id], onDelete: Cascade)
-  oportunidade Opportunity? @relation(fields: [oportunidadeId], references: [id], onDelete: Cascade)
-  organizacao  Organizacao  @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
-  protocolo    Ticket?      @relation(fields: [protocoloId], references: [id], onDelete: Cascade)
+  responsavel   User?                @relation("AtividadeResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+  criadoPor     User?                @relation("AtividadeAutor", fields: [criadoPorId], references: [id], onDelete: SetNull)
+  contato       Contact?             @relation(fields: [contatoId], references: [id], onDelete: Cascade)
+  conta         Account?             @relation(fields: [contaId], references: [id], onDelete: Cascade)
+  oportunidade  Opportunity?         @relation(fields: [oportunidadeId], references: [id], onDelete: Cascade)
+  organizacao   Organizacao          @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  protocolo     Ticket?              @relation(fields: [protocoloId], references: [id], onDelete: Cascade)
+  /// A sugestao de ligacao que originou esta tarefa, quando foi o caso (item E.2).
+  acaoDeLigacao CallSuggestedAction?
+  estagio       FunnelStage?         @relation(fields: [estagioId], references: [id], onDelete: SetNull)
 
   @@index([organizacaoId, contatoId, criadoEm])
   @@index([organizacaoId, contaId, criadoEm])
   @@index([organizacaoId, oportunidadeId, criadoEm])
   @@index([organizacaoId, responsavelId, prazo])
   @@index([organizacaoId, prazo])
+  /// A pergunta do bloqueio: "esta oportunidade tem tarefa de etapa em aberto?"
+  @@index([organizacaoId, oportunidadeId, obrigatoria, concluidoEm])
+  /// "Que visitas estao em andamento agora?" — check-in feito, check-out nao.
+  @@index([organizacaoId, checkinEm, checkoutEm])
   @@map("atividades")
 }
 
@@ -591,6 +811,148 @@ model OpportunityStageLog {
   @@index([oportunidadeId, criadoEm])
   @@index([paraEstagioId, criadoEm])
   @@map("oportunidade_historico_estagio")
+}
+
+/// O que a trilha de auditoria da oportunidade sabe nomear (item 3.2).
+///
+/// Enum, e nao texto livre: campo digitado a mao vira `valor`, `Valor` e
+/// `valor_informado` na mesma tabela, e o filtro por campo passa a mentir. O
+/// preco e ter de migrar o enum quando um campo novo entrar em auditoria — o que
+/// e exatamente o momento em que alguem devia estar pensando nisso.
+enum CampoAuditado {
+  TITULO
+  VALOR_INFORMADO
+  MESES_RECORRENCIA
+  RESPONSAVEL
+  PREVISAO_FECHAMENTO
+  CONDICAO_PAGAMENTO
+  PRAZO_ENTREGA
+  /// Origem entra na trilha; temperatura NAO.
+  ///
+  /// Origem e um fato sobre a procedencia do negocio, e mudar isso em silencio
+  /// reescreveria de onde a venda veio — que e a base de qualquer decisao de
+  /// investimento em canal. Temperatura e leitura subjetiva que muda toda semana:
+  /// auditar cada mudanca encheria a trilha e esconderia as linhas que importam.
+  ORIGEM
+  ITENS
+  STATUS
+  APROVACAO_DESCONTO
+}
+
+/// Quem editou o que, e quando, numa oportunidade (item 3.2).
+///
+/// **Nao guarda mudanca de etapa.** Isso ja vive em `OpportunityStageLog`, que
+/// carrega o tempo gasto no estagio; duplicar aqui daria dois registros do mesmo
+/// fato e faria a leitura contar duas vezes. A trilha que a tela mostra e a uniao
+/// das duas fontes, montada na consulta.
+model OpportunityAudit {
+  id             String        @id @default(uuid())
+  oportunidadeId String        @map("oportunidade_id")
+  campo          CampoAuditado
+  /// Valor antes e depois, no tipo natural de cada campo.
+  ///
+  /// Json, e nao texto: `RESPONSAVEL` guarda `{id, nome}` — so o id deixaria a
+  /// trilha ilegivel depois de o usuario ser removido, que e justamente quando
+  /// alguem vai querer ler. `de` nulo distingue "estava vazio" de "nao mudou":
+  /// campo que nao mudou nao gera linha nenhuma.
+  de             Json?
+  para           Json?
+  /// Nulo quando a mudanca veio de rotina automatica, nao de pessoa.
+  autorId        String?       @map("autor_id")
+  criadoEm       DateTime      @default(now()) @map("criado_em")
+
+  oportunidade Opportunity @relation(fields: [oportunidadeId], references: [id], onDelete: Cascade)
+  autor        User?       @relation(fields: [autorId], references: [id], onDelete: SetNull)
+
+  @@index([oportunidadeId, criadoEm])
+  @@map("oportunidade_auditoria")
+}
+
+/// De quem e a meta (item 4.1).
+///
+/// `EQUIPE` so faz sentido para GESTOR, e "equipe" e a mesma definicao que o
+/// resto da plataforma usa: `equipeIds` de `lib/visibilidade.ts`, ou seja o
+/// gestor mais quem aponta para ele em `gestorId`. Inventar aqui um segundo
+/// conceito de equipe faria a meta medir um grupo diferente do que a tela mostra.
+///
+/// Os dois escopos coexistem de proposito: um gestor que tambem vende tem meta
+/// propria e meta do time, e sao numeros diferentes.
+enum EscopoMeta {
+  INDIVIDUAL
+  EQUIPE
+}
+
+/// Meta mensal de venda (item 4.1).
+///
+/// Uma linha por (usuario, escopo, mes) — e e o **mes** que faz o recurso valer.
+/// Quem vende ar-condicionado tem meta de dezembro diferente da de junho, e uma
+/// meta anual dividida por doze descreve mal o ano todo: em junho a equipe parece
+/// heroica e em dezembro parece fracassada, sem nada ter mudado.
+model Meta {
+  id            String     @id @default(uuid())
+  organizacaoId String     @default("") @map("organizacao_id")
+  usuarioId     String     @map("usuario_id")
+  escopo        EscopoMeta
+  /// Competencia: sempre o primeiro dia do mes, em UTC.
+  ///
+  /// Guardar o mes como data (e nao ano+mes em dois inteiros) deixa a comparacao
+  /// de periodo ser a mesma do resto da plataforma. A normalizacao para o dia 1
+  /// acontece no servico, e o indice unico e o que impede duas metas do mesmo mes.
+  mes           DateTime   @map("mes") @db.Date
+  valor         Decimal    @map("valor") @db.Decimal(14, 2)
+  criadoEm      DateTime   @default(now()) @map("criado_em")
+  atualizadoEm  DateTime   @updatedAt @map("atualizado_em")
+
+  usuario     User        @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+
+  @@unique([organizacaoId, usuarioId, escopo, mes])
+  @@index([organizacaoId, mes])
+  @@map("metas")
+}
+
+/// Que recurso de IA consumiu (item 6.8).
+///
+/// Enum e nao texto livre pelo mesmo motivo do campo auditado: "resumo",
+/// "Resumo" e "resumo_conversa" na mesma tabela fariam o filtro por recurso
+/// mentir, e o medidor existe justamente para dizer ONDE o credito foi.
+enum RecursoIA {
+  TRANSCRICAO
+  RESUMO
+  SUGESTAO_RESPOSTA
+  CLASSIFICACAO
+  OUTRO
+}
+
+/// Consumo de IA, um registro por uso (item 6.8).
+///
+/// **Nada escreve aqui hoje**, e isso e uma afirmacao sobre a plataforma, nao um
+/// esquecimento: nenhum recurso de IA esta ligado — nao ha provedor configurado,
+/// e a coluna `transcricao` de `Call` nunca e preenchida. O proprio plano
+/// registra que o item "so faz sentido se a IA for ligada de verdade".
+///
+/// A tabela e o `registrarConsumo` existem porque medir no momento do uso e caro
+/// de acrescentar depois: se a IA entrar e ninguem medir, a primeira fatura e uma
+/// surpresa. A tela diz que nada esta ligado, em vez de mostrar zeros — um
+/// mostrador em "R$ 0,00" convidaria a acreditar que a IA roda e e de graca.
+model ConsumoIA {
+  id            String    @id @default(uuid())
+  organizacaoId String    @default("") @map("organizacao_id")
+  recurso       RecursoIA
+  /// Unidades do provedor: tokens, minutos de audio, imagens. Sem unidade
+  /// universal, e por isso o rotulo vem junto na tela de cada recurso.
+  unidades      Int
+  /// Custo em reais, quando o provedor informa. Nulo NAO e zero.
+  custo         Decimal?  @db.Decimal(12, 6)
+  /// Id do registro que originou o uso (conversa, chamada, oportunidade).
+  referencia    String?
+  criadoEm      DateTime  @default(now()) @map("criado_em")
+
+  organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+
+  @@index([organizacaoId, criadoEm])
+  @@index([organizacaoId, recurso, criadoEm])
+  @@map("consumo_ia")
 }
 
 model Product {
@@ -643,18 +1005,296 @@ model CatalogItem {
   @@map("catalogo_itens")
 }
 
+/// Como o item cobra: uma vez, ou todo mes.
+///
+/// Nao e detalhe de exibicao — muda o que "valor da oportunidade" significa.
+/// R$ 1.000 de equipamento e R$ 500/mes de manutencao nao se somam: um e
+/// receita de uma vez, o outro se repete enquanto o contrato durar. Por isso o
+/// total mora em dois campos na oportunidade, e o horizonte em `mesesRecorrencia`.
+enum Recorrencia {
+  UNICO
+  MENSAL
+}
+
 model OpportunityItem {
-  id             String  @id @default(uuid())
-  oportunidadeId String  @map("oportunidade_id")
-  produtoId      String  @map("produto_id")
-  quantidade     Int     @default(1)
-  precoUnitario  Decimal @map("preco_unitario") @db.Decimal(14, 2)
+  id             String      @id @default(uuid())
+  oportunidadeId String      @map("oportunidade_id")
+  produtoId      String      @map("produto_id")
+  quantidade     Int         @default(1)
+  precoUnitario  Decimal     @map("preco_unitario") @db.Decimal(14, 2)
+  /// Acrescimo e desconto em VALOR absoluto por linha, nao em percentual.
+  ///
+  /// Percentual seria mais bonito na tela e pior no banco: quem negocia diz
+  /// "tira duzentos reais", e guardar 6,6667% para reproduzir R$ 200 de R$ 3.000
+  /// perde centavo no arredondamento e o total deixa de fechar com a proposta
+  /// que o cliente assinou. A tela pode oferecer o percentual e converter.
+  acrescimo      Decimal     @default(0) @db.Decimal(14, 2)
+  desconto       Decimal     @default(0) @db.Decimal(14, 2)
+  recorrencia    Recorrencia @default(UNICO)
+  /// Custo unitario, para a margem. Nulo = nao informado, que e diferente de
+  /// zero: zero afirma "nao custa nada" e produziria 100% de lucro na tela.
+  custoUnitario  Decimal?    @map("custo_unitario") @db.Decimal(14, 2)
 
   oportunidade Opportunity @relation(fields: [oportunidadeId], references: [id], onDelete: Cascade)
   produto      Product     @relation(fields: [produtoId], references: [id])
 
   @@unique([oportunidadeId, produtoId])
   @@map("oportunidade_itens")
+}
+
+enum TipoGarantia {
+  LEGAL
+  CONTRATUAL
+  COMPRESSOR
+  OUTRA
+}
+
+/// Base instalada (item 5.1): o equipamento fisico entregue ao cliente, com o
+/// que sustenta qualquer acionamento de garantia depois. Vive na conta, e nao
+/// no contato — o equipamento pertence a empresa, nao a pessoa que assinou a
+/// compra (mesma logica de leads e oportunidades morarem na conta).
+model ProdutoDoCliente {
+  id            String @id @default(uuid())
+  organizacaoId String @default("") @map("organizacao_id")
+  contaId       String @map("conta_id")
+  modelo        String
+  /// Nulo: equipamento sem numero de serie legivel no cadastro — nao "sem serie".
+  numeroSerie String? @map("numero_serie")
+  /// Nulo: data de instalacao desconhecida. Sem ela nenhum componente de
+  /// garantia tem como calcular vencimento — o estado e SEM_DATA_INICIO, e
+  /// nunca e tratado como vencida (ver lib/garantia.ts).
+  dataInstalacao DateTime? @map("data_instalacao")
+  instaladorNome String?   @map("instalador_nome")
+  /// Nulo = nao informado. A garantia CONTRATUAL da Philco so vale com
+  /// instalador credenciado — "nao informado" e um terceiro estado, diferente
+  /// de "nao credenciado" (ver lib/garantia.ts).
+  instaladorCredenciado Boolean? @map("instalador_credenciado")
+  notaFiscalNumero      String?  @map("nota_fiscal_numero")
+  observacoes           String?
+  criadoEm              DateTime @default(now()) @map("criado_em")
+  atualizadoEm          DateTime @updatedAt @map("atualizado_em")
+
+  conta       Account              @relation(fields: [contaId], references: [id], onDelete: Cascade)
+  organizacao Organizacao          @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  componentes ComponenteGarantia[]
+
+  @@index([organizacaoId, contaId])
+  @@index([numeroSerie])
+  @@map("produtos_do_cliente")
+}
+
+/// Uma garantia do equipamento (item 5.1). O mesmo produto tem prazos
+/// diferentes por componente — na regra Philco, legal, contratual e
+/// compressor vencem em datas diferentes, e cada um mora na propria linha.
+model ComponenteGarantia {
+  id                 String       @id @default(uuid())
+  produtoDoClienteId String       @map("produto_do_cliente_id")
+  tipo               TipoGarantia
+  /// Rotulo livre, usado so quando tipo = OUTRA.
+  nome      String?
+  prazoDias Int     @map("prazo_dias")
+  /// Nulo ate ser preenchido (herda a data de instalacao do produto na
+  /// criacao). Guardado a parte porque um componente trocado — ex.: compressor
+  /// substituido — reinicia a propria contagem sem mexer no equipamento inteiro.
+  dataInicio DateTime? @map("data_inicio")
+  observacao String?
+  criadoEm   DateTime  @default(now()) @map("criado_em")
+
+  produtoDoCliente ProdutoDoCliente @relation(fields: [produtoDoClienteId], references: [id], onDelete: Cascade)
+
+  @@index([produtoDoClienteId])
+  @@map("componentes_garantia")
+}
+
+enum EntidadeVisao {
+  CONTA
+  LEAD
+  OPORTUNIDADE
+}
+
+/// Visao salva (item 6.1): um filtro nomeado, com cor, para reabrir depois.
+///
+/// Nao guarda uma consulta propria — guarda o MESMO filtro que a tela ja tem
+/// (busca, etiqueta, responsavel, conforme a entidade). O formato de `filtro`
+/// depende de `entidade` e e validado na camada de servico, nao no banco,
+/// porque cada entidade tem um vocabulario de filtro diferente.
+///
+/// Compartilhada pela organizacao inteira, como o funil — nao pessoal. Nao ha
+/// hoje nenhuma tabela com o contorno "so o dono ve" nesta plataforma, e
+/// inventar essa politica so para este item criaria a primeira excecao sem
+/// necessidade pedida. `criadoPorId` e so autoria, no mesmo padrao de
+/// `Campaign` e `Activity`.
+model VisaoSalva {
+  id            String        @id @default(uuid())
+  organizacaoId String        @default("") @map("organizacao_id")
+  entidade      EntidadeVisao
+  nome          String
+  /// Hex, mesmo padrao de `Branding.corPrimaria` — cor da aba na lista.
+  cor           String        @default("#64748b")
+  filtro        Json
+  criadoPorId   String?       @map("criado_por_id")
+  criadoEm      DateTime      @default(now()) @map("criado_em")
+  atualizadoEm  DateTime      @updatedAt @map("atualizado_em")
+
+  criadoPor   User?       @relation(fields: [criadoPorId], references: [id], onDelete: SetNull)
+  organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+
+  /// Nome unico por entidade, dentro da organizacao: duas visoes de contas
+  /// nao podem se chamar "Clientes VIP", mas uma de contas e uma de leads podem.
+  @@unique([organizacaoId, entidade, nome])
+  @@index([organizacaoId, entidade])
+  @@map("visoes_salvas")
+}
+
+/// Filial (item 6.5): unidade fisica da organizacao, usada para classificar
+/// contas e pessoas — quem atende de qual endereco.
+///
+/// So classificacao, sem efeito em visibilidade. O levantamento antes de
+/// modelar (pedido explicito: "checar como a politica de visibilidade se
+/// comporta com hierarquia, essa e a parte dificil, nao o schema") achou que
+/// filial entraria como fator obrigatorio dentro de cada politica em
+/// `politicas.ts` (contas, contatos, leads, oportunidades) se fosse gate de
+/// visibilidade — mudanca grande em codigo de seguranca. Nenhum documento do
+/// produto (ANALISE-CRM.md, SCOPE.md) especifica isso, nem confirma que a
+/// Bradel opera hoje com unidades fisicas segregando quem-ve-o-que; a linha
+/// do backlog e so "Filiais (hierarquia de empresa) | Ploomes | medio", copiada
+/// por comparacao competitiva. Por isso o campo existe para agrupar/filtrar
+/// contas e relatorios, e `contextoVisibilidade()`/`politicas.ts` ficam
+/// intocados — se a necessidade de gate aparecer depois, ela chega como pedido
+/// concreto, nao como suposicao.
+///
+/// Sem hierarquia entre filiais (uma matriz com filiais-filhas): "hierarquia
+/// de empresa" no backlog original nunca foi detalhado alem do nome da linha,
+/// e uma lista plana por organizacao cobre o caso de uso conhecido (agrupar
+/// contas por unidade) sem inventar uma arvore que nada pediu.
+model Filial {
+  id            String   @id @default(uuid())
+  organizacaoId String   @default("") @map("organizacao_id")
+  nome          String
+  cidade        String?
+  uf            String?  @db.Char(2)
+  ativa         Boolean  @default(true)
+  criadoEm      DateTime @default(now()) @map("criado_em")
+  atualizadoEm  DateTime @updatedAt @map("atualizado_em")
+
+  organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  usuarios    User[]
+  contas      Account[]
+
+  @@unique([organizacaoId, nome])
+  @@index([organizacaoId])
+  @@map("filiais")
+}
+
+enum TipoCampoCustomizado {
+  TEXTO
+  NUMERO
+  DATA
+  BOOLEANO
+  SELECAO
+}
+
+/// Campo customizado (item 6.4): campo extra que o ADMIN define para conta,
+/// lead ou oportunidade — reusa `EntidadeVisao` porque sao exatamente as
+/// mesmas tres entidades, sem inventar um segundo enum identico.
+///
+/// `tipo` e `valorUnico` sao IMUTAVEIS depois de criado: mudar o tipo de um
+/// campo com valores ja gravados corromperia silenciosamente os dados
+/// antigos (um valor "texto livre" viraria invalido como NUMERO), e mudar
+/// valorUnico depois exigiria auditar todo o historico em busca de duplicata.
+///
+/// `chave` e o slug gerado do nome na criacao, e tambem imutavel — e o
+/// identificador estavel que a API usa; o `nome` (rotulo exibido) pode mudar
+/// sem quebrar nada que ja gravou valor.
+model CampoCustomizado {
+  id            String               @id @default(uuid())
+  organizacaoId String               @default("") @map("organizacao_id")
+  entidade      EntidadeVisao
+  nome          String
+  chave         String
+  tipo          TipoCampoCustomizado
+  /// So usado quando `tipo` e SELECAO. Vazio nos demais tipos.
+  opcoes        String[]             @default([])
+  obrigatorio   Boolean              @default(false)
+  /// So checado em codigo (`findFirst` antes de gravar) — NAO vira constraint
+  /// do banco. O campo e definido em runtime pelo ADMIN; um indice unico
+  /// condicional por campo exigiria uma migration a cada campo novo, o
+  /// oposto do que esta feature promete (campo sem precisar mexer no
+  /// schema). Risco aceito: janela de corrida sob escrita concorrente no
+  /// mesmo campo unico. Ver decisao 80 no SCOPE.md.
+  valorUnico    Boolean              @default(false) @map("valor_unico")
+  /// Agrupamento livre na tela ("Comercial", "Localizacao" no Ploomes) — so
+  /// exibicao, sem efeito em validacao.
+  secao         String?
+  ordem         Int                  @default(0)
+  /// Desativar preserva os valores ja gravados e para de exigir/exibir o
+  /// campo em formularios novos — apagar de verdade derruba a FK e some com
+  /// o historico.
+  ativo         Boolean              @default(true)
+  criadoEm      DateTime             @default(now()) @map("criado_em")
+  atualizadoEm  DateTime             @updatedAt @map("atualizado_em")
+
+  organizacao         Organizacao                         @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  valoresConta        ValorCampoCustomizadoConta[]
+  valoresLead         ValorCampoCustomizadoLead[]
+  valoresOportunidade ValorCampoCustomizadoOportunidade[]
+
+  /// Chave unica por entidade dentro da organizacao: um campo de CONTA e um
+  /// de LEAD podem se chamar igual, mas dois de CONTA nao.
+  @@unique([organizacaoId, entidade, chave])
+  @@index([organizacaoId, entidade])
+  @@map("campos_customizados")
+}
+
+/// Valor de um campo customizado numa conta. Filha de `Account` E de
+/// `CampoCustomizado` — chega sempre por uma das duas, nunca lida sozinha.
+/// `onDelete: Cascade` nos dois lados: apagar a conta ou apagar a definicao
+/// do campo apaga o valor junto, sem registro orfao.
+model ValorCampoCustomizadoConta {
+  id                 String @id @default(uuid())
+  campoCustomizadoId String @map("campo_customizado_id")
+  contaId            String @map("conta_id")
+  /// Sempre texto na coluna — NUMERO/DATA/BOOLEANO sao validados e
+  /// convertidos na camada de servico, no mesmo espirito de `garantia.ts`:
+  /// consulta fina no banco, funcao pura para o significado do valor.
+  valor              String
+
+  campo CampoCustomizado @relation(fields: [campoCustomizadoId], references: [id], onDelete: Cascade)
+  conta Account          @relation(fields: [contaId], references: [id], onDelete: Cascade)
+
+  /// Um valor por campo por conta.
+  @@unique([campoCustomizadoId, contaId])
+  /// Sustenta a checagem de `valorUnico` em codigo sem varrer a tabela.
+  @@index([campoCustomizadoId, valor])
+  @@map("valores_campo_customizado_conta")
+}
+
+model ValorCampoCustomizadoLead {
+  id                 String @id @default(uuid())
+  campoCustomizadoId String @map("campo_customizado_id")
+  leadId             String @map("lead_id")
+  valor              String
+
+  campo CampoCustomizado @relation(fields: [campoCustomizadoId], references: [id], onDelete: Cascade)
+  lead  Lead             @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([campoCustomizadoId, leadId])
+  @@index([campoCustomizadoId, valor])
+  @@map("valores_campo_customizado_lead")
+}
+
+model ValorCampoCustomizadoOportunidade {
+  id                 String @id @default(uuid())
+  campoCustomizadoId String @map("campo_customizado_id")
+  oportunidadeId     String @map("oportunidade_id")
+  valor              String
+
+  campo       CampoCustomizado @relation(fields: [campoCustomizadoId], references: [id], onDelete: Cascade)
+  oportunidade Opportunity     @relation(fields: [oportunidadeId], references: [id], onDelete: Cascade)
+
+  @@unique([campoCustomizadoId, oportunidadeId])
+  @@index([campoCustomizadoId, valor])
+  @@map("valores_campo_customizado_oportunidade")
 }
 
 // ---------------------------------------------------------------------------
@@ -777,6 +1417,30 @@ model TicketSchedule {
 // ---------------------------------------------------------------------------
 
 /// Credenciais e destino de fila por canal externo. Um registro por canal.
+/// Como o WhatsApp desta organizacao fala com o WhatsApp.
+///
+/// **OFICIAL** — Cloud API da Meta. Numero registrado numa WABA, template
+/// aprovado para iniciar conversa, e a Meta como interlocutora. E o modo padrao,
+/// e o unico com garantia de continuidade.
+///
+/// **NAO_OFICIAL** — uma ponte externa (Baileys, WPPConnect e afins) que se
+/// conecta como se fosse o WhatsApp Web, com sessao mantida por QR Code.
+/// Funciona com qualquer numero e sem custo por mensagem, e por isso e o que
+/// pequenas operacoes usam.
+///
+/// O modo nao oficial **viola os termos de uso do WhatsApp** e o numero pode ser
+/// bloqueado sem aviso nem recurso. Isso esta escrito aqui, na tela de
+/// configuracao e no SCOPE.md porque e uma decisao de negocio com consequencia
+/// real — e quem liga precisa saber que ligou, em vez de descobrir no dia em que
+/// o numero da empresa para de funcionar.
+///
+/// A plataforma NAO embute a biblioteca de conexao: ela conversa com a ponte por
+/// HTTP. Ver `whatsapp.modo.ts` para o porque.
+enum ModoWhatsApp {
+  OFICIAL
+  NAO_OFICIAL
+}
+
 model ChannelConfig {
   id            String  @id @default(uuid())
   organizacaoId String  @default("") @map("organizacao_id")
@@ -796,6 +1460,26 @@ model ChannelConfig {
   appSecret   String? @map("app_secret")
   /// Token do desafio de verificacao do webhook (GET hub.challenge).
   verifyToken String? @map("verify_token")
+
+  /// Modo do WhatsApp (oficial ou por ponte externa). Nulo nos outros canais.
+  ///
+  /// Nulo e nao um default: Instagram e Facebook nao tem "modo", e gravar
+  /// OFICIAL neles faria a coluna afirmar algo sobre um canal a que a pergunta
+  /// nao se aplica.
+  modo ModoWhatsApp? @map("modo")
+
+  /// Endereco da ponte nao oficial. Ex.: http://wpp:3000/api/plataforma.
+  ///
+  /// Fica em coluna propria, e nao reaproveita `accessToken`/`phoneNumberId`: os
+  /// campos da Meta continuam significando o que significam, e um dia em que os
+  /// dois modos estiverem configurados a troca de modo nao perde credencial.
+  ponteUrl     String? @map("ponte_url")
+  /// Token com que a plataforma se autentica NA ponte. Cifrado em repouso.
+  ponteToken   String? @map("ponte_token")
+  /// Segredo HMAC com que a PONTE assina o que envia para ca. Cifrado.
+  ponteSegredo String? @map("ponte_segredo")
+  /// Nome da sessao/instancia na ponte, quando ela hospeda mais de um numero.
+  ponteSessao  String? @map("ponte_sessao")
 
   /// Fila que recebe as conversas deste canal.
   filaId String? @map("fila_id")
@@ -1103,6 +1787,19 @@ model VoiceConfig {
 }
 
 /// Registro de chamada (CDR). Uma linha por chamada, entrante ou sainte.
+/// Como a ligacao terminou, na leitura do motor que a analisou.
+///
+/// Tres valores, e **nulo nao e NEUTRO**. Nulo significa "ninguem analisou esta
+/// chamada", e a distincao e a coisa mais importante deste item: dobrar as nao
+/// analisadas em "neutras" faria a gestao ler um mar de neutralidade que na
+/// verdade e ausencia de analise, e concluir que o atendimento e morno quando o
+/// que existe e uma fila sem transcricao.
+enum SentimentoDaLigacao {
+  POSITIVO
+  NEUTRO
+  NEGATIVO
+}
+
 model Call {
   id            String      @id @default(uuid())
   organizacaoId String      @default("") @map("organizacao_id")
@@ -1125,22 +1822,85 @@ model Call {
   /// Duracao da conversa em segundos, informada pelo provedor no encerramento.
   duracao     Int?
 
-  gravacaoUrl     String?  @map("gravacao_url")
-  gravacaoDuracao Int?     @map("gravacao_duracao")
-  transcricao     String?
-  custo           Decimal? @db.Decimal(10, 4)
-  motivoFalha     String?  @map("motivo_falha")
+  gravacaoUrl       String?              @map("gravacao_url")
+  gravacaoDuracao   Int?                 @map("gravacao_duracao")
+  transcricao       String?
+  /// Assistente da ligacao (item E.2): resumo, sentimento e a procedencia deles.
+  ///
+  /// A plataforma **nao transcreve nem interpreta** — nao ha provedor generativo
+  /// aqui. Quem transcreve e um motor externo, que posta o resultado pela ponte
+  /// de integracao, do mesmo jeito que o agente de IA posta resposta em conversa.
+  ///
+  /// `analisadoPor` guarda o nome do motor, e nao existe por curiosidade: um
+  /// resumo sem autor nao se discute, e trocar de motor sem registro faria duas
+  /// analises incomparaveis parecerem a mesma coisa. `analisadoEm` diz de quando
+  /// e a leitura — analise feita antes do fim da ligacao nao vale como atual.
+  resumo            String?
+  sentimento        SentimentoDaLigacao?
+  analisadoPor      String?              @map("analisado_por")
+  analisadoEm       DateTime?            @map("analisado_em")
+  custo             Decimal?             @db.Decimal(10, 4)
+  /**
+   * Como a ligacao foi, de 1 a 5, na opiniao de quem ouviu (item 6.6).
+   * Nulo = ninguem classificou, e isso e diferente de "ruim". A coluna existe
+   * porque custo sozinho nao responde a pergunta que a gestao faz ao olhar a
+   * lista de chamadas: **o que a gente pagou por isso valeu?**
+   */
+  classificacao     Int?
+  /// Quem classificou. Sem isso, "nota 2" nao tem autor e nao se discute.
+  classificadoPorId String?              @map("classificado_por_id")
+  classificadoEm    DateTime?            @map("classificado_em")
+  motivoFalha       String?              @map("motivo_falha")
 
-  contato     Contact?      @relation(fields: [contatoId], references: [id], onDelete: SetNull)
-  conversa    Conversation? @relation(fields: [conversaId], references: [id], onDelete: SetNull)
-  agente      User?         @relation(fields: [agenteId], references: [id], onDelete: SetNull)
-  fila        Queue?        @relation(fields: [filaId], references: [id], onDelete: SetNull)
-  organizacao Organizacao   @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  contato         Contact?              @relation(fields: [contatoId], references: [id], onDelete: SetNull)
+  conversa        Conversation?         @relation(fields: [conversaId], references: [id], onDelete: SetNull)
+  agente          User?                 @relation(fields: [agenteId], references: [id], onDelete: SetNull)
+  classificadoPor User?                 @relation("ChamadaClassificador", fields: [classificadoPorId], references: [id], onDelete: SetNull)
+  acoesSugeridas  CallSuggestedAction[]
+  fila            Queue?                @relation(fields: [filaId], references: [id], onDelete: SetNull)
+  organizacao     Organizacao           @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
   @@index([organizacaoId, iniciadoEm])
   @@index([organizacaoId, agenteId, iniciadoEm])
   @@index([organizacaoId, status])
   @@map("chamadas")
+}
+
+/// Proxima acao que o motor sugeriu ao ouvir a ligacao (item E.2).
+///
+/// Tabela propria, e nao um campo de texto na chamada, por um motivo so: a
+/// demonstracao mostrava as proximas acoes **executaveis**, e sugestao que nao
+/// pode virar tarefa e enfeite. Cada linha tem um destino possivel — virar
+/// atividade de verdade, na agenda de alguem — e um estado que diz se isso
+/// aconteceu.
+///
+/// **Filha de `Call`**: nao tem `organizacaoId` porque toda leitura passa pela
+/// chamada, que a extensao de multi-tenant filtra. E o mesmo caminho da trilha
+/// de auditoria da oportunidade.
+///
+/// Descartar tambem e registro: sugestao ruim descartada em silencio voltaria a
+/// aparecer igual, e ninguem saberia que ela ja tinha sido recusada.
+model CallSuggestedAction {
+  id        String @id @default(uuid())
+  chamadaId String @map("chamada_id")
+  texto     String
+  /// Ordem em que o motor sugeriu. A ordem e informacao: motor bom sugere o mais
+  /// urgente primeiro, e reordenar por data de criacao perderia isso.
+  ordem     Int    @default(0)
+
+  criadoEm DateTime @default(now()) @map("criado_em")
+
+  /// A atividade que nasceu desta sugestao. Nulo = ainda nao virou tarefa.
+  atividadeId     String?   @unique @map("atividade_id")
+  descartadoEm    DateTime? @map("descartado_em")
+  descartadoPorId String?   @map("descartado_por_id")
+
+  chamada       Call      @relation(fields: [chamadaId], references: [id], onDelete: Cascade)
+  atividade     Activity? @relation(fields: [atividadeId], references: [id], onDelete: SetNull)
+  descartadoPor User?     @relation("AcaoDescartadaPor", fields: [descartadoPorId], references: [id], onDelete: SetNull)
+
+  @@index([chamadaId, ordem])
+  @@map("acoes_sugeridas_da_chamada")
 }
 
 // ---------------------------------------------------------------------------

@@ -192,7 +192,18 @@ test.describe('Etiquetas do CRM', () => {
     await expect(ficha.getByText(tag, { exact: true })).toBeVisible();
     // E aparece no cartao da lista tambem, que e o que faz a etiqueta servir
     // para varrer a carteira sem abrir cada cliente.
-    await expect(cartao(page, 'Contas').getByText(tag, { exact: true })).toBeVisible();
+    //
+    // O alvo e o CHIP no cartao, e nao "o texto da etiqueta em algum lugar da
+    // coluna": a mesma palavra tambem e o botao do filtro, e `getByText` casava
+    // com os dois e quebrava por modo estrito — mas so quando a etiqueta nova
+    // nascia visivel no filtro em vez de escondida atras de "+N etiquetas".
+    // Falhava na suite completa e passava sozinho, que e o pior dos dois mundos.
+    // O chip e o unico item de lista cujo texto inteiro e a etiqueta.
+    await expect(
+      cartao(page, 'Contas')
+        .getByRole('listitem')
+        .filter({ hasText: new RegExp(`^${tag}$`) }),
+    ).toBeVisible();
 
     await limpar(page, tag);
   });

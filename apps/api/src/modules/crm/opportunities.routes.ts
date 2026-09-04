@@ -11,12 +11,19 @@ import {
   fecharOportunidadeSchema,
   itensSchema,
   listarOportunidadesSchema,
+  tarefaDaEtapaSchema,
 } from './opportunities.schemas';
+import { getBranding } from '../branding/branding.service';
+import { gerarPropostaPdf } from './proposta.pdf';
 import {
   atualizarOportunidade,
+  auditoriaDaOportunidade,
+  dadosDaProposta,
   criarFunil,
   criarOportunidade,
+  decidirDesconto,
   definirItens,
+  definirTarefaDaEtapa,
   fecharOportunidade,
   funilKanban,
   listarFunis,
@@ -57,6 +64,27 @@ funnelsRoutes.post(
   }),
 );
 
+/**
+ * Exigencia da etapa (item 3.1). Escrita de ADMIN/SUPERVISOR, como criar funil.
+ *
+ * Definir o processo e decidir por todo mundo que usa o funil, e por isso nao
+ * acompanha a alcada de aprovar caso a caso — o mesmo corte da politica de
+ * desconto (decisao 58).
+ */
+funnelsRoutes.patch(
+  '/:funilId/estagios/:estagioId',
+  requireRole('ADMIN', 'SUPERVISOR'),
+  validateBody(tarefaDaEtapaSchema),
+  asyncHandler(async (req, res) => {
+    const estagio = await definirTarefaDaEtapa(
+      param(req, 'funilId'),
+      param(req, 'estagioId'),
+      req.body.tarefaObrigatoria,
+    );
+    res.json({ estagio });
+  }),
+);
+
 opportunitiesRoutes.get(
   '/',
   validateQuery(listarOportunidadesSchema),
@@ -81,6 +109,40 @@ opportunitiesRoutes.get(
   }),
 );
 
+/**
+ * Trilha de auditoria da oportunidade (item 3.2).
+ *
+ * Sem perfil extra: quem ve a oportunidade ve o historico dela. Restringir a
+ * gestao faria o vendedor perguntar "quem mudou meu valor?" por mensagem, que e
+ * pior para todos — e o proprio dono do registro e quem mais precisa da resposta.
+ */
+opportunitiesRoutes.get(
+  '/:id/auditoria',
+  asyncHandler(async (req, res) => {
+    res.json({ eventos: await auditoriaDaOportunidade(param(req, 'id')) });
+  }),
+);
+
+/**
+ * A proposta comercial em PDF (item 2.2).
+ *
+ * A marca vem de `getBranding()`, como nos relatorios: o documento sai com o
+ * nome e a cor da organizacao, e nao com a marca da plataforma — quem manda a
+ * proposta e a empresa.
+ */
+opportunitiesRoutes.get(
+  '/:id/proposta.pdf',
+  asyncHandler(async (req, res) => {
+    const branding = await getBranding();
+    const proposta = await dadosDaProposta(param(req, 'id'), branding.appName);
+    const pdf = await gerarPropostaPdf(proposta, branding.corPrimaria);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="proposta-${proposta.numero}.pdf"`);
+    res.send(pdf);
+  }),
+);
+
 opportunitiesRoutes.post(
   '/',
   validateBody(criarOportunidadeSchema),
@@ -102,6 +164,34 @@ opportunitiesRoutes.post(
   validateBody(fecharOportunidadeSchema),
   asyncHandler(async (req, res) => {
     res.json({ oportunidade: await fecharOportunidade(param(req, 'id'), req.body) });
+  }),
+);
+
+/**
+ * Alcada de desconto (item 2.3).
+ *
+ * `requireRole` sem COMERCIAL: quem concede o desconto nao aprova o proprio
+ * desconto. A politica de visibilidade continua valendo por dentro, entao um
+ * GESTOR so decide sobre proposta da equipe dele — perfil diz *se* pode aprovar,
+ * politica diz *sobre o que*.
+ *
+ * Dois verbos e nao um com corpo `{aprovado: boolean}`: aprovar e reprovar sao
+ * acoes diferentes com consequencias diferentes, e um booleano no corpo esconde
+ * qual foi no log de acesso.
+ */
+opportunitiesRoutes.post(
+  '/:id/desconto/aprovar',
+  requireRole('ADMIN', 'SUPERVISOR', 'GESTOR'),
+  asyncHandler(async (req, res) => {
+    res.json({ oportunidade: await decidirDesconto(param(req, 'id'), true) });
+  }),
+);
+
+opportunitiesRoutes.post(
+  '/:id/desconto/reprovar',
+  requireRole('ADMIN', 'SUPERVISOR', 'GESTOR'),
+  asyncHandler(async (req, res) => {
+    res.json({ oportunidade: await decidirDesconto(param(req, 'id'), false) });
   }),
 );
 

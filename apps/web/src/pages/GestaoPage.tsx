@@ -5,6 +5,7 @@ import { StatTile } from '../components/viz/StatTile';
 import { ApiError, api } from '../lib/api';
 import { ESTADO, SERIES } from '../lib/viz';
 import type { ResultadosPesquisa } from '../lib/types';
+import { ConsumoDeIaCard } from './gestao/ConsumoDeIa';
 
 const hoje = () => new Date().toISOString().slice(0, 10);
 const trintaDias = () => new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -103,6 +104,12 @@ export function GestaoPage() {
           )}
         </Card>
       </div>
+
+      {/* Medidor de consumo de IA (item 6.8).
+          Fica na Area da Gestao porque e informacao de CUSTO da instalacao, e
+          nao de operacao — e porque quem olha qualidade percebida e quem
+          pergunta quanto a IA esta custando para sustentar isso. */}
+      <ConsumoDeIaCard />
     </div>
   );
 }

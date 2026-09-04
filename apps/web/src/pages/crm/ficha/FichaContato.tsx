@@ -9,6 +9,7 @@ import {
 } from '../../../lib/types';
 import { Indicadores } from './Indicadores';
 import { LinhaDoTempo } from './LinhaDoTempo';
+import { CheckinDeVisita } from './CheckinDeVisita';
 import { RegistrarAtividade } from './RegistrarAtividade';
 import { EditorEtiquetas } from '../Etiquetas';
 
@@ -243,6 +244,7 @@ export function FichaContato({ contatoId, aoMudarEtiquetas }: FichaProps) {
                     </div>
                     <p className="mt-1 text-sm text-slate-800">{a.titulo}</p>
                     {a.responsavel && <p className="text-xs text-slate-400">{a.responsavel.nome}</p>}
+                    <CheckinDeVisita atividade={a} aoMudar={() => atualizar()} aoErrar={setErro} />
                   </div>
                   <Button variante="neutro" onClick={() => void concluir(a)}>
                     Concluir

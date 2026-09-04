@@ -11,6 +11,8 @@ export function toPublicUser(user: User) {
     ativo: user.ativo,
     ultimoLogin: user.ultimoLogin,
     criadoEm: user.criadoEm,
+    /** Filial desta pessoa (item 6.5). Exposto porque a tela de usuarios agora edita este campo. */
+    filialId: user.filialId,
   };
 }
 

@@ -1,20 +1,39 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alerta, Badge, Button, Card, EmptyState, Field, Input } from '../../components/ui';
+import { Alerta, Badge, Button, Card, EmptyState, Field, Input, Select } from '../../components/ui';
 import { ApiError, api } from '../../lib/api';
 import { EditorEtiquetas, Etiquetas, FiltroEtiquetas } from './Etiquetas';
 import {
+  LABEL_CAMPO_CONTA,
   LABEL_FASE_LEAD,
+  LABEL_PAPEL_NA_CONTA,
+  PAPEIS_NA_CONTA,
   moeda,
+  type CampoCustomizadoDef,
+  type PapelNaConta,
+  type PreviaEnriquecimento,
   type Conta,
+  type Filial,
   type IndicadoresFicha,
   type Lead,
   type Oportunidade,
+  type ProdutoInstalado,
+  type FiltroContaSalvo,
+  type ValorCampoCustomizado,
 } from '../../lib/types';
+import { CamposCustomizadosCampos } from './CamposCustomizados';
+import { BaseInstalada } from './ficha/BaseInstalada';
+import { VisoesSalvas } from './VisoesSalvas';
 import { Indicadores } from './ficha/Indicadores';
 import { LinhaDoTempo } from './ficha/LinhaDoTempo';
 import { RegistrarAtividade } from './ficha/RegistrarAtividade';
 
-type Ficha = { conta: Conta; leads: Lead[]; oportunidades: Oportunidade[] };
+type Ficha = {
+  conta: Conta;
+  leads: Lead[];
+  oportunidades: Oportunidade[];
+  produtosInstalados: ProdutoInstalado[];
+  camposCustomizados: ValorCampoCustomizado[];
+};
 
 const mascararCnpj = (cnpj: string | null) =>
   cnpj && cnpj.length === 14
@@ -30,6 +49,7 @@ type Props = {
 
 export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   const [contas, setContas] = useState<Conta[]>([]);
+  const [filiais, setFiliais] = useState<Filial[]>([]);
   const [busca, setBusca] = useState('');
   /** Etiquetas ligadas no filtro. Semantica E, igual a aba de contatos. */
   const [tags, setTags] = useState<string[]>([]);
@@ -37,8 +57,16 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   const [versaoTags, setVersaoTags] = useState(0);
   const [ficha, setFicha] = useState<Ficha | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-  const [nova, setNova] = useState({ nome: '', cnpj: '', segmento: '' });
+  const [nova, setNova] = useState({ nome: '', cnpj: '', segmento: '', filialId: '' });
+  /** Campos customizados (item 6.4) da "Nova conta". */
+  const [camposDef, setCamposDef] = useState<CampoCustomizadoDef[]>([]);
+  const [novosCampos, setNovosCampos] = useState<Record<string, unknown>>({});
   const [indicadores, setIndicadores] = useState<IndicadoresFicha | null>(null);
+  /** Enriquecimento por CNPJ (item 5.2): previa antes de aplicar. */
+  const [previa, setPrevia] = useState<PreviaEnriquecimento | null>(null);
+  const [consultando, setConsultando] = useState(false);
+  const [aplicando, setAplicando] = useState(false);
+  const [avisoCnpj, setAvisoCnpj] = useState<string | null>(null);
   /** Sinal para a linha do tempo rebuscar depois de um registro novo. */
   const [versao, setVersao] = useState(0);
 
@@ -61,6 +89,20 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
     return () => clearTimeout(t);
   }, [carregar]);
 
+  useEffect(() => {
+    void api
+      .get<{ filiais: Filial[] }>('/filiais')
+      .then(({ filiais: lista }) => setFiliais(lista))
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    void api
+      .get<{ campos: CampoCustomizadoDef[] }>('/campos-customizados?entidade=CONTA')
+      .then(({ campos }) => setCamposDef(campos))
+      .catch(() => undefined);
+  }, []);
+
   const abrir = useCallback(async (id: string) => {
     try {
       // Duas chamadas em paralelo: `/contas/:id` traz contatos, leads e
@@ -72,12 +114,103 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
       ]);
       setFicha(detalhe);
       setIndicadores(resumo.indicadores);
+      // A previa e de UMA conta: mantida ao trocar de cliente, ela ofereceria
+      // aplicar no cliente errado os dados do anterior.
+      setPrevia(null);
+      setAvisoCnpj(null);
       setErro(null);
     } catch (e) {
       setFicha(null);
       setErro(e instanceof ApiError ? e.message : 'Falha ao abrir a conta');
     }
   }, []);
+
+  /**
+   * Consulta o cadastro publico. **Nao escreve nada** — devolve a previa.
+   *
+   * Duas etapas de proposito: enriquecimento e a unica operacao em que dado de
+   * fora entra no cadastro do cliente, e ver antes de aplicar e o que transforma
+   * varinha magica em decisao.
+   */
+  const consultarCnpj = async () => {
+    if (!ficha) return;
+    setConsultando(true);
+    setErro(null);
+    setAvisoCnpj(null);
+    try {
+      const resposta = await api.get<PreviaEnriquecimento>(`/contas/${ficha.conta.id}/enriquecimento`);
+      setPrevia(resposta);
+      const p = resposta.plano;
+      const nada =
+        Object.keys(p.camposParaPreencher).length === 0 &&
+        p.contatosParaCriar.length === 0 &&
+        p.contatosParaClassificar.length === 0;
+      // "Nada a preencher" e um resultado, nao uma falha: o cadastro ja esta
+      // completo. Sem essa frase, a tela pareceria nao ter respondido.
+      if (nada) setAvisoCnpj('O cadastro publico nao traz nada que esteja faltando aqui.');
+    } catch (e) {
+      setErro(e instanceof ApiError ? e.message : 'Falha ao consultar o cadastro publico');
+    } finally {
+      setConsultando(false);
+    }
+  };
+
+  const aplicarCnpj = async () => {
+    if (!ficha) return;
+    setAplicando(true);
+    setErro(null);
+    try {
+      await api.post(`/contas/${ficha.conta.id}/enriquecimento`);
+      setPrevia(null);
+      setAvisoCnpj('Cadastro publico aplicado no que estava em branco.');
+      await abrir(ficha.conta.id);
+      await carregar();
+    } catch (e) {
+      setErro(e instanceof ApiError ? e.message : 'Falha ao aplicar o cadastro publico');
+    } finally {
+      setAplicando(false);
+    }
+  };
+
+  /** Define ou limpa a filial que atende esta conta (item 6.5). So classificacao. */
+  const definirFilial = async (filialId: string) => {
+    if (!ficha) return;
+    setErro(null);
+    try {
+      await api.patch(`/contas/${ficha.conta.id}`, { filialId: filialId || null });
+      await abrir(ficha.conta.id);
+    } catch (e) {
+      setErro(e instanceof ApiError ? e.message : 'Falha ao definir a filial');
+    }
+  };
+
+  /** Grava um campo customizado (item 6.4) da conta aberta. */
+  const mudarCampoCustomizado = async (chave: string, valor: string | number | boolean | null) => {
+    if (!ficha) return;
+    setErro(null);
+    try {
+      await api.patch(`/contas/${ficha.conta.id}`, { camposCustomizados: { [chave]: valor } });
+      await abrir(ficha.conta.id);
+    } catch (e) {
+      setErro(e instanceof ApiError ? e.message : 'Falha ao salvar o campo customizado');
+    }
+  };
+
+  /** Define ou limpa o papel de uma pessoa na conta. */
+  const definirPapel = async (contatoId: string, valor: string) => {
+    if (!ficha) return;
+    setErro(null);
+    try {
+      await api.patch(`/contas/${ficha.conta.id}/contatos/${contatoId}/papel`, {
+        // Vazio significa "sem papel", e vai como nulo: string vazia nao e um
+        // valor do enum e seria recusada pelo schema.
+        papelNaConta: valor === '' ? null : (valor as PapelNaConta),
+      });
+      await abrir(ficha.conta.id);
+    } catch (e) {
+      setErro(e instanceof ApiError ? e.message : 'Falha ao definir o papel');
+    }
+  };
 
   /**
    * Carrega a ficha do registro que a URL pede.
@@ -108,8 +241,11 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
         nome: nova.nome,
         ...(nova.cnpj.trim() ? { cnpj: nova.cnpj } : {}),
         ...(nova.segmento.trim() ? { segmento: nova.segmento } : {}),
+        ...(nova.filialId ? { filialId: nova.filialId } : {}),
+        ...(Object.keys(novosCampos).length ? { camposCustomizados: novosCampos } : {}),
       });
-      setNova({ nome: '', cnpj: '', segmento: '' });
+      setNova({ nome: '', cnpj: '', segmento: '', filialId: '' });
+      setNovosCampos({});
       await carregar();
     } catch (err) {
       setErro(err instanceof ApiError ? err.message : 'Falha ao criar conta');
@@ -120,6 +256,17 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
     <div className="grid gap-5 lg:grid-cols-[380px_1fr]">
       <div className="space-y-5">
         <Card titulo="Contas" descricao={`${contas.length} encontrada(s)`}>
+          <div className="mb-3">
+            <VisoesSalvas<FiltroContaSalvo>
+              entidade="CONTA"
+              filtroAtual={{ ...(busca.trim() ? { busca: busca.trim() } : {}), ...(tags.length ? { tags } : {}) }}
+              filtroVazio={!busca.trim() && tags.length === 0}
+              aoAplicar={(filtro) => {
+                setBusca(filtro.busca ?? '');
+                setTags(filtro.tags ?? []);
+              }}
+            />
+          </div>
           <Input
             placeholder="Buscar por nome, CNPJ ou segmento"
             value={busca}
@@ -189,8 +336,33 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
             <Field label="Segmento">
               <Input value={nova.segmento} onChange={(e) => setNova({ ...nova, segmento: e.target.value })} />
             </Field>
+            <Field label="Filial">
+              <Select value={nova.filialId} onChange={(e) => setNova({ ...nova, filialId: e.target.value })}>
+                <option value="">Sem filial</option>
+                {filiais.map((f) => (
+                  <option key={f.id} value={f.id}>{f.nome}</option>
+                ))}
+              </Select>
+            </Field>
             <Button type="submit" className="w-full">Criar conta</Button>
           </form>
+          {camposDef.length > 0 && (
+            <div className="mt-4 border-t border-slate-100 pt-4">
+              <CamposCustomizadosCampos
+                campos={camposDef}
+                valores={novosCampos}
+                aoMudar={(chave, valor) =>
+                  setNovosCampos((atuais) => {
+                    if (valor === null) {
+                      const { [chave]: _removido, ...resto } = atuais;
+                      return resto;
+                    }
+                    return { ...atuais, [chave]: valor };
+                  })
+                }
+              />
+            </div>
+          )}
         </Card>
       </div>
 
@@ -216,6 +388,21 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
               <div>
                 <dt className="text-xs text-slate-500">Telefone</dt>
                 <dd className="text-slate-800">{ficha.conta.telefone ?? '—'}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-slate-500">Filial</dt>
+                <dd>
+                  <Select
+                    aria-label="Filial desta conta"
+                    value={ficha.conta.filialId ?? ''}
+                    onChange={(e) => void definirFilial(e.target.value)}
+                  >
+                    <option value="">Sem filial</option>
+                    {filiais.map((f) => (
+                      <option key={f.id} value={f.id}>{f.nome}</option>
+                    ))}
+                  </Select>
+                </dd>
               </div>
             </dl>
 
@@ -243,6 +430,101 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
             )}
           </Card>
 
+          {/* Enriquecimento por CNPJ (item 5.2).
+              Duas etapas — consultar e aplicar — porque esta e a unica operacao
+              em que dado de fora entra no cadastro do cliente. Ver antes e o que
+              transforma "varinha magica" em decisao. */}
+          {ficha.conta.cnpj && (
+            <Card
+              titulo="Cadastro publico (CNPJ)"
+              descricao={
+                ficha.conta.enriquecidoEm
+                  ? `Consultado em ${new Date(ficha.conta.enriquecidoEm).toLocaleString('pt-BR')}`
+                  : 'Nunca consultado'
+              }
+            >
+              <div className="flex flex-wrap gap-2">
+                <Button variante="neutro" onClick={() => void consultarCnpj()} disabled={consultando}>
+                  {consultando ? 'Consultando...' : 'Consultar cadastro publico'}
+                </Button>
+                {previa && (
+                  <Button onClick={() => void aplicarCnpj()} disabled={aplicando}>
+                    {aplicando ? 'Aplicando...' : 'Aplicar o que esta em branco'}
+                  </Button>
+                )}
+              </div>
+
+              {avisoCnpj && <p className="mt-3 text-sm text-slate-600">{avisoCnpj}</p>}
+
+              {previa && (
+                <div className="mt-4 space-y-4 text-sm">
+                  <dl className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <dt className="text-xs text-slate-500">Razao social</dt>
+                      <dd className="text-slate-800">{previa.dados.razaoSocial ?? '—'}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-slate-500">Situacao cadastral</dt>
+                      <dd className="text-slate-800">{previa.dados.situacaoCadastral ?? '—'}</dd>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <dt className="text-xs text-slate-500">Atividade principal</dt>
+                      <dd className="text-slate-800">{previa.dados.atividadePrincipal ?? '—'}</dd>
+                    </div>
+                  </dl>
+
+                  {Object.keys(previa.plano.camposParaPreencher).length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium text-slate-500">Vai preencher</p>
+                      <ul className="mt-1 space-y-0.5">
+                        {Object.entries(previa.plano.camposParaPreencher).map(([campo, valor]) => (
+                          <li key={campo} className="text-slate-700">
+                            {LABEL_CAMPO_CONTA[campo] ?? campo}: <strong>{valor}</strong>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {previa.plano.contatosParaCriar.length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium text-slate-500">
+                        Vai criar {previa.plano.contatosParaCriar.length} contato(s) do quadro societario
+                      </p>
+                      <ul className="mt-1 space-y-0.5">
+                        {previa.plano.contatosParaCriar.map((c) => (
+                          <li key={c.nome} className="text-slate-700">
+                            {c.nome} &mdash; {LABEL_PAPEL_NA_CONTA[c.papelNaConta]}
+                            {c.qualificacaoQsa && (
+                              <span className="text-xs text-slate-400"> ({c.qualificacaoQsa})</span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Os conflitos aparecem e NAO sao aplicados. O telefone que o
+                      vendedor digitou e provavelmente o celular de quem atende; o
+                      do cadastro publico e frequentemente o do contador. */}
+                  {previa.plano.conflitos.length > 0 && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                      <p className="text-xs font-medium text-amber-800">Divergencias &mdash; nao serao sobrescritas</p>
+                      <ul className="mt-1 space-y-0.5 text-amber-900">
+                        {previa.plano.conflitos.map((c) => (
+                          <li key={c.campo}>
+                            {c.campo}: aqui <strong>{c.atual}</strong>, no cadastro publico{' '}
+                            <strong>{c.publico}</strong>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+            </Card>
+          )}
+
           <Card titulo="Contatos vinculados" descricao={`${ficha.conta.contatos?.length ?? 0} contato(s)`}>
             {!ficha.conta.contatos || ficha.conta.contatos.length === 0 ? (
               <EmptyState
@@ -252,14 +534,52 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
             ) : (
               <ul className="divide-y divide-slate-100">
                 {ficha.conta.contatos.map((c) => (
-                  <li key={c.id} className="py-2">
-                    <p className="text-sm text-slate-800">{c.nome}</p>
-                    <p className="text-xs text-slate-500">{c.email ?? c.telefone ?? 'Sem contato'}</p>
+                  <li key={c.id} className="flex flex-wrap items-center justify-between gap-3 py-2">
+                    <div className="min-w-0">
+                      <p className="text-sm text-slate-800">{c.nome}</p>
+                      <p className="text-xs text-slate-500">{c.email ?? c.telefone ?? 'Sem contato'}</p>
+                      {/* A qualificacao da Receita fica ao lado do papel, e nao no
+                          lugar dele: uma coisa e o que o registro publico diz,
+                          outra e como a plataforma classificou. */}
+                      {c.qualificacaoQsa && <p className="text-xs text-slate-400">{c.qualificacaoQsa}</p>}
+                    </div>
+                    <div className="w-40 shrink-0">
+                      <Select
+                        aria-label={`Papel de ${c.nome} na conta`}
+                        value={c.papelNaConta ?? ''}
+                        onChange={(e) => void definirPapel(c.id, e.target.value)}
+                      >
+                        <option value="">Sem papel</option>
+                        {PAPEIS_NA_CONTA.map((papel) => (
+                          <option key={papel} value={papel}>
+                            {LABEL_PAPEL_NA_CONTA[papel]}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
                   </li>
                 ))}
               </ul>
             )}
           </Card>
+
+          <Card titulo="Base instalada" descricao={`${ficha.produtosInstalados.length} equipamento(s)`}>
+            <BaseInstalada
+              contaId={ficha.conta.id}
+              produtos={ficha.produtosInstalados}
+              aoMudar={() => void abrir(ficha.conta.id)}
+            />
+          </Card>
+
+          {ficha.camposCustomizados.length > 0 && (
+            <Card titulo="Campos customizados">
+              <CamposCustomizadosCampos
+                campos={ficha.camposCustomizados}
+                valores={Object.fromEntries(ficha.camposCustomizados.map((c) => [c.chave, c.valor]))}
+                aoMudar={mudarCampoCustomizado}
+              />
+            </Card>
+          )}
 
           <Card titulo="Leads" descricao={`${ficha.leads.length} registro(s)`}>
             {ficha.leads.length === 0 ? (

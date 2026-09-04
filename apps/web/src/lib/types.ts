@@ -4,6 +4,14 @@ export type AgentStatus = 'OFFLINE' | 'DISPONIVEL' | 'EM_ATENDIMENTO' | 'PAUSA';
 
 export type Canal = 'WEBCHAT' | 'WHATSAPP' | 'INSTAGRAM' | 'FACEBOOK' | 'EMAIL' | 'VOZ';
 
+/**
+ * Quao quente esta a negociacao, na leitura de quem esta nela.
+ *
+ * Tres degraus e nao cinco: escala fina vira ruido num funil de cem cartoes —
+ * todo mundo marca o meio. Nulo e um valor de verdade: "ninguem leu ainda".
+ */
+export type Temperatura = 'FRIA' | 'MORNA' | 'QUENTE';
+
 export type Usuario = {
   id: string;
   nome: string;
@@ -12,6 +20,54 @@ export type Usuario = {
   status: AgentStatus;
   ativo: boolean;
   ultimoLogin: string | null;
+  criadoEm: string;
+  /** Filial desta pessoa (item 6.5). Nulo = sem filial atribuida. */
+  filialId?: string | null;
+};
+
+export type EntidadeCampoCustomizado = 'CONTA' | 'LEAD' | 'OPORTUNIDADE';
+export type TipoCampoCustomizado = 'TEXTO' | 'NUMERO' | 'DATA' | 'BOOLEANO' | 'SELECAO';
+
+/** Definicao de campo customizado (item 6.4), como o CRUD de Configuracoes le e grava. */
+export type CampoCustomizadoDef = {
+  id: string;
+  entidade: EntidadeCampoCustomizado;
+  nome: string;
+  chave: string;
+  tipo: TipoCampoCustomizado;
+  opcoes: string[];
+  obrigatorio: boolean;
+  valorUnico: boolean;
+  secao: string | null;
+  ordem: number;
+  ativo: boolean;
+  criadoEm: string;
+};
+
+/** Definicao + valor atual, como a ficha de conta/lead/oportunidade devolve. */
+export type ValorCampoCustomizado = {
+  id: string;
+  nome: string;
+  chave: string;
+  tipo: TipoCampoCustomizado;
+  opcoes: string[];
+  obrigatorio: boolean;
+  secao: string | null;
+  ordem: number;
+  ativo: boolean;
+  valor: string | number | boolean | null;
+};
+
+/**
+ * Filial (item 6.5): unidade fisica da organizacao. So classificacao — nao
+ * muda quem ve o que, ver o comentario em `Filial` no schema da API.
+ */
+export type Filial = {
+  id: string;
+  nome: string;
+  cidade: string | null;
+  uf: string | null;
+  ativa: boolean;
   criadoEm: string;
 };
 
@@ -86,6 +142,18 @@ export type Contato = {
   criadoEm?: string;
   atualizadoEm?: string;
   totalConversas?: number;
+  /**
+   * Ciclo de vida (item E.4), DERIVADO dos fatos — nao e um campo digitado.
+   *
+   * Por isso nao existe seletor para mudar: quem muda o degrau e o que
+   * acontece com o contato (uma conversa, uma negociacao, uma venda). Nulo
+   * aparece quando a resposta nao foi calculada nesta consulta.
+   */
+  cicloDeVida?: CicloDeVida | null;
+  /** Papel desta pessoa na conta (item 5.2). Nulo = ninguem classificou. */
+  papelNaConta?: PapelNaConta | null;
+  /** O que a Receita registra, palavra por palavra. */
+  qualificacaoQsa?: string | null;
 };
 
 type ConversaBase = {
@@ -187,6 +255,51 @@ export type Conta = {
   totalLeads?: number;
   totalOportunidades?: number;
   contatos?: Contato[];
+  /** Preenchidos pela consulta publica de CNPJ (item 5.2). */
+  razaoSocial?: string | null;
+  situacaoCadastral?: string | null;
+  atividadePrincipal?: string | null;
+  enriquecidoEm?: string | null;
+  /** Filial que atende esta conta (item 6.5). Nulo = sem filial atribuida. */
+  filialId?: string | null;
+};
+
+export type TipoGarantia = 'LEGAL' | 'CONTRATUAL' | 'COMPRESSOR' | 'OUTRA';
+
+/**
+ * Estado da garantia de um componente (item 5.1).
+ *
+ * `SEM_DATA_INICIO` e `REQUISITO_NAO_INFORMADO` sao estados proprios, e nao
+ * "vencida": ausencia de dado nunca vira um degrau negativo, so um degrau com
+ * nome. `NAO_APLICAVEL` e a garantia CONTRATUAL que nunca chegou a existir,
+ * por faltar instalador credenciado ou nota fiscal (regra Philco).
+ */
+export type StatusGarantia = 'VIGENTE' | 'VENCIDA' | 'SEM_DATA_INICIO' | 'REQUISITO_NAO_INFORMADO' | 'NAO_APLICAVEL';
+
+export type ComponenteGarantia = {
+  id: string;
+  tipo: TipoGarantia;
+  nome: string | null;
+  prazoDias: number;
+  dataInicio: string | null;
+  observacao: string | null;
+  status: StatusGarantia;
+  vencimento: string | null;
+};
+
+export type ProdutoInstalado = {
+  id: string;
+  contaId: string;
+  modelo: string;
+  numeroSerie: string | null;
+  dataInstalacao: string | null;
+  instaladorNome: string | null;
+  instaladorCredenciado: boolean | null;
+  notaFiscalNumero: string | null;
+  observacoes: string | null;
+  criadoEm: string;
+  atualizadoEm: string;
+  componentes: ComponenteGarantia[];
 };
 
 export type Lead = {
@@ -204,9 +317,21 @@ export type Lead = {
   contato: Contato;
   conta: Referencia | null;
   responsavel: Referencia | null;
+  /** So no detalhe (`GET /leads/:id`) — ausente na listagem/kanban. */
+  camposCustomizados?: ValorCampoCustomizado[];
 };
 
-export type Estagio = { id: string; nome: string; ordem: number; probabilidade: number };
+export type Estagio = {
+  id: string;
+  nome: string;
+  ordem: number;
+  probabilidade: number;
+  /**
+   * Titulo da tarefa que a etapa exige antes de o negocio avancar (item 3.1).
+   * Nulo = etapa sem exigencia. Ausente = API antiga.
+   */
+  tarefaObrigatoria?: string | null;
+};
 
 export type Funil = {
   id: string;
@@ -216,11 +341,45 @@ export type Funil = {
   totalOportunidades?: number;
 };
 
+export type Recorrencia = 'UNICO' | 'MENSAL';
+
+/**
+ * Situacao da alcada de desconto.
+ *
+ * `NAO_REQUER` e `APROVADA` sao diferentes: o primeiro diz que o desconto caiu
+ * dentro do teto, o segundo que alguem com alcada olhou e liberou.
+ */
+export type AprovacaoDesconto = 'NAO_REQUER' | 'PENDENTE' | 'APROVADA' | 'REPROVADA';
+
+/**
+ * Rotulos da alcada.
+ *
+ * `NAO_REQUER` le "dentro da alcada", e nao "nao requer": a tela fala do
+ * desconto, nao do estado interno do registro.
+ */
+export const LABEL_APROVACAO_DESCONTO: Record<AprovacaoDesconto, string> = {
+  NAO_REQUER: 'Dentro da alcada',
+  PENDENTE: 'Aguardando aprovacao',
+  APROVADA: 'Aprovado',
+  REPROVADA: 'Reprovado',
+};
+
 export type OportunidadeItem = {
   id: string;
   quantidade: number;
   precoUnitario: number;
+  acrescimo: number;
+  desconto: number;
+  recorrencia: Recorrencia;
+  /** Nulo = custo nao informado. Diferente de zero. */
+  custoUnitario: number | null;
+  /** Quantidade x preco, antes de acrescimo e desconto. */
+  bruto: number;
+  /** O liquido da linha — o que se cobra. Nome antigo, mantido. */
   total: number;
+  custo: number | null;
+  margem: number | null;
+  margemPercentual: number | null;
   produto: { id: string; nome: string; sku: string };
 };
 
@@ -239,10 +398,53 @@ export type Oportunidade = {
   responsavel: Referencia | null;
   itens: OportunidadeItem[];
   totalItens: number;
+  valorUnico?: number;
+  valorMensal?: number;
+  mesesRecorrencia?: number;
+  valorInformado?: number | null;
+  /** Digitado a mao discorda do que os itens somam — a tela avisa. */
+  divergeDoInformado?: boolean;
+  totais?: {
+    bruto: number;
+    descontoTotal: number;
+    acrescimoTotal: number;
+    custoTotal: number | null;
+    margem: number | null;
+    margemPercentual: number | null;
+    itensComCusto: number;
+  };
+  aprovacaoDesconto?: AprovacaoDesconto;
+  aprovadoPor?: Referencia | null;
+  aprovadoEm?: string | null;
+  /** Condicoes que vao para a proposta impressa (item 2.2). */
+  condicaoPagamento?: string | null;
+  prazoEntrega?: string | null;
+  /**
+   * Temperatura e origem, que o cartao do funil mostra sem exigir clique.
+   *
+   * Nulo nos dois nao e um degrau: temperatura nula e "ninguem leu ainda", e
+   * origem nula e "nao registrada". A tela nao preenche nenhum dos dois por
+   * conta propria — ver `pages/crm/temperatura.ts`.
+   */
+  temperatura?: Temperatura | null;
+  canalOrigem?: Canal | null;
   /** Contados na API, para os dois numeros virem do mesmo relogio. */
   estagioDesde?: string;
   diasNoEstagio?: number;
   diasAberta?: number;
+  /** Tarefas com prazo ainda em aberto. Zero significa "nenhum proximo passo". */
+  tarefasAbertas?: number;
+  /** Prazo mais proximo entre as tarefas abertas; no passado, ha tarefa atrasada. */
+  proximoPrazo?: string | null;
+  /**
+   * Titulos das tarefas que a etapa atual exige e que estao em aberto (item 3.1).
+   *
+   * Lista, e nao booleano, para o cartao dizer o que falta sem uma segunda
+   * chamada. Vazia e um zero de verdade; ausente e "API antiga".
+   */
+  tarefaDaEtapaPendente?: string[];
+  /** So no detalhe (`GET /oportunidades/:id`) — ausente no kanban. */
+  camposCustomizados?: ValorCampoCustomizado[];
 };
 
 export type ColunaFunil = {
@@ -286,6 +488,62 @@ export const LABEL_TIPO_LEAD: Record<LeadTipo, string> = {
   OUTBOUND: 'Outbound',
   INDICACAO: 'Indicacao',
   PARCEIRO: 'Parceiro',
+};
+
+/** Campos que a trilha de auditoria da oportunidade sabe nomear (item 3.2). */
+export const CAMPOS_AUDITADOS = [
+  'TITULO',
+  'VALOR_INFORMADO',
+  'MESES_RECORRENCIA',
+  'RESPONSAVEL',
+  'PREVISAO_FECHAMENTO',
+  'CONDICAO_PAGAMENTO',
+  'PRAZO_ENTREGA',
+  'ORIGEM',
+  'ITENS',
+  'STATUS',
+  'APROVACAO_DESCONTO',
+] as const;
+
+export type CampoAuditado = (typeof CAMPOS_AUDITADOS)[number];
+
+export const LABEL_CAMPO_AUDITADO: Record<CampoAuditado, string> = {
+  TITULO: 'Titulo',
+  VALOR_INFORMADO: 'Valor informado',
+  MESES_RECORRENCIA: 'Meses de recorrencia',
+  RESPONSAVEL: 'Responsavel',
+  PREVISAO_FECHAMENTO: 'Previsao de fechamento',
+  CONDICAO_PAGAMENTO: 'Condicao de pagamento',
+  PRAZO_ENTREGA: 'Prazo de entrega',
+  ORIGEM: 'Origem',
+  ITENS: 'Proposta',
+  STATUS: 'Situacao',
+  APROVACAO_DESCONTO: 'Aprovacao do desconto',
+};
+
+/**
+ * Valor de um campo auditado, no tipo natural dele.
+ *
+ * `{id, nome}` e referencia a usuario; `{quantidade, total}` e o retrato da
+ * proposta. A API guarda assim — nao como texto pronto — para a leitura
+ * continuar numerica e a formatacao ficar na tela.
+ */
+export type ValorAuditado =
+  | string
+  | number
+  | null
+  | { id: string; nome: string }
+  | { quantidade: number; total: number };
+
+export type EventoAuditoria = {
+  id: string;
+  /** `ETAPA` vem do historico de estagio, que e outra tabela e ja existia. */
+  tipo: 'CAMPO' | 'ETAPA';
+  campo: CampoAuditado | null;
+  de: ValorAuditado;
+  para: ValorAuditado;
+  autor: string | null;
+  ocorridoEm: string;
 };
 
 export const LABEL_MOTIVO_PERDA: Record<MotivoPerda, string> = {
@@ -610,11 +868,72 @@ export type Chamada = {
   gravacaoUrl: string | null;
   gravacaoDuracao: number | null;
   transcricao: string | null;
+  /**
+   * Custo cobrado pelo provedor. Nulo = o provedor nao informou (item 6.6).
+   *
+   * Diferente de zero: chamada nao atendida costuma custar nada mesmo, e "sem
+   * informacao" nao pode virar "de graca".
+   */
   custo: number | null;
   motivoFalha: string | null;
   contato: { id: string; nome: string } | null;
   agente: { id: string; nome: string } | null;
   fila: { id: string; nome: string } | null;
+  /** Nota de 1 a 5 de quem ouviu. Nulo = ninguem classificou, nao "ruim". */
+  classificacao?: number | null;
+  classificadoEm?: string | null;
+  classificadoPor?: Referencia | null;
+  /**
+   * Assistente da ligacao (item E.2): resumo, sentimento e a procedencia deles.
+   *
+   * `sentimento` nulo significa **ninguem analisou esta chamada** — nunca
+   * NEUTRO. A plataforma nao transcreve nem interpreta: quem faz isso e um motor
+   * externo, e `analisadoPor` diz qual, porque resumo sem autor nao se discute.
+   */
+  resumo?: string | null;
+  sentimento?: SentimentoDaLigacao | null;
+  analisadoPor?: string | null;
+  analisadoEm?: string | null;
+};
+
+export type SentimentoDaLigacao = 'POSITIVO' | 'NEUTRO' | 'NEGATIVO';
+
+export const LABEL_SENTIMENTO: Record<SentimentoDaLigacao, string> = {
+  POSITIVO: 'Positivo',
+  NEUTRO: 'Neutro',
+  NEGATIVO: 'Negativo',
+};
+
+/** O que aconteceu com uma proxima acao sugerida pelo motor. */
+export type EstadoDaAcao = 'PENDENTE' | 'VIROU_TAREFA' | 'DESCARTADA';
+
+export type AcaoSugerida = {
+  id: string;
+  texto: string;
+  ordem: number;
+  estado: EstadoDaAcao;
+  atividadeId: string | null;
+  descartadoEm: string | null;
+  /** Por que o botao nao esta disponivel. Nulo = pode virar tarefa. */
+  impedimento: string | null;
+};
+
+export type AnaliseDaLigacao = {
+  chamadaId: string;
+  /**
+   * `SEM_ANALISE` e diferente de "analisada e sem proxima acao".
+   *
+   * Motor que ouviu e nao achou nada a fazer produziu resultado legitimo; a tela
+   * nao pode mostrar isso como "nenhum motor analisou esta ligacao".
+   */
+  estado: 'SEM_ANALISE' | 'ANALISADA';
+  transcricao: string | null;
+  resumo: string | null;
+  sentimento: SentimentoDaLigacao | null;
+  analisadoPor: string | null;
+  analisadoEm: string | null;
+  contato: Referencia | null;
+  acoes: AcaoSugerida[];
 };
 
 export type IndicadoresVoz = {
@@ -625,6 +944,36 @@ export type IndicadoresVoz = {
   naoAtendidas: number;
   taxaAtendimento: number | null;
   tma: number | null;
+  /*
+   * Custo e nota do periodo (item 6.6).
+   *
+   * As duas medias vem de bases DIFERENTES, e os dois contadores dizem quais:
+   * custo medio sobre as chamadas que tem custo, nota media sobre as que tem
+   * nota. Sem os contadores, "nota media 5" com uma chamada avaliada de cem
+   * pareceria resultado da operacao inteira.
+   */
+  custoTotal?: number | null;
+  custoMedio?: number | null;
+  chamadasComCusto?: number;
+  notaMedia?: number | null;
+  chamadasComNota?: number;
+  /**
+   * Sentimento do periodo (item E.2).
+   *
+   * `semAnalise` nao e detalhe: sem ele, "70% neutro" pode ser 7 de 10 chamadas
+   * ou 7 de 700 nao analisadas, e as duas frases pedem decisoes opostas.
+   */
+  sentimento?: {
+    positivo: number;
+    neutro: number;
+    negativo: number;
+    analisadas: number;
+    semAnalise: number;
+    /** Nulo quando nada foi analisado. Zero afirmaria que nada correu mal. */
+    fracaoNegativa: number | null;
+  };
+  /** Quantas ainda faltam ouvir. E a fila de trabalho de quem classifica. */
+  semNota?: number;
 };
 
 export type ConfigVoz = {
@@ -716,12 +1065,13 @@ export type EventoFicha = {
 
 export type Timeline = { eventos: EventoFicha[]; proximoCursor: string | null };
 
-export const TIPOS_ATIVIDADE = ['NOTA', 'LIGACAO', 'WHATSAPP', 'EMAIL', 'REUNIAO', 'VISITA', 'PROPOSTA'] as const;
+export const TIPOS_ATIVIDADE = ['NOTA', 'TAREFA', 'LIGACAO', 'WHATSAPP', 'EMAIL', 'REUNIAO', 'VISITA', 'PROPOSTA'] as const;
 
 export type TipoAtividade = (typeof TIPOS_ATIVIDADE)[number];
 
 export const LABEL_TIPO_ATIVIDADE: Record<TipoAtividade, string> = {
   NOTA: 'Nota',
+  TAREFA: 'Tarefa',
   LIGACAO: 'Ligacao',
   WHATSAPP: 'WhatsApp',
   EMAIL: 'E-mail',
@@ -741,7 +1091,45 @@ export type Atividade = {
   criadoEm: string;
   responsavel: { id: string; nome: string } | null;
   criadoPor?: { id: string; nome: string } | null;
+  /** Exigida por uma etapa do funil (item 3.1): nao da para avancar sem concluir. */
+  obrigatoria?: boolean;
+  /*
+   * Check-in e check-out de visita (item 6.7).
+   *
+   * Coordenada e opcional de proposito: o tecnico pode estar num subsolo, com
+   * GPS negado ou sem sinal, e recusar o registro nesse caso o impediria
+   * justamente na visita mais dificil. A tela diz quando veio sem localizacao.
+   */
+  checkinEm?: string | null;
+  checkinLat?: number | null;
+  checkinLng?: number | null;
+  checkoutEm?: string | null;
+  checkoutLat?: number | null;
+  checkoutLng?: number | null;
 };
+
+/** Uma atividade agendada, para o drill-down da matriz de produtividade (item 3.3). */
+export type AtividadeDaCelula = { id: string; titulo: string; prazo: string; concluidoEm: string | null };
+
+/**
+ * `feitas / agendadas` de uma combinacao usuario x tipo. Nulo no lugar da
+ * celula (nao neste tipo) significa "nenhuma atividade agendada" — nao 0%.
+ */
+export type CelulaProdutividade = {
+  feitas: number;
+  agendadas: number;
+  percentual: number;
+  atividades: AtividadeDaCelula[];
+};
+
+export type LinhaProdutividade = {
+  usuarioId: string;
+  usuarioNome: string;
+  porTipo: Record<TipoAtividade, CelulaProdutividade | null>;
+  total: CelulaProdutividade;
+};
+
+export type MatrizProdutividade = { mes: string; linhas: LinhaProdutividade[] };
 
 export type IndicadoresFicha = {
   conversas: number;
@@ -785,3 +1173,242 @@ export type EstadoIa = {
 
 /** Canais em que a ponte de IA pode ser ligada (voz fica de fora). */
 export const CANAIS_IA = ['WEBCHAT', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'EMAIL'] as const;
+
+/* ── Metas mensais (item 4.1) ─────────────────────────────────────────────── */
+
+export type EscopoMeta = 'INDIVIDUAL' | 'EQUIPE';
+
+export type SituacaoMeta = 'ATINGIDA' | 'NO_RITMO' | 'ABAIXO' | 'SEM_META';
+
+/**
+ * Progresso de uma meta no mes.
+ *
+ * Os nulos sao significativos e a tela **nao** pode transforma-los em zero:
+ * `percentual` nulo e "nao ha meta contra o que medir", e `projecao` nula e "nao
+ * ha o que projetar" (mes futuro, ou mes encerrado sem ritmo a extrapolar).
+ */
+export type ProgressoMeta = {
+  meta: number;
+  realizado: number;
+  percentual: number | null;
+  falta: number;
+  projecao: number | null;
+  variacao: number | null;
+  ritmoNecessario: number | null;
+  situacao: SituacaoMeta;
+};
+
+export type LinhaDeMeta = ProgressoMeta & {
+  usuarioId: string;
+  nome: string;
+  escopo: EscopoMeta;
+  /** So nas metas de equipe: quantas pessoas o numero cobre. */
+  integrantes?: number;
+};
+
+export type PainelDeMetas = {
+  mes: string;
+  individuais: LinhaDeMeta[];
+  equipes: LinhaDeMeta[];
+  /** Vendeu no mes e nao tem meta individual — apontado, nao escondido. */
+  semMeta: Array<{ usuarioId: string; nome: string; realizado: number }>;
+};
+
+/** Um mes da rampa. `valor` nulo = ninguem definiu (diferente de zero). */
+export type MesDaRampa = { mes: string; valor: number | null };
+
+/** `GET /metas/minha` (item 4.2): o progresso do proprio usuario, para o dashboard. */
+export type MinhaMeta = ProgressoMeta & { mes: string; definida: boolean };
+
+export const LABEL_SITUACAO_META: Record<SituacaoMeta, string> = {
+  ATINGIDA: 'Atingida',
+  NO_RITMO: 'No ritmo',
+  ABAIXO: 'Abaixo do ritmo',
+  SEM_META: 'Sem meta',
+};
+
+export const TOM_SITUACAO_META: Record<SituacaoMeta, 'sucesso' | 'marca' | 'alerta' | 'neutro'> = {
+  ATINGIDA: 'sucesso',
+  NO_RITMO: 'marca',
+  ABAIXO: 'alerta',
+  // Cinza, nao ambar: sem meta nao e falha de quem vendeu — e falha de quem nao
+  // definiu, e o aviso ambar acusaria a pessoa errada.
+  SEM_META: 'neutro',
+};
+
+/* ── Visoes salvas (item 6.1) ──────────────────────────────────────────────── */
+
+export type EntidadeVisao = 'CONTA' | 'LEAD' | 'OPORTUNIDADE';
+
+/** Filtro de Contas: o mesmo par busca+etiqueta que a tela ja usa. */
+export type FiltroContaSalvo = { busca?: string; tags?: string[] };
+/** Filtro de Leads: o mesmo que o card "Filtros" ja usa. */
+export type FiltroLeadSalvo = { tipo?: LeadTipo; responsavelId?: string; atrasados?: boolean; busca?: string };
+/** Filtro de Oportunidades: hoje so o funil, porque e so o que o kanban expoe. */
+export type FiltroOportunidadeSalvo = { funilId?: string };
+
+export type VisaoSalva<F = Record<string, unknown>> = {
+  id: string;
+  entidade: EntidadeVisao;
+  nome: string;
+  cor: string;
+  filtro: F;
+  criadoPor: { id: string; nome: string } | null;
+  criadoEm: string;
+  atualizadoEm: string;
+};
+
+/** Paleta fixa para a cor da visao — nao e livre, para as abas nao virarem um arco-iris sem critério. */
+export const PALETA_VISAO = ['#64748b', '#2563eb', '#16a34a', '#dc2626', '#d97706', '#7c3aed', '#0891b2', '#db2777'] as const;
+
+/* ── Quadro societario e enriquecimento por CNPJ (item 5.2) ───────────────── */
+
+export const PAPEIS_NA_CONTA = [
+  'SOCIO',
+  'ADMINISTRADOR',
+  'DECISOR',
+  'TECNICO',
+  'FINANCEIRO',
+  'COMPRAS',
+  'OUTRO',
+] as const;
+
+export type PapelNaConta = (typeof PAPEIS_NA_CONTA)[number];
+
+export const LABEL_PAPEL_NA_CONTA: Record<PapelNaConta, string> = {
+  SOCIO: 'Socio',
+  ADMINISTRADOR: 'Administrador',
+  DECISOR: 'Decisor',
+  TECNICO: 'Tecnico',
+  FINANCEIRO: 'Financeiro',
+  COMPRAS: 'Compras',
+  OUTRO: 'Outro',
+};
+
+export type DadosPublicosCnpj = {
+  cnpj: string;
+  razaoSocial: string | null;
+  nomeFantasia: string | null;
+  situacaoCadastral: string | null;
+  atividadePrincipal: string | null;
+  telefone: string | null;
+  email: string | null;
+  socios: Array<{ nome: string; qualificacao: string | null }>;
+};
+
+export type PlanoDeEnriquecimento = {
+  camposParaPreencher: Record<string, string>;
+  contatosParaCriar: Array<{ nome: string; papelNaConta: PapelNaConta; qualificacaoQsa: string | null }>;
+  contatosParaClassificar: Array<{
+    id: string;
+    nome: string;
+    papelNaConta: PapelNaConta;
+    qualificacaoQsa: string | null;
+  }>;
+  /** Onde a consulta discorda do gravado. Reportado, nunca aplicado. */
+  conflitos: Array<{ campo: string; atual: string; publico: string }>;
+};
+
+export type PreviaEnriquecimento = {
+  dados: DadosPublicosCnpj;
+  plano: PlanoDeEnriquecimento;
+  enriquecidoEm: string | null;
+};
+
+/** Rotulos dos campos da conta, para a previa nao mostrar nome de coluna. */
+export const LABEL_CAMPO_CONTA: Record<string, string> = {
+  razaoSocial: 'Razao social',
+  telefone: 'Telefone',
+  email: 'E-mail',
+  situacaoCadastral: 'Situacao cadastral',
+  atividadePrincipal: 'Atividade principal',
+};
+
+/* ── Medidor de consumo de IA (item 6.8) ──────────────────────────────────── */
+
+export type RecursoIA = 'TRANSCRICAO' | 'RESUMO' | 'SUGESTAO_RESPOSTA' | 'CLASSIFICACAO' | 'OUTRO';
+
+export const LABEL_RECURSO_IA: Record<RecursoIA, string> = {
+  TRANSCRICAO: 'Transcricao de audio',
+  RESUMO: 'Resumo',
+  SUGESTAO_RESPOSTA: 'Resposta do agente de IA',
+  CLASSIFICACAO: 'Classificacao',
+  OUTRO: 'Outro',
+};
+
+/** Unidade de cada recurso — nao existe unidade universal entre eles. */
+export const UNIDADE_RECURSO_IA: Record<RecursoIA, string> = {
+  TRANSCRICAO: 'min de audio',
+  RESUMO: 'mil tokens',
+  SUGESTAO_RESPOSTA: 'mil tokens',
+  CLASSIFICACAO: 'mil tokens',
+  OUTRO: 'unidades',
+};
+
+export type SituacaoCicloIa = 'SEM_TETO' | 'DENTRO' | 'PROJETA_ESTOURO' | 'ESTOUROU' | 'SEM_CONSUMO';
+
+export type ConsumoDeIa = {
+  mes: string;
+  /**
+   * Existe ALGUM registro de consumo na organizacao, em qualquer mes.
+   *
+   * E o que distingue "a IA nao esta ligada" de "esta ligada e este mes nao teve
+   * uso" — dois estados que um zero nao separa, e o primeiro nao deve aparecer
+   * como "R$ 0,00".
+   */
+  ligado: boolean;
+  teto: number | null;
+  custoTotal: number | null;
+  unidadesTotais: number;
+  usos: number;
+  usosComCusto: number;
+  porRecurso: Array<{ recurso: RecursoIA; usos: number; unidades: number; custo: number | null }>;
+  projecao: number | null;
+  fracaoDoTeto: number | null;
+  diasDecorridos: number;
+  diasNoMes: number;
+  situacao: SituacaoCicloIa;
+};
+
+/* ── Ciclo de vida do contato (item E.4) ──────────────────────────────────── */
+
+/** Os degraus, do mais avancado para o menos — a mesma ordem da API. */
+export const CICLOS_DE_VIDA = [
+  'CLIENTE',
+  'EM_NEGOCIACAO',
+  'PERDIDO',
+  'QUALIFICADO',
+  'CONTATADO',
+  'LEAD',
+] as const;
+
+export type CicloDeVida = (typeof CICLOS_DE_VIDA)[number];
+
+export const LABEL_CICLO_DE_VIDA: Record<CicloDeVida, string> = {
+  CLIENTE: 'Cliente',
+  EM_NEGOCIACAO: 'Em negociacao',
+  PERDIDO: 'Perdido',
+  QUALIFICADO: 'Qualificado',
+  CONTATADO: 'Contatado',
+  LEAD: 'Lead',
+};
+
+/** O que cada degrau significa, para a tela nao precisar de manual. */
+export const AJUDA_CICLO_DE_VIDA: Record<CicloDeVida, string> = {
+  CLIENTE: 'Tem oportunidade ganha. Compra nao expira: cliente que sumiu continua tendo comprado.',
+  EM_NEGOCIACAO: 'Tem negociacao aberta agora.',
+  PERDIDO: 'Perdeu e nao tem nada aberto.',
+  QUALIFICADO: 'Lead que passou da triagem, ainda sem oportunidade.',
+  CONTATADO: 'Ja houve conversa, ou existe lead na entrada.',
+  LEAD: 'Cadastro e mais nada — nunca houve conversa.',
+};
+
+export type FunilDeCicloDeVida = {
+  total: number;
+  degraus: Array<{
+    ciclo: CicloDeVida;
+    total: number;
+    /** Nulo quando nao ha base para calcular fracao; zero e um valor legitimo. */
+    fracao: number | null;
+  }>;
+};

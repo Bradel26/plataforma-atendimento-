@@ -1,5 +1,6 @@
 import { Outlet, useLocation } from 'react-router-dom';
 import { itemDaRota } from './nav';
+import { PaletaDeComando } from './PaletaDeComando';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 
@@ -16,6 +17,10 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
+      {/* Fica no shell, e nao numa pagina: `Ctrl+K` tem de responder de qualquer
+          tela, e uma paleta montada por pagina perderia o estado a cada
+          navegacao — inclusive a que ela mesma acabou de fazer. */}
+      <PaletaDeComando />
     </div>
   );
 }

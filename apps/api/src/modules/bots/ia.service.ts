@@ -8,6 +8,7 @@ import { limiteBytes, salvar, tipoAceito, urlAssinada } from '../../lib/storage'
 import { organizacaoAtual } from '../../lib/tenant';
 import { notificarConversaAtualizada, notificarMensagem } from '../../realtime/hub';
 import { obterConfig } from '../channels/channels.service';
+import { registrarConsumo } from '../ia/consumo.service';
 import { enviarArquivoParaCanal, enviarParaCanal, exigeEnvioExterno } from '../channels/outbound.service';
 import { inclusaoDetalhe, toConversaDetalhe, toMensagem } from '../conversations/conversations.serializer';
 
@@ -128,6 +129,8 @@ export type RespostaDaIa = {
   texto?: string;
   respondendoA?: string | null;
   anexo?: { tipo?: string; url: string; nome?: string | null } | null;
+  /** Consumo declarado pelo motor (item 6.8). Ausente = motor nao informou. */
+  consumo?: { unidades?: number; custo?: number | null };
 };
 
 /**
@@ -143,6 +146,21 @@ export async function registrarRespostaDaIa(entrada: RespostaDaIa) {
 
   const texto = entrada.texto?.trim() ?? '';
   if (!texto && !entrada.anexo) throw badRequest('Informe texto ou anexo');
+
+  /*
+   * O uso de IA e medido AQUI, no caminho que usa a IA (item 6.8).
+   *
+   * Nao numa rotina que varre log depois: consumo medido em lote perde a
+   * referencia do que originou o uso, que e o que permite responder "por que
+   * gastamos tanto na terca". `registrarConsumo` nao lanca — um medidor que
+   * derruba a operacao que ele mede e pior que um medidor que perde um registro.
+   */
+  await registrarConsumo({
+    recurso: 'SUGESTAO_RESPOSTA',
+    unidades: entrada.consumo?.unidades ?? 0,
+    custo: entrada.consumo?.custo ?? null,
+    referencia: conversa.id,
+  });
 
   if (entrada.anexo) {
     const baixado = await baixarParaEnvio(entrada.anexo.url, entrada.anexo.nome ?? null);

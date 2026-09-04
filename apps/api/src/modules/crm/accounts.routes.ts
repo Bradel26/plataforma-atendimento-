@@ -9,7 +9,21 @@ import { validateBody, validateQuery } from '../../http/middleware/validate';
 import { param } from '../../http/params';
 import { badRequest, conflict, notFound } from '../../lib/errors';
 import { prisma } from '../../lib/prisma';
-import { inclusaoLead, inclusaoOportunidade, toLead, toOportunidade } from './crm.serializers';
+import { exigirFilialDaOrganizacao } from '../filiais/filiais.service';
+import {
+  inclusaoLead,
+  inclusaoOportunidade,
+  inclusaoProdutoDoCliente,
+  toLead,
+  toOportunidade,
+  toProdutoDoCliente,
+} from './crm.serializers';
+import { confirmarValoresDoRegistro, prepararValoresDoRegistro, valoresDoRegistro } from './campos-customizados.service';
+import {
+  aplicarEnriquecimento,
+  definirPapelNaConta,
+  previaDoEnriquecimento,
+} from './cnpj.service';
 
 export const accountsRoutes = Router();
 
@@ -33,6 +47,10 @@ const criarSchema = z.object({
   tags: z.array(z.string().trim().min(1).max(TAMANHO_MAXIMO)).max(MAXIMO_POR_REGISTRO).default([]),
   /** Responsavel principal pela carteira. Nulo devolve a conta para a carteira aberta. */
   responsavelId: z.string().uuid().nullable().optional(),
+  /** Filial que atende esta conta (item 6.5). So classificacao, ver `Filial` no schema. */
+  filialId: z.string().uuid().nullable().optional(),
+  /** Item 6.4: `{chave: valor}`, validado em runtime contra as definicoes ativas. */
+  camposCustomizados: z.record(z.string(), z.unknown()).optional(),
 });
 
 const atualizarSchema = criarSchema
@@ -52,6 +70,7 @@ const listarSchema = z.object({
     .union([z.string(), z.array(z.string())])
     .optional()
     .transform((v) => (v === undefined ? [] : normalizarTags(Array.isArray(v) ? v : [v]))),
+  filialId: z.string().uuid().optional(),
   limite: z.coerce.number().int().min(1).max(200).default(100),
 });
 
@@ -72,7 +91,7 @@ accountsRoutes.get(
   '/',
   validateQuery(listarSchema),
   asyncHandler(async (_req, res) => {
-    const { busca, tags, limite } = res.locals.query as z.infer<typeof listarSchema>;
+    const { busca, tags, filialId, limite } = res.locals.query as z.infer<typeof listarSchema>;
     const escopo = await filtroDe(politicaContas);
     const contas = await prisma.account.findMany({
       // O escopo entra sempre; a busca, so quando ha termo. Antes o `where` era
@@ -80,13 +99,22 @@ accountsRoutes.get(
       where: {
         AND: [
           escopo,
+          ...(filialId ? [{ filialId }] : []),
           ...(busca
             ? [
                 {
                   OR: [
                     { nome: { contains: busca, mode: 'insensitive' as const } },
-                    { cnpj: { contains: busca.replace(/\D/g, '') } },
                     { segmento: { contains: busca, mode: 'insensitive' as const } },
+                    /*
+                     * So entra se sobrar digito. `cnpj: { contains: '' }` bate com
+                     * QUALQUER conta que tenha CNPJ preenchido — e busca sem digito
+                     * nenhum (nome comum, por exemplo) fazia essa clausula do OR
+                     * virar sempre verdadeira, devolvendo a base inteira como se
+                     * fosse "sem filtro". Achado pelo roteiro do item 6.3, que
+                     * apagou uma conta de outro teste ao confiar nesta busca.
+                     */
+                    ...(busca.replace(/\D/g, '') ? [{ cnpj: { contains: busca.replace(/\D/g, '') } }] : []),
                   ],
                 },
               ]
@@ -134,12 +162,19 @@ accountsRoutes.get(
      * o **detalhe** de oportunidade, barrados por perfil nas rotas proprias.
      * A porta de entrada aqui e a conta, e ela ja passou pela politica.
      */
-    const [leads, oportunidades] = await Promise.all([
+    const [leads, oportunidades, produtosInstalados] = await Promise.all([
       prisma.lead.findMany({ where: { contaId: id }, include: inclusaoLead, orderBy: { atualizadoEm: 'desc' } }),
       prisma.opportunity.findMany({
         where: { contaId: id },
         include: inclusaoOportunidade,
         orderBy: { atualizadoEm: 'desc' },
+      }),
+      // Base instalada (item 5.1): mesma logica de leads/oportunidades acima —
+      // a porta de entrada e a conta, ja passada pela politica.
+      prisma.produtoDoCliente.findMany({
+        where: { contaId: id },
+        include: inclusaoProdutoDoCliente,
+        orderBy: { criadoEm: 'desc' },
       }),
     ]);
 
@@ -147,6 +182,8 @@ accountsRoutes.get(
       conta,
       leads: leads.map(toLead),
       oportunidades: oportunidades.map(toOportunidade),
+      produtosInstalados: produtosInstalados.map(toProdutoDoCliente),
+      camposCustomizados: await valoresDoRegistro('CONTA', id),
     });
   }),
 );
@@ -159,9 +196,16 @@ accountsRoutes.post(
       const existente = await prisma.account.findFirst({ where: { cnpj: req.body.cnpj } });
       if (existente) throw conflict('Ja existe uma conta com este CNPJ');
     }
-    res.status(201).json({
-      conta: await prisma.account.create({ data: comTagsNormalizadas(req.body) }),
-    });
+    if (req.body.filialId) await exigirFilialDaOrganizacao(req.body.filialId);
+
+    // Valida os campos customizados ANTES de criar: se falhar, nao sobra
+    // conta sem o campo obrigatorio que a validacao recusou.
+    const { camposCustomizados, ...corpo } = req.body;
+    const valores = await prepararValoresDoRegistro('CONTA', null, camposCustomizados);
+
+    const conta = await prisma.account.create({ data: comTagsNormalizadas(corpo) });
+    await confirmarValoresDoRegistro('CONTA', conta.id, valores);
+    res.status(201).json({ conta, camposCustomizados: await valoresDoRegistro('CONTA', conta.id) });
   }),
 );
 
@@ -179,6 +223,11 @@ accountsRoutes.patch(
       const existente = await prisma.account.findFirst({ where: { cnpj: req.body.cnpj } });
       if (existente) throw conflict('Ja existe uma conta com este CNPJ');
     }
+    if (req.body.filialId) await exigirFilialDaOrganizacao(req.body.filialId);
+
+    const { camposCustomizados, ...corpo } = req.body;
+    const valores = await prepararValoresDoRegistro('CONTA', id, camposCustomizados);
+
     /*
      * Trocar o responsavel da conta **nao** propaga para os contatos.
      *
@@ -188,9 +237,9 @@ accountsRoutes.patch(
      * `updateMany` nos contatos e exatamente a "melhoria" que alguem faria mais
      * tarde sem perceber o que quebra. Ha teste guardando este comportamento.
      */
-    res.json({
-      conta: await prisma.account.update({ where: { id }, data: comTagsNormalizadas(req.body) }),
-    });
+    const conta = await prisma.account.update({ where: { id }, data: comTagsNormalizadas(corpo) });
+    await confirmarValoresDoRegistro('CONTA', id, valores);
+    res.json({ conta, camposCustomizados: await valoresDoRegistro('CONTA', id) });
   }),
 );
 
@@ -266,5 +315,64 @@ accountsRoutes.delete(
     if (!atual) throw notFound('Conta nao encontrada');
     await prisma.account.delete({ where: { id } });
     res.status(204).end();
+  }),
+);
+
+/* ── Quadro societario e enriquecimento por CNPJ (item 5.2) ───────────────── */
+
+const PAPEIS = ['SOCIO', 'ADMINISTRADOR', 'DECISOR', 'TECNICO', 'FINANCEIRO', 'COMPRAS', 'OUTRO'] as const;
+
+/**
+ * A previa do enriquecimento. **Nao escreve nada.**
+ *
+ * `GET` de proposito: e leitura, e repetir a chamada nao muda o cadastro. Quem
+ * decide aplicar chama o `POST` logo abaixo.
+ */
+accountsRoutes.get(
+  '/:id/enriquecimento',
+  requireRole('ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'),
+  asyncHandler(async (req, res) => {
+    res.json(await previaDoEnriquecimento(param(req, 'id')));
+  }),
+);
+
+accountsRoutes.post(
+  '/:id/enriquecimento',
+  requireRole('ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'),
+  asyncHandler(async (req, res) => {
+    res.json(await aplicarEnriquecimento(param(req, 'id')));
+  }),
+);
+
+/**
+ * Papel de uma pessoa na conta.
+ *
+ * Fica nas rotas de conta, e nao nas de contato, porque a pergunta e da conta:
+ * "quem sao as pessoas desta empresa e o que cada uma faz nela". A escrita
+ * confere as duas pontas pela politica, como o vinculo acima.
+ */
+accountsRoutes.patch(
+  '/:id/contatos/:contatoId/papel',
+  requireRole('ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'),
+  validateBody(z.object({ papelNaConta: z.enum(PAPEIS).nullable() })),
+  asyncHandler(async (req, res) => {
+    const id = param(req, 'id');
+    const contatoId = param(req, 'contatoId');
+
+    const [escopoConta, escopoContato] = await Promise.all([
+      filtroDe(politicaContas),
+      filtroDe(politicaContatos),
+    ]);
+    const [conta, contato] = await Promise.all([
+      prisma.account.findFirst({ where: apenasVisivel(id, escopoConta), select: { id: true } }),
+      prisma.contact.findFirst({ where: apenasVisivel(contatoId, escopoContato), select: { id: true, contaId: true } }),
+    ]);
+    if (!conta) throw notFound('Conta nao encontrada');
+    if (!contato) throw notFound('Contato nao encontrado');
+    // O contato tem de ser DAQUELA conta: papel e vinculo, e definir o papel de
+    // alguem de outra empresa nao significaria nada.
+    if (contato.contaId !== conta.id) throw badRequest('Este contato nao pertence a este cliente');
+
+    res.json({ contato: await definirPapelNaConta(contato.id, req.body.papelNaConta) });
   }),
 );

@@ -5,13 +5,20 @@ import { requireAuth, requireRole } from '../../http/middleware/auth';
 import { validateBody } from '../../http/middleware/validate';
 import { badRequest, notFound } from '../../lib/errors';
 import {
+  MODELO_CONTAS_CSV,
+  MODELO_CONTATOS_CSV,
   MODELO_LEADS_CSV,
+  MODELO_OPORTUNIDADES_CSV,
+  exportarContas,
   exportarContatos,
   exportarConversas,
   exportarLeads,
   exportarOportunidades,
   exportarProtocolos,
+  importarContas,
+  importarContatos,
   importarLeads,
+  importarOportunidades,
 } from './dados.service';
 
 export const dadosRoutes = Router();
@@ -21,9 +28,18 @@ dadosRoutes.use(requireAuth);
 const EXPORTACOES: Record<string, () => Promise<string>> = {
   leads: exportarLeads,
   contatos: exportarContatos,
+  contas: exportarContas,
   oportunidades: exportarOportunidades,
   protocolos: exportarProtocolos,
   conversas: exportarConversas,
+};
+
+/** Cada recurso importavel: o modelo em branco e a funcao de importacao. */
+const IMPORTACOES: Record<string, { modelo: string; importar: (csv: string, dryRun: boolean) => Promise<unknown> }> = {
+  leads: { modelo: MODELO_LEADS_CSV, importar: importarLeads },
+  contatos: { modelo: MODELO_CONTATOS_CSV, importar: importarContatos },
+  contas: { modelo: MODELO_CONTAS_CSV, importar: importarContas },
+  oportunidades: { modelo: MODELO_OPORTUNIDADES_CSV, importar: importarOportunidades },
 };
 
 const importarSchema = z.object({
@@ -34,10 +50,13 @@ const importarSchema = z.object({
 });
 
 /** Modelo em branco para o usuario preencher. */
-dadosRoutes.get('/modelos/leads.csv', (_req, res) => {
+dadosRoutes.get('/modelos/:recurso.csv', (req, res) => {
+  const recurso = req.params.recurso ?? '';
+  const item = IMPORTACOES[recurso];
+  if (!item) throw notFound(`Modelo de importacao "${recurso}" nao existe. Disponiveis: ${Object.keys(IMPORTACOES).join(', ')}`);
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-  res.setHeader('Content-Disposition', 'attachment; filename="modelo-leads.csv"');
-  res.send(MODELO_LEADS_CSV);
+  res.setHeader('Content-Disposition', `attachment; filename="modelo-${recurso}.csv"`);
+  res.send(item.modelo);
 });
 
 dadosRoutes.get(
@@ -57,11 +76,14 @@ dadosRoutes.get(
 );
 
 dadosRoutes.post(
-  '/importar/leads',
+  '/importar/:recurso',
   requireRole('ADMIN', 'SUPERVISOR'),
   validateBody(importarSchema),
   asyncHandler(async (req, res) => {
+    const recurso = req.params.recurso ?? '';
+    const item = IMPORTACOES[recurso];
+    if (!item) throw notFound(`Importacao "${recurso}" nao existe. Disponiveis: ${Object.keys(IMPORTACOES).join(', ')}`);
     if (req.body.csv.length > 2_000_000) throw badRequest('Arquivo muito grande (limite de 2 MB)');
-    res.json({ resultado: await importarLeads(req.body.csv, req.body.dryRun) });
+    res.json({ resultado: await item.importar(req.body.csv, req.body.dryRun) });
   }),
 );

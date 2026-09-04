@@ -3,11 +3,14 @@ import { z } from 'zod';
 import { asyncHandler } from '../../http/async-handler';
 import { requireAuth, requireRole } from '../../http/middleware/auth';
 import { validateBody, validateQuery } from '../../http/middleware/validate';
+import { param } from '../../http/params';
 import { prismaSemIsolamento } from '../../lib/prisma';
 import { ORGANIZACAO_INICIAL, comOrganizacao, semOrganizacao } from '../../lib/tenant';
 import { getBranding } from '../branding/branding.service';
+import { acaoViraTarefa, analiseDaChamada, descartarAcao } from './analise.service';
 import {
   aplicarEvento,
+  classificarChamada,
   configPublica,
   indicadoresVoz,
   listarChamadas,
@@ -86,6 +89,73 @@ vozRoutes.post(
   validateBody(z.object({ destino: z.string().trim().min(8, 'Informe o numero com DDD').max(20) })),
   asyncHandler(async (req, res) => {
     res.status(201).json({ chamada: await originarChamada(req.user!.sub, req.body.destino) });
+  }),
+);
+
+/**
+ * Classifica a ligacao de 1 a 5, ou limpa a nota (item 6.6).
+ *
+ * Sem `requireRole`: quem atendeu e quem melhor sabe como foi a ligacao, e
+ * reservar a nota a gestao transformaria a coluna em auditoria em vez de
+ * leitura. O escopo de quem ve qual chamada continua sendo o da listagem.
+ */
+vozRoutes.patch(
+  '/chamadas/:id/classificacao',
+  requireAuth,
+  validateBody(
+    z.object({
+      // Inteiro de 1 a 5, ou nulo para retirar a nota. Zero nao entra: seria uma
+      // nota, e nao a ausencia dela.
+      classificacao: z.number().int().min(1).max(5).nullable(),
+    }),
+  ),
+  asyncHandler(async (req, res) => {
+    res.json({
+      chamada: await classificarChamada(param(req, 'id'), req.body.classificacao, req.user!.sub),
+    });
+  }),
+);
+
+/**
+ * A analise da ligacao (item E.2).
+ *
+ * Sem `requireRole`: quem atendeu a ligacao e quem mais precisa do resumo e das
+ * proximas acoes. Reservar a leitura a gestao transformaria o assistente em
+ * ferramenta de auditoria — o oposto do que ele e.
+ */
+vozRoutes.get(
+  '/chamadas/:id/analise',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    res.json({ analise: await analiseDaChamada(param(req, 'id')) });
+  }),
+);
+
+/**
+ * A sugestao vira tarefa de verdade.
+ *
+ * POST e nao PATCH porque **cria** uma atividade: a resposta traz a atividade
+ * criada, e nao so a sugestao mudada, para a tela poder dizer de quem ficou a
+ * tarefa sem uma segunda consulta.
+ */
+vozRoutes.post(
+  '/chamadas/:id/acoes/:acaoId/tarefa',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    res
+      .status(201)
+      .json(await acaoViraTarefa(param(req, 'id'), param(req, 'acaoId'), req.user!.sub));
+  }),
+);
+
+/** Descarta a sugestao, com autor: "essa era ruim" precisa de quem disse. */
+vozRoutes.post(
+  '/chamadas/:id/acoes/:acaoId/descartar',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    res.json({
+      analise: await descartarAcao(param(req, 'id'), param(req, 'acaoId'), req.user!.sub),
+    });
   }),
 );
 

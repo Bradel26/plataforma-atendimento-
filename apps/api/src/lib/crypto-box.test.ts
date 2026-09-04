@@ -30,7 +30,18 @@ describe('cifragem de segredos', () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const cifrado = cifrar('segredo-integro');
     const partes = cifrado.split(':');
-    const adulterado = [partes[0], partes[1], partes[2], `${partes[3]!.slice(0, -2)}ff`].join(':');
+    /*
+     * A alteracao INVERTE o ultimo byte, em vez de escrever um valor fixo.
+     *
+     * A primeira versao trocava os dois ultimos digitos por "ff" — e quando o
+     * texto cifrado ja terminava em "ff" nada era alterado, o GCM decifrava
+     * corretamente e o teste falhava dizendo que a deteccao nao funcionou. Uma
+     * chance em 256, que apareceu de verdade numa execucao. Inverter garante um
+     * texto diferente qualquer que seja o original.
+     */
+    const ultimo = Number.parseInt(partes[3]!.slice(-2), 16);
+    const invertido = (ultimo ^ 0xff).toString(16).padStart(2, '0');
+    const adulterado = [partes[0], partes[1], partes[2], `${partes[3]!.slice(0, -2)}${invertido}`].join(':');
     expect(decifrar(adulterado)).toBe('');
   });
 });

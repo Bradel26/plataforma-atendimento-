@@ -145,7 +145,10 @@ test.describe('Rotas proprias do CRM', () => {
 
     await expect(page).toHaveURL(/\/oportunidades\/[0-9a-f-]{36}$/);
     await expect(cartao(page, titulo)).toBeVisible();
-    await expect(cartao(page, 'Itens')).toBeVisible();
+    // O cartao se chama "Proposta" desde a decisao 57 — antes era "Itens", e o
+    // nome mudou porque ele passou a carregar desconto, recorrencia e margem, e
+    // nao so a lista de produtos.
+    await expect(cartao(page, 'Proposta')).toBeVisible();
 
     await page.reload();
     await expect(cartao(page, titulo)).toBeVisible();
@@ -206,6 +209,8 @@ test.describe('CRM: escopo por perfil', () => {
 
     await expect(abas(page).filter({ hasText: 'Contatos' })).toBeVisible();
     await expect(abas(page).filter({ hasText: 'Contas' })).toBeVisible();
+    // A agenda e de todos: o agente tem tarefa como qualquer um.
+    await expect(abas(page).filter({ hasText: 'Agenda' })).toBeVisible();
 
     // Lead e oportunidade sao processo comercial; produtos e importacao sao de
     // gestao. A API recusa as quatro por perfil, entao a aba nao pode existir.
@@ -216,15 +221,41 @@ test.describe('CRM: escopo por perfil', () => {
       'Importar / Exportar',
       // Renomear etiqueta alcanca registro que ele nem ve: a aba nao e dele.
       'Etiquetas',
+      // Leitura comercial e relatorio de gestao: as rotas `/comercial/*` recusam
+      // AGENTE e COMERCIAL com 403.
+      'Leitura comercial',
+      // Metas: `/metas` recusa quem nao e ADMIN, SUPERVISOR ou GESTOR.
+      'Metas',
     ]) {
       await expect(abas(page).filter({ hasText: proibida }), `aba ${proibida}`).toHaveCount(0);
     }
   });
 
-  test('o admin ve as sete abas', async ({ page }) => {
+  test('o admin ve todas as abas do CRM', async ({ page }) => {
     await entrar(page, 'admin', '/crm');
-    // O contraponto: sem ele, o teste acima passaria com o CRM inteiro quebrado.
-    await expect(abas(page)).toHaveCount(7);
+
+    // O contraponto do teste acima: sem ele, aquele passaria com o CRM inteiro
+    // quebrado — nenhuma aba tambem satisfaz "nao ve as proibidas".
+    //
+    // Afirma o CONJUNTO, e nao a contagem. Uma contagem crua quebra a cada aba
+    // nova dizendo apenas "esperava 7, recebeu 8", que manda quem le contar
+    // botao na tela; o conjunto diz qual aba entrou ou saiu. Foi o que aconteceu
+    // quando a aba de leitura comercial entrou.
+    await expect(abas(page)).toHaveText([
+      // A agenda (item E.5) e a primeira aba, e nao tem perfil restrito: cada um
+      // ve a propria pela politica de atividades.
+      'Agenda',
+      'Contatos',
+      'Contas',
+      'Leads',
+      'Oportunidades',
+      'Leitura comercial',
+      'Metas',
+      'Produtividade',
+      'Produtos e precos',
+      'Etiquetas',
+      'Importar / Exportar',
+    ]);
   });
 
   test('?aba=leads digitado pelo agente cai em Contatos, nao numa aba que falha', async ({ page }) => {

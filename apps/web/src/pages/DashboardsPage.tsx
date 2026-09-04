@@ -1,14 +1,20 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alerta, Card, Field, Select } from '../components/ui';
+import { Alerta, Badge, Card, Field, Select } from '../components/ui';
 import { BarList } from '../components/viz/BarList';
+import { BarraDeMeta } from '../components/viz/BarraDeMeta';
 import { StatTile } from '../components/viz/StatTile';
+import { useAuth } from '../features/auth/AuthProvider';
 import { ApiError, api, getAccessToken } from '../lib/api';
 import { EVENTOS, conectar } from '../lib/realtime';
 import { COR_CANAL, COR_STATUS_AGENTE, ESTADO, SERIES, duracao } from '../lib/viz';
 import {
   LABEL_STATUS,
   LABEL_STATUS_PROTOCOLO,
+  LABEL_SITUACAO_META,
+  TOM_SITUACAO_META,
+  moeda,
   type Indicadores,
+  type MinhaMeta,
   type RelatorioAssuntos,
 } from '../lib/types';
 
@@ -35,6 +41,10 @@ export function DashboardsPage() {
   const [assuntos, setAssuntos] = useState<RelatorioAssuntos | null>(null);
   const [horas, setHoras] = useState('24');
   const [erro, setErro] = useState<string | null>(null);
+  const { temPerfil } = useAuth();
+  /** Meta e processo comercial: mesmo corte de perfil das abas Leads/Oportunidades do CRM. */
+  const participaDoComercial = temPerfil('ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL');
+  const [minhaMeta, setMinhaMeta] = useState<MinhaMeta | null>(null);
 
   const carregar = useCallback(async () => {
     try {
@@ -57,6 +67,16 @@ export function DashboardsPage() {
   useEffect(() => {
     void carregar();
   }, [carregar]);
+
+  // Meta e mensal, e nao depende da janela de horas escolhida acima — por isso
+  // e uma chamada a parte, e nao entra no `Promise.all` de cima.
+  useEffect(() => {
+    if (!participaDoComercial) return;
+    void api
+      .get<MinhaMeta>(`/metas/minha?mes=${new Date().toISOString().slice(0, 7)}`)
+      .then(setMinhaMeta)
+      .catch(() => undefined);
+  }, [participaDoComercial]);
 
   // Recarrega quando algo muda de verdade, em vez de consultar em loop.
   useEffect(() => {
@@ -120,6 +140,66 @@ export function DashboardsPage() {
       </div>
 
       {erro && <Alerta>{erro}</Alerta>}
+
+      {/*
+        Meta no dashboard (item 4.2): so para quem participa do processo
+        comercial — mesmo corte das abas Leads/Oportunidades do CRM. Uma
+        pessoa de atendimento nao tem meta de venda, e mostrar "sem meta" para
+        ela acusaria uma ausencia que nao e dela.
+
+        Uma serie so na barra (o percentual): "realizado" e fluxo do periodo,
+        "meta" e alvo, escalas diferentes que nao cabem no mesmo eixo — a
+        mesma regra que separa os cartoes de assunto mais abaixo.
+      */}
+      {participaDoComercial && (
+        <Card
+          titulo="Minha meta do mes"
+          acao={
+            minhaMeta?.definida ? (
+              <Badge tom={TOM_SITUACAO_META[minhaMeta.situacao]}>{LABEL_SITUACAO_META[minhaMeta.situacao]}</Badge>
+            ) : undefined
+          }
+        >
+          {minhaMeta === null ? (
+            <p className="text-sm text-slate-500">Carregando...</p>
+          ) : !minhaMeta.definida ? (
+            <p className="text-sm text-slate-500">Ninguem definiu uma meta para voce neste mes.</p>
+          ) : (
+            <div className="space-y-3">
+              <BarraDeMeta percentual={minhaMeta.percentual} situacao={minhaMeta.situacao} />
+              <dl className="grid gap-3 sm:grid-cols-4 text-sm">
+                <div>
+                  <dt className="text-xs text-slate-500">Realizado</dt>
+                  <dd className="text-slate-800">{moeda(minhaMeta.realizado)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-slate-500">Meta</dt>
+                  <dd className="text-slate-800">{moeda(minhaMeta.meta)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-slate-500">Projecao</dt>
+                  {/* Nula em mes futuro (nada a extrapolar ainda). */}
+                  <dd className="text-slate-800">{minhaMeta.projecao === null ? '—' : moeda(minhaMeta.projecao)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-slate-500">Variacao</dt>
+                  <dd
+                    className={
+                      minhaMeta.variacao === null
+                        ? 'text-slate-800'
+                        : minhaMeta.variacao >= 0
+                          ? 'text-emerald-700'
+                          : 'text-red-700'
+                    }
+                  >
+                    {minhaMeta.variacao === null ? '—' : moeda(minhaMeta.variacao)}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          )}
+        </Card>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <StatTile

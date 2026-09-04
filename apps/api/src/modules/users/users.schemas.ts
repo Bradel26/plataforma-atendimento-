@@ -24,6 +24,8 @@ export const updateUserSchema = z
      * equipe que nao da para configurar e um escopo que ninguem usa.
      */
     gestorId: z.string().uuid().nullable().optional(),
+    /** Filial desta pessoa (item 6.5). So classificacao, ver `Filial` no schema. */
+    filialId: z.string().uuid().nullable().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, { message: 'Informe ao menos um campo' });
 
