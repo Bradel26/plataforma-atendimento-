@@ -55,7 +55,9 @@ export function createApp() {
   // por IP contaria todo mundo como o mesmo cliente (o proprio proxy).
   if (env.TRUST_PROXY) app.set('trust proxy', true);
 
-  app.use(helmet());
+  // Nao anuncie HSTS antes de haver HTTPS de verdade: ele faz o navegador
+  // reescrever futuras visitas HTTP para HTTPS, inclusive no dominio temporario.
+  app.use(helmet({ strictTransportSecurity: env.HSTS_ATIVO ? undefined : false }));
   app.use(cors({ origin: env.WEB_ORIGIN, credentials: true }));
   // O webhook da Meta valida assinatura sobre o corpo BRUTO — precisa vir antes
   // do express.json, que consumiria o stream e reserializaria o payload.

@@ -54,6 +54,11 @@ describe.skipIf(!temFront)('API servindo o front', () => {
     expect(res.headers.get('cache-control')).toBe('no-store');
   });
 
+  it('nao forca HTTPS quando HSTS nao esta configurado', async () => {
+    const res = await fetch(base + '/');
+    expect(res.headers.get('strict-transport-security')).toBeNull();
+  });
+
   /**
    * Este e o motivo do arquivo existir. Servido por nginx, o front nao passava
    * pelo helmet; servido pela API, passa — e o helmet proibia enquadrar a

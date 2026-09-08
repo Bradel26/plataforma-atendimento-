@@ -50,6 +50,15 @@ const schema = z.object({
     .default('false')
     .transform((v) => v === 'true'),
   /**
+   * HSTS so pode ser enviado quando o endereco publico atende em HTTPS.
+   * O dominio temporario sslip.io opera em HTTP e, se recebesse esse cabecalho,
+   * o navegador gravaria a regra e passaria a trocar toda visita por HTTPS.
+   */
+  HSTS_ATIVO: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+  /**
    * Worker da fila dentro do processo da API. Deixe ligado em desenvolvimento;
    * em producao desligue e suba `node dist/src/worker.js` como processo proprio,
    * senao um lote de campanha disputa CPU com quem esta sendo atendido.
