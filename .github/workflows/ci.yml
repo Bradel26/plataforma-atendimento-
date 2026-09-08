@@ -51,7 +51,10 @@ jobs:
       COOLIFY_URL: ${{ vars.COOLIFY_URL || 'https://coolify.bradel.com.br' }}
       COOLIFY_UUID: ${{ vars.COOLIFY_UUID || 'zios6of26x7kizkh57fxw62t' }}
       COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
-      PRODUCAO: ${{ vars.PRODUCAO_URL || 'https://zios6of26x7kizkh57fxw62t.187.127.32.153.sslip.io' }}
+      # O dominio temporario sslip.io opera somente em HTTP. Quando o dominio
+      # proprio estiver configurado com certificado, sobrescreva PRODUCAO_URL
+      # com a URL HTTPS nas variables do repositorio.
+      PRODUCAO: ${{ vars.PRODUCAO_URL || 'http://zios6of26x7kizkh57fxw62t.187.127.32.153.sslip.io' }}
     steps:
       - name: Disparar o deploy e aguardar o resultado
         run: |
