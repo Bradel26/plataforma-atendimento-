@@ -163,7 +163,7 @@ export function LinhaDoTempo({ base, raizId, recarregar = 0 }: Props) {
               return (
                 <li key={`${evento.tipo}-${evento.id}`}>
                   {novoDia && (
-                    <p className="pb-2 pt-4 text-xs font-semibold uppercase tracking-wide text-slate-400 first:pt-0">
+                    <p className="pb-2 pt-4 text-xs font-semibold uppercase tracking-wide text-slate-500 first:pt-0">
                       {diaLegivel(evento.ocorridoEm)}
                     </p>
                   )}
@@ -182,11 +182,11 @@ export function LinhaDoTempo({ base, raizId, recarregar = 0 }: Props) {
                             teste confere a ordem pelo valor real. */}
                         <time
                           dateTime={evento.ocorridoEm}
-                          className="text-xs tabular-nums text-slate-400"
+                          className="text-xs tabular-nums text-slate-500"
                         >
                           {hora(evento.ocorridoEm)}
                         </time>
-                        <span className="text-xs text-slate-400">{LABEL_TIPO_EVENTO[evento.tipo]}</span>
+                        <span className="text-xs text-slate-500">{LABEL_TIPO_EVENTO[evento.tipo]}</span>
                         {/* Marca so o que vem da empresa: na ficha do contato, o
                             resto e dele, e um selo em cada linha seria ruido. */}
                         {evento.escopo === 'CONTA' && <Badge>Da empresa</Badge>}
@@ -199,7 +199,7 @@ export function LinhaDoTempo({ base, raizId, recarregar = 0 }: Props) {
                       {evento.detalhe && (
                         <p className="mt-0.5 line-clamp-3 text-sm text-slate-600">{evento.detalhe}</p>
                       )}
-                      {evento.usuario && <p className="mt-0.5 text-xs text-slate-400">{evento.usuario}</p>}
+                      {evento.usuario && <p className="mt-0.5 text-xs text-slate-500">{evento.usuario}</p>}
                     </div>
                   </div>
                 </li>

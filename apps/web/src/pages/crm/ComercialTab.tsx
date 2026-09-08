@@ -95,7 +95,7 @@ const pct = (v: number | null) => (v === null ? '—' : `${(v * 100).toFixed(1)}
  * nao a distingue.
  */
 function Variacao({ valor, inverter = false }: { valor: number | null; inverter?: boolean }) {
-  if (valor === null) return <span className="text-xs text-slate-400">sem base de comparacao</span>;
+  if (valor === null) return <span className="text-xs text-slate-500">sem base de comparacao</span>;
   const subiu = valor > 0;
   const bom = inverter ? !subiu : subiu;
   const cor = valor === 0 ? undefined : bom ? ESTADO.bom : ESTADO.atencao;
@@ -377,7 +377,7 @@ export function ComercialTab() {
                   {funil.estagios.map((e) => (
                     <tr key={e.id} className="border-b border-slate-100 last:border-0">
                       <th scope="row" className="py-2 pr-3 text-left font-medium text-slate-700">
-                        {e.nome} <span className="text-xs font-normal text-slate-400">{e.probabilidade}%</span>
+                        {e.nome} <span className="text-xs font-normal text-slate-500">{e.probabilidade}%</span>
                       </th>
                       <td className="py-2 pr-3 text-right tabular-nums">{e.entrou}</td>
                       <td className="py-2 pr-3 text-right tabular-nums">{e.avancou}</td>

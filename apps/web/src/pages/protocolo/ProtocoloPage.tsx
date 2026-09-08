@@ -200,7 +200,7 @@ export function ProtocoloPage() {
                     }`}
                   >
                     <div className="flex items-baseline justify-between gap-2">
-                      <span className="font-mono text-xs text-slate-400">#{p.numero}</span>
+                      <span className="font-mono text-xs text-slate-500">#{p.numero}</span>
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${COR_PRIORIDADE[p.prioridade]}`}>
                         {LABEL_PRIORIDADE[p.prioridade]}
                       </span>

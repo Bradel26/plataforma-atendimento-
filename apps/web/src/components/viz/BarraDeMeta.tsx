@@ -9,7 +9,7 @@ import type { SituacaoMeta } from '../../lib/types';
  * telas lerem "progresso" da mesma forma visual.
  */
 export function BarraDeMeta({ percentual, situacao }: { percentual: number | null; situacao: SituacaoMeta }) {
-  if (percentual === null) return <span className="text-xs text-slate-400">sem meta</span>;
+  if (percentual === null) return <span className="text-xs text-slate-500">sem meta</span>;
   const largura = Math.min(100, Math.max(0, percentual * 100));
   return (
     <div className="flex items-center gap-2">

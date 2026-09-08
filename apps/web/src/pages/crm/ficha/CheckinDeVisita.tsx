@@ -101,7 +101,7 @@ export function CheckinDeVisita({ atividade, aoMudar, aoErrar }: Props) {
           // Dizer que nao houve localizacao e melhor que omitir: quem le o
           // registro depois precisa saber que o dado nao existe, e nao supor que
           // ninguem clicou.
-          <span className="text-slate-400">sem localizacao</span>
+          <span className="text-slate-500">sem localizacao</span>
         )}
       </div>
     );

@@ -140,7 +140,7 @@ export function VozTab() {
             />
             <span>
               Guardar a gravacao no storage da plataforma
-              <span className="block text-xs text-slate-400">
+              <span className="block text-xs text-slate-500">
                 A URL do provedor exige credencial e expira; sem copia, a gravacao se perde.
               </span>
             </span>
@@ -173,11 +173,11 @@ export function VozTab() {
           </li>
         </ol>
 
-        <p className="mt-4 text-xs text-slate-400">
+        <p className="mt-4 text-xs text-slate-500">
           Toda requisicao do provedor e conferida pela assinatura dele. Sem assinatura valida, a
           plataforma responde 401 e nao registra nada.
         </p>
-        <p className="mt-2 text-xs text-slate-400">
+        <p className="mt-2 text-xs text-slate-500">
           Softphone no navegador, ramais, URA e monitoria (escuta/sussurro) precisam do SDK e do
           console do provedor — nao estao implementados. Ver "Voz" no SCOPE.md.
         </p>

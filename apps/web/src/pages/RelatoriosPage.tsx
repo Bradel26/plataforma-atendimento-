@@ -93,7 +93,7 @@ export function RelatoriosPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="text-xs uppercase tracking-wide text-slate-400">
+              <thead className="text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                   {relatorio.colunas.map((c) => (
                     <th key={c.chave} className="pb-2 pr-4 font-medium">{c.rotulo}</th>

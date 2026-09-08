@@ -48,7 +48,7 @@ export function LoginPage() {
           <h2 className="text-3xl font-semibold leading-tight">
             Atendimento multicanal, call center e CRM em uma unica plataforma.
           </h2>
-          <p className="mt-4 text-sm text-slate-400">
+          <p className="mt-4 text-sm text-slate-500">
             Webchat, WhatsApp, filas, protocolos e indicadores em tempo real.
           </p>
         </div>

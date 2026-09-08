@@ -92,7 +92,7 @@ export function GestaoPage() {
                       </Badge>
                       <span className="text-xs text-slate-500">{c.cliente}</span>
                     </span>
-                    <span className="text-xs text-slate-400">
+                    <span className="text-xs text-slate-500">
                       {c.agente ?? 'sem agente'}
                       {c.respondidoEm ? ` · ${new Date(c.respondidoEm).toLocaleDateString('pt-BR')}` : ''}
                     </span>

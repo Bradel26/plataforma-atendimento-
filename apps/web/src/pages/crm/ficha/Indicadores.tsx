@@ -11,7 +11,7 @@ export function Indicador({ rotulo, valor, detalhe }: { rotulo: string; valor: s
     <div className="rounded-lg border border-slate-200 px-3 py-2.5">
       <p className="text-xs text-slate-500">{rotulo}</p>
       <p className="mt-0.5 text-xl font-semibold tabular-nums text-slate-800">{valor}</p>
-      {detalhe && <p className="text-xs text-slate-400">{detalhe}</p>}
+      {detalhe && <p className="text-xs text-slate-500">{detalhe}</p>}
     </div>
   );
 }

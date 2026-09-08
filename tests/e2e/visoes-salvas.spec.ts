@@ -20,7 +20,7 @@ test.describe('Visoes salvas', () => {
   });
 
   test('salvar o filtro de Contas cria um chip que reaplica busca ao ser clicado', async ({ page }) => {
-    await page.getByRole('button', { name: 'Contas', exact: true }).click();
+    await page.getByRole('link', { name: 'Contas', exact: true }).click();
     const contas = cartao(page, 'Contas');
 
     // Sem filtro nenhum, o formulario de salvar nem aparece.
@@ -50,13 +50,14 @@ test.describe('Visoes salvas', () => {
 
     // Remove o chip pelo botao que aparece no hover (forca o hover via hover()).
     await chip.hover();
-    page.once('dialog', (d) => void d.accept());
+    // Remover abre o ConfirmDialog (Fase 9 substituiu o window.confirm nativo).
     await contas.getByRole('button', { name: `Remover visao ${nomeVisao}` }).click();
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Remover' }).click();
     await expect(chip).toHaveCount(0);
   });
 
   test('Leads: visao salva reaplica o filtro de responsavel/atraso', async ({ page }) => {
-    await page.getByRole('button', { name: 'Leads', exact: true }).click();
+    await page.getByRole('link', { name: 'Leads', exact: true }).click();
     const filtros = cartao(page, 'Filtros');
 
     await filtros.getByLabel('Prazo').selectOption('true');
@@ -72,13 +73,14 @@ test.describe('Visoes salvas', () => {
     await expect(filtros.getByLabel('Prazo')).toHaveValue('true');
 
     await chip.hover();
-    page.once('dialog', (d) => void d.accept());
+    // Remover abre o ConfirmDialog (Fase 9 substituiu o window.confirm nativo).
     await filtros.getByRole('button', { name: `Remover visao ${nomeVisao}` }).click();
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Remover' }).click();
     await expect(chip).toHaveCount(0);
   });
 
   test('Oportunidades: visao salva reaplica o funil escolhido', async ({ page }) => {
-    await page.getByRole('button', { name: 'Oportunidades', exact: true }).click();
+    await page.getByRole('link', { name: 'Oportunidades', exact: true }).click();
     const funilCard = cartao(page, 'Funil');
     await expect(funilCard.getByLabel('Funil')).toBeVisible();
 
@@ -99,8 +101,9 @@ test.describe('Visoes salvas', () => {
     await expect(funilCard.getByLabel('Funil')).toHaveValue(valorFunil!);
 
     await chip.hover();
-    page.once('dialog', (d) => void d.accept());
+    // Remover abre o ConfirmDialog (Fase 9 substituiu o window.confirm nativo).
     await funilCard.getByRole('button', { name: `Remover visao ${nomeVisao}` }).click();
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Remover' }).click();
     await expect(chip).toHaveCount(0);
   });
 });

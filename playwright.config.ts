@@ -25,5 +25,25 @@ export default defineConfig({
     locale: 'pt-BR',
     timezoneId: 'America/Sao_Paulo',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    {
+      name: 'chromium',
+      use: {
+        ...devices['Desktop Chrome'],
+        /*
+         * O padrao do Desktop Chrome (1280x720) da um container de conteudo de
+         * ~992px (1280 menos a sidebar fixa de 240px e o padding de 48px do
+         * `main`) — cai na faixa "tablet" do `useFaixaDeLargura`, que em
+         * Contatos/Contas mostra so um lado por vez de proposito (os
+         * componentes da ficha usam grids responsivos por VIEWPORT, e
+         * ganhariam menos largura que assumem se dividissem espaco com a
+         * lista nessa faixa). Ningueem usa este CRM numa janela de tablet:
+         * 1440x900 e o notebook mais comum que a equipe realmente usa, e da
+         * um container de ~1152px — solidamente "notebook", o mesmo patamar
+         * que a Fase 6 pretendia testar.
+         */
+        viewport: { width: 1440, height: 900 },
+      },
+    },
+  ],
 });

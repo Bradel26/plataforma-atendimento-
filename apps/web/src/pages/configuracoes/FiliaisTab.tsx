@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Alerta, Badge, Button, Card, EmptyState, Field, Input } from '../../components/ui';
+import { useConfirm } from '../../components/ui/ConfirmDialog';
 import { ApiError, api } from '../../lib/api';
 import type { Filial } from '../../lib/types';
 
 const FORM_VAZIO = { nome: '', cidade: '', uf: '' };
 
 export function FiliaisTab() {
+  const confirmar = useConfirm();
   const [filiais, setFiliais] = useState<Filial[]>([]);
   const [form, setForm] = useState(FORM_VAZIO);
   const [erro, setErro] = useState<string | null>(null);
@@ -49,15 +51,22 @@ export function FiliaisTab() {
     }
   };
 
-  const remover = async (filial: Filial) => {
-    if (!window.confirm(`Remover a filial "${filial.nome}"? Contas e usuarios ficam sem filial.`)) return;
-    setErro(null);
-    try {
-      await api.del(`/filiais/${filial.id}`);
-      await carregar();
-    } catch (err) {
-      setErro(err instanceof ApiError ? err.message : 'Falha ao remover filial');
-    }
+  const remover = (filial: Filial) => {
+    confirmar({
+      titulo: `Remover a filial "${filial.nome}"?`,
+      descricao: 'Contas e usuarios ficam sem filial.',
+      variante: 'perigo',
+      rotuloConfirmar: 'Remover',
+      aoConfirmar: async () => {
+        setErro(null);
+        try {
+          await api.del(`/filiais/${filial.id}`);
+          await carregar();
+        } catch (err) {
+          setErro(err instanceof ApiError ? err.message : 'Falha ao remover filial');
+        }
+      },
+    });
   };
 
   return (

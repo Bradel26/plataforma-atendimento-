@@ -73,7 +73,7 @@ export function UsuariosTab() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="text-xs uppercase tracking-wide text-slate-400">
+              <thead className="text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="pb-2 font-medium">Nome</th>
                   <th className="pb-2 font-medium">Perfil</th>

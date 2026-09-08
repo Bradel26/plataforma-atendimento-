@@ -118,7 +118,9 @@ export function PaletaDeComando() {
       role="dialog"
       aria-modal="true"
       aria-label="Paleta de comando"
-      className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/30 px-4 pt-24"
+      // `bg-black/30`, nao `bg-slate-900/30` — a escala slate inverte no tema
+      // escuro; `black` fica de fora do remapeamento de proposito.
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 px-4 pt-24"
       onClick={fechar}
     >
       <div
@@ -142,7 +144,7 @@ export function PaletaDeComando() {
           }}
           placeholder="Buscar contato, cliente, oportunidade, protocolo — ou ir para uma tela"
           aria-label="Buscar ou ir para"
-          className="w-full border-b border-slate-200 px-4 py-3 text-sm outline-none placeholder:text-slate-400"
+          className="anel-de-foco w-full border-b border-slate-200 px-4 py-3 text-sm placeholder:text-slate-400"
         />
 
         {/*
@@ -189,13 +191,13 @@ export function PaletaDeComando() {
                     <span className="block truncate text-xs text-slate-500">{item.detalhe}</span>
                   )}
                 </span>
-                <span className="shrink-0 text-xs text-slate-400">{ROTULO_TIPO[item.tipo]}</span>
+                <span className="shrink-0 text-xs text-slate-500">{ROTULO_TIPO[item.tipo]}</span>
               </button>
             </li>
           ))}
         </ul>
 
-        <p className="border-t border-slate-200 px-4 py-2 text-xs text-slate-400">
+        <p className="border-t border-slate-200 px-4 py-2 text-xs text-slate-500">
           Setas para navegar · Enter para abrir · Esc para fechar
         </p>
       </div>

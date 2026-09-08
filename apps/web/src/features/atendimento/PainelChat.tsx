@@ -57,7 +57,7 @@ function Bolha({ mensagem }: { mensagem: Mensagem }) {
       >
         <Anexo mensagem={mensagem} />
         <p className="whitespace-pre-wrap break-words">{mensagem.conteudo}</p>
-        <p className={`mt-1 text-right text-[10px] ${doAgente ? 'text-white/70' : 'text-slate-400'}`}>
+        <p className={`mt-1 text-right text-[10px] ${doAgente ? 'text-white/70' : 'text-slate-500'}`}>
           {hora(mensagem.criadoEm)}
         </p>
       </div>
@@ -69,10 +69,18 @@ export function PainelChat({
   conversa,
   agentes,
   onMudou,
+  aoVoltarParaLista,
+  aoAlternarFicha,
+  fichaAberta,
 }: {
   conversa: ConversaDetalhe;
   agentes: Usuario[];
   onMudou: (detalhe: ConversaDetalhe) => void;
+  /** So existe no passo mobile "chat": volta pra lista sem perder a conversa aberta. */
+  aoVoltarParaLista?: () => void;
+  /** So existe fora do desktop, onde a ficha e um drawer/passo em vez de coluna fixa. */
+  aoAlternarFicha?: () => void;
+  fichaAberta?: boolean;
 }) {
   const [texto, setTexto] = useState('');
   const [erro, setErro] = useState<string | null>(null);
@@ -81,6 +89,8 @@ export function PainelChat({
   const [cursorHistorico, setCursorHistorico] = useState<string | null>(null);
   const [fimDoHistorico, setFimDoHistorico] = useState(false);
   const fim = useRef<HTMLDivElement>(null);
+  const rascunhos = useRef<Map<string, string>>(new Map());
+  const conversaIdAnterior = useRef(conversa.id);
 
   useEffect(() => {
     fim.current?.scrollIntoView({ block: 'end' });
@@ -92,6 +102,26 @@ export function PainelChat({
     setAnteriores([]);
     setCursorHistorico(null);
     setFimDoHistorico(false);
+  }, [conversa.id]);
+
+  /*
+   * O rascunho nao enviado troca junto com a conversa, em vez de vazar de uma
+   * pra outra ou se perder.
+   *
+   * Sem isto, o campo de texto e um unico `useState` que sobrevive a troca de
+   * conversa (o componente nao desmonta): quem comecava a escrever pra um
+   * cliente, trocava de aba pra atender outro, e via o texto do primeiro
+   * aparecer na caixa do segundo — ou pior, mandava sem perceber. Guardar por
+   * `conversa.id` deixa cada conversa com o proprio rascunho, do jeito que
+   * WhatsApp Web e qualquer mensageiro profissional ja fazem.
+   */
+  useEffect(() => {
+    const idAnterior = conversaIdAnterior.current;
+    if (idAnterior === conversa.id) return;
+    rascunhos.current.set(idAnterior, texto);
+    setTexto(rascunhos.current.get(conversa.id) ?? '');
+    conversaIdAnterior.current = conversa.id;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversa.id]);
 
   const finalizada = conversa.status === 'FINALIZADO';
@@ -177,16 +207,51 @@ export function PainelChat({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-5 py-3">
-        <div className="min-w-0">
-          <p className="truncate font-medium text-slate-800">{conversa.contato.nome}</p>
-          <p className="truncate text-xs text-slate-500">
-            {conversa.contato.email ?? conversa.contato.telefone ?? 'Sem contato informado'}
-            {conversa.fila ? ` · ${conversa.fila.nome}` : ''}
-          </p>
+        <div className="flex min-w-0 items-center gap-2.5">
+          {/* So existe no passo mobile "chat" — no notebook/tablet/desktop a
+              lista fica sempre visivel ao lado, sem precisar de volta. */}
+          {aoVoltarParaLista && (
+            <Button
+              variante="neutro"
+              tamanho="sm"
+              onClick={aoVoltarParaLista}
+              aria-label="Voltar para a lista de conversas"
+              className="shrink-0"
+            >
+              &larr;
+            </Button>
+          )}
+          <span
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold"
+            style={{ backgroundColor: 'var(--brand-primary-soft)', color: 'var(--brand-primary)' }}
+          >
+            {conversa.contato.nome.charAt(0).toUpperCase()}
+          </span>
+          <div className="min-w-0">
+            <p className="truncate font-medium text-slate-800">{conversa.contato.nome}</p>
+            <p className="truncate text-xs text-slate-500">
+              {conversa.contato.email ?? conversa.contato.telefone ?? 'Sem contato informado'}
+              {conversa.fila ? ` · ${conversa.fila.nome}` : ''}
+            </p>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <Badge tom={finalizada ? 'neutro' : 'sucesso'}>{LABEL_CONVERSA_STATUS[conversa.status]}</Badge>
+
+          {/* So existe fora do desktop: la a ficha e coluna fixa e sempre
+              visivel, entao um botao pra abrir o que ja esta aberto so
+              ocuparia espaco atoa. */}
+          {aoAlternarFicha && (
+            <Button
+              variante={fichaAberta ? 'primario' : 'neutro'}
+              tamanho="sm"
+              onClick={aoAlternarFicha}
+              aria-pressed={fichaAberta}
+            >
+              Ficha do contato
+            </Button>
+          )}
 
           {conversa.status === 'EM_ESPERA' && (
             <Button
@@ -271,27 +336,36 @@ export function PainelChat({
         </div>
       </div>
 
+      {/*
+        Largura maxima no conteudo, nao no fundo: o painel continua esticando
+        em telas largas (sem faixa vazia estranha do lado), mas a linha de
+        texto para de crescer alem do confortavel pra ler — 75% de uma coluna
+        de 1800px+ vira uma bolha do tamanho da tela inteira sem isto.
+      */}
       <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50 px-5 py-4">
-        {(conversa.temHistoricoAnterior ?? false) && !fimDoHistorico && (
-          <button
-            type="button"
-            onClick={() => void carregarAnteriores()}
-            disabled={ocupado}
-            className="mx-auto mb-3 block rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-50"
-          >
-            Carregar mensagens anteriores
-          </button>
-        )}
+        <div className="mx-auto max-w-3xl">
+          {(conversa.temHistoricoAnterior ?? false) && !fimDoHistorico && (
+            <button
+              type="button"
+              onClick={() => void carregarAnteriores()}
+              disabled={ocupado}
+              className="mx-auto mb-3 block rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+            >
+              Carregar mensagens anteriores
+            </button>
+          )}
 
-        <ul className="space-y-2">
-          {[...anteriores, ...conversa.mensagens].map((m) => (
-            <Bolha key={m.id} mensagem={m} />
-          ))}
-        </ul>
-        <div ref={fim} />
+          <ul className="space-y-2">
+            {[...anteriores, ...conversa.mensagens].map((m) => (
+              <Bolha key={m.id} mensagem={m} />
+            ))}
+          </ul>
+          <div ref={fim} />
+        </div>
       </div>
 
       <footer className="border-t border-slate-200 bg-white p-4">
+        <div className="mx-auto max-w-3xl">
         {erro && <div className="mb-3"><Alerta>{erro}</Alerta></div>}
         {finalizada ? (
           <p className="text-center text-sm text-slate-500">
@@ -333,6 +407,7 @@ export function PainelChat({
             </Button>
           </form>
         )}
+        </div>
       </footer>
     </div>
   );

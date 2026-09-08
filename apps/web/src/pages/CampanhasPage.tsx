@@ -309,7 +309,7 @@ export function CampanhasPage() {
           <p className="text-sm text-slate-500">
             Selecione uma campanha para ver os contatos e disparar os envios.
           </p>
-          <p className="mt-3 text-xs text-slate-400">
+          <p className="mt-3 text-xs text-slate-500">
             Campanhas de voz exigem integracao de telefonia (PABX/SIP), que ainda nao existe — o
             disparo e recusado com essa mensagem em vez de falhar silenciosamente.
           </p>

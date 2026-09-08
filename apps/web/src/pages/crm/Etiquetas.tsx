@@ -195,7 +195,7 @@ export function EditorEtiquetas({ tags, aoSalvar }: EditorProps) {
           maxLength={30}
           placeholder="Nova etiqueta e Enter"
           aria-label="Nova etiqueta"
-          className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 placeholder:text-slate-400 focus:border-brand-400 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+          className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 placeholder:text-slate-400 focus:border-[var(--brand-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-primary)]/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
         />
 
         {sugestoes.length > 0 && (
@@ -208,7 +208,7 @@ export function EditorEtiquetas({ tags, aoSalvar }: EditorProps) {
                   className="flex w-full items-center justify-between px-2 py-1 text-left text-xs text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
                 >
                   <span>{s.tag}</span>
-                  <span className="tabular-nums text-slate-400">{s.total}</span>
+                  <span className="tabular-nums text-slate-500">{s.total}</span>
                 </button>
               </li>
             ))}

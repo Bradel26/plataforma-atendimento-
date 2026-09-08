@@ -19,10 +19,12 @@ describe('comandosDeNavegacao', () => {
     expect(rotas).not.toContain('/configuracoes');
   });
 
-  it('o comercial recebe o CRM e nao o atendimento', () => {
+  it('o comercial recebe o CRM e o atendimento', () => {
+    // Vendedor com WhatsApp proprio atende o cliente direto no painel — por
+    // isso COMERCIAL passou a ver /atendimento junto com /crm.
     const rotas = comandosDeNavegacao('COMERCIAL', '').map((c) => c.rota);
     expect(rotas).toContain('/crm');
-    expect(rotas).not.toContain('/atendimento');
+    expect(rotas).toContain('/atendimento');
   });
 
   it('o admin recebe tudo', () => {

@@ -153,7 +153,7 @@ test.describe('Ficha 360 do contato', () => {
   });
 
   test('a ficha da empresa tem os quatro indicadores e a linha do tempo dela', async ({ page }) => {
-    await page.getByRole('button', { name: 'Contas' }).click();
+    await page.getByRole('link', { name: 'Contas' }).click();
 
     const lista = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Contas' }) });
     const primeira = lista.locator('li button').first();

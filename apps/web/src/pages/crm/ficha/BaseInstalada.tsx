@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Alerta, Badge, Button, EmptyState, Field, Input, Select } from '../../../components/ui';
+import { useConfirm } from '../../../components/ui/ConfirmDialog';
 import { ApiError, api } from '../../../lib/api';
 import type { ComponenteGarantia, ProdutoInstalado, StatusGarantia, TipoGarantia } from '../../../lib/types';
 
@@ -66,6 +67,7 @@ type Props = {
 };
 
 export function BaseInstalada({ contaId, produtos, aoMudar }: Props) {
+  const confirmar = useConfirm();
   const [form, setForm] = useState(PRODUTO_VAZIO);
   const [componentes, setComponentes] = useState<NovoComponente[]>([{ ...COMPONENTE_VAZIO }]);
   const [salvando, setSalvando] = useState(false);
@@ -109,15 +111,22 @@ export function BaseInstalada({ contaId, produtos, aoMudar }: Props) {
     }
   };
 
-  const remover = async (produtoId: string) => {
-    if (!window.confirm('Remover este equipamento e as garantias dele?')) return;
-    setErro(null);
-    try {
-      await api.del(`/produtos-instalados/${produtoId}`);
-      aoMudar();
-    } catch (e) {
-      setErro(e instanceof ApiError ? e.message : 'Falha ao remover');
-    }
+  const remover = (produtoId: string) => {
+    confirmar({
+      titulo: 'Remover este equipamento?',
+      descricao: 'As garantias dele saem junto.',
+      variante: 'perigo',
+      rotuloConfirmar: 'Remover',
+      aoConfirmar: async () => {
+        setErro(null);
+        try {
+          await api.del(`/produtos-instalados/${produtoId}`);
+          aoMudar();
+        } catch (e) {
+          setErro(e instanceof ApiError ? e.message : 'Falha ao remover');
+        }
+      },
+    });
   };
 
   return (
@@ -140,7 +149,7 @@ export function BaseInstalada({ contaId, produtos, aoMudar }: Props) {
                     N/S {p.numeroSerie ?? '—'} · Instalado em {dataBr(p.dataInstalacao)}
                     {p.instaladorNome ? ` · ${p.instaladorNome}` : ''}
                   </p>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-slate-500">
                     Instalador credenciado:{' '}
                     {p.instaladorCredenciado === null ? 'nao informado' : p.instaladorCredenciado ? 'sim' : 'nao'}
                     {' · '}
@@ -281,7 +290,7 @@ function ComponenteLinha({ componente }: { componente: ComponenteGarantia }) {
         <p className="text-xs text-slate-700">
           {componente.tipo === 'OUTRA' ? componente.nome ?? 'Outra' : LABEL_TIPO_GARANTIA[componente.tipo]}
         </p>
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-slate-500">
           {componente.prazoDias} dia(s){componente.vencimento ? ` · vence em ${dataBr(componente.vencimento)}` : ''}
         </p>
       </div>

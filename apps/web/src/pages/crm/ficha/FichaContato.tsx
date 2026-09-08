@@ -243,7 +243,7 @@ export function FichaContato({ contatoId, aoMudarEtiquetas }: FichaProps) {
                       )}
                     </div>
                     <p className="mt-1 text-sm text-slate-800">{a.titulo}</p>
-                    {a.responsavel && <p className="text-xs text-slate-400">{a.responsavel.nome}</p>}
+                    {a.responsavel && <p className="text-xs text-slate-500">{a.responsavel.nome}</p>}
                     <CheckinDeVisita atividade={a} aoMudar={() => atualizar()} aoErrar={setErro} />
                   </div>
                   <Button variante="neutro" onClick={() => void concluir(a)}>

@@ -1,6 +1,23 @@
 import { Badge } from '../../components/ui';
+import { SkeletonBloco } from '../../components/ui/Skeleton';
 import { EtiquetasCompactas } from '../../pages/crm/Etiquetas';
 import type { ConversaResumo } from '../../lib/types';
+
+/** Silhueta de um cartao de conversa: avatar, nome+hora, previa. */
+function SkeletonConversa() {
+  return (
+    <li className="flex items-start gap-2.5 px-4 py-3" aria-hidden="true">
+      <SkeletonBloco className="mt-0.5 h-9 w-9 shrink-0 rounded-full" />
+      <div className="min-w-0 flex-1 space-y-1.5">
+        <div className="flex items-baseline justify-between gap-2">
+          <SkeletonBloco className="h-3 w-2/5" />
+          <SkeletonBloco className="h-2.5 w-8 shrink-0" />
+        </div>
+        <SkeletonBloco className="h-2.5 w-4/5" />
+      </div>
+    </li>
+  );
+}
 
 function horaCurta(iso: string) {
   const data = new Date(iso);
@@ -34,7 +51,13 @@ export function ListaConversas({
   onCarregarMais?: () => void;
 }) {
   if (carregando && conversas.length === 0) {
-    return <p className="p-4 text-sm text-slate-500">Carregando conversas...</p>;
+    return (
+      <ul className="divide-y divide-slate-100">
+        {Array.from({ length: 6 }, (_, i) => (
+          <SkeletonConversa key={i} />
+        ))}
+      </ul>
+    );
   }
 
   if (conversas.length === 0) {
@@ -50,34 +73,44 @@ export function ListaConversas({
             <button
               type="button"
               onClick={() => onSelecionar(c.id)}
-              className={`w-full px-4 py-3 text-left transition ${
+              className={`flex w-full items-start gap-2.5 px-4 py-3 text-left transition ${
                 ativa ? 'bg-[var(--brand-primary)]/8' : 'hover:bg-slate-50'
               }`}
               style={ativa ? { borderLeft: '3px solid var(--brand-primary)' } : { borderLeft: '3px solid transparent' }}
             >
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="truncate text-sm font-medium text-slate-800">{c.contato.nome}</span>
-                <span className="shrink-0 text-xs text-slate-400">{horaCurta(c.ultimaMensagemEm)}</span>
-              </div>
-              <p className="mt-0.5 truncate text-xs text-slate-500">{previa(c)}</p>
-              <div className="mt-1.5 flex items-center gap-1.5">
-                <Badge tom="neutro">{c.canal}</Badge>
-                {c.fila && <Badge tom="neutro">{c.fila.nome}</Badge>}
-                {c.agente && <Badge tom="marca">{c.agente.nome}</Badge>}
-                {c.naoLidas > 0 && (
-                  <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-semibold text-white">
-                    {c.naoLidas}
-                  </span>
+              {/* Iniciais, e nao foto: nenhum canal manda avatar do cliente, e um
+                  circulo vazio no lugar chamaria mais atencao que a inicial. */}
+              <span
+                className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold"
+                style={{ backgroundColor: 'var(--brand-primary-soft)', color: 'var(--brand-primary)' }}
+              >
+                {c.contato.nome.charAt(0).toUpperCase()}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="truncate text-sm font-medium text-slate-800">{c.contato.nome}</span>
+                  <span className="shrink-0 text-xs text-slate-500">{horaCurta(c.ultimaMensagemEm)}</span>
+                </div>
+                <p className="mt-0.5 truncate text-xs text-slate-500">{previa(c)}</p>
+                <div className="mt-1.5 flex items-center gap-1.5">
+                  <Badge tom="neutro">{c.canal}</Badge>
+                  {c.fila && <Badge tom="neutro">{c.fila.nome}</Badge>}
+                  {c.agente && <Badge tom="marca">{c.agente.nome}</Badge>}
+                  {c.naoLidas > 0 && (
+                    <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-semibold text-white">
+                      {c.naoLidas}
+                    </span>
+                  )}
+                </div>
+                {/* Linha propria, abaixo de canal e fila: aquela linha ja disputa
+                    espaco com o contador de nao lidas, e uma etiqueta longa
+                    empurraria o contador para fora do cartao. */}
+                {c.tags.length > 0 && (
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    <EtiquetasCompactas tags={c.tags} />
+                  </div>
                 )}
               </div>
-              {/* Linha propria, abaixo de canal e fila: aquela linha ja disputa
-                  espaco com o contador de nao lidas, e uma etiqueta longa
-                  empurraria o contador para fora do cartao. */}
-              {c.tags.length > 0 && (
-                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                  <EtiquetasCompactas tags={c.tags} />
-                </div>
-              )}
             </button>
           </li>
         );

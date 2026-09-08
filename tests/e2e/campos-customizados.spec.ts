@@ -52,8 +52,8 @@ test.describe('Campos customizados', () => {
     await expect(cartao(page, 'Campos customizados').locator('li').filter({ hasText: nomeCampo })).toBeVisible();
     await expect(cartao(page, 'Campos customizados').getByText('Obrigatorio')).toBeVisible();
 
-    await page.goto('/crm');
-    await page.getByRole('button', { name: 'Contas', exact: true }).click();
+    // Aba do CRM e link real com deep link proprio: ir direto ao endereco.
+    await page.goto('/crm?aba=contas');
     const novaConta = cartao(page, 'Nova conta');
     const nomeConta = `Conta com campo ${Date.now().toString(36)}`;
     await novaConta.getByLabel('Nome').fill(nomeConta);

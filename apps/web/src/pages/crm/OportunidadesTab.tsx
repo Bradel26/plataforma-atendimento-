@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alerta, Badge, Button, Card, Field, Input, Select } from '../../components/ui';
+import { MotivoPerdaDialog } from '../../components/ui/MotivoPerdaDialog';
 import { ApiError, api } from '../../lib/api';
 import {
+  LABEL_MOTIVO_PERDA,
   moeda,
   type CampoCustomizadoDef,
   type ColunaFunil,
@@ -12,6 +14,7 @@ import {
   type Oportunidade,
 } from '../../lib/types';
 import { useAuth } from '../../features/auth/AuthProvider';
+import { useFaixaDeLargura } from '../../lib/useFaixaDeLargura';
 import { CamposCustomizadosCampos } from './CamposCustomizados';
 import { FichaOportunidade } from './ficha/FichaOportunidade';
 import { sinalDeAcao } from './sinalDeAcao';
@@ -21,6 +24,172 @@ import { VisoesSalvas } from './VisoesSalvas';
 const MOTIVOS: MotivoPerda[] = ['PRECO', 'SEM_INTERESSE', 'CONCORRENTE', 'SEM_BUDGET', 'SEM_RESPOSTA', 'OUTRO'];
 
 type Kanban = { funil: { id: string; nome: string }; colunas: ColunaFunil[] };
+
+/**
+ * O cartao da oportunidade — usado nas duas disposicoes (colunas lado a lado
+ * em desktop/notebook, lista agrupada por etapa abaixo disso). Extraido para
+ * nao duplicar seis campos e dois botoes de acao entre os dois layouts.
+ */
+function CartaoOportunidade({
+  o,
+  kanban,
+  probabilidadesDoFunil,
+  aoArrastar,
+  aoAbrir,
+  aoMover,
+  aoFechar,
+}: {
+  o: Oportunidade;
+  kanban: Kanban | null;
+  probabilidadesDoFunil: number[];
+  aoArrastar: (id: string) => void;
+  aoAbrir: (id: string) => void;
+  aoMover: (id: string, estagioId: string) => void;
+  aoFechar: (id: string, status: 'GANHA' | 'PERDIDA') => void;
+}) {
+  const etiquetas = etiquetasDoCartao(o);
+  const discordancia = discordanciaDaTemperatura(o.temperatura, o.estagio.probabilidade, probabilidadesDoFunil);
+  const sinal = sinalDeAcao(o);
+
+  return (
+    <li
+      draggable
+      onDragStart={() => aoArrastar(o.id)}
+      className="cursor-grab rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition hover:shadow-md active:cursor-grabbing"
+    >
+      {/* Titulo como botao, e nao o cartao inteiro: o cartao e
+          arrastavel, e clique em area de arraste erra com facilidade
+          — abrir a oportunidade por acidente ao mover o cartao
+          seria pior do que precisar acertar o texto. */}
+      <button
+        type="button"
+        onClick={() => aoAbrir(o.id)}
+        className="block w-full truncate text-left text-sm font-medium text-slate-800 underline-offset-2 hover:underline"
+      >
+        {o.titulo}
+      </button>
+      <p className="truncate text-xs text-slate-500">{o.conta.nome}</p>
+      {/*
+        Alternativa ao arraste (item 1 da Fase 7): teclado, tela
+        estreita e mobile precisam de um jeito de mudar de etapa
+        sem arrastar. Mesma chamada do drop (`moverPara`) — a
+        regra de etapa obrigatoria continua sendo aplicada pela
+        API do mesmo jeito.
+      */}
+      {kanban && kanban.colunas.length > 1 && (
+        <Select
+          aria-label={`Mover ${o.titulo} para outra etapa`}
+          value=""
+          onChange={(e) => {
+            const estagioId = e.target.value;
+            if (estagioId) aoMover(o.id, estagioId);
+            e.target.value = '';
+          }}
+          className="mt-1.5 !py-1 !text-xs"
+        >
+          <option value="">Mover para...</option>
+          {kanban.colunas
+            .filter((c) => c.estagio.id !== o.estagio.id)
+            .map((c) => (
+              <option key={c.estagio.id} value={c.estagio.id}>
+                {c.estagio.nome}
+              </option>
+            ))}
+        </Select>
+      )}
+      {/* Temperatura e origem (item esquecido do plano).
+          Ficam logo abaixo da conta, antes do dinheiro: sao a
+          leitura *qualitativa* do cartao, e quem varre o quadro le
+          "quem e / como esta / quanto vale" nessa ordem.
+
+          Cartao sem leitura nao mostra etiqueta nenhuma — nao
+          mostra "Fria". Ausencia e "ninguem leu", e pintar de frio
+          seria inventar uma leitura em nome do vendedor. */}
+      {etiquetas.length > 0 && (
+        <p className="mt-1 flex flex-wrap items-center gap-1">
+          {etiquetas.map((etiqueta) => (
+            <span key={etiqueta.texto} title={etiqueta.titulo}>
+              <Badge tom={etiqueta.tom}>{etiqueta.texto}</Badge>
+            </span>
+          ))}
+          {/* A discordancia entre a leitura e a etapa e o motivo de
+              os dois numeros existirem separados: a etapa diz que
+              esta quase fechando, e quem esta na negociacao diz que
+              esfriou. E esse cartao que infla a previsao. */}
+          {discordancia && (
+            <span title={discordancia} className="text-xs text-slate-500">
+              discorda da etapa
+            </span>
+          )}
+        </p>
+      )}
+      <p className="mt-1 text-sm font-semibold text-slate-700">{moeda(o.valor)}</p>
+      {o.itens.length > 0 && (
+        <p className="mt-0.5 text-xs text-slate-500">
+          {o.itens.length} item(ns) · {moeda(o.totalItens)}
+        </p>
+      )}
+      {/* Os dois cronometros e o sinal de proximo passo. Ficam no
+          cartao, e nao so na ficha, porque o vendedor varre o quadro
+          — nao abre um por um — e "parado" so vira acao se aparecer
+          sem clique. Os dias vem contados da API para os dois numeros
+          saírem do mesmo relogio. */}
+      {typeof o.diasNoEstagio === 'number' && typeof o.diasAberta === 'number' && (
+        <p
+          className="mt-1.5 text-xs text-slate-500"
+          title={`${o.diasNoEstagio} dia(s) nesta etapa · ${o.diasAberta} dia(s) desde a abertura`}
+        >
+          {o.diasNoEstagio}d na etapa · {o.diasAberta}d total
+        </p>
+      )}
+      {sinal && (
+        <p className="mt-1.5">
+          {/* O `title` diz *qual* tarefa falta. A etiqueta e curta
+              para caber no cartao; o detalhe fica no hover em vez
+              de virar um segundo clique. */}
+          <span title={o.tarefaDaEtapaPendente?.join('; ') || undefined}>
+            <Badge tom={sinal.tom}>{sinal.texto}</Badge>
+          </span>
+        </p>
+      )}
+      {/* Dono do cartao: mesma leitura de "de quem e isto" que a
+          ficha do contato ja da, so que sem abrir nada. Ausente
+          quando ninguem foi atribuido — sem circulo vazio no lugar. */}
+      <div
+        className={
+          o.responsavel
+            ? 'mt-2 flex items-center justify-between gap-2 border-t border-slate-100 pt-2'
+            : 'mt-2 flex gap-1.5'
+        }
+      >
+        {o.responsavel && (
+          <span
+            title={o.responsavel.nome}
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-600"
+          >
+            {o.responsavel.nome.charAt(0).toUpperCase()}
+          </span>
+        )}
+        <div className="flex gap-1.5">
+          <button
+            type="button"
+            onClick={() => aoFechar(o.id, 'GANHA')}
+            className="rounded border border-emerald-200 px-2 py-1 text-xs text-emerald-700 hover:bg-emerald-50"
+          >
+            Ganhou
+          </button>
+          <button
+            type="button"
+            onClick={() => aoFechar(o.id, 'PERDIDA')}
+            className="rounded border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+          >
+            Perdeu
+          </button>
+        </div>
+      </div>
+    </li>
+  );
+}
 
 type Props = {
   /** Registro aberto, vindo da URL (`/oportunidades/:id`). Nulo em `/crm`. */
@@ -35,6 +204,8 @@ export function OportunidadesTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   const [kanban, setKanban] = useState<Kanban | null>(null);
   const [contas, setContas] = useState<Conta[]>([]);
   const [arrastando, setArrastando] = useState<string | null>(null);
+  /** Oportunidade pendente de motivo antes de fechar como PERDIDA. */
+  const [pedidoMotivo, setPedidoMotivo] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [nova, setNova] = useState({ titulo: '', contaId: '', valor: '' });
   /** Campos customizados (item 6.4) da "Nova oportunidade". */
@@ -44,6 +215,22 @@ export function OportunidadesTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   const [exigencia, setExigencia] = useState<Record<string, string>>({});
   const [salvandoEtapa, setSalvandoEtapa] = useState<string | null>(null);
   const { temPerfil } = useAuth();
+  /**
+   * Busca por titulo ou conta (Fase 7, item 3): Contatos, Contas e Leads ja
+   * tem busca; Oportunidades so tinha o seletor de funil. `/oportunidades/kanban`
+   * nao aceita `busca` — nao dava pra inventar o parametro sem mexer na API.
+   * Mas o quadro inteiro do funil ja chega de uma vez, e filtrar o que ja
+   * esta em memoria fecha a lacuna sem round-trip novo nenhum.
+   */
+  const [buscaCartao, setBuscaCartao] = useState('');
+
+  /**
+   * Mesmo problema de Leads (Fase 7, item 2): colunas de 288px rolando na
+   * horizontal so mostram uma coluna por vez abaixo de notebook — sem visao
+   * geral do funil. Container real, mesmo hook de Contatos/Contas/Atendimento.
+   */
+  const { ref: containerRef, faixa } = useFaixaDeLargura<HTMLDivElement>();
+  const emColunas = faixa === 'desktop' || faixa === 'notebook';
 
   const carregarFunis = useCallback(async () => {
     const f = await api.get<{ funis: Funil[] }>('/funis');
@@ -100,10 +287,13 @@ export function OportunidadesTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
     }
   };
 
-  const mover = async (estagioId: string) => {
-    const id = arrastando;
-    setArrastando(null);
-    if (!id) return;
+  /**
+   * Move uma oportunidade para outro estagio — usada pelo soltar do arraste
+   * E pelo seletor "Mover para" do cartao (alternativa por teclado/tela
+   * estreita/mobile, item 1 da Fase 7). Mesma chamada dos dois jeitos: a
+   * regra de etapa obrigatoria e quem barra, nao esta funcao.
+   */
+  const moverPara = async (id: string, estagioId: string) => {
     try {
       await api.patch(`/oportunidades/${id}`, { estagioId });
       await carregar();
@@ -112,19 +302,33 @@ export function OportunidadesTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
     }
   };
 
-  const fechar = async (id: string, status: 'GANHA' | 'PERDIDA') => {
+  const mover = async (estagioId: string) => {
+    const id = arrastando;
+    setArrastando(null);
+    if (!id) return;
+    await moverPara(id, estagioId);
+  };
+
+  const enviarFechamento = async (id: string, status: 'GANHA' | 'PERDIDA', motivoPerda?: MotivoPerda) => {
     try {
-      if (status === 'PERDIDA') {
-        const motivo = window.prompt(`Motivo da perda (${MOTIVOS.join(', ')})`, 'CONCORRENTE');
-        if (!motivo) return;
-        await api.post(`/oportunidades/${id}/fechar`, { status, motivoPerda: motivo });
-      } else {
-        await api.post(`/oportunidades/${id}/fechar`, { status });
-      }
+      await api.post(`/oportunidades/${id}/fechar`, { status, ...(motivoPerda ? { motivoPerda } : {}) });
       await carregar();
     } catch (e) {
       setErro(e instanceof ApiError ? e.message : 'Falha ao fechar a oportunidade');
     }
+  };
+
+  /**
+   * Fecha como ganha ou perdida. Perdida exige motivo: abre `MotivoPerdaDialog`
+   * (Fase 9 — substitui o `window.prompt` que nao seguia tema escuro nem
+   * white-label) e so envia depois de confirmado.
+   */
+  const fechar = async (id: string, status: 'GANHA' | 'PERDIDA') => {
+    if (status === 'PERDIDA') {
+      setPedidoMotivo(id);
+      return;
+    }
+    await enviarFechamento(id, status);
   };
 
   const criar = async (e: React.FormEvent) => {
@@ -162,6 +366,30 @@ export function OportunidadesTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   const previsao = kanban?.colunas.reduce((acc, c) => acc + c.valorPonderado, 0) ?? 0;
   const emAberto = kanban?.colunas.reduce((acc, c) => acc + c.valorTotal, 0) ?? 0;
 
+  /**
+   * Colunas com a busca aplicada. O total e o valor de cada coluna, exibidos
+   * no cabecalho, sao recalculados sobre o filtrado — mostrar "5 op" com 2
+   * cartoes na tela seria a mesma inconsistencia que a Fase 6 corrigiu com
+   * "N encontrado(s)" em Contatos e Contas.
+   */
+  const termo = buscaCartao.trim().toLocaleLowerCase('pt-BR');
+  const colunasFiltradas =
+    kanban?.colunas.map((coluna) => {
+      const oportunidades = termo
+        ? coluna.oportunidades.filter(
+            (o) =>
+              o.titulo.toLocaleLowerCase('pt-BR').includes(termo) ||
+              o.conta.nome.toLocaleLowerCase('pt-BR').includes(termo),
+          )
+        : coluna.oportunidades;
+      return {
+        ...coluna,
+        oportunidades,
+        total: termo ? oportunidades.length : coluna.total,
+        valorTotal: termo ? oportunidades.reduce((acc, o) => acc + o.valor, 0) : coluna.valorTotal,
+      };
+    }) ?? [];
+
   /*
    * Com registro na URL, o painel substitui o kanban em vez de dividir a tela.
    *
@@ -185,7 +413,7 @@ export function OportunidadesTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   }
 
   return (
-    <div className="space-y-4">
+    <div ref={containerRef} className="space-y-4">
       <Card titulo="Funil" descricao={kanban ? kanban.funil.nome : 'Carregando...'}>
         <div className="mb-3">
           <VisoesSalvas<FiltroOportunidadeSalvo>
@@ -213,144 +441,111 @@ export function OportunidadesTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
             <p className="text-sm font-semibold" style={{ color: 'var(--brand-accent)' }}>{moeda(previsao)}</p>
           </div>
         </div>
+        <div className="mt-3">
+          <Field label="Busca" hint="Filtra os cartoes ja carregados — titulo ou conta">
+            <Input
+              placeholder="Titulo ou conta"
+              value={buscaCartao}
+              onChange={(e) => setBuscaCartao(e.target.value)}
+            />
+          </Field>
+        </div>
       </Card>
 
       {erro && <Alerta>{erro}</Alerta>}
 
-      <div className="flex gap-3 overflow-x-auto pb-2">
-        {kanban?.colunas.map((coluna) => (
-          <div
-            key={coluna.estagio.id}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={() => void mover(coluna.estagio.id)}
-            className="flex w-72 shrink-0 flex-col rounded-xl border border-slate-200 bg-slate-50"
-          >
-            <header className="border-b border-slate-200 px-3 py-2.5">
-              <div className="flex items-baseline justify-between gap-2">
-                <p className="text-sm font-semibold text-slate-700">{coluna.estagio.nome}</p>
-                <Badge tom="neutro">{coluna.estagio.probabilidade}%</Badge>
-              </div>
-              <p className="text-xs text-slate-500">
-                {coluna.total} op · {moeda(coluna.valorTotal)}
-              </p>
-              {/* A exigencia aparece no cabecalho da coluna, antes de o cartao
-                  chegar nela: descobrir o bloqueio ao arrastar e o que faz a
-                  regra parecer defeito. */}
-              {coluna.estagio.tarefaObrigatoria && (
-                <p className="mt-0.5 truncate text-xs text-slate-400" title={coluna.estagio.tarefaObrigatoria}>
-                  Exige: {coluna.estagio.tarefaObrigatoria}
+      {emColunas ? (
+        <div className="flex gap-3 overflow-x-auto pb-2">
+          {colunasFiltradas.map((coluna) => (
+            <div
+              key={coluna.estagio.id}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => void mover(coluna.estagio.id)}
+              className="flex w-72 shrink-0 flex-col rounded-xl border border-slate-200 bg-slate-50"
+            >
+              <header className="border-b border-slate-200 px-3 py-2.5">
+                <div className="flex items-baseline justify-between gap-2">
+                  <p className="text-sm font-semibold text-slate-700">{coluna.estagio.nome}</p>
+                  <Badge tom="neutro">{coluna.estagio.probabilidade}%</Badge>
+                </div>
+                <p className="text-xs text-slate-500">
+                  {coluna.total} op · {moeda(coluna.valorTotal)}
                 </p>
+                {/* A exigencia aparece no cabecalho da coluna, antes de o cartao
+                    chegar nela: descobrir o bloqueio ao arrastar e o que faz a
+                    regra parecer defeito. */}
+                {coluna.estagio.tarefaObrigatoria && (
+                  <p className="mt-0.5 truncate text-xs text-slate-500" title={coluna.estagio.tarefaObrigatoria}>
+                    Exige: {coluna.estagio.tarefaObrigatoria}
+                  </p>
+                )}
+              </header>
+              <ul className="min-h-24 flex-1 space-y-2 p-2">
+                {coluna.oportunidades.map((o: Oportunidade) => (
+                  <CartaoOportunidade
+                    key={o.id}
+                    o={o}
+                    kanban={kanban}
+                    probabilidadesDoFunil={probabilidadesDoFunil}
+                    aoArrastar={setArrastando}
+                    aoAbrir={aoAbrir}
+                    aoMover={(id, estagioId) => void moverPara(id, estagioId)}
+                    aoFechar={(id, status) => void fechar(id, status)}
+                  />
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      ) : (
+        /*
+         * Mesma solucao de Leads (Fase 7, item 2): abaixo de notebook, uma
+         * lista agrupada por etapa em vez de colunas de 288px rolando na
+         * horizontal. `<details>` comeca aberto so quando ha oportunidade —
+         * com um funil de 6+ etapas, abrir todas de largura cheia empurraria
+         * a etapa que importa para fora da primeira tela.
+         */
+        <div className="space-y-3">
+          {colunasFiltradas.map((coluna) => (
+            <details
+              key={coluna.estagio.id}
+              open={coluna.oportunidades.length > 0}
+              className="rounded-xl border border-slate-200 bg-slate-50"
+            >
+              <summary className="cursor-pointer list-none px-3 py-2.5 [&::-webkit-details-marker]:hidden">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-sm font-semibold text-slate-700">{coluna.estagio.nome}</span>
+                  <Badge tom="neutro">{coluna.estagio.probabilidade}%</Badge>
+                </div>
+                <p className="text-xs text-slate-500">
+                  {coluna.total} op · {moeda(coluna.valorTotal)}
+                </p>
+                {coluna.estagio.tarefaObrigatoria && (
+                  <p className="mt-0.5 truncate text-xs text-slate-500" title={coluna.estagio.tarefaObrigatoria}>
+                    Exige: {coluna.estagio.tarefaObrigatoria}
+                  </p>
+                )}
+              </summary>
+              {coluna.oportunidades.length > 0 && (
+                <ul className="space-y-2 border-t border-slate-200 p-2">
+                  {coluna.oportunidades.map((o: Oportunidade) => (
+                    <CartaoOportunidade
+                      key={o.id}
+                      o={o}
+                      kanban={kanban}
+                      probabilidadesDoFunil={probabilidadesDoFunil}
+                      aoArrastar={setArrastando}
+                      aoAbrir={aoAbrir}
+                      aoMover={(id, estagioId) => void moverPara(id, estagioId)}
+                      aoFechar={(id, status) => void fechar(id, status)}
+                    />
+                  ))}
+                </ul>
               )}
-            </header>
-            <ul className="min-h-24 flex-1 space-y-2 p-2">
-              {coluna.oportunidades.map((o: Oportunidade) => (
-                <li
-                  key={o.id}
-                  draggable
-                  onDragStart={() => setArrastando(o.id)}
-                  className="cursor-grab rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm active:cursor-grabbing"
-                >
-                  {/* Titulo como botao, e nao o cartao inteiro: o cartao e
-                      arrastavel, e clique em area de arraste erra com facilidade
-                      — abrir a oportunidade por acidente ao mover o cartao
-                      seria pior do que precisar acertar o texto. */}
-                  <button
-                    type="button"
-                    onClick={() => aoAbrir(o.id)}
-                    className="block w-full truncate text-left text-sm font-medium text-slate-800 underline-offset-2 hover:underline"
-                  >
-                    {o.titulo}
-                  </button>
-                  <p className="truncate text-xs text-slate-500">{o.conta.nome}</p>
-                  {/* Temperatura e origem (item esquecido do plano).
-                      Ficam logo abaixo da conta, antes do dinheiro: sao a
-                      leitura *qualitativa* do cartao, e quem varre o quadro le
-                      "quem e / como esta / quanto vale" nessa ordem.
-
-                      Cartao sem leitura nao mostra etiqueta nenhuma — nao
-                      mostra "Fria". Ausencia e "ninguem leu", e pintar de frio
-                      seria inventar uma leitura em nome do vendedor. */}
-                  {(() => {
-                    const etiquetas = etiquetasDoCartao(o);
-                    const discordancia = discordanciaDaTemperatura(
-                      o.temperatura,
-                      o.estagio.probabilidade,
-                      probabilidadesDoFunil,
-                    );
-                    if (etiquetas.length === 0) return null;
-                    return (
-                      <p className="mt-1 flex flex-wrap items-center gap-1">
-                        {etiquetas.map((etiqueta) => (
-                          <span key={etiqueta.texto} title={etiqueta.titulo}>
-                            <Badge tom={etiqueta.tom}>{etiqueta.texto}</Badge>
-                          </span>
-                        ))}
-                        {/* A discordancia entre a leitura e a etapa e o motivo de
-                            os dois numeros existirem separados: a etapa diz que
-                            esta quase fechando, e quem esta na negociacao diz que
-                            esfriou. E esse cartao que infla a previsao. */}
-                        {discordancia && (
-                          <span title={discordancia} className="text-xs text-slate-400">
-                            discorda da etapa
-                          </span>
-                        )}
-                      </p>
-                    );
-                  })()}
-                  <p className="mt-1 text-sm font-semibold text-slate-700">{moeda(o.valor)}</p>
-                  {o.itens.length > 0 && (
-                    <p className="mt-0.5 text-xs text-slate-400">
-                      {o.itens.length} item(ns) · {moeda(o.totalItens)}
-                    </p>
-                  )}
-                  {/* Os dois cronometros e o sinal de proximo passo. Ficam no
-                      cartao, e nao so na ficha, porque o vendedor varre o quadro
-                      — nao abre um por um — e "parado" so vira acao se aparecer
-                      sem clique. Os dias vem contados da API para os dois numeros
-                      saírem do mesmo relogio. */}
-                  {typeof o.diasNoEstagio === 'number' && typeof o.diasAberta === 'number' && (
-                    <p
-                      className="mt-1.5 text-xs text-slate-500"
-                      title={`${o.diasNoEstagio} dia(s) nesta etapa · ${o.diasAberta} dia(s) desde a abertura`}
-                    >
-                      {o.diasNoEstagio}d na etapa · {o.diasAberta}d total
-                    </p>
-                  )}
-                  {(() => {
-                    const sinal = sinalDeAcao(o);
-                    return sinal ? (
-                      <p className="mt-1.5">
-                        {/* O `title` diz *qual* tarefa falta. A etiqueta e curta
-                            para caber no cartao; o detalhe fica no hover em vez
-                            de virar um segundo clique. */}
-                        <span title={o.tarefaDaEtapaPendente?.join('; ') || undefined}>
-                          <Badge tom={sinal.tom}>{sinal.texto}</Badge>
-                        </span>
-                      </p>
-                    ) : null;
-                  })()}
-                  <div className="mt-2 flex gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => void fechar(o.id, 'GANHA')}
-                      className="rounded border border-emerald-200 px-2 py-1 text-xs text-emerald-700 hover:bg-emerald-50"
-                    >
-                      Ganhou
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void fechar(o.id, 'PERDIDA')}
-                      className="rounded border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
-                    >
-                      Perdeu
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-      </div>
+            </details>
+          ))}
+        </div>
+      )}
 
       {/* Processo do funil (item 3.1).
           Fica junto do quadro, e nao numa tela de configuracao distante, porque
@@ -437,6 +632,18 @@ export function OportunidadesTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
           </div>
         )}
       </Card>
+
+      <MotivoPerdaDialog
+        aberto={pedidoMotivo !== null}
+        motivos={MOTIVOS}
+        labelMotivo={LABEL_MOTIVO_PERDA}
+        aoCancelar={() => setPedidoMotivo(null)}
+        aoConfirmar={(motivo) => {
+          if (!pedidoMotivo) return;
+          void enviarFechamento(pedidoMotivo, 'PERDIDA', motivo);
+          setPedidoMotivo(null);
+        }}
+      />
     </div>
   );
 }

@@ -207,7 +207,7 @@ export function TelefoniaPage() {
             Ligar
           </Button>
         </form>
-        <p className="mt-2 text-xs text-slate-400">
+        <p className="mt-2 text-xs text-slate-500">
           Softphone no navegador, ramais e URA dependem do provedor contratado — ver "Voz" no SCOPE.md.
         </p>
       </Card>
@@ -284,7 +284,7 @@ export function TelefoniaPage() {
                       {c.gravacaoUrl?.startsWith('/api/arquivos/') ? (
                         <audio controls src={c.gravacaoUrl} className="h-8 w-44" />
                       ) : (
-                        <span className="text-xs text-slate-400">{c.gravacaoUrl ? 'no provedor' : '—'}</span>
+                        <span className="text-xs text-slate-500">{c.gravacaoUrl ? 'no provedor' : '—'}</span>
                       )}
                     </td>
                     <td className="py-2 whitespace-nowrap">
@@ -300,7 +300,7 @@ export function TelefoniaPage() {
                           {assistente === c.id ? 'Fechar' : 'Abrir'}
                         </button>
                       ) : (
-                        <span className="text-xs text-slate-400" title="Nenhum motor analisou esta ligacao">
+                        <span className="text-xs text-slate-500" title="Nenhum motor analisou esta ligacao">
                           sem analise
                         </span>
                       )}

@@ -93,7 +93,7 @@ export function EscalasPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="text-xs uppercase tracking-wide text-slate-400">
+              <thead className="text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="pb-2 pr-4 font-medium">Agente</th>
                   {DIAS_SEMANA.map((d) => (
@@ -180,7 +180,7 @@ export function EscalasPage() {
         ) : (
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="text-xs uppercase tracking-wide text-slate-400">
+              <thead className="text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="pb-2 pr-4 font-medium">Agente</th>
                   <th className="pb-2 pr-4 font-medium">Disponivel</th>

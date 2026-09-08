@@ -140,7 +140,7 @@ export function DetalheProtocolo({
                 <span className="text-xs font-medium text-slate-700">{c.autor?.nome ?? 'Sistema'}</span>
                 <span className="flex items-center gap-2">
                   <Badge tom={c.interno ? 'alerta' : 'sucesso'}>{c.interno ? 'Interno' : 'Cliente'}</Badge>
-                  <span className="text-xs text-slate-400">{dataHora(c.criadoEm)}</span>
+                  <span className="text-xs text-slate-500">{dataHora(c.criadoEm)}</span>
                 </span>
               </div>
               <p className="mt-1.5 whitespace-pre-wrap text-sm text-slate-700">{c.conteudo}</p>
@@ -197,7 +197,7 @@ export function DetalheProtocolo({
                   >
                     {a.nome}
                   </a>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-slate-500">
                     {dataHora(a.criadoEm)}
                     {a.tamanho ? ` · ${tamanhoLegivel(a.tamanho)}` : ''}
                   </p>

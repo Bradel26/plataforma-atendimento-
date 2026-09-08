@@ -244,7 +244,7 @@ export function EditorDeItens({
                     }`}
                   >
                     {moeda(liquido)}
-                    {l.recorrencia === 'MENSAL' && <span className="block text-xs font-normal text-slate-400">/mes</span>}
+                    {l.recorrencia === 'MENSAL' && <span className="block text-xs font-normal text-slate-500">/mes</span>}
                   </td>
                   <td className="py-1.5 text-right">
                     <button

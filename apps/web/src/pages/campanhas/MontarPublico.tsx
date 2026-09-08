@@ -243,7 +243,7 @@ export function MontarPublico({
                   ? 'este canal exige que o cliente escreva primeiro'
                   : 'ficam de fora, e o cadastro pode ser completado'}
                 {previa.amostraSemEndereco.length > 0 && (
-                  <span className="text-slate-400">
+                  <span className="text-slate-500">
                     {' '}
                     ({previa.amostraSemEndereco.map((c) => c.nome).join(', ')}
                     {previa.semEndereco > previa.amostraSemEndereco.length ? ', ...' : ''})
@@ -269,7 +269,7 @@ export function MontarPublico({
         </div>
       )}
 
-      <p className="mt-3 text-xs text-slate-400">
+      <p className="mt-3 text-xs text-slate-500">
         Nao ha filtro por regiao: a plataforma nao guarda endereco de contato. Um filtro que devolve
         zero sempre seria pior que a falta dele.
       </p>

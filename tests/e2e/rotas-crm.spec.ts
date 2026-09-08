@@ -202,33 +202,33 @@ test.describe('Rotas proprias do CRM', () => {
  * `smoke:visibilidade`, que exercita os cinco perfis contra a API.
  */
 test.describe('CRM: escopo por perfil', () => {
-  const abas = (page: Page) => page.locator('nav button');
+  /*
+   * A Fase 9 separou as abas em dois grupos (comentario em `CrmPage.tsx`):
+   * as diretas (Agenda/Contatos/Contas/Leads/Oportunidades) viraram `<Link>`
+   * de verdade, e as de leitura/gestao entraram num menu "Mais" — que so
+   * existe no DOM quando ha ao menos uma permitida ao perfil logado. Os dois
+   * grupos precisam de locator proprio: um nao acha o outro.
+   */
+  const abaDireta = (page: Page, rotulo: string) => page.getByRole('link', { name: rotulo, exact: true });
+  const botaoMais = (page: Page) => page.getByRole('button', { name: 'Mais' });
 
   test('o agente nao ve as abas do processo comercial', async ({ page }) => {
     await entrar(page, 'agente', '/crm');
 
-    await expect(abas(page).filter({ hasText: 'Contatos' })).toBeVisible();
-    await expect(abas(page).filter({ hasText: 'Contas' })).toBeVisible();
+    await expect(abaDireta(page, 'Contatos')).toBeVisible();
+    await expect(abaDireta(page, 'Contas')).toBeVisible();
     // A agenda e de todos: o agente tem tarefa como qualquer um.
-    await expect(abas(page).filter({ hasText: 'Agenda' })).toBeVisible();
+    await expect(abaDireta(page, 'Agenda')).toBeVisible();
 
-    // Lead e oportunidade sao processo comercial; produtos e importacao sao de
-    // gestao. A API recusa as quatro por perfil, entao a aba nao pode existir.
-    for (const proibida of [
-      'Leads',
-      'Oportunidades',
-      'Produtos e precos',
-      'Importar / Exportar',
-      // Renomear etiqueta alcanca registro que ele nem ve: a aba nao e dele.
-      'Etiquetas',
-      // Leitura comercial e relatorio de gestao: as rotas `/comercial/*` recusam
-      // AGENTE e COMERCIAL com 403.
-      'Leitura comercial',
-      // Metas: `/metas` recusa quem nao e ADMIN, SUPERVISOR ou GESTOR.
-      'Metas',
-    ]) {
-      await expect(abas(page).filter({ hasText: proibida }), `aba ${proibida}`).toHaveCount(0);
-    }
+    // Lead e oportunidade sao processo comercial: abas diretas que o agente
+    // nao tem — a API recusa por perfil, entao a aba nao pode existir.
+    await expect(abaDireta(page, 'Leads')).toHaveCount(0);
+    await expect(abaDireta(page, 'Oportunidades')).toHaveCount(0);
+
+    // Produtos, importacao, etiquetas, leitura comercial e metas sao todas de
+    // gestao/configuracao e moram dentro do menu "Mais" — nenhuma e permitida
+    // ao agente, entao o menu inteiro nem renderiza (grupo vazio).
+    await expect(botaoMais(page)).toHaveCount(0);
   });
 
   test('o admin ve todas as abas do CRM', async ({ page }) => {
@@ -236,19 +236,15 @@ test.describe('CRM: escopo por perfil', () => {
 
     // O contraponto do teste acima: sem ele, aquele passaria com o CRM inteiro
     // quebrado — nenhuma aba tambem satisfaz "nao ve as proibidas".
-    //
-    // Afirma o CONJUNTO, e nao a contagem. Uma contagem crua quebra a cada aba
-    // nova dizendo apenas "esperava 7, recebeu 8", que manda quem le contar
-    // botao na tela; o conjunto diz qual aba entrou ou saiu. Foi o que aconteceu
-    // quando a aba de leitura comercial entrou.
-    await expect(abas(page)).toHaveText([
-      // A agenda (item E.5) e a primeira aba, e nao tem perfil restrito: cada um
-      // ve a propria pela politica de atividades.
-      'Agenda',
-      'Contatos',
-      'Contas',
-      'Leads',
-      'Oportunidades',
+    for (const rotulo of ['Agenda', 'Contatos', 'Contas', 'Leads', 'Oportunidades']) {
+      await expect(abaDireta(page, rotulo), `aba direta ${rotulo}`).toBeVisible();
+    }
+
+    // Afirma o CONJUNTO, e nao a contagem, dentro do menu "Mais": uma contagem
+    // crua quebra a cada aba nova dizendo so "esperava 6, recebeu 7", que manda
+    // quem le contar item na tela; o conjunto diz qual aba entrou ou saiu.
+    await botaoMais(page).click();
+    await expect(page.getByRole('menuitem')).toHaveText([
       'Leitura comercial',
       'Metas',
       'Produtividade',
@@ -260,7 +256,7 @@ test.describe('CRM: escopo por perfil', () => {
 
   test('?aba=leads digitado pelo agente cai em Contatos, nao numa aba que falha', async ({ page }) => {
     await entrar(page, 'agente', '/crm?aba=leads');
-    await expect(abas(page).filter({ hasText: 'Contatos' })).toHaveAttribute('aria-current', 'page');
+    await expect(abaDireta(page, 'Contatos')).toHaveAttribute('aria-current', 'page');
   });
 
   test('/oportunidades/:id nao existe para o agente', async ({ page }) => {

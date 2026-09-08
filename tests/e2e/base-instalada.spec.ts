@@ -15,8 +15,9 @@ const cartao = (page: import('@playwright/test').Page, titulo: string) =>
 
 test.describe('Base instalada', () => {
   test.beforeEach(async ({ page }) => {
-    await entrar(page, 'admin', '/crm');
-    await page.getByRole('button', { name: 'Contas' }).click();
+    // Abas do CRM viraram links de verdade (deep link por aba): ir direto ao
+    // endereco evita depender do clique so para chegar na tela sob teste.
+    await entrar(page, 'admin', '/crm?aba=contas');
   });
 
   test('cadastrar equipamento, ver status da garantia e remover', async ({ page }) => {
@@ -52,8 +53,9 @@ test.describe('Base instalada', () => {
     // O formulario fecha e esvazia depois de salvar.
     await expect(base.getByLabel('Modelo')).toHaveCount(0);
 
-    page.once('dialog', (d) => void d.accept());
+    // Remover abre o ConfirmDialog (Fase 9 substituiu o window.confirm nativo).
     await linha.getByRole('button', { name: 'Remover' }).click();
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Remover' }).click();
     await expect(linha).toHaveCount(0);
     await expect(base.getByText('Nenhum equipamento cadastrado')).toBeVisible();
   });
@@ -79,8 +81,9 @@ test.describe('Base instalada', () => {
     const linha = base.locator('li').filter({ hasText: modelo });
     await expect(linha.getByText('Instalador nao informado')).toBeVisible();
 
-    page.once('dialog', (d) => void d.accept());
+    // Remover abre o ConfirmDialog (Fase 9 substituiu o window.confirm nativo).
     await linha.getByRole('button', { name: 'Remover' }).click();
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Remover' }).click();
     await expect(linha).toHaveCount(0);
   });
 });

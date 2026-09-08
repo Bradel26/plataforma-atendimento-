@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Alerta, Button, Field, Input } from '../../components/ui';
+import { useConfirm } from '../../components/ui/ConfirmDialog';
 import { ApiError, api } from '../../lib/api';
 import { PALETA_VISAO, type EntidadeVisao, type VisaoSalva } from '../../lib/types';
 
@@ -26,6 +27,7 @@ export function VisoesSalvas<F extends Record<string, unknown>>({
   filtroVazio,
   aoAplicar,
 }: Props<F>) {
+  const confirmar = useConfirm();
   const [visoes, setVisoes] = useState<VisaoSalva<F>[]>([]);
   const [ativaId, setAtivaId] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -74,16 +76,22 @@ export function VisoesSalvas<F extends Record<string, unknown>>({
     }
   };
 
-  const remover = async (visao: VisaoSalva<F>) => {
-    if (!window.confirm(`Remover a visao "${visao.nome}"?`)) return;
-    setErro(null);
-    try {
-      await api.del(`/visoes-salvas/${visao.id}`);
-      if (ativaId === visao.id) aplicar(null);
-      await carregar();
-    } catch (e) {
-      setErro(e instanceof ApiError ? e.message : 'Falha ao remover a visao');
-    }
+  const remover = (visao: VisaoSalva<F>) => {
+    confirmar({
+      titulo: `Remover a visao "${visao.nome}"?`,
+      variante: 'perigo',
+      rotuloConfirmar: 'Remover',
+      aoConfirmar: async () => {
+        setErro(null);
+        try {
+          await api.del(`/visoes-salvas/${visao.id}`);
+          if (ativaId === visao.id) aplicar(null);
+          await carregar();
+        } catch (e) {
+          setErro(e instanceof ApiError ? e.message : 'Falha ao remover a visao');
+        }
+      },
+    });
   };
 
   return (
@@ -127,7 +135,7 @@ export function VisoesSalvas<F extends Record<string, unknown>>({
       {erro && <Alerta>{erro}</Alerta>}
 
       {filtroVazio ? (
-        <p className="text-xs text-slate-400">Preencha algum filtro para poder salva-lo como visao.</p>
+        <p className="text-xs text-slate-500">Preencha algum filtro para poder salva-lo como visao.</p>
       ) : (
         <form onSubmit={salvar} className="flex flex-wrap items-end gap-2">
           <Field label="Salvar filtro atual como">

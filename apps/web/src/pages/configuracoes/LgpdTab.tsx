@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alerta, Badge, Button, Card, Field, Input } from '../../components/ui';
+import { useConfirm } from '../../components/ui/ConfirmDialog';
 import { ApiError, api } from '../../lib/api';
 import type { Contato, PoliticaRetencao, RegistroLgpd, ResumoExpurgo } from '../../lib/types';
 
@@ -13,6 +14,7 @@ const CAMPOS = [
 
 /** Politica de retencao, expurgo e direitos do titular (LGPD). Somente admin. */
 export function LgpdTab() {
+  const confirmar = useConfirm();
   const [politica, setPolitica] = useState<PoliticaRetencao | null>(null);
   const [registros, setRegistros] = useState<RegistroLgpd[]>([]);
   const [resumo, setResumo] = useState<ResumoExpurgo | null>(null);
@@ -93,13 +95,19 @@ export function LgpdTab() {
       setAviso(`Dados de ${c.nome} exportados. A exportacao entrou na trilha de auditoria.`);
     });
 
-  const anonimizar = async (c: Contato) => {
-    if (!window.confirm(`Anonimizar ${c.nome}? A operacao nao tem volta.`)) return;
-    await executar(async () => {
-      await api.post(`/lgpd/titulares/${c.id}/anonimizar`, { confirmacao: 'ANONIMIZAR' });
-      setAviso('Titular anonimizado.');
-      setEncontrados([]);
-      await carregar();
+  const anonimizar = (c: Contato) => {
+    confirmar({
+      titulo: `Anonimizar ${c.nome}?`,
+      descricao: 'A operacao nao tem volta.',
+      variante: 'perigo',
+      rotuloConfirmar: 'Anonimizar',
+      aoConfirmar: () =>
+        executar(async () => {
+          await api.post(`/lgpd/titulares/${c.id}/anonimizar`, { confirmacao: 'ANONIMIZAR' });
+          setAviso('Titular anonimizado.');
+          setEncontrados([]);
+          await carregar();
+        }),
     });
   };
 
@@ -138,7 +146,7 @@ export function LgpdTab() {
               />
               <span>
                 Executar o expurgo automaticamente uma vez por dia.
-                <span className="block text-xs text-slate-400">
+                <span className="block text-xs text-slate-500">
                   Ultimo expurgo: {dataHora(politica.ultimoExpurgoEm)}
                 </span>
               </span>
@@ -152,16 +160,20 @@ export function LgpdTab() {
               <Button
                 variante="neutro"
                 disabled={ocupado || !resumo}
-                onClick={() => {
-                  if (window.confirm('Isto apaga dados de forma irreversivel. Confirmar?')) {
-                    void rodarExpurgo(true);
-                  }
-                }}
+                onClick={() =>
+                  confirmar({
+                    titulo: 'Executar expurgo?',
+                    descricao: 'Isto apaga dados de forma irreversivel.',
+                    variante: 'perigo',
+                    rotuloConfirmar: 'Executar',
+                    aoConfirmar: () => rodarExpurgo(true),
+                  })
+                }
               >
                 Executar expurgo
               </Button>
             </div>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-500">
               O botao de executar so libera depois de uma simulacao: o numero na tela e o que sera apagado.
             </p>
           </div>
@@ -217,7 +229,7 @@ export function LgpdTab() {
               <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
                 <div className="min-w-0">
                   <p className="truncate text-sm text-slate-800">{c.nome}</p>
-                  <p className="truncate text-xs text-slate-400">{c.email ?? c.telefone ?? 'sem contato'}</p>
+                  <p className="truncate text-xs text-slate-500">{c.email ?? c.telefone ?? 'sem contato'}</p>
                 </div>
                 <div className="flex gap-2">
                   <Button variante="neutro" disabled={ocupado} onClick={() => void exportar(c)}>
@@ -243,7 +255,7 @@ export function LgpdTab() {
                 <div className="flex items-center gap-2">
                   <Badge tom={r.acao === 'EXPURGO' ? 'alerta' : 'neutro'}>{r.acao}</Badge>
                   <span className="text-sm text-slate-700">{r.autor}</span>
-                  <span className="text-xs text-slate-400">{dataHora(r.criadoEm)}</span>
+                  <span className="text-xs text-slate-500">{dataHora(r.criadoEm)}</span>
                 </div>
                 <p className="mt-1 truncate text-xs text-slate-500">{JSON.stringify(r.detalhe)}</p>
               </li>

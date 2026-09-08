@@ -68,7 +68,7 @@ export function ProdutosTab() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
-                <thead className="text-xs uppercase tracking-wide text-slate-400">
+                <thead className="text-xs uppercase tracking-wide text-slate-500">
                   <tr>
                     <th className="pb-2 font-medium">SKU</th>
                     <th className="pb-2 font-medium">Produto</th>

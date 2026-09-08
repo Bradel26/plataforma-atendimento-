@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Alerta, Badge, Button, Card } from '../../components/ui';
+import { useAuth } from '../../features/auth/AuthProvider';
 import { ApiError, api } from '../../lib/api';
 
 /**
@@ -69,6 +71,9 @@ export function AgendaDaSemana() {
   const [inicio, setInicio] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [concluindo, setConcluindo] = useState<string | null>(null);
+  const { temPerfil } = useAuth();
+  /** `/oportunidades/:id` e subrota restrita (nav.ts) — o AGENTE ve a Agenda mas nao essa rota. */
+  const podeAbrirOportunidade = temPerfil('ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL');
 
   const carregar = useCallback(async () => {
     const params = new URLSearchParams({ offset: String(new Date().getTimezoneOffset()) });
@@ -112,7 +117,7 @@ export function AgendaDaSemana() {
 
   const linha = (item: ItemAgenda) => (
     <li key={item.id} className="flex items-start gap-2 py-1">
-      <span className="w-10 shrink-0 pt-0.5 text-xs text-slate-400">{hora(item.prazo)}</span>
+      <span className="w-10 shrink-0 pt-0.5 text-xs text-slate-500">{hora(item.prazo)}</span>
       <span className="min-w-0 grow">
         <span
           className={`block truncate text-sm ${
@@ -122,10 +127,28 @@ export function AgendaDaSemana() {
         >
           {item.titulo}
         </span>
-        {(item.contato || item.oportunidade) && (
-          <span className="block truncate text-xs text-slate-500">
-            {item.oportunidade?.titulo ?? item.contato?.nome}
-          </span>
+        {/* Nome clicavel: da agenda direto para a oportunidade ou o contato,
+            sem precisar procurar o registro em Contatos/Oportunidades depois.
+            As duas rotas ja existem (`/oportunidades/:id`, `/contatos/:id`) —
+            so faltava o link daqui pra la. */}
+        {item.oportunidade && podeAbrirOportunidade ? (
+          <Link
+            to={`/oportunidades/${item.oportunidade.id}`}
+            className="block truncate text-xs text-[var(--brand-primary)] underline-offset-2 hover:underline"
+          >
+            {item.oportunidade.titulo}
+          </Link>
+        ) : item.oportunidade ? (
+          <span className="block truncate text-xs text-slate-500">{item.oportunidade.titulo}</span>
+        ) : (
+          item.contato && (
+            <Link
+              to={`/contatos/${item.contato.id}`}
+              className="block truncate text-xs text-[var(--brand-primary)] underline-offset-2 hover:underline"
+            >
+              {item.contato.nome}
+            </Link>
+          )
         )}
       </span>
       {item.obrigatoria && <Badge tom="neutro">etapa</Badge>}
@@ -192,12 +215,12 @@ export function AgendaDaSemana() {
                 <span className="font-medium text-slate-700">
                   {nome} {data}
                 </span>
-                {d.itens.length > 0 && <span className="text-slate-400">{d.itens.length}</span>}
+                {d.itens.length > 0 && <span className="text-slate-500">{d.itens.length}</span>}
               </p>
               {d.itens.length === 0 ? (
                 // Dia vazio continua na tela: dia livre e informacao para quem vai
                 // marcar visita, e some justamente quando importa.
-                <p className="py-1 text-xs text-slate-400">livre</p>
+                <p className="py-1 text-xs text-slate-500">livre</p>
               ) : (
                 <ul className="divide-y divide-slate-100">{d.itens.map(linha)}</ul>
               )}
@@ -221,7 +244,7 @@ export function AgendaDaSemana() {
               alcance da vista. O numero completo continua no cabecalho. */}
           <ul className="mt-1 divide-y divide-slate-100">{agenda.semPrazo.slice(0, 8).map(linha)}</ul>
           {agenda.semPrazo.length > 8 && (
-            <p className="mt-1 text-xs text-slate-400">
+            <p className="mt-1 text-xs text-slate-500">
               e mais {agenda.semPrazo.length - 8} sem data &mdash; a lista completa esta em
               Oportunidades e nas fichas.
             </p>

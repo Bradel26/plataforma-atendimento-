@@ -24,8 +24,8 @@ export function StatTile({
     <div className="rounded-xl border border-slate-200 bg-white px-4 py-3.5">
       <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{rotulo}</p>
       <p
-        className={`mt-1 font-semibold tabular-nums ${destaque ? 'text-3xl' : 'text-2xl'}`}
-        style={{ color: estado ?? '#0f172a' }}
+        className={`mt-1 font-semibold tabular-nums ${destaque ? 'text-3xl' : 'text-2xl'} ${estado ? '' : 'text-slate-800'}`}
+        style={estado ? { color: estado } : undefined}
       >
         {valor}
       </p>

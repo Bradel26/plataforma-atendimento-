@@ -47,7 +47,7 @@ export function CamposCustomizadosCampos({ campos, valores, aoMudar }: Props) {
         return (
           <div key={campo.id}>
             {mudaSecao && campo.secao && (
-              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">{campo.secao}</p>
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">{campo.secao}</p>
             )}
             <Field label={campo.obrigatorio ? `${campo.nome} *` : campo.nome}>
               {campo.tipo === 'BOOLEANO' ? (

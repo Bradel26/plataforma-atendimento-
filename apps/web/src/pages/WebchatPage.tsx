@@ -212,7 +212,7 @@ export function WebchatPage() {
             <div className="min-h-0 flex-1 space-y-2 overflow-y-auto bg-slate-50 p-4">
               {conversa.mensagens.map((m) =>
                 m.autor === 'SISTEMA' ? (
-                  <p key={m.id} className="text-center text-xs text-slate-400">
+                  <p key={m.id} className="text-center text-xs text-slate-500">
                     {m.conteudo}
                   </p>
                 ) : (

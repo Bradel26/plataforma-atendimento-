@@ -236,7 +236,7 @@ export function IaTab() {
             </div>
 
             {!podeLigar && (
-              <p className="text-right text-xs text-slate-400">
+              <p className="text-right text-xs text-slate-500">
                 Informe o webhook e o segredo para poder ligar.
               </p>
             )}
@@ -311,7 +311,7 @@ export function IaTab() {
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-sm font-medium text-slate-800">{t.nome}</p>
                       <Badge tom={t.ativo ? 'sucesso' : 'neutro'}>{t.ativo ? 'Ativo' : 'Revogado'}</Badge>
-                      <span className="font-mono text-xs text-slate-400">{t.prefixo}…</span>
+                      <span className="font-mono text-xs text-slate-500">{t.prefixo}…</span>
                     </div>
                     <p className="mt-0.5 text-xs text-slate-500">
                       Criado em {dataHora(t.criadoEm)}

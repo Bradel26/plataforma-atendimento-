@@ -98,6 +98,8 @@ test.describe('Metas mensais', () => {
     // para ele e o painel da equipe inteira.
     await entrar(page, 'comercial', '/crm?aba=oportunidades');
     await expect(page.getByRole('heading', { name: 'Funil', exact: true })).toBeVisible({ timeout: 15_000 });
-    await expect(page.locator('nav button', { hasText: 'Metas' })).toHaveCount(0);
+    // Metas mora no menu "Mais" (Fase 9) — o comercial nao tem nenhuma das seis
+    // abas desse grupo, entao o menu inteiro nem aparece para ele.
+    await expect(page.getByRole('button', { name: 'Mais' })).toHaveCount(0);
   });
 });

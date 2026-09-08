@@ -82,8 +82,9 @@ test.describe('Leitura comercial', () => {
 
   test('o agente nao ve a aba — escondida, nao barrada no clique', async ({ page }) => {
     await entrar(page, 'agente', '/crm');
-    // A aba aparece como botao na barra de abas do CRM.
-    await expect(page.getByRole('button', { name: 'Leitura comercial' })).toHaveCount(0);
+    // A aba mora no menu "Mais" (Fase 9) — o agente nao tem nenhuma das seis
+    // abas desse grupo, entao o menu inteiro nem aparece para ele.
+    await expect(page.getByRole('button', { name: 'Mais' })).toHaveCount(0);
 
     // E digitar a URL cai em Contatos, nao numa tela de erro: a aba pedida so
     // vale se o perfil a enxerga.

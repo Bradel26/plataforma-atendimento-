@@ -1,5 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alerta, Badge, Button, Card, EmptyState, Field, Input, Select } from '../../components/ui';
+import { BarraDeSelecao } from '../../components/ui/BarraDeSelecao';
+import { useConfirm } from '../../components/ui/ConfirmDialog';
+import { SkeletonBloco } from '../../components/ui/Skeleton';
+import { useToast } from '../../components/ui/Toast';
+import { useAuth } from '../../features/auth/AuthProvider';
 import { ApiError, api } from '../../lib/api';
 import { EditorEtiquetas, Etiquetas, FiltroEtiquetas } from './Etiquetas';
 import {
@@ -20,6 +25,7 @@ import {
   type FiltroContaSalvo,
   type ValorCampoCustomizado,
 } from '../../lib/types';
+import { useFaixaDeLargura } from '../../lib/useFaixaDeLargura';
 import { CamposCustomizadosCampos } from './CamposCustomizados';
 import { BaseInstalada } from './ficha/BaseInstalada';
 import { VisoesSalvas } from './VisoesSalvas';
@@ -69,18 +75,70 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   const [avisoCnpj, setAvisoCnpj] = useState<string | null>(null);
   /** Sinal para a linha do tempo rebuscar depois de um registro novo. */
   const [versao, setVersao] = useState(0);
+  const mostrarToast = useToast();
+  const confirmar = useConfirm();
+  const { temPerfil } = useAuth();
+
+  /** So mostra skeleton na carga inicial — a mesma regra da `Table` e de Contatos. */
+  const [carregando, setCarregando] = useState(true);
+  /** Selecao em massa (Fase 6), presa a lista carregada — ver o mesmo em ContatosTab. */
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+  const [tagEmLote, setTagEmLote] = useState('');
+  const [aplicandoTagLote, setAplicandoTagLote] = useState(false);
+  const [filialEmLote, setFilialEmLote] = useState('');
+  const [aplicandoFilialLote, setAplicandoFilialLote] = useState(false);
+  const [excluindoLote, setExcluindoLote] = useState(false);
+  const selecionarTodosRef = useRef<HTMLInputElement>(null);
+
+  /**
+   * Chave do campo em gravacao (ex.: `'filial'`, `'papel:<contatoId>'`), ou
+   * nulo. Varios PATCHes imediatos da ficha (filial, campo customizado, papel,
+   * etiqueta) nao davam nenhum sinal alem do proprio valor mudar — sem
+   * feedback, um clique duplo ou uma rede lenta pareciam nao ter acontecido.
+   */
+  const [salvandoCampo, setSalvandoCampo] = useState<string | null>(null);
+
+  /**
+   * Largura real do container, nao do viewport (mesmo principio do
+   * Atendimento, Fase 3, e de Contatos acima). Abaixo de `notebook`, o grid
+   * lista+ficha lado a lado aperta demais.
+   */
+  const { ref: containerRef, faixa } = useFaixaDeLargura<HTMLDivElement>();
+  const ladoALado = faixa === 'desktop' || faixa === 'notebook';
+  const buscaRef = useRef<HTMLInputElement>(null);
+  const nomeNovaContaRef = useRef<HTMLInputElement>(null);
+  const voltarRef = useRef<HTMLButtonElement>(null);
+  const montado = useRef(false);
+
+  // Foco previsivel ao alternar entre lista e ficha em modo de foco unico —
+  // mesma logica de Contatos. So depois da primeira renderizacao.
+  useEffect(() => {
+    if (!montado.current) {
+      montado.current = true;
+      return;
+    }
+    if (ladoALado) return;
+    if (selecionadoId) voltarRef.current?.focus();
+    else buscaRef.current?.focus();
+  }, [ladoALado, selecionadoId]);
 
   const carregar = useCallback(async () => {
     const params = new URLSearchParams();
     if (busca.trim()) params.set('busca', busca.trim());
     for (const tag of tags) params.append('tags', tag);
     const qs = params.size ? `?${params}` : '';
+    setCarregando(true);
     try {
       const { contas: lista } = await api.get<{ contas: Conta[] }>(`/contas${qs}`);
       setContas(lista);
       setErro(null);
+      // Selecao presa ao resultado: um filtro novo pode nao conter mais quem
+      // estava marcado, e agir sobre quem sumiu da tela nao pode ser silencioso.
+      setSelecionados(new Set());
     } catch (e) {
       setErro(e instanceof ApiError ? e.message : 'Falha ao carregar contas');
+    } finally {
+      setCarregando(false);
     }
   }, [busca, tags]);
 
@@ -176,11 +234,15 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   const definirFilial = async (filialId: string) => {
     if (!ficha) return;
     setErro(null);
+    setSalvandoCampo('filial');
     try {
       await api.patch(`/contas/${ficha.conta.id}`, { filialId: filialId || null });
       await abrir(ficha.conta.id);
+      mostrarToast('sucesso', 'Filial atualizada.');
     } catch (e) {
       setErro(e instanceof ApiError ? e.message : 'Falha ao definir a filial');
+    } finally {
+      setSalvandoCampo(null);
     }
   };
 
@@ -188,11 +250,15 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   const mudarCampoCustomizado = async (chave: string, valor: string | number | boolean | null) => {
     if (!ficha) return;
     setErro(null);
+    setSalvandoCampo(`campo:${chave}`);
     try {
       await api.patch(`/contas/${ficha.conta.id}`, { camposCustomizados: { [chave]: valor } });
       await abrir(ficha.conta.id);
+      mostrarToast('sucesso', 'Campo salvo.');
     } catch (e) {
       setErro(e instanceof ApiError ? e.message : 'Falha ao salvar o campo customizado');
+    } finally {
+      setSalvandoCampo(null);
     }
   };
 
@@ -200,6 +266,7 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   const definirPapel = async (contatoId: string, valor: string) => {
     if (!ficha) return;
     setErro(null);
+    setSalvandoCampo(`papel:${contatoId}`);
     try {
       await api.patch(`/contas/${ficha.conta.id}/contatos/${contatoId}/papel`, {
         // Vazio significa "sem papel", e vai como nulo: string vazia nao e um
@@ -207,8 +274,11 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
         papelNaConta: valor === '' ? null : (valor as PapelNaConta),
       });
       await abrir(ficha.conta.id);
+      mostrarToast('sucesso', 'Papel atualizado.');
     } catch (e) {
       setErro(e instanceof ApiError ? e.message : 'Falha ao definir o papel');
+    } finally {
+      setSalvandoCampo(null);
     }
   };
 
@@ -244,134 +314,345 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
         ...(nova.filialId ? { filialId: nova.filialId } : {}),
         ...(Object.keys(novosCampos).length ? { camposCustomizados: novosCampos } : {}),
       });
+      const nomeCriada = nova.nome;
       setNova({ nome: '', cnpj: '', segmento: '', filialId: '' });
       setNovosCampos({});
       await carregar();
+      mostrarToast('sucesso', `${nomeCriada} cadastrada.`);
     } catch (err) {
       setErro(err instanceof ApiError ? err.message : 'Falha ao criar conta');
     }
   };
 
-  return (
-    <div className="grid gap-5 lg:grid-cols-[380px_1fr]">
-      <div className="space-y-5">
-        <Card titulo="Contas" descricao={`${contas.length} encontrada(s)`}>
-          <div className="mb-3">
-            <VisoesSalvas<FiltroContaSalvo>
-              entidade="CONTA"
-              filtroAtual={{ ...(busca.trim() ? { busca: busca.trim() } : {}), ...(tags.length ? { tags } : {}) }}
-              filtroVazio={!busca.trim() && tags.length === 0}
-              aoAplicar={(filtro) => {
-                setBusca(filtro.busca ?? '');
-                setTags(filtro.tags ?? []);
-              }}
-            />
-          </div>
-          <Input
-            placeholder="Buscar por nome, CNPJ ou segmento"
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-          />
-          <div className="mt-2">
-            <FiltroEtiquetas
-              ativas={tags}
-              versao={versaoTags}
-              campo="contas"
-              aoAlternar={(tag) =>
-                setTags((atuais) =>
-                  atuais.includes(tag) ? atuais.filter((t) => t !== tag) : [...atuais, tag],
-                )
-              }
-            />
-          </div>
-          {erro && <div className="mt-3"><Alerta>{erro}</Alerta></div>}
-          <div className="mt-3 max-h-[45vh] overflow-y-auto">
-            {contas.length === 0 ? (
-              <EmptyState
-                titulo="Nenhuma conta"
-                descricao={
-                  tags.length > 0 || busca.trim()
-                    ? 'Nenhum cliente com esse filtro. Desligue uma etiqueta ou limpe a busca.'
-                    : 'Cadastre a primeira empresa no formulario abaixo.'
-                }
-              />
-            ) : (
-              <ul className="divide-y divide-slate-100">
-                {contas.map((c) => (
-                  <li key={c.id}>
-                    <button
-                      type="button"
-                      onClick={() => aoAbrir(c.id)}
-                      className={`w-full py-2.5 text-left transition hover:bg-slate-50 ${
-                        selecionadoId === c.id ? 'bg-slate-50' : ''
-                      }`}
-                    >
-                      <p className="text-sm font-medium text-slate-800">{c.nome}</p>
-                      <p className="text-xs text-slate-500">{mascararCnpj(c.cnpj)}</p>
-                      <p className="mt-1 text-xs text-slate-400">
-                        {c.totalContatos ?? 0} contato(s) · {c.totalLeads ?? 0} lead(s) ·{' '}
-                        {c.totalOportunidades ?? 0} oportunidade(s)
-                      </p>
-                      {c.tags && c.tags.length > 0 && (
-                        <div className="mt-1.5">
-                          <Etiquetas tags={c.tags} />
-                        </div>
-                      )}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </Card>
+  const alternarSelecao = (id: string) => {
+    setSelecionados((atual) => {
+      const proximo = new Set(atual);
+      if (proximo.has(id)) proximo.delete(id);
+      else proximo.add(id);
+      return proximo;
+    });
+  };
 
-        <Card titulo="Nova conta">
-          <form onSubmit={criar} className="space-y-3">
-            <Field label="Nome">
-              <Input required value={nova.nome} onChange={(e) => setNova({ ...nova, nome: e.target.value })} />
-            </Field>
-            <Field label="CNPJ" hint="Com ou sem mascara">
-              <Input value={nova.cnpj} onChange={(e) => setNova({ ...nova, cnpj: e.target.value })} />
-            </Field>
-            <Field label="Segmento">
-              <Input value={nova.segmento} onChange={(e) => setNova({ ...nova, segmento: e.target.value })} />
-            </Field>
-            <Field label="Filial">
-              <Select value={nova.filialId} onChange={(e) => setNova({ ...nova, filialId: e.target.value })}>
-                <option value="">Sem filial</option>
-                {filiais.map((f) => (
-                  <option key={f.id} value={f.id}>{f.nome}</option>
-                ))}
-              </Select>
-            </Field>
-            <Button type="submit" className="w-full">Criar conta</Button>
-          </form>
-          {camposDef.length > 0 && (
-            <div className="mt-4 border-t border-slate-100 pt-4">
-              <CamposCustomizadosCampos
-                campos={camposDef}
-                valores={novosCampos}
-                aoMudar={(chave, valor) =>
-                  setNovosCampos((atuais) => {
-                    if (valor === null) {
-                      const { [chave]: _removido, ...resto } = atuais;
-                      return resto;
-                    }
-                    return { ...atuais, [chave]: valor };
-                  })
-                }
-              />
-            </div>
-          )}
-        </Card>
+  const alternarTodos = (marcado: boolean) => {
+    setSelecionados(marcado ? new Set(contas.map((c) => c.id)) : new Set());
+  };
+
+  useEffect(() => {
+    if (!selecionarTodosRef.current) return;
+    selecionarTodosRef.current.indeterminate = selecionados.size > 0 && selecionados.size < contas.length;
+  }, [selecionados, contas.length]);
+
+  /** Mesmo `PATCH /contas/:id` que a ficha ja usa — cada conta recebe SUA lista atual + a nova etiqueta. */
+  const aplicarEtiquetaEmLote = async () => {
+    const tag = tagEmLote.trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR');
+    if (!tag || selecionados.size === 0) return;
+    setAplicandoTagLote(true);
+    const alvos = contas.filter((c) => selecionados.has(c.id));
+    const resultados = await Promise.allSettled(
+      alvos.map((c) => {
+        const tagsAtuais = c.tags ?? [];
+        if (tagsAtuais.includes(tag)) return Promise.resolve();
+        return api.patch(`/contas/${c.id}`, { tags: [...tagsAtuais, tag] });
+      }),
+    );
+    const falhas = resultados.filter((r) => r.status === 'rejected').length;
+    setAplicandoTagLote(false);
+    setTagEmLote('');
+    setVersaoTags((v) => v + 1);
+    await carregar();
+    if (falhas > 0) {
+      mostrarToast('erro', `Etiqueta aplicada em ${alvos.length - falhas} de ${alvos.length}. ${falhas} falharam.`);
+    } else {
+      mostrarToast('sucesso', `Etiqueta aplicada em ${alvos.length} conta${alvos.length === 1 ? '' : 's'}.`);
+    }
+  };
+
+  /** Mesmo `PATCH /contas/:id` com `filialId` que a ficha usa em `definirFilial`. */
+  const aplicarFilialEmLote = async () => {
+    if (selecionados.size === 0) return;
+    setAplicandoFilialLote(true);
+    const ids = [...selecionados];
+    const resultados = await Promise.allSettled(
+      ids.map((id) => api.patch(`/contas/${id}`, { filialId: filialEmLote || null })),
+    );
+    const falhas = resultados.filter((r) => r.status === 'rejected').length;
+    setAplicandoFilialLote(false);
+    await carregar();
+    const nomeFilial = filiais.find((f) => f.id === filialEmLote)?.nome ?? 'Sem filial';
+    if (falhas > 0) {
+      mostrarToast('erro', `Filial definida em ${ids.length - falhas} de ${ids.length}. ${falhas} falharam.`);
+    } else {
+      mostrarToast('sucesso', `${nomeFilial} definida em ${ids.length} conta${ids.length === 1 ? '' : 's'}.`);
+    }
+  };
+
+  /**
+   * Exclui as contas selecionadas, uma chamada `DELETE /contas/:id` por vez —
+   * o mesmo endpoint restrito a ADMIN que a API ja expoe. Sem endpoint de
+   * exclusao em lote, entao nao existe transacao: uma falha no meio deixa
+   * algumas excluidas e outras nao, e o resumo final conta as duas coisas.
+   */
+  const excluirEmLote = async () => {
+    if (selecionados.size === 0) return;
+    const ids = [...selecionados];
+    confirmar({
+      titulo: `Excluir ${ids.length} conta${ids.length === 1 ? '' : 's'}?`,
+      descricao: 'Nao pode ser desfeito. Contatos vinculados perdem o vinculo, nao sao excluidos.',
+      variante: 'perigo',
+      rotuloConfirmar: 'Excluir',
+      aoConfirmar: async () => {
+        setExcluindoLote(true);
+        const resultados = await Promise.allSettled(ids.map((id) => api.del(`/contas/${id}`)));
+        const falhas = resultados.filter((r) => r.status === 'rejected').length;
+        setExcluindoLote(false);
+        await carregar();
+        if (falhas > 0) {
+          mostrarToast('erro', `${ids.length - falhas} de ${ids.length} excluidas. ${falhas} falharam.`);
+        } else {
+          mostrarToast('sucesso', `${ids.length} conta${ids.length === 1 ? '' : 's'} excluida${ids.length === 1 ? '' : 's'}.`);
+        }
+      },
+    });
+  };
+
+  const painelLista = (
+    <Card titulo="Contas" descricao={`${contas.length} encontrada(s)`}>
+      <div className="mb-3">
+        <VisoesSalvas<FiltroContaSalvo>
+          entidade="CONTA"
+          filtroAtual={{ ...(busca.trim() ? { busca: busca.trim() } : {}), ...(tags.length ? { tags } : {}) }}
+          filtroVazio={!busca.trim() && tags.length === 0}
+          aoAplicar={(filtro) => {
+            setBusca(filtro.busca ?? '');
+            setTags(filtro.tags ?? []);
+          }}
+        />
       </div>
+      <Input
+        ref={buscaRef}
+        placeholder="Buscar por nome, CNPJ ou segmento"
+        value={busca}
+        onChange={(e) => setBusca(e.target.value)}
+      />
+      <div className="mt-2">
+        <FiltroEtiquetas
+          ativas={tags}
+          versao={versaoTags}
+          campo="contas"
+          aoAlternar={(tag) =>
+            setTags((atuais) =>
+              atuais.includes(tag) ? atuais.filter((t) => t !== tag) : [...atuais, tag],
+            )
+          }
+        />
+      </div>
+      {erro && <div className="mt-3"><Alerta>{erro}</Alerta></div>}
 
-      {ficha ? (
+      {contas.length > 0 && (
+        <BarraDeSelecao contagem={selecionados.size} aoLimpar={() => setSelecionados(new Set())}>
+          <Input
+            value={tagEmLote}
+            onChange={(e) => setTagEmLote(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                void aplicarEtiquetaEmLote();
+              }
+            }}
+            placeholder="Etiqueta"
+            aria-label="Etiqueta para aplicar as selecionadas"
+            disabled={aplicandoTagLote}
+            className="!w-32"
+          />
+          <Button
+            tamanho="sm"
+            variante="neutro"
+            onClick={() => void aplicarEtiquetaEmLote()}
+            disabled={aplicandoTagLote || !tagEmLote.trim()}
+          >
+            {aplicandoTagLote ? 'Aplicando...' : 'Aplicar etiqueta'}
+          </Button>
+          <Select
+            value={filialEmLote}
+            onChange={(e) => setFilialEmLote(e.target.value)}
+            aria-label="Filial para definir nas selecionadas"
+            disabled={aplicandoFilialLote}
+            className="!w-36 !py-1.5 !text-xs"
+          >
+            <option value="">Sem filial</option>
+            {filiais.map((f) => (
+              <option key={f.id} value={f.id}>{f.nome}</option>
+            ))}
+          </Select>
+          <Button
+            tamanho="sm"
+            variante="neutro"
+            onClick={() => void aplicarFilialEmLote()}
+            disabled={aplicandoFilialLote}
+          >
+            {aplicandoFilialLote ? 'Definindo...' : 'Definir filial'}
+          </Button>
+          {temPerfil('ADMIN') && (
+            <Button
+              tamanho="sm"
+              variante="perigo"
+              onClick={() => void excluirEmLote()}
+              disabled={excluindoLote}
+            >
+              {excluindoLote ? 'Excluindo...' : 'Excluir'}
+            </Button>
+          )}
+        </BarraDeSelecao>
+      )}
+
+      <div className="mt-3 max-h-[45vh] overflow-y-auto">
+        {carregando && contas.length === 0 ? (
+          <div className="space-y-3 px-1 py-1" aria-hidden="true">
+            {Array.from({ length: 6 }, (_, i) => (
+              <div key={i} className="space-y-1.5">
+                <SkeletonBloco className="h-3.5 w-2/3" />
+                <SkeletonBloco className="h-3 w-1/3" />
+              </div>
+            ))}
+          </div>
+        ) : contas.length === 0 ? (
+          <EmptyState
+            titulo="Nenhuma conta"
+            descricao={
+              tags.length > 0 || busca.trim()
+                ? 'Nenhum cliente com esse filtro. Desligue uma etiqueta ou limpe a busca.'
+                : 'Cadastre a primeira empresa no formulario abaixo.'
+            }
+            acao={
+              tags.length === 0 && !busca.trim() ? (
+                <Button variante="neutro" onClick={() => nomeNovaContaRef.current?.focus()}>
+                  Cadastrar conta
+                </Button>
+              ) : undefined
+            }
+          />
+        ) : (
+          <>
+            <div className="flex items-center gap-2 border-b border-slate-100 py-1.5">
+              <input
+                ref={selecionarTodosRef}
+                type="checkbox"
+                aria-label="Selecionar todas as contas visiveis"
+                checked={selecionados.size > 0 && selecionados.size === contas.length}
+                onChange={(e) => alternarTodos(e.target.checked)}
+              />
+              <span className="text-xs text-slate-500">Selecionar todas</span>
+            </div>
+            <ul className="divide-y divide-slate-100">
+            {contas.map((c) => (
+              <li key={c.id} className="flex items-start gap-2">
+                <input
+                  type="checkbox"
+                  className="mt-3"
+                  aria-label={`Selecionar ${c.nome}`}
+                  checked={selecionados.has(c.id)}
+                  onChange={() => alternarSelecao(c.id)}
+                />
+                <button
+                  type="button"
+                  onClick={() => aoAbrir(c.id)}
+                  className={`flex-1 py-2.5 text-left transition hover:bg-slate-50 ${
+                    selecionadoId === c.id ? 'bg-slate-50' : ''
+                  }`}
+                >
+                  <p className="text-sm font-medium text-slate-800">{c.nome}</p>
+                  <p className="text-xs text-slate-500">{mascararCnpj(c.cnpj)}</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {c.totalContatos ?? 0} contato(s) · {c.totalLeads ?? 0} lead(s) ·{' '}
+                    {c.totalOportunidades ?? 0} oportunidade(s)
+                  </p>
+                  {c.tags && c.tags.length > 0 && (
+                    <div className="mt-1.5">
+                      <Etiquetas tags={c.tags} />
+                    </div>
+                  )}
+                </button>
+              </li>
+            ))}
+            </ul>
+          </>
+        )}
+      </div>
+    </Card>
+  );
+
+  const painelFormulario = (
+    <Card titulo="Nova conta">
+      <form onSubmit={criar} className="space-y-3">
+        <Field label="Nome">
+          <Input
+            ref={nomeNovaContaRef}
+            required
+            value={nova.nome}
+            onChange={(e) => setNova({ ...nova, nome: e.target.value })}
+          />
+        </Field>
+        <Field label="CNPJ" hint="Com ou sem mascara">
+          <Input value={nova.cnpj} onChange={(e) => setNova({ ...nova, cnpj: e.target.value })} />
+        </Field>
+        <Field label="Segmento">
+          <Input value={nova.segmento} onChange={(e) => setNova({ ...nova, segmento: e.target.value })} />
+        </Field>
+        <Field label="Filial">
+          <Select value={nova.filialId} onChange={(e) => setNova({ ...nova, filialId: e.target.value })}>
+            <option value="">Sem filial</option>
+            {filiais.map((f) => (
+              <option key={f.id} value={f.id}>{f.nome}</option>
+            ))}
+          </Select>
+        </Field>
+        <Button type="submit" className="w-full">Criar conta</Button>
+      </form>
+      {camposDef.length > 0 && (
+        <div className="mt-4 border-t border-slate-100 pt-4">
+          <CamposCustomizadosCampos
+            campos={camposDef}
+            valores={novosCampos}
+            aoMudar={(chave, valor) =>
+              setNovosCampos((atuais) => {
+                if (valor === null) {
+                  const { [chave]: _removido, ...resto } = atuais;
+                  return resto;
+                }
+                return { ...atuais, [chave]: valor };
+              })
+            }
+          />
+        </div>
+      )}
+    </Card>
+  );
+
+  // Em espaco real estreito, so um lado por vez: lista OU ficha, nunca as
+  // duas empilhadas obrigando rolagem longa. A ficha conta como "aberta" pelo
+  // que a URL pede (`selecionadoId`), nao pelo resultado da busca — um id que
+  // deu 404 ainda e uma tentativa de abrir algo, e deve mostrar o aviso de
+  // "nao encontrado" no lugar da ficha, nao a lista de volta.
+  const mostrarLista = ladoALado || !selecionadoId;
+  const mostrarFicha = ladoALado || Boolean(selecionadoId);
+
+  return (
+    <div ref={containerRef}>
+    <div className={ladoALado ? 'grid gap-5 lg:grid-cols-[380px_1fr]' : undefined}>
+      {mostrarLista && (
+        <div className="space-y-5">
+          {painelLista}
+          {painelFormulario}
+        </div>
+      )}
+
+      {mostrarFicha && (ficha ? (
         <div className="space-y-5">
           <button
+            ref={voltarRef}
             type="button"
             onClick={aoFechar}
-            className="text-xs text-slate-500 underline-offset-2 transition hover:text-slate-700 hover:underline"
+            className="anel-de-foco rounded text-xs text-slate-500 underline-offset-2 transition hover:text-slate-700 hover:underline"
           >
             &larr; Todos os clientes
           </button>
@@ -395,6 +676,7 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
                   <Select
                     aria-label="Filial desta conta"
                     value={ficha.conta.filialId ?? ''}
+                    disabled={salvandoCampo === 'filial'}
                     onChange={(e) => void definirFilial(e.target.value)}
                   >
                     <option value="">Sem filial</option>
@@ -402,6 +684,7 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
                       <option key={f.id} value={f.id}>{f.nome}</option>
                     ))}
                   </Select>
+                  {salvandoCampo === 'filial' && <p className="mt-1 text-xs text-slate-500">Salvando...</p>}
                 </dd>
               </div>
             </dl>
@@ -417,6 +700,7 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
                   // aparecer no cartao da esquerda e no filtro tambem.
                   await abrir(ficha.conta.id);
                   await carregar();
+                  mostrarToast('sucesso', 'Etiquetas atualizadas.');
                 }}
               />
             </div>
@@ -496,7 +780,7 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
                           <li key={c.nome} className="text-slate-700">
                             {c.nome} &mdash; {LABEL_PAPEL_NA_CONTA[c.papelNaConta]}
                             {c.qualificacaoQsa && (
-                              <span className="text-xs text-slate-400"> ({c.qualificacaoQsa})</span>
+                              <span className="text-xs text-slate-500"> ({c.qualificacaoQsa})</span>
                             )}
                           </li>
                         ))}
@@ -541,12 +825,13 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
                       {/* A qualificacao da Receita fica ao lado do papel, e nao no
                           lugar dele: uma coisa e o que o registro publico diz,
                           outra e como a plataforma classificou. */}
-                      {c.qualificacaoQsa && <p className="text-xs text-slate-400">{c.qualificacaoQsa}</p>}
+                      {c.qualificacaoQsa && <p className="text-xs text-slate-500">{c.qualificacaoQsa}</p>}
                     </div>
                     <div className="w-40 shrink-0">
                       <Select
                         aria-label={`Papel de ${c.nome} na conta`}
                         value={c.papelNaConta ?? ''}
+                        disabled={salvandoCampo === `papel:${c.id}`}
                         onChange={(e) => void definirPapel(c.id, e.target.value)}
                       >
                         <option value="">Sem papel</option>
@@ -556,6 +841,9 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
                           </option>
                         ))}
                       </Select>
+                      {salvandoCampo === `papel:${c.id}` && (
+                        <p className="mt-1 text-xs text-slate-500">Salvando...</p>
+                      )}
                     </div>
                   </li>
                 ))}
@@ -572,7 +860,10 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
           </Card>
 
           {ficha.camposCustomizados.length > 0 && (
-            <Card titulo="Campos customizados">
+            <Card
+              titulo="Campos customizados"
+              descricao={salvandoCampo?.startsWith('campo:') ? 'Salvando...' : undefined}
+            >
               <CamposCustomizadosCampos
                 campos={ficha.camposCustomizados}
                 valores={Object.fromEntries(ficha.camposCustomizados.map((c) => [c.chave, c.valor]))}
@@ -653,7 +944,8 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
             />
           )}
         </Card>
-      )}
+      ))}
+    </div>
     </div>
   );
 }

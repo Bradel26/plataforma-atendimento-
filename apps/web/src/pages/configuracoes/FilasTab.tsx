@@ -59,7 +59,7 @@ export function FilasTab() {
                 <div className="min-w-0">
                   <p className="font-medium text-slate-800">{fila.nome}</p>
                   <p className="truncate text-xs text-slate-500">{fila.descricao ?? 'Sem descricao'}</p>
-                  <p className="mt-1.5 text-xs text-slate-400">
+                  <p className="mt-1.5 text-xs text-slate-500">
                     {fila.agentes.length === 0
                       ? 'Nenhum agente vinculado'
                       : `Agentes: ${fila.agentes.map((a) => a.nome).join(', ')}`}

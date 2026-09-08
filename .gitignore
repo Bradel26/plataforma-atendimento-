@@ -53,3 +53,11 @@ playwright-report/
 
 # Retratos logicos do banco (dados reais — nunca versionar)
 backups/
+
+# Configuracao local do Claude Code (plugins habilitados nesta maquina, lock de
+# tarefas agendadas) — nao e configuracao do projeto, e por usuario/maquina.
+.claude/
+
+# Snapshots/logs de depuracao do MCP do Playwright usado pela ferramenta —
+# artefato de sessao, nao saida de teste (essa ja e ignorada acima).
+.playwright-mcp/

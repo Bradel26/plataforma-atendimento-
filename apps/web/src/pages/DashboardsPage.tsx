@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alerta, Badge, Card, Field, Select } from '../components/ui';
+import { SkeletonCard } from '../components/ui/Skeleton';
 import { BarList } from '../components/viz/BarList';
 import { BarraDeMeta } from '../components/viz/BarraDeMeta';
 import { StatTile } from '../components/viz/StatTile';
@@ -126,6 +127,12 @@ export function DashboardsPage() {
     { rotulo: 'Saintes', valor: dados?.voz.saintes ?? 0, cor: SERIES[1] },
   ];
 
+  // So antes da primeira resposta: "sem dados ainda" nao e o mesmo que "zero
+  // dados", e mostrar os cartoes de vazio (ou "—") nesse instante diria a
+  // coisa errada. Depois da primeira carga, `dados` nunca volta a `null` —
+  // o recarregamento por socket so troca o conteudo, sem reativar o skeleton.
+  const carregando = dados === null && !erro;
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -201,44 +208,63 @@ export function DashboardsPage() {
         </Card>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <StatTile
-          rotulo="Em espera"
-          valor={dados?.conversas.emEspera ?? '—'}
-          detalhe="aguardando atendente"
-          destaque
-          estado={dados && dados.conversas.emEspera > 0 ? ESTADO.atencao : undefined}
-        />
-        <StatTile rotulo="Em atendimento" valor={dados?.conversas.emAtendimento ?? '—'} detalhe="conversas ativas" />
-        <StatTile rotulo="TME" valor={duracao(dados?.tempos.tmeSegundos ?? null)} detalhe="tempo medio de espera" />
-        <StatTile rotulo="TMA" valor={duracao(dados?.tempos.tmaSegundos ?? null)} detalhe="tempo medio de atendimento" />
-        <StatTile
-          rotulo="CSAT"
-          valor={dados && dados.satisfacao.csat !== null ? `${dados.satisfacao.csat}/5` : '—'}
-          detalhe={`${dados?.satisfacao.csatRespostas ?? 0} resposta(s)`}
-        />
-        <StatTile
-          rotulo="SLA vencido"
-          valor={dados?.protocolos.slaVencidos ?? '—'}
-          detalhe="chamados fora do prazo"
-          estado={dados && dados.protocolos.slaVencidos > 0 ? ESTADO.grave : undefined}
-        />
-      </div>
+      <h2 className="sr-only">Indicadores gerais do periodo</h2>
+      {carregando ? (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6" aria-busy="true">
+          <span className="sr-only">Carregando indicadores...</span>
+          {Array.from({ length: 6 }, (_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <StatTile
+            rotulo="Em espera"
+            valor={dados?.conversas.emEspera ?? '—'}
+            detalhe="aguardando atendente"
+            destaque
+            estado={dados && dados.conversas.emEspera > 0 ? ESTADO.atencao : undefined}
+          />
+          <StatTile rotulo="Em atendimento" valor={dados?.conversas.emAtendimento ?? '—'} detalhe="conversas ativas" />
+          <StatTile rotulo="TME" valor={duracao(dados?.tempos.tmeSegundos ?? null)} detalhe="tempo medio de espera" />
+          <StatTile rotulo="TMA" valor={duracao(dados?.tempos.tmaSegundos ?? null)} detalhe="tempo medio de atendimento" />
+          <StatTile
+            rotulo="CSAT"
+            valor={dados && dados.satisfacao.csat !== null ? `${dados.satisfacao.csat}/5` : '—'}
+            detalhe={`${dados?.satisfacao.csatRespostas ?? 0} resposta(s)`}
+          />
+          <StatTile
+            rotulo="SLA vencido"
+            valor={dados?.protocolos.slaVencidos ?? '—'}
+            detalhe="chamados fora do prazo"
+            estado={dados && dados.protocolos.slaVencidos > 0 ? ESTADO.grave : undefined}
+          />
+        </div>
+      )}
 
-      <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-4">
-        <Card titulo="Conversas por canal" descricao={`${dados?.conversas.novasNoPeriodo ?? 0} nova(s) no periodo`}>
-          <BarList itens={canais} vazio="Nenhuma conversa no periodo" />
-        </Card>
-        <Card titulo="Agentes por status" descricao={`${dados?.agentes.total ?? 0} agente(s) ativo(s)`}>
-          <BarList itens={agentes} vazio="Nenhum agente cadastrado" />
-        </Card>
-        <Card titulo="Protocolos por status" descricao="Chamados abertos e encerrados">
-          <BarList itens={protocolos} vazio="Nenhum chamado registrado" />
-        </Card>
-        <Card titulo="Chamadas por direcao" descricao={`${dados?.voz.total ?? 0} chamada(s) no periodo`}>
-          <BarList itens={chamadas} vazio="Nenhuma chamada no periodo" />
-        </Card>
-      </div>
+      <h2 className="sr-only">Distribuicao por canal, agente, protocolo e chamada</h2>
+      {carregando ? (
+        <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-4" aria-busy="true">
+          {Array.from({ length: 4 }, (_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
+      ) : (
+        <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-4">
+          <Card titulo="Conversas por canal" descricao={`${dados?.conversas.novasNoPeriodo ?? 0} nova(s) no periodo`}>
+            <BarList itens={canais} vazio="Nenhuma conversa no periodo" />
+          </Card>
+          <Card titulo="Agentes por status" descricao={`${dados?.agentes.total ?? 0} agente(s) ativo(s)`}>
+            <BarList itens={agentes} vazio="Nenhum agente cadastrado" />
+          </Card>
+          <Card titulo="Protocolos por status" descricao="Chamados abertos e encerrados">
+            <BarList itens={protocolos} vazio="Nenhum chamado registrado" />
+          </Card>
+          <Card titulo="Chamadas por direcao" descricao={`${dados?.voz.total ?? 0} chamada(s) no periodo`}>
+            <BarList itens={chamadas} vazio="Nenhuma chamada no periodo" />
+          </Card>
+        </div>
+      )}
 
       {/*
         Assunto em DOIS cartoes, e nao um com duas medidas.
@@ -252,83 +278,100 @@ export function DashboardsPage() {
         pergunta e magnitude. Cor por etiqueta sugeriria que "boleto" e sempre
         laranja em toda a tela, o que nao e verdade nem seria util.
       */}
-      <div className="grid gap-5 lg:grid-cols-2">
-        <Card
-          titulo="Atendimentos por assunto"
-          descricao={
-            assuntos
-              ? `${assuntos.total} atendimento(s) no periodo · ${assuntos.semEtiqueta} sem etiqueta`
-              : 'Etiquetas das conversas no periodo'
-          }
-        >
-          <BarList
-            itens={(assuntos?.assuntos ?? []).map((a) => ({
-              rotulo: a.tag,
-              valor: a.conversas,
-              cor: SERIES[0],
-            }))}
-            vazio="Nenhuma conversa etiquetada no periodo. Etiquete no painel de atendimento."
-          />
-          {/*
-            A cobertura fica escrita, e nao so no descricao acima: um relatorio de
-            assunto com 5% dos atendimentos classificados parece igual a um com
-            95%, e quem le tiraria conclusao da amostra achando que e o total.
-          */}
-          {assuntos && assuntos.total > 0 && assuntos.semEtiqueta > 0 && (
-            <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-              {Math.round(((assuntos.total - assuntos.semEtiqueta) / assuntos.total) * 100)}% dos
-              atendimentos do periodo estao classificados. As barras descrevem apenas essa parte.
-            </p>
-          )}
-        </Card>
-
-        <Card titulo="Tempo medio por assunto" descricao="Da atribuicao ao encerramento, das conversas finalizadas">
-          <BarList
-            itens={(assuntos?.assuntos ?? [])
-              .filter((a) => a.tmaSegundos !== null)
-              // Reordenado por tempo, nao por volume: o cartao ao lado ja
-              // responde "qual e o mais frequente". Aqui a pergunta e outra —
-              // qual assunto consome mais atendente por atendimento — e um
-              // assunto de pouco volume e TMA alto e justamente o que se procura.
-              .sort((a, b) => (b.tmaSegundos ?? 0) - (a.tmaSegundos ?? 0))
-              .map((a) => ({
+      <h2 className="sr-only">Atendimentos por assunto</h2>
+      {carregando ? (
+        <div className="grid gap-5 lg:grid-cols-2" aria-busy="true">
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+      ) : (
+        <div className="grid gap-5 lg:grid-cols-2">
+          <Card
+            titulo="Atendimentos por assunto"
+            descricao={
+              assuntos
+                ? `${assuntos.total} atendimento(s) no periodo · ${assuntos.semEtiqueta} sem etiqueta`
+                : 'Etiquetas das conversas no periodo'
+            }
+          >
+            <BarList
+              itens={(assuntos?.assuntos ?? []).map((a) => ({
                 rotulo: a.tag,
-                // Minutos, e nao segundos: TMA de atendimento humano fica na casa
-                // dos milhares de segundos, e numero que ninguem le de relance
-                // nao informa.
-                valor: Math.round((a.tmaSegundos ?? 0) / 60),
+                valor: a.conversas,
                 cor: SERIES[0],
               }))}
-            unidade="min"
-            vazio="Nenhum atendimento etiquetado foi finalizado no periodo"
-          />
-        </Card>
-      </div>
+              vazio="Nenhuma conversa etiquetada no periodo. Etiquete no painel de atendimento."
+            />
+            {/*
+              A cobertura fica escrita, e nao so no descricao acima: um relatorio de
+              assunto com 5% dos atendimentos classificados parece igual a um com
+              95%, e quem le tiraria conclusao da amostra achando que e o total.
+            */}
+            {assuntos && assuntos.total > 0 && assuntos.semEtiqueta > 0 && (
+              <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+                {Math.round(((assuntos.total - assuntos.semEtiqueta) / assuntos.total) * 100)}% dos
+                atendimentos do periodo estao classificados. As barras descrevem apenas essa parte.
+              </p>
+            )}
+          </Card>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatTile rotulo="Atribuidas" valor={dados?.conversas.atribuidas ?? '—'} detalhe="com agente definido" />
-        <StatTile rotulo="Finalizadas" valor={dados?.conversas.finalizadas ?? '—'} detalhe="no total" />
-        <StatTile rotulo="Mensagens" valor={dados?.conversas.mensagensNoPeriodo ?? '—'} detalhe="trocadas no periodo" />
-        <StatTile
-          rotulo="NPS"
-          valor={dados?.satisfacao.nps ?? '—'}
-          detalhe={`${dados?.satisfacao.npsRespostas ?? 0} resposta(s)`}
-        />
-        <StatTile
-          rotulo="Atendimento de voz"
-          valor={dados && dados.voz.taxaAtendimento !== null ? `${dados.voz.taxaAtendimento}%` : '—'}
-          detalhe={`alvo ${TAXA_ATENDIMENTO_ALVO}% — ${dados?.voz.atendidas ?? 0} atendida(s)`}
-          estado={estadoDaTaxa(dados?.voz.taxaAtendimento ?? null)}
-        />
-        <StatTile rotulo="TMA de voz" valor={duracao(dados?.voz.tma ?? null)} detalhe="tempo medio falado" />
-        <StatTile
-          rotulo="Chamadas perdidas"
-          valor={dados?.voz.naoAtendidas ?? '—'}
-          detalhe="nao atendidas ou ocupadas"
-          estado={dados && dados.voz.naoAtendidas > 0 ? ESTADO.grave : undefined}
-        />
-        <StatTile rotulo="Chamadas entrantes" valor={dados?.voz.entrantes ?? '—'} detalhe="recebidas no periodo" />
-      </div>
+          <Card titulo="Tempo medio por assunto" descricao="Da atribuicao ao encerramento, das conversas finalizadas">
+            <BarList
+              itens={(assuntos?.assuntos ?? [])
+                .filter((a) => a.tmaSegundos !== null)
+                // Reordenado por tempo, nao por volume: o cartao ao lado ja
+                // responde "qual e o mais frequente". Aqui a pergunta e outra —
+                // qual assunto consome mais atendente por atendimento — e um
+                // assunto de pouco volume e TMA alto e justamente o que se procura.
+                .sort((a, b) => (b.tmaSegundos ?? 0) - (a.tmaSegundos ?? 0))
+                .map((a) => ({
+                  rotulo: a.tag,
+                  // Minutos, e nao segundos: TMA de atendimento humano fica na casa
+                  // dos milhares de segundos, e numero que ninguem le de relance
+                  // nao informa.
+                  valor: Math.round((a.tmaSegundos ?? 0) / 60),
+                  cor: SERIES[0],
+                }))}
+              unidade="min"
+              vazio="Nenhum atendimento etiquetado foi finalizado no periodo"
+            />
+          </Card>
+        </div>
+      )}
+
+      <h2 className="sr-only">Indicadores adicionais de atendimento e voz</h2>
+      {carregando ? (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-busy="true">
+          {Array.from({ length: 8 }, (_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <StatTile rotulo="Atribuidas" valor={dados?.conversas.atribuidas ?? '—'} detalhe="com agente definido" />
+          <StatTile rotulo="Finalizadas" valor={dados?.conversas.finalizadas ?? '—'} detalhe="no total" />
+          <StatTile rotulo="Mensagens" valor={dados?.conversas.mensagensNoPeriodo ?? '—'} detalhe="trocadas no periodo" />
+          <StatTile
+            rotulo="NPS"
+            valor={dados?.satisfacao.nps ?? '—'}
+            detalhe={`${dados?.satisfacao.npsRespostas ?? 0} resposta(s)`}
+          />
+          <StatTile
+            rotulo="Atendimento de voz"
+            valor={dados && dados.voz.taxaAtendimento !== null ? `${dados.voz.taxaAtendimento}%` : '—'}
+            detalhe={`alvo ${TAXA_ATENDIMENTO_ALVO}% — ${dados?.voz.atendidas ?? 0} atendida(s)`}
+            estado={estadoDaTaxa(dados?.voz.taxaAtendimento ?? null)}
+          />
+          <StatTile rotulo="TMA de voz" valor={duracao(dados?.voz.tma ?? null)} detalhe="tempo medio falado" />
+          <StatTile
+            rotulo="Chamadas perdidas"
+            valor={dados?.voz.naoAtendidas ?? '—'}
+            detalhe="nao atendidas ou ocupadas"
+            estado={dados && dados.voz.naoAtendidas > 0 ? ESTADO.grave : undefined}
+          />
+          <StatTile rotulo="Chamadas entrantes" valor={dados?.voz.entrantes ?? '—'} detalhe="recebidas no periodo" />
+        </div>
+      )}
     </div>
   );
 }

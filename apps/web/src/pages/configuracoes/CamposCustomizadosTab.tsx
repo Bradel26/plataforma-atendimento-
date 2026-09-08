@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Alerta, Badge, Button, Card, EmptyState, Field, Input, Select } from '../../components/ui';
+import { useConfirm } from '../../components/ui/ConfirmDialog';
 import { ApiError, api } from '../../lib/api';
 import type { CampoCustomizadoDef, EntidadeCampoCustomizado, TipoCampoCustomizado } from '../../lib/types';
 
@@ -27,6 +28,7 @@ const FORM_VAZIO = {
 };
 
 export function CamposCustomizadosTab() {
+  const confirmar = useConfirm();
   const [entidade, setEntidade] = useState<EntidadeCampoCustomizado>('CONTA');
   const [campos, setCampos] = useState<CampoCustomizadoDef[]>([]);
   const [form, setForm] = useState(FORM_VAZIO);
@@ -77,15 +79,22 @@ export function CamposCustomizadosTab() {
     }
   };
 
-  const remover = async (campo: CampoCustomizadoDef) => {
-    if (!window.confirm(`Remover o campo "${campo.nome}"? Os valores ja gravados nele se perdem junto.`)) return;
-    setErro(null);
-    try {
-      await api.del(`/campos-customizados/${campo.id}`);
-      await carregar(entidade);
-    } catch (err) {
-      setErro(err instanceof ApiError ? err.message : 'Falha ao remover campo');
-    }
+  const remover = (campo: CampoCustomizadoDef) => {
+    confirmar({
+      titulo: `Remover o campo "${campo.nome}"?`,
+      descricao: 'Os valores ja gravados nele se perdem junto.',
+      variante: 'perigo',
+      rotuloConfirmar: 'Remover',
+      aoConfirmar: async () => {
+        setErro(null);
+        try {
+          await api.del(`/campos-customizados/${campo.id}`);
+          await carregar(entidade);
+        } catch (err) {
+          setErro(err instanceof ApiError ? err.message : 'Falha ao remover campo');
+        }
+      },
+    });
   };
 
   return (
@@ -125,14 +134,14 @@ export function CamposCustomizadosTab() {
                 <div className="min-w-0">
                   <p className="font-medium text-slate-800">
                     {campo.nome}
-                    {campo.secao && <span className="ml-2 text-xs text-slate-400">{campo.secao}</span>}
+                    {campo.secao && <span className="ml-2 text-xs text-slate-500">{campo.secao}</span>}
                   </p>
                   <div className="mt-1 flex flex-wrap gap-1.5">
                     <Badge tom="neutro">{TIPOS.find((t) => t.valor === campo.tipo)?.label ?? campo.tipo}</Badge>
                     {campo.obrigatorio && <Badge tom="alerta">Obrigatorio</Badge>}
                     {campo.valorUnico && <Badge tom="marca">Valor unico</Badge>}
                     {campo.tipo === 'SELECAO' && campo.opcoes.length > 0 && (
-                      <span className="text-xs text-slate-400">{campo.opcoes.join(', ')}</span>
+                      <span className="text-xs text-slate-500">{campo.opcoes.join(', ')}</span>
                     )}
                   </div>
                 </div>

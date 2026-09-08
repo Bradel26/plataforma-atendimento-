@@ -83,7 +83,7 @@ function Tabela({
               <td className="py-2 pr-3 text-slate-800">
                 {l.nome}
                 {l.integrantes !== undefined && (
-                  <span className="block text-xs text-slate-400">{l.integrantes} pessoa(s)</span>
+                  <span className="block text-xs text-slate-500">{l.integrantes} pessoa(s)</span>
                 )}
               </td>
               <td className="py-2 pr-3"><BarraDeMeta percentual={l.percentual} situacao={l.situacao} /></td>

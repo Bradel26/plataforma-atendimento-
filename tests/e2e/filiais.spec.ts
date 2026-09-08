@@ -59,8 +59,9 @@ test.describe('Filiais', () => {
 
     // Remove pela propria UI aqui — a este ponto nao ha conta vinculada, entao
     // nao precisa da limpeza por API do afterEach para esta filial.
-    page.once('dialog', (d) => void d.accept());
+    // Remover abre o ConfirmDialog (Fase 9 substituiu o window.confirm nativo).
     await linha.getByRole('button', { name: 'Remover' }).click();
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Remover' }).click();
     await expect(lista.locator('li').filter({ hasText: nome })).toHaveCount(0);
   });
 
@@ -76,8 +77,8 @@ test.describe('Filiais', () => {
     filialId = (await criacaoFilial.json()).filial.id;
     await expect(cartao(page, 'Filiais').locator('li').filter({ hasText: nome })).toBeVisible();
 
-    await page.goto('/crm');
-    await page.getByRole('button', { name: 'Contas', exact: true }).click();
+    // Aba do CRM e link real com deep link proprio: ir direto ao endereco.
+    await page.goto('/crm?aba=contas');
 
     const nomeConta = `Conta com filial ${Date.now().toString(36)}`;
     const novaConta = cartao(page, 'Nova conta');

@@ -62,7 +62,7 @@ export function MonitoramentoPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="text-xs uppercase tracking-wide text-slate-400">
+              <thead className="text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="pb-2 font-medium">Agente</th>
                   <th className="pb-2 font-medium">Status</th>
@@ -95,7 +95,7 @@ export function MonitoramentoPage() {
                     <td className="py-3">
                       <span className="flex flex-wrap gap-1">
                         {a.filas.length === 0 ? (
-                          <span className="text-xs text-slate-400">sem fila</span>
+                          <span className="text-xs text-slate-500">sem fila</span>
                         ) : (
                           a.filas.map((f) => <Badge key={f.id}>{f.nome}</Badge>)
                         )}

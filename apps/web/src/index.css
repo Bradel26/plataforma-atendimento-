@@ -28,6 +28,35 @@ body {
  * dos valores e src/lib/viz.ts, e um teste de unidade compara os dois para
  * eles nao divergirem.
  */
+/*
+ * Tokens de texto e superficie. slate-500 e o piso de contraste (~4.6:1
+ * sobre fundo branco) para texto que carrega informacao; slate-400 fica
+ * reservado para placeholder e conteudo genuinamente decorativo/desabilitado.
+ * Documentados aqui como fonte da verdade — o codigo usa as classes
+ * Tailwind equivalentes (text-slate-500, text-slate-400, bg-slate-50), que
+ * ja resolvem para os mesmos valores e ja acompanham o remapeamento de tema
+ * abaixo.
+ */
+:root {
+  --text-secondary: var(--color-slate-500);
+  --text-tertiary: var(--color-slate-400);
+  --surface-sunken: var(--color-slate-50);
+}
+
+/*
+ * Anel de foco padrao do kit. `:focus-visible`, nao `:focus` — assim so
+ * navegacao por teclado acende o anel, sem marcar todo clique de mouse.
+ * O outline comeca transparente (nunca native `outline: none`, que apaga o
+ * foco de vez) e so ganha cor no focus-visible.
+ */
+.anel-de-foco {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+.anel-de-foco:focus-visible {
+  outline-color: var(--brand-primary);
+}
+
 :root {
   --serie-1: #2a78d6;
   --serie-2: #eb6834;
@@ -108,4 +137,60 @@ html.tema-escuro {
   --estado-grave: #f15653;
   --estado-neutro: #8593a8;
   --estado-info: #4693f3;
+}
+
+/*
+ * Microinteracoes (Fase 10). So entrada — sem animacao de saida: elementos
+ * como o Toast se desmontam pelo proprio estado (timeout, ou a barra de
+ * selecao esvaziando), e uma transicao de saida exigiria atrasar esse
+ * desmonte — exatamente o tipo de coordenacao que uma biblioteca de motion
+ * resolve bem e CSS solto nao. Fica para a Fase 11 avaliar. Aqui, so a
+ * entrada, porque ela sozinha ja responde a pergunta "o que acabou de
+ * acontecer": um toast novo, ou a barra de acoes em lote aparecendo — o item
+ * que chega deslizando e ganhando opacidade e o que puxa o olho pra ele.
+ * Compartilhada entre os dois porque e o mesmo efeito com o mesmo proposito.
+ */
+@keyframes entrada-suave {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.anim-entrada-suave {
+  animation: entrada-suave 180ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .anim-entrada-suave {
+    animation: none;
+  }
+}
+
+/*
+ * Mesma logica do toast: so entrada. Fechar um dialogo (Cancelar, Esc,
+ * clique fora) e sempre uma decisao do usuario que ja sabe o que esta
+ * fazendo — a tela some na hora, sem transicao, porque nao ha nada novo para
+ * o olho confirmar ali. Abrir e diferente: e o momento em que a atencao
+ * precisa ser puxada para o que a tela esta pedindo.
+ */
+@keyframes entrada-dialogo {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.anim-entrada-dialogo {
+  animation: entrada-dialogo 150ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .anim-entrada-dialogo {
+    animation: none;
+  }
 }

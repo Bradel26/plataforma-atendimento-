@@ -336,7 +336,7 @@ export function FichaOportunidade({ oportunidadeId }: { oportunidadeId: string }
                       {t.prazo && <Badge tom="neutro">{data(t.prazo)}</Badge>}
                     </div>
                     <p className="mt-1 text-sm text-slate-800">{t.titulo}</p>
-                    {t.responsavel && <p className="text-xs text-slate-400">{t.responsavel.nome}</p>}
+                    {t.responsavel && <p className="text-xs text-slate-500">{t.responsavel.nome}</p>}
                     {/* Visita ganha check-in aqui, na propria linha: um segundo
                         lugar para registrar a mesma coisa seria um segundo lugar
                         para esquecer. */}
@@ -454,7 +454,7 @@ export function FichaOportunidade({ oportunidadeId }: { oportunidadeId: string }
                     <tr key={item.id}>
                       <td className="py-2 text-slate-800">
                         {item.produto.nome}
-                        <span className="block text-xs text-slate-400">
+                        <span className="block text-xs text-slate-500">
                           {item.produto.sku}
                           {item.recorrencia === 'MENSAL' && ' · cobrado por mes'}
                         </span>
@@ -468,7 +468,7 @@ export function FichaOportunidade({ oportunidadeId }: { oportunidadeId: string }
                       <td className="py-2 text-right font-medium tabular-nums text-slate-800">
                         {moeda(item.total)}
                         {item.recorrencia === 'MENSAL' && (
-                          <span className="block text-xs font-normal text-slate-400">/mes</span>
+                          <span className="block text-xs font-normal text-slate-500">/mes</span>
                         )}
                       </td>
                       {/* Travessao, e nao 0%, quando o custo nao foi informado:
@@ -562,7 +562,7 @@ export function FichaOportunidade({ oportunidadeId }: { oportunidadeId: string }
                   {/* Autor nulo e mudanca de rotina automatica, nao "nao sei":
                       escrever um nome ali seria atribuir a alguem o que a
                       plataforma fez sozinha. */}
-                  <p className="text-xs text-slate-400">{e.autor ?? 'automatico'}</p>
+                  <p className="text-xs text-slate-500">{e.autor ?? 'automatico'}</p>
                 </div>
                 <p className="text-xs text-slate-500">{new Date(e.ocorridoEm).toLocaleString('pt-BR')}</p>
               </li>

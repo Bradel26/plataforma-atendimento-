@@ -85,7 +85,10 @@ test.describe('Matriz de produtividade', () => {
     ]);
     expect(concluirResp.status(), 'POST /concluir deveria responder 200').toBe(200);
 
-    await page.getByRole('button', { name: 'Produtividade', exact: true }).click();
+    // "Produtividade" e leitura de gestao: mora dentro do menu "Mais", nao
+    // como aba direta.
+    await page.getByRole('button', { name: 'Mais' }).click();
+    await page.getByRole('menuitem', { name: 'Produtividade', exact: true }).click();
     const painel = cartao(page, 'Produtividade');
     await painel.getByLabel('Mes').fill(MES);
 

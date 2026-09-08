@@ -73,7 +73,7 @@ export function BarList({
                 <span className="truncate text-slate-700">{item.rotulo}</span>
                 <span className="shrink-0 tabular-nums font-medium text-slate-800">
                   {comUnidade(item.valor)}
-                  <span className="ml-1.5 text-xs font-normal text-slate-400">{proporcao(item.valor)}%</span>
+                  <span className="ml-1.5 text-xs font-normal text-slate-500">{proporcao(item.valor)}%</span>
                 </span>
               </div>
               {/* Trilha recessiva + extremidade arredondada de 4px, ancorada na base.
