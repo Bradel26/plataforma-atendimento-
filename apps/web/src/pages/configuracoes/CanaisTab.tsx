@@ -25,6 +25,13 @@ type CanalConfig = {
   ponteSegredoMascarado?: string | null;
 };
 
+type QrDaPonte = {
+  /** PNG em data URL. Nulo quando nao ha nada para escanear agora. */
+  qr: string | null;
+  conectado: boolean;
+  motivo: string | null;
+};
+
 type EstadoDaPonte = {
   situacao: 'CONECTADO' | 'DESCONECTADO' | 'DESCONHECIDO';
   detalhe: string | null;
@@ -85,6 +92,9 @@ export function CanaisTab() {
   const modoTocado = useRef(false);
   const [estadoPonte, setEstadoPonte] = useState<EstadoDaPonte | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  /** O QR de pareamento. Nulo enquanto nunca foi buscado. */
+  const [qrPonte, setQrPonte] = useState<QrDaPonte | null>(null);
+  const [trocandoNumero, setTrocandoNumero] = useState(false);
   /** Caminho que a ponte deve chamar. Vem da API porque leva o id da organizacao. */
   const [caminhoPonte, setCaminhoPonte] = useState<string | null>(null);
 
@@ -135,6 +145,69 @@ export function CanaisTab() {
   useEffect(() => {
     void carregar();
   }, []);
+
+  /**
+   * O QR expira sozinho a cada ~20 segundos, e a ponte gera o proximo.
+   *
+   * Por isso a tela busca em intervalo em vez de uma vez so: um QR parado na
+   * tela e um QR que nao funciona mais, e a pessoa fica apontando a camera para
+   * um codigo morto sem entender por que nada acontece.
+   *
+   * So roda com o painel do WhatsApp aberto no modo nao oficial. Para de rodar
+   * quando conecta: dali em diante nao ha o que escanear.
+   */
+  useEffect(() => {
+    if (editando !== 'WHATSAPP' || modo !== 'NAO_OFICIAL') {
+      setQrPonte(null);
+      return;
+    }
+
+    let vivo = true;
+
+    const buscar = async () => {
+      try {
+        const r = await api.get<QrDaPonte>('/canais/whatsapp/ponte/qr');
+        if (vivo) setQrPonte(r);
+      } catch {
+        // Silencio proposital: a ponte cair nao pode apagar o QR que ja esta na
+        // tela, que pode ser justamente o que a pessoa esta escaneando.
+      }
+    };
+
+    void buscar();
+    const timer = window.setInterval(() => {
+      void buscar();
+    }, 5_000);
+
+    return () => {
+      vivo = false;
+      window.clearInterval(timer);
+    };
+  }, [editando, modo]);
+
+  /**
+   * Trocar de numero: desfaz o pareamento e volta a pedir QR.
+   *
+   * Confirma antes porque a acao derruba o WhatsApp da operacao na hora — quem
+   * clicar sem querer deixa o atendimento mudo ate alguem escanear o novo QR.
+   */
+  const trocarNumero = async () => {
+    if (!window.confirm('Desconectar o numero atual? O WhatsApp para de receber ate alguem escanear o novo QR.')) {
+      return;
+    }
+
+    setTrocandoNumero(true);
+    setErro(null);
+    try {
+      await api.post('/canais/whatsapp/ponte/desconectar', {});
+      setQrPonte(null);
+      await carregar();
+    } catch (e) {
+      setErro(e instanceof ApiError ? e.message : 'Falha ao desconectar a ponte');
+    } finally {
+      setTrocandoNumero(false);
+    }
+  };
 
   const salvar = async (ativo?: boolean) => {
     setErro(null);
@@ -315,6 +388,62 @@ export function CanaisTab() {
                   {/* Desconhecido nao e desconectado: a frase diz qual dos dois. */}
                   {estadoPonte.detalhe && <span className="text-slate-400">{estadoPonte.detalhe}</span>}
                 </p>
+              )}
+
+              {/*
+                O pareamento pela tela.
+
+                So aparece depois que a ponte esta configurada — antes disso nao
+                ha a quem pedir QR, e um quadro vazio faria parecer defeito.
+              */}
+              {qrPonte && (
+                <div className="mt-3 rounded-lg border border-slate-200 bg-white p-4">
+                  {qrPonte.conectado ? (
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-sm text-slate-700">
+                        <span className="font-medium text-emerald-700">Numero conectado.</span> Nao ha nada
+                        para escanear.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => void trocarNumero()}
+                        disabled={trocandoNumero}
+                        className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                      >
+                        {trocandoNumero ? 'Desconectando...' : 'Trocar de numero'}
+                      </button>
+                    </div>
+                  ) : qrPonte.qr ? (
+                    <div className="flex flex-wrap items-center gap-4">
+                      <img
+                        src={qrPonte.qr}
+                        alt="QR Code para conectar o WhatsApp"
+                        width={200}
+                        height={200}
+                        className="rounded border border-slate-200"
+                      />
+                      <div className="text-xs text-slate-600">
+                        <p className="text-sm font-medium text-slate-800">Conecte o WhatsApp</p>
+                        <ol className="mt-2 list-decimal space-y-1 pl-4">
+                          <li>Abra o WhatsApp no celular do numero da operacao</li>
+                          <li>
+                            Toque em <strong>Aparelhos conectados</strong> e depois em{' '}
+                            <strong>Conectar aparelho</strong>
+                          </li>
+                          <li>Aponte a camera para este codigo</li>
+                        </ol>
+                        {/* Sem este aviso, ver o codigo mudar sozinho parece falha. */}
+                        <p className="mt-2 text-slate-400">
+                          O codigo se renova a cada poucos segundos. Se perder, espere o proximo.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-500">
+                      {qrPonte.motivo ?? 'Gerando o QR Code...'}
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           )}

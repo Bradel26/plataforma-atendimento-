@@ -15,7 +15,7 @@ import {
   type CanalExterno,
 } from './channels.service';
 import { AVISO_NAO_OFICIAL, modoEfetivo } from './whatsapp.modo';
-import { estadoDaPonte } from './whatsapp.ponte';
+import { desconectarPonte, estadoDaPonte, qrDaPonte } from './whatsapp.ponte';
 import { estadoDaIa, salvarIa } from '../bots/ia.service';
 
 export const channelsRoutes = Router();
@@ -120,6 +120,52 @@ channelsRoutes.get(
       return;
     }
     res.json({ estado: await estadoDaPonte(config), aviso: AVISO_NAO_OFICIAL, caminhoWebhook });
+  }),
+);
+
+/**
+ * O QR Code para parear o numero, buscado na ponte e repassado para a tela.
+ *
+ * A tela nao fala com a ponte direto, e isso e proposital: a ponte fica na rede
+ * interna e o token dela nao pode chegar ao navegador — se chegasse, qualquer
+ * pessoa com o DevTools aberto poderia mandar mensagem pelo numero da empresa.
+ *
+ * ADMIN e nao SUPERVISOR: quem ve este QR pode parear o WhatsApp da empresa em
+ * outro aparelho, o que e do mesmo tamanho que trocar a credencial do canal.
+ */
+channelsRoutes.get(
+  '/whatsapp/ponte/qr',
+  requireRole('ADMIN'),
+  asyncHandler(async (_req, res) => {
+    const config = await obterConfig('WHATSAPP');
+
+    if (!config || modoEfetivo(config.modo) !== 'NAO_OFICIAL') {
+      res.json({ qr: null, conectado: false, motivo: 'o WhatsApp nao esta no modo nao oficial' });
+      return;
+    }
+
+    res.json(await qrDaPonte(config));
+  }),
+);
+
+/**
+ * Desfaz o pareamento: o "trocar de numero" da tela.
+ *
+ * Existe porque a alternativa e ir no celular, achar "Aparelhos conectados" e
+ * remover o certo — e remover o errado derruba o atendimento inteiro.
+ */
+channelsRoutes.post(
+  '/whatsapp/ponte/desconectar',
+  requireRole('ADMIN'),
+  asyncHandler(async (_req, res) => {
+    const config = await obterConfig('WHATSAPP');
+
+    if (!config || modoEfetivo(config.modo) !== 'NAO_OFICIAL') {
+      throw notFound('O WhatsApp nao esta no modo nao oficial');
+    }
+
+    await desconectarPonte(config);
+    res.json({ ok: true });
   }),
 );
 

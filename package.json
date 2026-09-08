@@ -7,9 +7,12 @@
     "apps/*"
   ],
   "scripts": {
-    "dev": "npm run dev --workspaces --if-present",
+    "dev": "npm run dev --workspace=@plataforma/api --workspace=@plataforma/web --if-present",
     "dev:api": "npm run dev -w @plataforma/api",
     "dev:web": "npm run dev -w @plataforma/web",
+    "dev:ponte": "npm run dev -w @plataforma/ponte",
+    "build:ponte": "npm run build -w @plataforma/ponte",
+    "start:ponte": "npm run start -w @plataforma/ponte",
     "build": "npm run build -w @plataforma/api && npm run build -w @plataforma/web",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "vitest run",

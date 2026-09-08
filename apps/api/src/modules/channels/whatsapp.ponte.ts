@@ -156,6 +156,112 @@ export async function enviarArquivoPelaPonte(
   return { idExterno: await chamar(enderecos.arquivo, token, form) };
 }
 
+export type QrDaPonte = {
+  /** PNG em data URL, pronto para um `img`. Nulo quando nao ha o que escanear. */
+  qr: string | null;
+  conectado: boolean;
+  /** Por que nao ha QR agora — a tela mostra isto no lugar da imagem. */
+  motivo: string | null;
+};
+
+/**
+ * Busca o QR Code de pareamento na ponte.
+ *
+ * Nunca lanca, pelo mesmo motivo de `estadoDaPonte`: e a tela que existe para
+ * consertar a conexao, e ela nao pode quebrar junto com o que esta quebrado.
+ *
+ * **404 nao e erro.** Ponte de terceiro (Evolution API, WPPConnect) nao expoe
+ * `/qr` neste formato, e a resposta certa ali e "esta ponte nao pareia por
+ * aqui — use o painel dela", e nao uma tela de falha que sugere que algo
+ * quebrou.
+ */
+export async function qrDaPonte(config: ConfigDaPonte): Promise<QrDaPonte> {
+  if (!config.ponteUrl || !config.ponteToken) {
+    return { qr: null, conectado: false, motivo: 'a ponte ainda nao foi configurada' };
+  }
+
+  const { enderecos, token } = credenciais(config);
+
+  try {
+    const resposta = await fetch(enderecos.qr, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(8_000),
+    });
+
+    if (resposta.status === 404) {
+      return {
+        qr: null,
+        conectado: false,
+        motivo: 'esta ponte nao expoe QR Code — pareie o numero pelo painel dela',
+      };
+    }
+    if (!resposta.ok) {
+      return { qr: null, conectado: false, motivo: `a ponte respondeu ${resposta.status}` };
+    }
+
+    const corpo = (await resposta.json().catch(() => null)) as {
+      qr?: unknown;
+      conectado?: unknown;
+      status?: unknown;
+    } | null;
+
+    const conectado = corpo?.conectado === true;
+    // So aceita data URL de imagem: string arbitraria vinda da ponte iria direto
+    // para o `src` de um `img`, e ali um `javascript:` seria executado.
+    const qr =
+      typeof corpo?.qr === 'string' && corpo.qr.startsWith('data:image/') ? corpo.qr : null;
+
+    return {
+      qr,
+      conectado,
+      motivo: qr || conectado ? null : `a sessao esta ${String(corpo?.status ?? 'sem QR no momento')}`,
+    };
+  } catch (err) {
+    return {
+      qr: null,
+      conectado: false,
+      motivo: err instanceof Error ? err.message : 'nao foi possivel falar com a ponte',
+    };
+  }
+}
+
+/**
+ * Desfaz o pareamento na ponte — o "trocar de numero" da tela.
+ *
+ * Diferente das outras, esta **lanca**: e uma acao que o usuario pediu, e
+ * responder "ok" para um logout que nao aconteceu faria ele escanear um QR que
+ * nunca vem.
+ */
+export async function desconectarPonte(config: ConfigDaPonte): Promise<void> {
+  const { enderecos, token } = credenciais(config);
+
+  let resposta: Response;
+  try {
+    resposta = await fetch(enderecos.desconectar, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch (err) {
+    throw new AppError(
+      502,
+      'PONTE_INACESSIVEL',
+      `Nao foi possivel falar com a ponte: ${err instanceof Error ? err.message : 'erro de rede'}`,
+    );
+  }
+
+  if (resposta.status === 404) {
+    throw new AppError(
+      501,
+      'PONTE_SEM_DESCONEXAO',
+      'Esta ponte nao suporta desconectar por aqui — use o painel dela',
+    );
+  }
+  if (!resposta.ok) {
+    throw new AppError(502, 'DESCONEXAO_RECUSADA', `A ponte recusou a desconexao (${resposta.status})`);
+  }
+}
+
 /**
  * Pergunta a ponte se a sessao esta de pe.
  *

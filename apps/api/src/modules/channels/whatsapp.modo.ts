@@ -163,6 +163,14 @@ export function enderecosDaPonte(base: string, sessao: string | null | undefined
     texto: `${raiz}/mensagens${sufixo}`,
     arquivo: `${raiz}/arquivos${sufixo}`,
     estado: `${raiz}/estado${sufixo}`,
+    /*
+     * `qr` e `desconectar` sao o pareamento pela tela, e nem toda ponte os tem
+     * — quem usa uma de terceiro (Evolution API e afins) responde 404 aqui, e o
+     * lado da plataforma trata isso como "esta ponte nao sabe parear", nao como
+     * defeito. Por isso continuam sendo caminho por convencao como os outros.
+     */
+    qr: `${raiz}/qr${sufixo}`,
+    desconectar: `${raiz}/desconectar${sufixo}`,
   };
 }
 

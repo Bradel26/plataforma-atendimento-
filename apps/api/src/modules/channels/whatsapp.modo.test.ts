@@ -145,12 +145,14 @@ describe('lerEstadoDaPonte', () => {
 });
 
 describe('enderecosDaPonte', () => {
-  it('monta os tres caminhos', () => {
+  it('monta os caminhos', () => {
     const e = enderecosDaPonte('http://ponte:3000/api', null);
     expect(e).toEqual({
       texto: 'http://ponte:3000/api/mensagens',
       arquivo: 'http://ponte:3000/api/arquivos',
       estado: 'http://ponte:3000/api/estado',
+      qr: 'http://ponte:3000/api/qr',
+      desconectar: 'http://ponte:3000/api/desconectar',
     });
   });
 

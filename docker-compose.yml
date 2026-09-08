@@ -34,6 +34,37 @@ services:
       timeout: 5s
       retries: 10
 
+  # Ponte do WhatsApp nao oficial (Baileys). Opcional: so sobe com o perfil
+  # "ponte" (`docker compose --profile ponte up -d`), porque quem usa a Cloud
+  # API oficial nao precisa dela — e porque este modo viola os termos de uso do
+  # WhatsApp e nao deve subir por acidente.
+  ponte:
+    profiles: ["ponte"]
+    build:
+      context: .
+      dockerfile: apps/ponte/Dockerfile
+    container_name: plataforma-ponte
+    restart: unless-stopped
+    environment:
+      PONTE_PORTA: 3100
+      PONTE_TOKEN: ${PONTE_TOKEN:?defina PONTE_TOKEN}
+      PONTE_SEGREDO: ${PONTE_SEGREDO:?defina PONTE_SEGREDO}
+      PONTE_PLATAFORMA_URL: ${PONTE_PLATAFORMA_URL:-http://host.docker.internal:3000}
+      PONTE_ORGANIZACAO_ID: ${PONTE_ORGANIZACAO_ID:?defina PONTE_ORGANIZACAO_ID}
+      # Como a API alcanca a ponte para baixar a midia recebida.
+      PONTE_URL_PUBLICA: ${PONTE_URL_PUBLICA:-http://plataforma-ponte:3100}
+    ports:
+      - "3100:3100"
+    volumes:
+      # Credenciais do pareamento. Sem volume, todo restart pede QR de novo.
+      - ponte-dados:/app/dados
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3100/saude').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   postgres-data:
   redis-data:
+  ponte-dados:

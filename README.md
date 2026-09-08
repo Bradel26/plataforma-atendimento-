@@ -24,6 +24,8 @@ apps/
       realtime/   servidor Socket.IO, salas e hub de eventos
       http/       middlewares (auth, validação, erros)
       lib/        prisma, redis, jwt/tokens, senhas, erros
+  ponte/          Ponte de WhatsApp nao oficial (Baileys): mantem a sessao do
+                  WhatsApp Web e fala HTTP com a API. Processo separado de proposito
   web/            React + Vite + TypeScript + Tailwind v4
     src/
       components/ layout (Sidebar, Topbar, AppShell) e UI kit
@@ -74,7 +76,8 @@ escopo de equipe — um gestor sem subordinado enxerga o mesmo que um comercial.
 |---|---|
 | `npm run dev` | API e web em modo watch |
 | `npm run dev:api` / `npm run dev:web` | apenas um dos dois |
-| `npm run typecheck` | TypeScript nos dois apps |
+| `npm run dev:ponte` | ponte do WhatsApp nao oficial (porta 3100); fora do `npm run dev` de proposito |
+| `npm run typecheck` | TypeScript em todos os apps |
 | `npm test` | suíte de unidade (158 testes, sem infraestrutura) |
 | `npm run build` | build de produção |
 | `npm run db:studio` | Prisma Studio |
@@ -308,6 +311,66 @@ npm run smoke:canais    # com a API de pé
 Exercita o caminho completo com payloads no formato real, assinados localmente com HMAC: verificação
 do webhook, recusa de assinatura inválida, criação de conversa na fila certa, idempotência de
 reentrega e a garantia de que uma resposta recusada pela Graph API não entra no histórico.
+
+## WhatsApp sem Cloud API (ponte por QR Code)
+
+Nem todo número passa pela habilitação da Meta — conta verificada exige CNPJ, comprovante de
+endereço e site, e o processo leva dias ou semanas. Para esse caso o canal WhatsApp tem um segundo
+modo, escolhido em **Configurações → Canais**:
+
+| Modo | Como conecta | Custo por mensagem | Risco |
+|---|---|---|---|
+| **Oficial** | Meta Cloud API, com token e Phone Number ID | sim, por conversa | nenhum |
+| **Não oficial** | sessão de WhatsApp Web mantida pela ponte, pareada por QR Code | não | **o número pode ser bloqueado** |
+
+> ⚠️ O modo não oficial **viola os termos de uso do WhatsApp**. O número pode ser bloqueado sem
+> aviso nem recurso. Use um número que a operação possa perder.
+
+Para o resto do sistema os dois modos são indistinguíveis: a conversa, o histórico, a fila, o
+chatbot e os relatórios são os mesmos. Trocar de modo não apaga as credenciais do outro.
+
+### Por que a ponte é um processo separado
+
+A sessão do WhatsApp Web vive de socket aberto, reconexão e credencial em disco. Dentro da API, ela
+morreria a cada deploy — e o sintoma que chega ao suporte é "o cliente mandou mensagem e ninguém
+viu", que ninguém liga a um container que reiniciou. Separada, ela sobrevive aos deploys da
+plataforma, e desligá-la não derruba o atendimento.
+
+### Subir a ponte
+
+```bash
+cp apps/ponte/.env.exemplo apps/ponte/.env   # preencha token, segredo e organização
+npm run dev:ponte                            # sobe na porta 3100
+```
+
+Em produção, via compose (o perfil evita que ela suba por acidente):
+
+```bash
+docker compose --profile ponte up -d
+```
+
+### Conectar o número
+
+1. **Configurações → Canais → WhatsApp**, escolha *Sem API oficial (ponte externa)*.
+2. Preencha **endereço da ponte** (`http://localhost:3100`), **token** e **segredo** — os mesmos do
+   `.env` da ponte.
+3. Salve. O **QR Code aparece na própria tela**.
+4. No celular do número: **Aparelhos conectados → Conectar aparelho**, e aponte a câmera.
+
+O código se renova a cada poucos segundos, e a tela acompanha. Depois de conectado, o botão
+**Trocar de número** desfaz o pareamento e volta a pedir QR.
+
+### Usar outra ponte no lugar desta
+
+O contrato é HTTP e está em `whatsapp.modo.ts`: `POST /mensagens`, `POST /arquivos`,
+`GET /estado`, e — só para o pareamento pela tela — `GET /qr` e `POST /desconectar`, todos com
+`Bearer <token>` e o nome da sessão no fim do caminho. As mensagens recebidas voltam em
+`POST /api/webhooks/ponte/whatsapp/<organizacaoId>`, assinadas com HMAC-SHA256 no cabeçalho
+`X-Ponte-Assinatura`.
+
+Quem preferir uma ponte de terceiro (Evolution API, WPPConnect) aponta o **endereço da ponte** para
+um proxy fino que traduza esses cinco caminhos. As que não expõem `/qr` continuam funcionando: a
+tela diz que o pareamento é pelo painel delas, em vez de mostrar erro.
 
 ## Gestão e relatórios (Fase 3)
 
