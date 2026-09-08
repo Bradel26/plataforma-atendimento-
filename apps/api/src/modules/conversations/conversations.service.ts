@@ -201,7 +201,7 @@ export async function enviarMensagem(solicitante: Solicitante, id: string, conte
   // Canal externo: envia ANTES de gravar. Se a Meta recusar, a mensagem nao
   // entra no historico — nao existe "enviada" que o cliente nunca recebeu.
   const envio = exigeEnvioExterno(conversa.canal)
-    ? await enviarParaCanal(conversa.canal, conversa.enderecoExterno, conteudo)
+    ? await enviarParaCanal(conversa.canal, conversa.enderecoExterno, conteudo, conversa.canalConfigId)
     : { idExterno: null };
 
   const mensagem = await prisma.message.create({
@@ -250,7 +250,7 @@ export async function enviarArquivo(
   if (conversa.status === 'FINALIZADO') throw badRequest('Conversa finalizada — nao aceita novas mensagens');
 
   const envio = exigeEnvioExterno(conversa.canal)
-    ? await enviarArquivoParaCanal(conversa.canal, conversa.enderecoExterno, { ...arquivo, legenda })
+    ? await enviarArquivoParaCanal(conversa.canal, conversa.enderecoExterno, { ...arquivo, legenda }, conversa.canalConfigId)
     : { idExterno: null };
 
   const salvo = await salvar(arquivo);

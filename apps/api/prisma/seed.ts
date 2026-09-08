@@ -47,6 +47,9 @@ const usuarios: Array<{ nome: string; email: string; senha: string; perfil: Role
         { nome: 'Supervisor Demo', email: 'supervisor@plataforma.local', senha: 'Super@123', perfil: 'SUPERVISOR' as Role },
         { nome: 'Gestor Demo', email: 'gestor@plataforma.local', senha: 'Gestor@123', perfil: 'GESTOR' as Role },
         { nome: 'Comercial Demo', email: 'comercial@plataforma.local', senha: 'Comer@123', perfil: 'COMERCIAL' as Role },
+        { nome: 'Vendedor 1', email: 'vendedor1@plataforma.local', senha: 'Vendedor@123', perfil: 'COMERCIAL' as Role },
+        { nome: 'Vendedor 2', email: 'vendedor2@plataforma.local', senha: 'Vendedor@123', perfil: 'COMERCIAL' as Role },
+        { nome: 'Vendedor 3', email: 'vendedor3@plataforma.local', senha: 'Vendedor@123', perfil: 'COMERCIAL' as Role },
         { nome: 'Agente Um', email: 'agente1@plataforma.local', senha: 'Agente@123', perfil: 'AGENTE' as Role },
         { nome: 'Agente Dois', email: 'agente2@plataforma.local', senha: 'Agente@123', perfil: 'AGENTE' as Role },
       ]),
@@ -97,6 +100,26 @@ async function main() {
         create: { filaId: fila.id, usuarioId: agente.id },
       });
     }
+  }
+
+  /*
+   * Fila de Vendas: leads novos caem aqui, e quem atende e o COMERCIAL, nao o
+   * AGENTE. Politica de escopo ja trata COMERCIAL como participante de conversa
+   * (ver `politicaConversas` em lib/politicas.ts) — faltava so ele estar numa
+   * fila para a conversa em espera aparecer para ele.
+   */
+  const vendas = await prisma.queue.upsert({
+    where: { organizacaoId_nome: { organizacaoId: ORGANIZACAO_INICIAL, nome: 'Vendas' } },
+    update: {},
+    create: { nome: 'Vendas', descricao: 'Leads novos e atendimento comercial', canalPadrao: 'WEBCHAT' },
+  });
+  const comerciais = await prisma.user.findMany({ where: { perfil: 'COMERCIAL' } });
+  for (const comercial of comerciais) {
+    await prisma.queueAgent.upsert({
+      where: { filaId_usuarioId: { filaId: vendas.id, usuarioId: comercial.id } },
+      update: {},
+      create: { filaId: vendas.id, usuarioId: comercial.id },
+    });
   }
 
   await semearCrm();

@@ -5,9 +5,8 @@ import { AppError, badRequest, conflict, notFound } from '../../lib/errors';
 import { prisma } from '../../lib/prisma';
 import { cifrar } from '../../lib/crypto-box';
 import { limiteBytes, salvar, tipoAceito, urlAssinada } from '../../lib/storage';
-import { organizacaoAtual } from '../../lib/tenant';
 import { notificarConversaAtualizada, notificarMensagem } from '../../realtime/hub';
-import { obterConfig } from '../channels/channels.service';
+import { obterConfig, obterConfigPorId } from '../channels/channels.service';
 import { registrarConsumo } from '../ia/consumo.service';
 import { enviarArquivoParaCanal, enviarParaCanal, exigeEnvioExterno } from '../channels/outbound.service';
 import { inclusaoDetalhe, toConversaDetalhe, toMensagem } from '../conversations/conversations.serializer';
@@ -168,7 +167,7 @@ export async function registrarRespostaDaIa(entrada: RespostaDaIa) {
   }
 
   const envio = exigeEnvioExterno(canal)
-    ? await enviarParaCanal(canal, conversa.enderecoExterno, texto)
+    ? await enviarParaCanal(canal, conversa.enderecoExterno, texto, conversa.canalConfigId)
     : { idExterno: null };
 
   return gravar(conversa, {
@@ -258,7 +257,7 @@ async function gravarAnexo(
   respondendoA: string | null,
 ) {
   const envio = exigeEnvioExterno(conversa.canal)
-    ? await enviarArquivoParaCanal(conversa.canal, conversa.enderecoExterno, arquivo)
+    ? await enviarArquivoParaCanal(conversa.canal, conversa.enderecoExterno, arquivo, conversa.canalConfigId)
     : { idExterno: null };
 
   const salvo = await salvar(arquivo);
@@ -390,10 +389,22 @@ export function corpoDaEntrega(
  */
 export async function entregarParaIa(
   mensagem: MensagemParaIa,
-  conversa: Pick<Conversation, 'id' | 'canal' | 'agenteId' | 'status' | 'contatoId'> & { contato?: Contact | null },
+  conversa: Pick<Conversation, 'id' | 'canal' | 'agenteId' | 'status' | 'contatoId' | 'canalConfigId'> & {
+    contato?: Contact | null;
+  },
 ) {
   try {
-    const config = await obterConfig(conversa.canal);
+    /*
+     * A linha que recebeu decide a IA, nao "o canal": o vendedor com numero
+     * proprio pode ter um motor de IA diferente do numero compartilhado (ou
+     * nenhum, se ele responde tudo pessoalmente). Sem `canalConfigId` (canal
+     * sem numero — webchat, e-mail — ou conversa de antes desta coluna
+     * existir), cai na config compartilhada, que e o unico comportamento que
+     * ja existia.
+     */
+    const config = conversa.canalConfigId
+      ? await obterConfigPorId(conversa.canalConfigId)
+      : await obterConfig(conversa.canal);
     if (!config?.iaAtiva || !config.iaUrlWebhook || !config.iaSegredo) return { entregue: false as const };
 
     const contato = conversa.contato ?? (await prisma.contact.findUnique({ where: { id: conversa.contatoId } }));
@@ -426,16 +437,27 @@ export async function entregarParaIa(
   }
 }
 
-/** Estado da ponte de um canal. Nunca devolve o segredo — so se existe. */
+const estadoDeConfig = (canal: Channel, config: { iaAtiva: boolean; iaUrlWebhook: string | null; iaSegredo: string | null } | null) => ({
+  canal,
+  ativa: Boolean(config?.iaAtiva),
+  webhook: config?.iaUrlWebhook ?? null,
+  assinado: Boolean(config?.iaSegredo),
+  janelaHoras: JANELA_HORAS[canal] ?? 0,
+});
+
+/** Estado da ponte de um canal — a linha compartilhada. */
 export async function estadoDaIa(canal: Channel) {
-  const config = await obterConfig(canal);
-  return {
-    canal,
-    ativa: Boolean(config?.iaAtiva),
-    webhook: config?.iaUrlWebhook ?? null,
-    assinado: Boolean(config?.iaSegredo),
-    janelaHoras: JANELA_HORAS[canal] ?? 0,
-  };
+  return estadoDeConfig(canal, await obterConfig(canal));
+}
+
+/**
+ * Estado da ponte de uma linha pessoal — o vendedor pode ter motor de IA
+ * diferente do numero compartilhado, ou nenhum (responde tudo pessoalmente).
+ */
+export async function estadoDaIaDoNumero(id: string) {
+  const config = await obterConfigPorId(id);
+  if (!config) throw notFound('Numero nao encontrado');
+  return estadoDeConfig(config.canal, config);
 }
 
 /** Liga, desliga ou reconfigura a ponte de um canal. */
@@ -454,11 +476,40 @@ export async function salvarIa(
   // campo enviado como null continua sendo limpeza explicita.
   const paraGravar = { ...input, ...(input.iaSegredo ? { iaSegredo: cifrar(input.iaSegredo) } : {}) };
 
-  await prisma.channelConfig.upsert({
-    where: { organizacaoId_canal: { organizacaoId: organizacaoAtual(), canal } },
-    update: paraGravar,
-    create: { canal, ...paraGravar },
-  });
+  // IA e configurada por canal, na linha compartilhada (`donoId` nulo) — nao
+  // por numero. Mesmo motivo de `salvarCanal`: a chave que permitia upsert
+  // (`organizacaoId, canal`) foi embora quando o canal passou a admitir mais
+  // de uma linha.
+  const gravado = await prisma.channelConfig.findFirst({ where: { canal, donoId: null } });
+  if (gravado) {
+    await prisma.channelConfig.update({ where: { id: gravado.id }, data: paraGravar });
+  } else {
+    await prisma.channelConfig.create({ data: { canal, ...paraGravar } });
+  }
 
   return estadoDaIa(canal);
+}
+
+/**
+ * Liga, desliga ou reconfigura a ponte de IA de uma linha pessoal.
+ *
+ * So atualiza — nao existe "criar" aqui: uma linha pessoal ja existe (foi
+ * cadastrada por `criarNumero`) antes de alguem chegar a configurar a IA dela.
+ */
+export async function salvarIaDoNumero(
+  id: string,
+  input: { iaAtiva?: boolean; iaUrlWebhook?: string | null; iaSegredo?: string | null },
+) {
+  const atual = await obterConfigPorId(id);
+  if (!atual) throw notFound('Numero nao encontrado');
+
+  const futuro = { ...atual, ...input };
+  if (futuro.iaAtiva && !(futuro.iaUrlWebhook && futuro.iaSegredo)) {
+    throw conflict('Para ligar a IA informe o webhook e o segredo de assinatura');
+  }
+
+  const paraGravar = { ...input, ...(input.iaSegredo ? { iaSegredo: cifrar(input.iaSegredo) } : {}) };
+  await prisma.channelConfig.update({ where: { id }, data: paraGravar });
+
+  return estadoDaIaDoNumero(id);
 }

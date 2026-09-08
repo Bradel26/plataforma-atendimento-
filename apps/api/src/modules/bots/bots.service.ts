@@ -113,7 +113,9 @@ export async function responderAutomaticamente(conversaId: string, textoCliente:
     let idExterno: string | null = null;
     if (externo) {
       try {
-        idExterno = (await enviarParaCanal(conversa.canal, conversa.enderecoExterno, conteudo)).idExterno;
+        idExterno = (
+          await enviarParaCanal(conversa.canal, conversa.enderecoExterno, conteudo, conversa.canalConfigId)
+        ).idExterno;
       } catch (err) {
         // Nao propaga: quem chama e o webhook do canal, e um 500 nosso faria a
         // Meta reentregar a mensagem do cliente e duplica-la. O bot desiste

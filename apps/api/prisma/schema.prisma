@@ -62,35 +62,35 @@ model Organizacao {
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
-  usuarios         User[]
-  tokensIntegracao IntegrationToken[]
-  contatos         Contact[]
-  conversas        Conversation[]
-  filas            Queue[]
-  canais           ChannelConfig[]
-  contas           Account[]
-  leads            Lead[]
-  funis            Funnel[]
-  oportunidades    Opportunity[]
-  produtos         Product[]
-  catalogos        PriceCatalog[]
-  protocolos       Ticket[]
-  campanhas        Campaign[]
-  bots             Bot[]
-  escalas          WorkShift[]
-  branding         Branding?
-  politicaRetencao RetentionPolicy?
-  vozConfig        VoiceConfig?
-  mensagens        Message[]
-  chamadas         Call[]
-  pesquisas        Survey[]
-  atividades       Activity[]
-  registrosLgpd    LgpdLog[]
-  metas            Meta[]
-  consumoIa        ConsumoIA[]
-  produtosDoCliente ProdutoDoCliente[]
-  visoesSalvas     VisaoSalva[]
-  filiais          Filial[]
+  usuarios           User[]
+  tokensIntegracao   IntegrationToken[]
+  contatos           Contact[]
+  conversas          Conversation[]
+  filas              Queue[]
+  canais             ChannelConfig[]
+  contas             Account[]
+  leads              Lead[]
+  funis              Funnel[]
+  oportunidades      Opportunity[]
+  produtos           Product[]
+  catalogos          PriceCatalog[]
+  protocolos         Ticket[]
+  campanhas          Campaign[]
+  bots               Bot[]
+  escalas            WorkShift[]
+  branding           Branding?
+  politicaRetencao   RetentionPolicy?
+  vozConfig          VoiceConfig?
+  mensagens          Message[]
+  chamadas           Call[]
+  pesquisas          Survey[]
+  atividades         Activity[]
+  registrosLgpd      LgpdLog[]
+  metas              Meta[]
+  consumoIa          ConsumoIA[]
+  produtosDoCliente  ProdutoDoCliente[]
+  visoesSalvas       VisaoSalva[]
+  filiais            Filial[]
   camposCustomizados CampoCustomizado[]
 
   @@map("organizacoes")
@@ -155,6 +155,8 @@ model User {
   auditoriasFeitas      OpportunityAudit[]
   descontosAprovados    Opportunity[]         @relation("DescontoAprovador")
   tokensIntegracao      IntegrationToken[]
+  /// Numeros de canal (ex.: WhatsApp) cadastrados como linha pessoal deste usuario.
+  canaisProprios        ChannelConfig[]
   organizacao           Organizacao           @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
   /// SetNull: desligar o gestor nao pode apagar a equipe dele.
   gestor                User?                 @relation("Equipe", fields: [gestorId], references: [id], onDelete: SetNull)
@@ -337,6 +339,11 @@ model Conversation {
   contatoId     String             @map("contato_id")
   filaId        String?            @map("fila_id")
   agenteId      String?            @map("agente_id")
+  /// Numero/config de canal por onde esta conversa entrou. Com mais de um
+  /// numero no mesmo canal (varias linhas de WhatsApp), a resposta tem de sair
+  /// pelo MESMO numero que recebeu — sem isso, o cliente do vendedor recebe a
+  /// resposta com o remetente do numero errado.
+  canalConfigId String?            @map("canal_config_id")
   assunto       String?
 
   criadoEm         DateTime  @default(now()) @map("criado_em")
@@ -357,14 +364,15 @@ model Conversation {
   /// coexistem porque respondem perguntas diferentes.
   tags String[] @default([])
 
-  contato     Contact     @relation(fields: [contatoId], references: [id], onDelete: Cascade)
-  fila        Queue?      @relation(fields: [filaId], references: [id], onDelete: SetNull)
-  agente      User?       @relation(fields: [agenteId], references: [id], onDelete: SetNull)
+  contato     Contact        @relation(fields: [contatoId], references: [id], onDelete: Cascade)
+  fila        Queue?         @relation(fields: [filaId], references: [id], onDelete: SetNull)
+  agente      User?          @relation(fields: [agenteId], references: [id], onDelete: SetNull)
+  canalConfig ChannelConfig? @relation(fields: [canalConfigId], references: [id], onDelete: SetNull)
   mensagens   Message[]
   protocolos  Ticket[]
   pesquisa    Survey?
   chamadas    Call[]
-  organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  organizacao Organizacao    @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
   @@index([organizacaoId, status, ultimaMensagemEm])
   @@index([organizacaoId, agenteId, status])
@@ -491,10 +499,10 @@ model Account {
   atividades         Activity[]
   /// Base instalada (item 5.1): equipamentos entregues a esta conta.
   produtosInstalados ProdutoDoCliente[]
-  responsavel        User?              @relation("ContaResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+  responsavel        User?                        @relation("ContaResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
   /// SetNull: remover a filial nao pode apagar a conta.
-  filial             Filial?            @relation(fields: [filialId], references: [id], onDelete: SetNull)
-  organizacao        Organizacao        @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  filial             Filial?                      @relation(fields: [filialId], references: [id], onDelete: SetNull)
+  organizacao        Organizacao                  @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
   /// Campos customizados (item 6.4): apagar a conta apaga os valores junto.
   camposCustomizados ValorCampoCustomizadoConta[]
 
@@ -524,10 +532,10 @@ model Lead {
   atualizadoEm  DateTime     @updatedAt @map("atualizado_em")
   fechadoEm     DateTime?    @map("fechado_em")
 
-  contato     Contact     @relation(fields: [contatoId], references: [id], onDelete: Cascade)
-  conta       Account?    @relation(fields: [contaId], references: [id], onDelete: SetNull)
-  responsavel User?       @relation(fields: [responsavelId], references: [id], onDelete: SetNull)
-  organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  contato            Contact                     @relation(fields: [contatoId], references: [id], onDelete: Cascade)
+  conta              Account?                    @relation(fields: [contaId], references: [id], onDelete: SetNull)
+  responsavel        User?                       @relation(fields: [responsavelId], references: [id], onDelete: SetNull)
+  organizacao        Organizacao                 @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
   /// Campos customizados (item 6.4): apagar o lead apaga os valores junto.
   camposCustomizados ValorCampoCustomizadoLead[]
 
@@ -672,16 +680,16 @@ model Opportunity {
   /// historico custaria uma agregacao por cartao.
   estagioDesde       DateTime           @default(now()) @map("estagio_desde")
 
-  conta            Account               @relation(fields: [contaId], references: [id], onDelete: Cascade)
-  funil            Funnel                @relation(fields: [funilId], references: [id])
-  estagio          FunnelStage           @relation(fields: [estagioId], references: [id])
-  responsavel      User?                 @relation(fields: [responsavelId], references: [id], onDelete: SetNull)
-  aprovadoPor      User?                 @relation("DescontoAprovador", fields: [aprovadoPorId], references: [id], onDelete: SetNull)
-  itens            OpportunityItem[]
-  atividades       Activity[]
-  historicoEstagio OpportunityStageLog[]
-  auditoria        OpportunityAudit[]
-  organizacao      Organizacao           @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  conta              Account                             @relation(fields: [contaId], references: [id], onDelete: Cascade)
+  funil              Funnel                              @relation(fields: [funilId], references: [id])
+  estagio            FunnelStage                         @relation(fields: [estagioId], references: [id])
+  responsavel        User?                               @relation(fields: [responsavelId], references: [id], onDelete: SetNull)
+  aprovadoPor        User?                               @relation("DescontoAprovador", fields: [aprovadoPorId], references: [id], onDelete: SetNull)
+  itens              OpportunityItem[]
+  atividades         Activity[]
+  historicoEstagio   OpportunityStageLog[]
+  auditoria          OpportunityAudit[]
+  organizacao        Organizacao                         @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
   /// Campos customizados (item 6.4): apagar a oportunidade apaga os valores junto.
   camposCustomizados ValorCampoCustomizadoOportunidade[]
 
@@ -1054,25 +1062,25 @@ enum TipoGarantia {
 /// no contato — o equipamento pertence a empresa, nao a pessoa que assinou a
 /// compra (mesma logica de leads e oportunidades morarem na conta).
 model ProdutoDoCliente {
-  id            String @id @default(uuid())
-  organizacaoId String @default("") @map("organizacao_id")
-  contaId       String @map("conta_id")
-  modelo        String
+  id                    String    @id @default(uuid())
+  organizacaoId         String    @default("") @map("organizacao_id")
+  contaId               String    @map("conta_id")
+  modelo                String
   /// Nulo: equipamento sem numero de serie legivel no cadastro — nao "sem serie".
-  numeroSerie String? @map("numero_serie")
+  numeroSerie           String?   @map("numero_serie")
   /// Nulo: data de instalacao desconhecida. Sem ela nenhum componente de
   /// garantia tem como calcular vencimento — o estado e SEM_DATA_INICIO, e
   /// nunca e tratado como vencida (ver lib/garantia.ts).
-  dataInstalacao DateTime? @map("data_instalacao")
-  instaladorNome String?   @map("instalador_nome")
+  dataInstalacao        DateTime? @map("data_instalacao")
+  instaladorNome        String?   @map("instalador_nome")
   /// Nulo = nao informado. A garantia CONTRATUAL da Philco so vale com
   /// instalador credenciado — "nao informado" e um terceiro estado, diferente
   /// de "nao credenciado" (ver lib/garantia.ts).
-  instaladorCredenciado Boolean? @map("instalador_credenciado")
-  notaFiscalNumero      String?  @map("nota_fiscal_numero")
+  instaladorCredenciado Boolean?  @map("instalador_credenciado")
+  notaFiscalNumero      String?   @map("nota_fiscal_numero")
   observacoes           String?
-  criadoEm              DateTime @default(now()) @map("criado_em")
-  atualizadoEm          DateTime @updatedAt @map("atualizado_em")
+  criadoEm              DateTime  @default(now()) @map("criado_em")
+  atualizadoEm          DateTime  @updatedAt @map("atualizado_em")
 
   conta       Account              @relation(fields: [contaId], references: [id], onDelete: Cascade)
   organizacao Organizacao          @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
@@ -1091,14 +1099,14 @@ model ComponenteGarantia {
   produtoDoClienteId String       @map("produto_do_cliente_id")
   tipo               TipoGarantia
   /// Rotulo livre, usado so quando tipo = OUTRA.
-  nome      String?
-  prazoDias Int     @map("prazo_dias")
+  nome               String?
+  prazoDias          Int          @map("prazo_dias")
   /// Nulo ate ser preenchido (herda a data de instalacao do produto na
   /// criacao). Guardado a parte porque um componente trocado — ex.: compressor
   /// substituido — reinicia a propria contagem sem mexer no equipamento inteiro.
-  dataInicio DateTime? @map("data_inicio")
-  observacao String?
-  criadoEm   DateTime  @default(now()) @map("criado_em")
+  dataInicio         DateTime?    @map("data_inicio")
+  observacao         String?
+  criadoEm           DateTime     @default(now()) @map("criado_em")
 
   produtoDoCliente ProdutoDoCliente @relation(fields: [produtoDoClienteId], references: [id], onDelete: Cascade)
 
@@ -1289,8 +1297,8 @@ model ValorCampoCustomizadoOportunidade {
   oportunidadeId     String @map("oportunidade_id")
   valor              String
 
-  campo       CampoCustomizado @relation(fields: [campoCustomizadoId], references: [id], onDelete: Cascade)
-  oportunidade Opportunity     @relation(fields: [oportunidadeId], references: [id], onDelete: Cascade)
+  campo        CampoCustomizado @relation(fields: [campoCustomizadoId], references: [id], onDelete: Cascade)
+  oportunidade Opportunity      @relation(fields: [oportunidadeId], references: [id], onDelete: Cascade)
 
   @@unique([campoCustomizadoId, oportunidadeId])
   @@index([campoCustomizadoId, valor])
@@ -1484,6 +1492,20 @@ model ChannelConfig {
   /// Fila que recebe as conversas deste canal.
   filaId String? @map("fila_id")
 
+  /// Rotulo do numero, so quando houver mais de um do mesmo canal — ex.: "Vendedor 1".
+  /// Nulo no numero unico de instalacoes antigas, onde nao ha o que distinguir.
+  nome String? @map("nome")
+
+  /**
+   * Linha pessoal: mensagens recebidas por este numero vao direto para este
+   * usuario (`agenteId`), sem passar por fila. Existe para o vendedor com
+   * numero de WhatsApp proprio — o cliente que fala com ele nao deveria cair
+   * numa fila de espera compartilhada, porque a conversa ja tem dono.
+   * Nulo mantem o comportamento antigo: cai na fila (`filaId`) como qualquer
+   * canal compartilhado.
+   */
+  donoId String? @map("dono_id")
+
   /// Entrega as mensagens deste canal ao motor de IA externo (ver ia.service).
   iaAtiva      Boolean @default(false) @map("ia_ativa")
   /// Webhook do motor de IA. Ex.: https://whatsbot/api/webhook/plataforma/<id>.
@@ -1493,12 +1515,20 @@ model ChannelConfig {
 
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
-  fila        Queue?      @relation(fields: [filaId], references: [id], onDelete: SetNull)
-  organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  fila        Queue?         @relation(fields: [filaId], references: [id], onDelete: SetNull)
+  dono        User?          @relation(fields: [donoId], references: [id], onDelete: SetNull)
+  organizacao Organizacao    @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  conversas   Conversation[]
 
-  /// Um canal de cada tipo POR ORGANIZACAO. Antes era um por instalacao: existia
-  /// UM WhatsApp no sistema inteiro, o que sozinho impedia a virada.
-  @@unique([organizacaoId, canal])
+  /**
+   * Antes, um canal de cada tipo POR ORGANIZACAO (`@@unique([organizacaoId,
+   * canal])`) — so cabia UM WhatsApp por empresa inteira. Isso impedia numero
+   * proprio por vendedor, que e exatamente o caso de uso que criou esta
+   * tabela em primeiro lugar: cada linha pessoal e outra config do mesmo
+   * canal. `phoneNumberId` (globalmente unico, ver abaixo) e quem impede
+   * duplicata agora — a organizacao continua isolando por causa da extensao
+   * do Prisma, nao por esta chave.
+   */
   /// Ids externos da Meta: unicos por TIPO DE CANAL, no banco inteiro.
   ///
   /// Nao por organizacao, porque sao ids globais do lado da Meta — dois clientes

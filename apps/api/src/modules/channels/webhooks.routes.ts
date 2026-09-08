@@ -6,6 +6,7 @@ import { comOrganizacao } from '../../lib/tenant';
 import {
   CANAIS_EXTERNOS,
   assinaturaValida,
+  configDoDestino,
   obterConfig,
   organizacaoDoWebhook,
   type CanalExterno,
@@ -68,13 +69,14 @@ webhooksRoutes.post(
     // A organizacao sai do id externo dentro do corpo. Isto acontece ANTES de
     // qualquer leitura de configuracao: sem saber de quem e a mensagem, nao ha
     // segredo com que validar a assinatura.
-    const organizacaoId = await organizacaoDoWebhook(canal, identificadorExterno(corpoBruto));
+    const identificador = identificadorExterno(corpoBruto);
+    const organizacaoId = await organizacaoDoWebhook(canal, identificador);
     if (!organizacaoId) {
       res.status(503).json({ error: { code: 'CANAL_INDISPONIVEL', message: `Canal ${canal} inativo` } });
       return;
     }
 
-    await comOrganizacao(organizacaoId, () => processarEntrada(canal, corpoBruto, req, res));
+    await comOrganizacao(organizacaoId, () => processarEntrada(canal, identificador, corpoBruto, req, res));
   }),
 );
 
@@ -105,11 +107,16 @@ function identificadorExterno(corpoBruto: Buffer): string | null {
 /** O corpo do POST, agora dentro do contexto da organizacao. */
 async function processarEntrada(
   canal: CanalExterno,
+  identificador: string | null,
   corpoBruto: Buffer,
   req: { header(nome: string): string | undefined },
   res: Response,
 ) {
-    const config = await obterConfig(canal);
+    // A LINHA que recebeu, nao "a" config do canal: com mais de um numero por
+    // canal (vendedor com WhatsApp proprio), cada linha tem seu proprio
+    // appSecret possivel, e validar contra o numero errado rejeitaria uma
+    // assinatura legitima.
+    const config = await configDoDestino(canal, identificador);
 
     if (!config?.ativo || !config.appSecret) {
       res.status(503).json({ error: { code: 'CANAL_INDISPONIVEL', message: `Canal ${canal} inativo` } });

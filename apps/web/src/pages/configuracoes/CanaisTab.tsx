@@ -1,12 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alerta, Badge, Button, Card, Field, Input, Select } from '../../components/ui';
+import { Alerta, Badge, Button, Card, EmptyState, Field, Input, Select } from '../../components/ui';
+import { useConfirm } from '../../components/ui/ConfirmDialog';
 import { ApiError, api } from '../../lib/api';
-import type { Canal, Fila } from '../../lib/types';
+import type { Canal, Fila, Usuario } from '../../lib/types';
 
 type CanalConfig = {
   id: string;
   canal: Canal;
   ativo: boolean;
+  /** Rotulo da linha — so importa quando ha mais de um numero do mesmo canal. */
+  nome: string | null;
+  /** Dono da linha pessoal (vendedor com numero proprio). Nulo = linha compartilhada. */
+  dono: { id: string; nome: string } | null;
   phoneNumberId: string | null;
   pageId: string | null;
   igUserId: string | null;
@@ -23,6 +28,23 @@ type CanalConfig = {
   ponteSessao?: string | null;
   ponteTokenMascarado?: string | null;
   ponteSegredoMascarado?: string | null;
+};
+
+type IaDoNumero = { ativa: boolean; webhook: string | null; assinado: boolean };
+
+const numeroVazio = {
+  id: null as string | null,
+  nome: '',
+  donoId: '',
+  phoneNumberId: '',
+  accessToken: '',
+  appSecret: '',
+  verifyToken: '',
+  filaId: '',
+  ativo: true,
+  iaAtiva: false,
+  iaUrlWebhook: '',
+  iaSegredo: '',
 };
 
 type QrDaPonte = {
@@ -62,6 +84,7 @@ const vazio = {
 
 /** Configuracao dos canais da Meta. Segredos sao enviados, nunca lidos de volta. */
 export function CanaisTab() {
+  const confirmar = useConfirm();
   const [canais, setCanais] = useState<CanalConfig[]>([]);
   const [filas, setFilas] = useState<Fila[]>([]);
   const [editando, setEditando] = useState<CanalSuportado>('WHATSAPP');
@@ -98,14 +121,25 @@ export function CanaisTab() {
   /** Caminho que a ponte deve chamar. Vem da API porque leva o id da organizacao. */
   const [caminhoPonte, setCaminhoPonte] = useState<string | null>(null);
 
+  // ----- Numeros pessoais (vendedor com WhatsApp proprio) -----
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [numeroForm, setNumeroForm] = useState(numeroVazio);
+  const [numeroErro, setNumeroErro] = useState<string | null>(null);
+  const [numeroOk, setNumeroOk] = useState<string | null>(null);
+  const [numeroOcupado, setNumeroOcupado] = useState(false);
+
   const carregar = async () => {
     try {
-      const [c, f] = await Promise.all([
+      const [c, f, u] = await Promise.all([
         api.get<{ canais: CanalConfig[] }>('/canais'),
         api.get<{ filas: Fila[] }>('/filas'),
+        api.get<{ usuarios: Usuario[] }>('/usuarios'),
       ]);
       setCanais(c.canais);
       setFilas(f.filas);
+      // So quem pode atuar em conversa entra na lista de donos: dar numero
+      // proprio a um GESTOR ou ADMIN nao tem para onde a conversa ir depois.
+      setUsuarios(u.usuarios.filter((x) => x.perfil === 'COMERCIAL' || x.perfil === 'AGENTE'));
 
       const zap = c.canais.find((x) => x.canal === 'WHATSAPP');
       if (!modoTocado.current) setModo(zap?.modo ?? 'OFICIAL');
@@ -189,24 +223,28 @@ export function CanaisTab() {
    * Trocar de numero: desfaz o pareamento e volta a pedir QR.
    *
    * Confirma antes porque a acao derruba o WhatsApp da operacao na hora — quem
-   * clicar sem querer deixa o atendimento mudo ate alguem escanear o novo QR.
+   * clicar sem querer deixa o atendimento mudo ate alguem escanear de novo.
    */
-  const trocarNumero = async () => {
-    if (!window.confirm('Desconectar o numero atual? O WhatsApp para de receber ate alguem escanear o novo QR.')) {
-      return;
-    }
-
-    setTrocandoNumero(true);
-    setErro(null);
-    try {
-      await api.post('/canais/whatsapp/ponte/desconectar', {});
-      setQrPonte(null);
-      await carregar();
-    } catch (e) {
-      setErro(e instanceof ApiError ? e.message : 'Falha ao desconectar a ponte');
-    } finally {
-      setTrocandoNumero(false);
-    }
+  const trocarNumero = () => {
+    confirmar({
+      titulo: 'Desconectar o numero atual?',
+      descricao: 'O WhatsApp para de receber ate alguem escanear o novo QR.',
+      variante: 'perigo',
+      rotuloConfirmar: 'Desconectar',
+      aoConfirmar: async () => {
+        setTrocandoNumero(true);
+        setErro(null);
+        try {
+          await api.post('/canais/whatsapp/ponte/desconectar', {});
+          setQrPonte(null);
+          await carregar();
+        } catch (e) {
+          setErro(e instanceof ApiError ? e.message : 'Falha ao desconectar a ponte');
+        } finally {
+          setTrocandoNumero(false);
+        }
+      },
+    });
   };
 
   const salvar = async (ativo?: boolean) => {
@@ -248,6 +286,97 @@ export function CanaisTab() {
     } finally {
       setOcupado(false);
     }
+  };
+
+  const numeros = canais.filter((c) => c.canal === 'WHATSAPP' && c.dono);
+
+  const editarNumero = async (numero: CanalConfig) => {
+    setNumeroErro(null);
+    setNumeroOk(null);
+    let ia: IaDoNumero | null = null;
+    try {
+      ia = (await api.get<{ ia: IaDoNumero }>(`/canais/numeros/${numero.id}/ia`)).ia;
+    } catch {
+      // Sem IA configurada ainda nesta linha — segue com os campos em branco.
+    }
+    setNumeroForm({
+      ...numeroVazio,
+      id: numero.id,
+      nome: numero.nome ?? '',
+      donoId: numero.dono?.id ?? '',
+      filaId: numero.fila?.id ?? '',
+      ativo: numero.ativo,
+      iaAtiva: ia?.ativa ?? false,
+      iaUrlWebhook: ia?.webhook ?? '',
+    });
+  };
+
+  const cancelarEdicaoNumero = () => {
+    setNumeroForm(numeroVazio);
+    setNumeroErro(null);
+  };
+
+  const salvarNumero = async () => {
+    setNumeroErro(null);
+    setNumeroOk(null);
+    if (!numeroForm.id && !numeroForm.donoId) {
+      setNumeroErro('Escolha o vendedor dono do numero');
+      return;
+    }
+    setNumeroOcupado(true);
+    try {
+      const corpo: Record<string, unknown> = { ativo: numeroForm.ativo };
+      if (numeroForm.nome) corpo.nome = numeroForm.nome;
+      if (numeroForm.donoId) corpo.donoId = numeroForm.donoId;
+      if (numeroForm.phoneNumberId) corpo.phoneNumberId = numeroForm.phoneNumberId;
+      if (numeroForm.accessToken) corpo.accessToken = numeroForm.accessToken;
+      if (numeroForm.appSecret) corpo.appSecret = numeroForm.appSecret;
+      if (numeroForm.verifyToken) corpo.verifyToken = numeroForm.verifyToken;
+      if (numeroForm.filaId) corpo.filaId = numeroForm.filaId;
+
+      const id = numeroForm.id
+        ? (await api.put<{ canal: CanalConfig }>(`/canais/numeros/${numeroForm.id}`, corpo)).canal.id
+        : (await api.post<{ canal: CanalConfig }>('/canais/whatsapp/numeros', corpo)).canal.id;
+
+      // IA vai numa chamada separada: e outro recurso, com o proprio
+      // liga/desliga — mandar junto faria desligar a IA de uma linha exigir
+      // reenviar credencial da Meta que nao mudou em nada.
+      if (numeroForm.iaAtiva || numeroForm.iaUrlWebhook || numeroForm.iaSegredo) {
+        await api.put(`/canais/numeros/${id}/ia`, {
+          iaAtiva: numeroForm.iaAtiva,
+          ...(numeroForm.iaUrlWebhook ? { iaUrlWebhook: numeroForm.iaUrlWebhook } : {}),
+          ...(numeroForm.iaSegredo ? { iaSegredo: numeroForm.iaSegredo } : {}),
+        });
+      }
+
+      setNumeroForm(numeroVazio);
+      setNumeroOk(numeroForm.id ? 'Numero atualizado.' : 'Numero criado.');
+      await carregar();
+    } catch (e) {
+      setNumeroErro(e instanceof ApiError ? e.message : 'Falha ao salvar numero');
+    } finally {
+      setNumeroOcupado(false);
+    }
+  };
+
+  const excluirNumero = (numero: CanalConfig) => {
+    confirmar({
+      titulo: `Remover o numero de ${numero.dono?.nome}?`,
+      descricao: 'Conversas ja existentes so perdem a referencia.',
+      variante: 'perigo',
+      rotuloConfirmar: 'Remover',
+      aoConfirmar: async () => {
+        setNumeroErro(null);
+        setNumeroOk(null);
+        try {
+          await api.del(`/canais/numeros/${numero.id}`);
+          setNumeroOk('Numero removido.');
+          await carregar();
+        } catch (e) {
+          setNumeroErro(e instanceof ApiError ? e.message : 'Falha ao remover numero');
+        }
+      },
+    });
   };
 
   const atual = canais.find((c) => c.canal === editando);
@@ -386,7 +515,7 @@ export function CanaisTab() {
                         : 'nao confirmada'}
                   </Badge>
                   {/* Desconhecido nao e desconectado: a frase diz qual dos dois. */}
-                  {estadoPonte.detalhe && <span className="text-slate-400">{estadoPonte.detalhe}</span>}
+                  {estadoPonte.detalhe && <span className="text-slate-500">{estadoPonte.detalhe}</span>}
                 </p>
               )}
 
@@ -433,7 +562,7 @@ export function CanaisTab() {
                           <li>Aponte a camera para este codigo</li>
                         </ol>
                         {/* Sem este aviso, ver o codigo mudar sozinho parece falha. */}
-                        <p className="mt-2 text-slate-400">
+                        <p className="mt-2 text-slate-500">
                           O codigo se renova a cada poucos segundos. Se perder, espere o proximo.
                         </p>
                       </div>
@@ -544,6 +673,174 @@ export function CanaisTab() {
         </div>
       </Card>
 
+      {editando === 'WHATSAPP' && (
+        <div className="lg:col-span-2">
+        <Card
+          titulo="Numeros pessoais"
+          descricao="Um WhatsApp proprio por vendedor: a conversa nasce ja atribuida a ele, sem passar por fila"
+        >
+          <div className="space-y-4">
+            {numeroErro && <Alerta>{numeroErro}</Alerta>}
+            {numeroOk && <Alerta tipo="sucesso">{numeroOk}</Alerta>}
+
+            {numeros.length === 0 ? (
+              <EmptyState
+                titulo="Nenhum numero pessoal"
+                descricao="Cadastre o WhatsApp de um vendedor abaixo — ele passa a atender pelo painel de Atendimento"
+              />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="text-xs text-slate-500">
+                      <th className="pb-2 font-medium">Vendedor</th>
+                      <th className="pb-2 font-medium">Numero</th>
+                      <th className="pb-2 font-medium">Fila de espera</th>
+                      <th className="pb-2 font-medium">Estado</th>
+                      <th className="pb-2 font-medium" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {numeros.map((n) => (
+                      <tr key={n.id}>
+                        <td className="py-2 pr-2 text-slate-800">{n.dono?.nome}</td>
+                        <td className="py-2 pr-2 text-slate-600">{n.phoneNumberId ?? '—'}</td>
+                        <td className="py-2 pr-2 text-slate-600">{n.fila?.nome ?? 'nenhuma (linha direta)'}</td>
+                        <td className="py-2 pr-2">
+                          {n.ativo ? <Badge tom="sucesso">Ativo</Badge> : <Badge>Inativo</Badge>}
+                        </td>
+                        <td className="py-2 text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button variante="neutro" onClick={() => void editarNumero(n)}>Editar</Button>
+                            <Button variante="perigo" onClick={() => void excluirNumero(n)}>Remover</Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div className="rounded-lg border border-slate-200 p-4">
+              <p className="mb-3 text-xs font-medium text-slate-700">
+                {numeroForm.id ? 'Editar numero' : 'Adicionar numero'}
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Vendedor" hint="Quem recebe as conversas deste numero">
+                  <Select
+                    value={numeroForm.donoId}
+                    disabled={Boolean(numeroForm.id)}
+                    onChange={(e) => setNumeroForm({ ...numeroForm, donoId: e.target.value })}
+                  >
+                    <option value="">Selecione</option>
+                    {usuarios.map((u) => (
+                      <option key={u.id} value={u.id}>{u.nome}</option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="Rotulo" hint="Como este numero aparece na lista">
+                  <Input
+                    value={numeroForm.nome}
+                    placeholder="Ex.: Vendedor 1"
+                    onChange={(e) => setNumeroForm({ ...numeroForm, nome: e.target.value })}
+                  />
+                </Field>
+                <Field label="Phone Number ID">
+                  <Input
+                    value={numeroForm.phoneNumberId}
+                    onChange={(e) => setNumeroForm({ ...numeroForm, phoneNumberId: e.target.value })}
+                  />
+                </Field>
+                <Field label="Access Token" hint="Nunca e exibido de volta">
+                  <Input
+                    type="password"
+                    value={numeroForm.accessToken}
+                    onChange={(e) => setNumeroForm({ ...numeroForm, accessToken: e.target.value })}
+                  />
+                </Field>
+                <Field label="App Secret">
+                  <Input
+                    type="password"
+                    value={numeroForm.appSecret}
+                    onChange={(e) => setNumeroForm({ ...numeroForm, appSecret: e.target.value })}
+                  />
+                </Field>
+                <Field label="Verify Token">
+                  <Input
+                    value={numeroForm.verifyToken}
+                    onChange={(e) => setNumeroForm({ ...numeroForm, verifyToken: e.target.value })}
+                  />
+                </Field>
+                <Field
+                  label="Fila de espera (opcional)"
+                  hint="Deixe vazio: a conversa vai direto para o vendedor, sem espera"
+                >
+                  <Select
+                    value={numeroForm.filaId}
+                    onChange={(e) => setNumeroForm({ ...numeroForm, filaId: e.target.value })}
+                  >
+                    <option value="">Nenhuma — direto para o vendedor</option>
+                    {filas.map((f) => (
+                      <option key={f.id} value={f.id}>{f.nome}</option>
+                    ))}
+                  </Select>
+                </Field>
+              </div>
+
+              <div className="mt-4 border-t border-slate-100 pt-3">
+                <label className="flex items-center gap-2 text-xs font-medium text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={numeroForm.iaAtiva}
+                    onChange={(e) => setNumeroForm({ ...numeroForm, iaAtiva: e.target.checked })}
+                  />
+                  IA responde por este numero antes do vendedor
+                </label>
+                {numeroForm.iaAtiva && (
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <Field label="Webhook do motor de IA">
+                      <Input
+                        value={numeroForm.iaUrlWebhook}
+                        placeholder="https://whatsbot/api/webhook/plataforma/..."
+                        onChange={(e) => setNumeroForm({ ...numeroForm, iaUrlWebhook: e.target.value })}
+                      />
+                    </Field>
+                    <Field label="Segredo de assinatura" hint="Nunca e exibido de volta">
+                      <Input
+                        type="password"
+                        value={numeroForm.iaSegredo}
+                        onChange={(e) => setNumeroForm({ ...numeroForm, iaSegredo: e.target.value })}
+                      />
+                    </Field>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <label className="flex items-center gap-2 text-xs text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={numeroForm.ativo}
+                    onChange={(e) => setNumeroForm({ ...numeroForm, ativo: e.target.checked })}
+                  />
+                  Ativo
+                </label>
+                <Button disabled={numeroOcupado} onClick={() => void salvarNumero()}>
+                  {numeroForm.id ? 'Salvar alteracoes' : 'Adicionar numero'}
+                </Button>
+                {numeroForm.id && (
+                  <Button variante="neutro" disabled={numeroOcupado} onClick={cancelarEdicaoNumero}>
+                    Cancelar
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        </Card>
+        </div>
+      )}
+
       <Card
         titulo="Widget do site"
         descricao="Uma tag no site do cliente abre o Webchat como bolha flutuante"
@@ -570,7 +867,7 @@ export function CanaisTab() {
           Copiar tag
         </Button>
 
-        <p className="mt-3 text-xs text-slate-400">
+        <p className="mt-3 text-xs text-slate-500">
           Opcionais: <code>data-fila="&lt;id&gt;"</code> direciona para uma fila especifica e{' '}
           <code>data-titulo="..."</code> troca o texto do botao.
         </p>

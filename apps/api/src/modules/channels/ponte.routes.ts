@@ -150,6 +150,9 @@ ponteRoutes.post(
         // A ponte nao tem media id: ela manda a URL ou nada.
         anexoIdExterno: null,
         anexoNome: corpo.anexoNome ?? null,
+        // A ponte ainda so atende UM numero por organizacao (a sessao unica de
+        // `ponteSessao`); nulo cai na config compartilhada, que e essa mesma.
+        identificadorDestino: null,
       });
 
       // 200 tambem para reentrega: `duplicada` diz que nada foi criado, e a ponte

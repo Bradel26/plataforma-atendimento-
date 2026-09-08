@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { Channel } from '@prisma/client';
 import { prisma, prismaSemIsolamento } from '../../lib/prisma';
-import { organizacaoAtual, semOrganizacao } from '../../lib/tenant';
+import { semOrganizacao } from '../../lib/tenant';
 import { badRequest, notFound } from '../../lib/errors';
 import { cifrar, decifrar } from '../../lib/crypto-box';
 
@@ -59,14 +59,20 @@ function aberto<T extends ComSegredos>(config: T): T {
 
 export async function listarCanais() {
   const canais = await prisma.channelConfig.findMany({
-    include: { fila: { select: { id: true, nome: true } } },
-    orderBy: { canal: 'asc' },
+    include: { fila: { select: { id: true, nome: true } }, dono: { select: { id: true, nome: true } } },
+    // Numero sem dono (a linha compartilhada / historica) primeiro, depois as
+    // linhas pessoais por nome — e o `id` so para desempate estavel.
+    orderBy: [{ canal: 'asc' }, { donoId: 'asc' }, { id: 'asc' }],
   });
 
   return canais.map(aberto).map((c) => ({
     id: c.id,
     canal: c.canal,
     ativo: c.ativo,
+    /// Rotulo da linha. Cai no numero em si quando ninguem deu nome — a tela
+    /// nao pode mostrar "null" onde so ha um numero, o caso mais comum hoje.
+    nome: c.nome ?? c.phoneNumberId ?? c.pageId ?? null,
+    dono: c.dono,
     phoneNumberId: c.phoneNumberId,
     wabaId: c.wabaId,
     pageId: c.pageId,
@@ -120,14 +126,25 @@ type SalvarCanalInput = {
   filaId?: string | null;
 };
 
-export async function salvarCanal(canal: CanalExterno, input: SalvarCanalInput) {
+/** Campos aceitos so nas linhas pessoais — a de sempre nao tem dono nem rotulo. */
+type SalvarNumeroInput = SalvarCanalInput & { nome?: string | null; donoId?: string | null };
+
+/**
+ * Valida o que `salvarCanal`/`criarNumero`/`atualizarNumero` tem em comum:
+ * fila existe, dono existe (e e da mesma organizacao — `findUnique` de outra
+ * empresa nao acha nada, a extensao do Prisma cuida disso), credencial bate com
+ * o modo, e cifra o que for segredo. Devolve o que vai para o banco.
+ */
+async function prepararGravacao(canal: CanalExterno, atual: SalvarCanalInput | null, input: SalvarNumeroInput) {
   if (input.filaId) {
     const fila = await prisma.queue.findUnique({ where: { id: input.filaId } });
     if (!fila) throw notFound('Fila nao encontrada');
   }
+  if (input.donoId) {
+    const dono = await prisma.user.findUnique({ where: { id: input.donoId } });
+    if (!dono) throw notFound('Usuario nao encontrado');
+  }
 
-  const gravado = await prisma.channelConfig.findFirst({ where: { canal } });
-  const atual = gravado ? aberto(gravado) : null;
   const futuro = { ...atual, ...input };
 
   /*
@@ -163,24 +180,103 @@ export async function salvarCanal(canal: CanalExterno, input: SalvarCanalInput) 
     const valor = paraGravar[campo];
     if (valor) paraGravar[campo] = cifrar(valor);
   }
+  return paraGravar;
+}
 
-  // A organizacao aparece aqui de proposito: `upsert` exige chave unica, entao a
-  // extensao nao pode injetar o filtro. Sem ela, o upsert de uma empresa
-  // encontraria e sobrescreveria a configuracao de canal da outra.
-  await prisma.channelConfig.upsert({
-    where: { organizacaoId_canal: { organizacaoId: organizacaoAtual(), canal } },
-    update: paraGravar,
-    create: { canal, ...paraGravar },
-  });
+/**
+ * Numero compartilhado do canal — o que existia antes de linha pessoal ser
+ * possivel, e continua sendo: `donoId` nulo, um so por organizacao.
+ *
+ * Upsert por `findFirst` e nao por chave unica: a chave que permitia upsert
+ * (`organizacaoId, canal`) foi embora quando o canal passou a admitir mais de
+ * um numero — ver a migration `canal_numeros_por_dono`.
+ */
+export async function salvarCanal(canal: CanalExterno, input: SalvarCanalInput) {
+  const gravado = await prisma.channelConfig.findFirst({ where: { canal, donoId: null } });
+  const atual = gravado ? aberto(gravado) : null;
+  const paraGravar = await prepararGravacao(canal, atual, input);
+
+  if (gravado) {
+    await prisma.channelConfig.update({ where: { id: gravado.id }, data: paraGravar });
+  } else {
+    await prisma.channelConfig.create({ data: { canal, ...paraGravar } });
+  }
 
   const canais = await listarCanais();
-  return canais.find((c) => c.canal === canal)!;
+  return canais.find((c) => c.canal === canal && !c.dono)!;
+}
+
+/**
+ * Linha pessoal: numero proprio de um usuario (ex.: vendedor com WhatsApp
+ * dedicado). Mensagem recebida aqui vai direto para o dono — ver
+ * `configDoDestino` em inbound.service.
+ */
+export async function criarNumero(canal: CanalExterno, input: SalvarNumeroInput) {
+  const paraGravar = await prepararGravacao(canal, null, input);
+  await prisma.channelConfig.create({ data: { canal, ...paraGravar } });
+
+  const canais = await listarCanais();
+  const criado = canais.find((c) => c.canal === canal && c.dono?.id === input.donoId);
+  if (!criado) throw notFound('Numero nao encontrado apos criacao');
+  return criado;
+}
+
+async function carregarNumeroOuFalhar(id: string) {
+  const registro = await prisma.channelConfig.findUnique({ where: { id } });
+  if (!registro) throw notFound('Numero nao encontrado');
+  return registro;
+}
+
+export async function atualizarNumero(id: string, input: SalvarNumeroInput) {
+  const gravado = await carregarNumeroOuFalhar(id);
+  const paraGravar = await prepararGravacao(gravado.canal as CanalExterno, aberto(gravado), input);
+  await prisma.channelConfig.update({ where: { id }, data: paraGravar });
+
+  const canais = await listarCanais();
+  return canais.find((c) => c.id === id)!;
+}
+
+/** Conversas que apontavam para este numero perdem so a referencia (SetNull). */
+export async function excluirNumero(id: string) {
+  await carregarNumeroOuFalhar(id);
+  await prisma.channelConfig.delete({ where: { id } });
 }
 
 /** Sempre devolve os segredos em claro — o resto do sistema nao sabe da cifra. */
 export async function obterConfig(canal: Channel) {
-  const config = await prisma.channelConfig.findFirst({ where: { canal } });
+  // Prefere a linha sem dono (a compartilhada, historica); sem ela, cai na
+  // primeira do canal — installs com so linha pessoal ainda tem de onde tirar
+  // verifyToken para o GET de verificacao do webhook.
+  const config =
+    (await prisma.channelConfig.findFirst({ where: { canal, donoId: null } })) ??
+    (await prisma.channelConfig.findFirst({ where: { canal }, orderBy: { atualizadoEm: 'asc' } }));
   return config ? aberto(config) : null;
+}
+
+/** Config de uma linha especifica, por id. Usado para responder pelo MESMO numero que recebeu. */
+export async function obterConfigPorId(id: string) {
+  const config = await prisma.channelConfig.findUnique({ where: { id } });
+  return config ? aberto(config) : null;
+}
+
+/**
+ * Config que deveria atender esta mensagem: a linha cujo identificador exterior
+ * bate, ou — sem identificador, ou sem bater nenhuma — a mesma regra de
+ * `obterConfig` (compartilhada, senao a primeira do canal).
+ *
+ * Existe separado de `organizacaoDoWebhook` porque aquela funcao roda SEM
+ * organizacao (e o que ela descobre) e so precisa do id da empresa; esta roda
+ * DENTRO do contexto ja aberto e precisa da config inteira — fila, dono,
+ * segredos — para decidir o destino da conversa e validar a assinatura.
+ */
+export async function configDoDestino(canal: Channel, identificador: string | null) {
+  if (identificador) {
+    const porId = await prisma.channelConfig.findFirst({
+      where: { canal, OR: [{ phoneNumberId: identificador }, { pageId: identificador }, { igUserId: identificador }] },
+    });
+    if (porId) return aberto(porId);
+  }
+  return obterConfig(canal);
 }
 
 /**

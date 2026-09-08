@@ -61,4 +61,11 @@ export type MensagemNormalizada = {
   anexoIdExterno: string | null;
   /** Nome original quando o canal informa (documento do WhatsApp). */
   anexoNome: string | null;
+  /**
+   * Numero/pagina que RECEBEU a mensagem (phone_number_id no WhatsApp, o id da
+   * pagina no Messenger/Instagram). Com mais de uma linha do mesmo canal na
+   * mesma organizacao — o caso do vendedor com WhatsApp proprio —, e este
+   * identificador que diz qual `ChannelConfig` atender, e nao so o `canal`.
+   */
+  identificadorDestino: string | null;
 };

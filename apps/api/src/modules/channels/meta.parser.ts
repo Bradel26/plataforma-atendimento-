@@ -50,6 +50,7 @@ export function normalizarWebhook(corpo: MetaWebhook): MensagemNormalizada[] {
           anexoUrl: null,
           anexoIdExterno: midia?.id ?? null,
           anexoNome: mensagem.document?.filename ?? null,
+          identificadorDestino: valor.metadata?.phone_number_id ?? null,
         });
       }
     }
@@ -75,6 +76,7 @@ export function normalizarWebhook(corpo: MetaWebhook): MensagemNormalizada[] {
         anexoUrl: anexo?.payload?.url ?? null,
         anexoIdExterno: null,
         anexoNome: null,
+        identificadorDestino: evento.recipient?.id ?? null,
       });
     }
   }

@@ -1,6 +1,6 @@
 import type { Channel } from '@prisma/client';
 import { AppError, badRequest } from '../../lib/errors';
-import { obterConfig } from './channels.service';
+import { obterConfig, obterConfigPorId } from './channels.service';
 import { impedimentoDeEnvio, modoEfetivo } from './whatsapp.modo';
 import { enviarArquivoPelaPonte, enviarTextoPelaPonte } from './whatsapp.ponte';
 
@@ -14,6 +14,24 @@ export const exigeEnvioExterno = (canal: Channel) => EXTERNOS.includes(canal);
 type Resultado = { idExterno: string | null };
 
 /**
+ * A config de onde a resposta sai.
+ *
+ * `canalConfigId` vem da conversa: e a linha que RECEBEU a mensagem, e a
+ * resposta tem de sair pelo mesmo numero — sobretudo na linha pessoal do
+ * vendedor, onde responder pelo numero compartilhado da empresa entregaria a
+ * mensagem com o remetente errado. Conversa antiga (de antes desta coluna
+ * existir) nao tem `canalConfigId`; cai na config compartilhada do canal, que
+ * e o unico numero que existia naquela epoca.
+ */
+async function configParaEnvio(canal: Channel, canalConfigId: string | null) {
+  if (canalConfigId) {
+    const config = await obterConfigPorId(canalConfigId);
+    if (config) return config;
+  }
+  return obterConfig(canal);
+}
+
+/**
  * Envia a resposta do agente para o canal externo.
  *
  * Lanca em caso de falha, de proposito: se a mensagem nao chegou ao cliente,
@@ -24,11 +42,12 @@ export async function enviarParaCanal(
   canal: Channel,
   enderecoExterno: string | null,
   texto: string,
+  canalConfigId: string | null = null,
 ): Promise<Resultado> {
   if (!exigeEnvioExterno(canal)) return { idExterno: null };
   if (!enderecoExterno) throw badRequest('Conversa sem endereco externo — nao e possivel responder');
 
-  const config = await obterConfig(canal);
+  const config = await configParaEnvio(canal, canalConfigId);
 
   /*
    * WhatsApp tem DOIS caminhos de saida (item do WhatsApp nos dois modos).
@@ -136,11 +155,12 @@ export async function enviarArquivoParaCanal(
   canal: Channel,
   enderecoExterno: string | null,
   arquivo: { buffer: Buffer; nome: string; tipo: string; legenda?: string; urlPublica?: string },
+  canalConfigId: string | null = null,
 ): Promise<Resultado> {
   if (!exigeEnvioExterno(canal)) return { idExterno: null };
   if (!enderecoExterno) throw badRequest('Conversa sem endereco externo — nao e possivel responder');
 
-  const config = await obterConfig(canal);
+  const config = await configParaEnvio(canal, canalConfigId);
 
   // O mesmo desvio do texto. A ponte recebe o binario direto, sem as duas etapas
   // da Cloud API e sem a exigencia de URL publica do Instagram — e por isso este

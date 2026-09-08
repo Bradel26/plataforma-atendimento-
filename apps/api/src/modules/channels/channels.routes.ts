@@ -9,6 +9,9 @@ import { notFound } from '../../lib/errors';
 import { organizacaoAtual } from '../../lib/tenant';
 import {
   CANAIS_EXTERNOS,
+  atualizarNumero,
+  criarNumero,
+  excluirNumero,
   listarCanais,
   obterConfig,
   salvarCanal,
@@ -16,44 +19,66 @@ import {
 } from './channels.service';
 import { AVISO_NAO_OFICIAL, modoEfetivo } from './whatsapp.modo';
 import { desconectarPonte, estadoDaPonte, qrDaPonte } from './whatsapp.ponte';
-import { estadoDaIa, salvarIa } from '../bots/ia.service';
+import { estadoDaIa, estadoDaIaDoNumero, salvarIa, salvarIaDoNumero } from '../bots/ia.service';
 
 export const channelsRoutes = Router();
 
 channelsRoutes.use(requireAuth);
 
-const salvarSchema = z
+const camposDoCanal = {
+  ativo: z.boolean().optional(),
+  phoneNumberId: z.string().trim().max(60).nullable().optional(),
+  wabaId: z.string().trim().max(60).nullable().optional(),
+  pageId: z.string().trim().max(60).nullable().optional(),
+  igUserId: z.string().trim().max(60).nullable().optional(),
+  accessToken: z.string().trim().min(10).nullable().optional(),
+  appSecret: z.string().trim().min(10).nullable().optional(),
+  verifyToken: z.string().trim().min(6).nullable().optional(),
+  filaId: z.string().uuid().nullable().optional(),
+  /*
+   * WhatsApp nos dois modos.
+   *
+   * `modo` nulo limpa a escolha (volta ao oficial, que e o efetivo do nulo).
+   * O segredo da ponte tem minimo de 16 caracteres pelo mesmo motivo do
+   * segredo da IA: e uma chave HMAC, e chave curta se quebra por forca bruta
+   * enquanto ninguem olha.
+   */
+  modo: z.enum(['OFICIAL', 'NAO_OFICIAL']).nullable().optional(),
+  ponteUrl: z.string().trim().url().max(300).nullable().optional(),
+  ponteToken: z.string().trim().min(8).max(200).nullable().optional(),
+  ponteSegredo: z
+    .string()
+    .trim()
+    .min(16, 'Use um segredo de ao menos 16 caracteres')
+    .max(200)
+    .nullable()
+    .optional(),
+  ponteSessao: z.string().trim().max(60).nullable().optional(),
+};
+
+const naoVazio = { message: 'Informe ao menos um campo' } as const;
+
+const salvarSchema = z.object(camposDoCanal).refine((d) => Object.keys(d).length > 0, naoVazio);
+
+/**
+ * Linha pessoal: mesmos campos do canal, mais rotulo e dono.
+ *
+ * `donoId` obrigatorio na criacao — uma linha pessoal sem dono e so um numero
+ * a mais do canal, o que a rota `PUT /:canal` ja cobre.
+ */
+const numeroSchema = z.object({
+  ...camposDoCanal,
+  nome: z.string().trim().min(1).max(60).nullable().optional(),
+  donoId: z.string().uuid(),
+});
+
+const atualizarNumeroSchema = z
   .object({
-    ativo: z.boolean().optional(),
-    phoneNumberId: z.string().trim().max(60).nullable().optional(),
-    wabaId: z.string().trim().max(60).nullable().optional(),
-    pageId: z.string().trim().max(60).nullable().optional(),
-    igUserId: z.string().trim().max(60).nullable().optional(),
-    accessToken: z.string().trim().min(10).nullable().optional(),
-    appSecret: z.string().trim().min(10).nullable().optional(),
-    verifyToken: z.string().trim().min(6).nullable().optional(),
-    filaId: z.string().uuid().nullable().optional(),
-    /*
-     * WhatsApp nos dois modos.
-     *
-     * `modo` nulo limpa a escolha (volta ao oficial, que e o efetivo do nulo).
-     * O segredo da ponte tem minimo de 16 caracteres pelo mesmo motivo do
-     * segredo da IA: e uma chave HMAC, e chave curta se quebra por forca bruta
-     * enquanto ninguem olha.
-     */
-    modo: z.enum(['OFICIAL', 'NAO_OFICIAL']).nullable().optional(),
-    ponteUrl: z.string().trim().url().max(300).nullable().optional(),
-    ponteToken: z.string().trim().min(8).max(200).nullable().optional(),
-    ponteSegredo: z
-      .string()
-      .trim()
-      .min(16, 'Use um segredo de ao menos 16 caracteres')
-      .max(200)
-      .nullable()
-      .optional(),
-    ponteSessao: z.string().trim().max(60).nullable().optional(),
+    ...camposDoCanal,
+    nome: z.string().trim().min(1).max(60).nullable().optional(),
+    donoId: z.string().uuid().nullable().optional(),
   })
-  .refine((d) => Object.keys(d).length > 0, { message: 'Informe ao menos um campo' });
+  .refine((d) => Object.keys(d).length > 0, naoVazio);
 
 const canalDaRota = (valor: string): CanalExterno => {
   const canal = valor.toUpperCase();
@@ -174,6 +199,62 @@ channelsRoutes.get(
   requireRole('ADMIN', 'SUPERVISOR'),
   asyncHandler(async (_req, res) => {
     res.json({ canais: await listarCanais(), suportados: CANAIS_EXTERNOS });
+  }),
+);
+
+/**
+ * Linha pessoal: numero proprio de um usuario (vendedor com WhatsApp dedicado).
+ *
+ * `/numeros/:id` registrada ANTES de `PUT /:canal`: os dois casam com
+ * `PUT /alguma-coisa`, e o Express usa a primeira rota que bater — com a ordem
+ * trocada, `PUT /numeros/xyz` seria lido como canal "numeros" e cairia no 404
+ * de canal invalido.
+ */
+channelsRoutes.put(
+  '/numeros/:id',
+  requireRole('ADMIN'),
+  validateBody(atualizarNumeroSchema),
+  asyncHandler(async (req, res) => {
+    res.json({ canal: await atualizarNumero(param(req, 'id'), req.body) });
+  }),
+);
+
+channelsRoutes.delete(
+  '/numeros/:id',
+  requireRole('ADMIN'),
+  asyncHandler(async (req, res) => {
+    await excluirNumero(param(req, 'id'));
+    res.status(204).end();
+  }),
+);
+
+/**
+ * Ponte de IA de uma linha pessoal — mesma ideia de `/:canal/ia`, so que por
+ * numero: o vendedor pode ter motor de IA proprio, diferente do compartilhado.
+ */
+channelsRoutes.get(
+  '/numeros/:id/ia',
+  requireRole('ADMIN', 'SUPERVISOR'),
+  asyncHandler(async (req, res) => {
+    res.json({ ia: await estadoDaIaDoNumero(param(req, 'id')) });
+  }),
+);
+
+channelsRoutes.put(
+  '/numeros/:id/ia',
+  requireRole('ADMIN'),
+  validateBody(iaSchema),
+  asyncHandler(async (req, res) => {
+    res.json({ ia: await salvarIaDoNumero(param(req, 'id'), req.body) });
+  }),
+);
+
+channelsRoutes.post(
+  '/:canal/numeros',
+  requireRole('ADMIN'),
+  validateBody(numeroSchema),
+  asyncHandler(async (req, res) => {
+    res.status(201).json({ canal: await criarNumero(canalDaRota(param(req, 'canal')), req.body) });
   }),
 );
 

@@ -78,7 +78,7 @@ export async function entregarPesquisa(
 
   const conversa = await prisma.conversation.findUnique({
     where: { id: conversaId },
-    select: { canal: true, enderecoExterno: true, filaId: true, agenteId: true },
+    select: { canal: true, enderecoExterno: true, filaId: true, agenteId: true, canalConfigId: true },
   });
   if (!conversa) return { entregue: false, motivo: 'Conversa nao encontrada' };
 
@@ -99,7 +99,9 @@ export async function entregarPesquisa(
   const texto = await textoConvite(pesquisa.tipo, pesquisa.token);
   try {
     if (exigeEnvioExterno(conversa.canal)) {
-      idExterno = (await enviarParaCanal(conversa.canal, conversa.enderecoExterno, texto)).idExterno;
+      idExterno = (
+        await enviarParaCanal(conversa.canal, conversa.enderecoExterno, texto, conversa.canalConfigId)
+      ).idExterno;
     }
   } catch (err) {
     const motivo = err instanceof Error ? err.message : 'erro desconhecido';

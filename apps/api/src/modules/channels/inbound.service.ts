@@ -1,5 +1,6 @@
 import type { Channel } from '@prisma/client';
 import { baixarAnexo } from './media.service';
+import { configDoDestino } from './channels.service';
 import { prisma } from '../../lib/prisma';
 import { redigirTexto } from '../../lib/redacao';
 import { notificarConversaAtualizada, notificarConversaNova, notificarMensagem } from '../../realtime/hub';
@@ -8,15 +9,31 @@ import { entregarParaIa } from '../bots/ia.service';
 import { inclusaoDetalhe, toConversaDetalhe, toMensagem } from '../conversations/conversations.serializer';
 import type { MensagemNormalizada } from './meta.types';
 
-/** Fila de destino: a configurada no canal, ou a primeira fila ativa daquele canal. */
-async function filaDoCanal(canal: Channel) {
-  const config = await prisma.channelConfig.findFirst({ where: { canal } });
-  if (config?.filaId) return config.filaId;
+type DestinoConversa = { canalConfigId: string | null; filaId: string | null; agenteId: string | null };
+
+/**
+ * Destino de uma conversa nova: a linha que recebeu a mensagem decide.
+ *
+ * Linha pessoal (`donoId` preenchido — o vendedor com WhatsApp proprio): a
+ * conversa nasce ja atribuida a ele, sem fila — o cliente que fala com o
+ * numero dele nao devia esperar em espera compartilhada por algo que ja tem
+ * dono. Linha comum: cai na fila configurada, ou na primeira fila ativa do
+ * canal, como sempre foi.
+ */
+async function destinoDaMensagem(canal: Channel, identificadorDestino: string | null): Promise<DestinoConversa> {
+  const config = await configDoDestino(canal, identificadorDestino);
+
+  if (config?.donoId) {
+    return { canalConfigId: config.id, filaId: null, agenteId: config.donoId };
+  }
+  if (config?.filaId) {
+    return { canalConfigId: config?.id ?? null, filaId: config.filaId, agenteId: null };
+  }
 
   const fila =
     (await prisma.queue.findFirst({ where: { ativa: true, canalPadrao: canal }, orderBy: { criadoEm: 'asc' } })) ??
     (await prisma.queue.findFirst({ where: { ativa: true }, orderBy: { criadoEm: 'asc' } }));
-  return fila?.id ?? null;
+  return { canalConfigId: config?.id ?? null, filaId: fila?.id ?? null, agenteId: null };
 }
 
 /**
@@ -43,16 +60,23 @@ export async function registrarMensagemEntrante(dados: MensagemNormalizada) {
   });
 
   const nova = !emAberto;
-  const filaId = emAberto?.filaId ?? (await filaDoCanal(dados.canal));
+  const destino = emAberto
+    ? { canalConfigId: emAberto.canalConfigId, filaId: emAberto.filaId, agenteId: null }
+    : await destinoDaMensagem(dados.canal, dados.identificadorDestino);
 
   const conversa =
     emAberto ??
     (await prisma.conversation.create({
       data: {
         canal: dados.canal,
-        status: 'EM_ESPERA',
+        // Linha pessoal ja nasce atribuida: nao ha "esperando na fila" para
+        // quem tem numero proprio, o cliente ja falou com o dono.
+        status: destino.agenteId ? 'ATRIBUIDO' : 'EM_ESPERA',
         contatoId: contato.id,
-        filaId,
+        filaId: destino.filaId,
+        agenteId: destino.agenteId,
+        atribuidoEm: destino.agenteId ? new Date() : null,
+        canalConfigId: destino.canalConfigId,
         enderecoExterno: dados.enderecoExterno,
       },
     }));
