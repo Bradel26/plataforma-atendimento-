@@ -60,6 +60,16 @@ describe.skipIf(!temFront)('API servindo o front', () => {
   });
 
   /**
+   * upgrade-insecure-requests manda o navegador trocar por HTTPS todo recurso
+   * da pagina (script, css), mesmo ela tendo sido servida por HTTP — quebra o
+   * carregamento dos proprios assets no dominio temporario, que so tem HTTP.
+   */
+  it('nao manda o navegador trocar os assets por HTTPS quando HSTS nao esta configurado', async () => {
+    const res = await fetch(base + '/');
+    expect(res.headers.get('content-security-policy')).not.toContain('upgrade-insecure-requests');
+  });
+
+  /**
    * Este e o motivo do arquivo existir. Servido por nginx, o front nao passava
    * pelo helmet; servido pela API, passa — e o helmet proibia enquadrar a
    * pagina, o que mata o widget no site do cliente.
