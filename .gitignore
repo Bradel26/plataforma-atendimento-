@@ -61,3 +61,4 @@ backups/
 # Snapshots/logs de depuracao do MCP do Playwright usado pela ferramenta —
 # artefato de sessao, nao saida de teste (essa ja e ignorada acima).
 .playwright-mcp/
+.superpowers/
