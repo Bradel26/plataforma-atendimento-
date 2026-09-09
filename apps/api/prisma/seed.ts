@@ -123,6 +123,7 @@ async function main() {
   }
 
   await semearCrm();
+  await semearEsteira();
 
   console.log('Seed concluido.');
   if (PRODUCAO) {
@@ -192,6 +193,30 @@ async function semearCrm() {
   }
 
   console.log(`  funil: ${funil.nome} (${estagios.length} estagios) | catalogo: ${catalogo.nome}`);
+}
+
+/**
+ * Esteira de Credenciamento: funil separado do CRM comercial, usado para
+ * acompanhar parceiros do cadastro ate o credenciamento ativo. Idempotente,
+ * mesmo shape de `semearCrm` — pipeline diferente, entao funcao propria.
+ */
+async function semearEsteira() {
+  const funilEsteira = await prisma.funnel.upsert({
+    where: { organizacaoId_nome: { organizacaoId: ORGANIZACAO_INICIAL, nome: 'Esteira de Credenciamento' } },
+    update: {},
+    create: { nome: 'Esteira de Credenciamento', tipo: 'ESTEIRA' },
+  });
+
+  const estagiosEsteira = ['Novo cadastro', 'Pendencia', 'Aprovacao', 'Credenciado', 'Ativo'];
+  for (const [indice, nome] of estagiosEsteira.entries()) {
+    await prisma.funnelStage.upsert({
+      where: { funilId_ordem: { funilId: funilEsteira.id, ordem: indice + 1 } },
+      update: { nome },
+      create: { funilId: funilEsteira.id, ordem: indice + 1, nome },
+    });
+  }
+
+  console.log(`  funil: ${funilEsteira.nome} (${estagiosEsteira.length} estagios)`);
 }
 
 /**
