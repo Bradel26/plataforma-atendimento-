@@ -829,8 +829,9 @@ export async function funilKanban(funilId?: string) {
   };
 }
 
-export async function listarFunis() {
+export async function listarFunis(tipo?: 'COMERCIAL' | 'ESTEIRA') {
   const funis = await prisma.funnel.findMany({
+    where: tipo ? { tipo } : undefined,
     include: { estagios: { orderBy: { ordem: 'asc' } }, _count: { select: { oportunidades: true } } },
     orderBy: { criadoEm: 'asc' },
   });
@@ -869,13 +870,18 @@ export async function definirTarefaDaEtapa(funilId: string, estagioId: string, t
   });
 }
 
-export async function criarFunil(input: { nome: string; estagios: Array<{ nome: string; probabilidade: number }> }) {
+export async function criarFunil(input: {
+  nome: string;
+  tipo?: 'COMERCIAL' | 'ESTEIRA';
+  estagios: Array<{ nome: string; probabilidade: number }>;
+}) {
   const existente = await prisma.funnel.findFirst({ where: { nome: input.nome } });
   if (existente) throw conflict('Ja existe um funil com este nome');
 
   return prisma.funnel.create({
     data: {
       nome: input.nome,
+      tipo: input.tipo ?? 'COMERCIAL',
       estagios: {
         createMany: {
           data: input.estagios.map((e, indice) => ({ ...e, ordem: indice + 1 })),

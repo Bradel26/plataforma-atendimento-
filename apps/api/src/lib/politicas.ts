@@ -164,6 +164,15 @@ export const politicaOportunidades = {
   },
 };
 
+export const politicaCredenciamentos = {
+  /** Processo operacional: AGENTE nao participa, mesmo corte de Oportunidades. */
+  filtro(ctx: ContextoVisibilidade): Prisma.CredenciamentoWhereInput {
+    if (ctx.veTudo) return {};
+    if (!ctx.carteiraAberta) return NADA;
+    return filtroCarteira(ctx) as Prisma.CredenciamentoWhereInput;
+  },
+};
+
 export const politicaAtividades = {
   /**
    * Atividade e acessoria: a visibilidade dela **deriva**.

@@ -18,7 +18,8 @@
     "start:worker": "node dist/src/worker.js",
     "admin:criar": "tsx src/cli/criar-admin.ts",
     "lgpd:reaplicar": "tsx src/cli/reaplicar-anonimizacao.ts",
-    "lgpd:reaplicar:executar": "tsx src/cli/reaplicar-anonimizacao.ts --executar"
+    "lgpd:reaplicar:executar": "tsx src/cli/reaplicar-anonimizacao.ts --executar",
+    "esteira:seed": "tsx src/cli/seed-esteira-bradel.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

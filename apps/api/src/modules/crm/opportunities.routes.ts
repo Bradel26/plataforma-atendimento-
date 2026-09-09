@@ -51,8 +51,9 @@ funnelsRoutes.use(COMERCIAIS);
 
 funnelsRoutes.get(
   '/',
+  validateQuery(z.object({ tipo: z.enum(['COMERCIAL', 'ESTEIRA']).optional() })),
   asyncHandler(async (_req, res) => {
-    res.json({ funis: await listarFunis() });
+    res.json({ funis: await listarFunis(res.locals.query.tipo) });
   }),
 );
 

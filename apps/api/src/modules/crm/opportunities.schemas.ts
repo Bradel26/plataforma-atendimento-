@@ -113,6 +113,7 @@ export const itensSchema = z.object({
 
 export const criarFunilSchema = z.object({
   nome: z.string().trim().min(2).max(80),
+  tipo: z.enum(['COMERCIAL', 'ESTEIRA']).default('COMERCIAL'),
   estagios: z
     .array(
       z.object({
