@@ -469,6 +469,38 @@ export type ColunaFunil = {
   valorPonderado: number;
 };
 
+export type SituacaoExcecao = 'REPROVADO' | 'CANCELADO' | 'INATIVADO';
+
+export const LABEL_SITUACAO_EXCECAO: Record<SituacaoExcecao, string> = {
+  REPROVADO: 'Reprovado',
+  CANCELADO: 'Cancelado',
+  INATIVADO: 'Inativado',
+};
+
+export type EstagioEsteira = { id: string; nome: string; ordem: number };
+
+export type Credenciamento = {
+  id: string;
+  contato: Referencia;
+  conta: Referencia | null;
+  funil: Referencia;
+  estagio: EstagioEsteira;
+  responsavel: Referencia | null;
+  situacaoExcecao: SituacaoExcecao | null;
+  motivoExcecao: string | null;
+  observacoes: string | null;
+  criadoEm: string;
+  atualizadoEm: string;
+  fechadoEm: string | null;
+  diasNoEstagio: number;
+};
+
+export type ColunaCredenciamento = {
+  estagio: EstagioEsteira;
+  credenciamentos: Credenciamento[];
+  total: number;
+};
+
 export type Produto = {
   id: string;
   nome: string;
