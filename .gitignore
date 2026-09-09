@@ -62,3 +62,4 @@ backups/
 # artefato de sessao, nao saida de teste (essa ja e ignorada acima).
 .playwright-mcp/
 .superpowers/
+.worktrees/
