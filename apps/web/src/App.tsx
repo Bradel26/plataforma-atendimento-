@@ -16,6 +16,7 @@ import { TelefoniaPage } from './pages/TelefoniaPage';
 import { WebchatPage } from './pages/WebchatPage';
 import { ConfiguracoesPage } from './pages/configuracoes/ConfiguracoesPage';
 import { CrmPage } from './pages/crm/CrmPage';
+import { EsteiraPage } from './pages/esteira/EsteiraPage';
 import { ProtocoloPage } from './pages/protocolo/ProtocoloPage';
 
 /**
@@ -26,6 +27,7 @@ const PAGINAS: Record<string, ComponentType> = {
   '/dashboards': DashboardsPage,
   '/atendimento': AtendimentoPage,
   '/protocolo': ProtocoloPage,
+  '/esteira': EsteiraPage,
   '/monitoramento': MonitoramentoPage,
   '/gestao': GestaoPage,
   '/campanhas': CampanhasPage,

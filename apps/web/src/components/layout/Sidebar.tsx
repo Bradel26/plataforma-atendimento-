@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { Tooltip } from '../ui/Tooltip';
 import { useAuth } from '../../features/auth/AuthProvider';
 import { useBranding } from '../../features/branding/BrandingProvider';
+import { api } from '../../lib/api';
 import { NAV, itemDaRota } from './nav';
 
 const CHAVE_COLAPSO = 'plataforma:sidebar-colapsada';
@@ -31,8 +32,19 @@ export function Sidebar({ aberta, aoFechar }: { aberta: boolean; aoFechar: () =>
     }
   });
   const navRef = useRef<HTMLElement>(null);
+  const [temEsteira, setTemEsteira] = useState(true);
 
-  const itens = NAV.filter((item) => temPerfil(...item.perfis));
+  useEffect(() => {
+    if (!temPerfil('ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL')) return;
+    void api
+      .get<{ funis: unknown[] }>('/funis?tipo=ESTEIRA')
+      .then((r) => setTemEsteira(r.funis.length > 0))
+      .catch(() => setTemEsteira(false));
+  }, [temPerfil]);
+
+  const itens = NAV.filter((item) => temPerfil(...item.perfis)).filter(
+    (item) => item.rota !== '/esteira' || temEsteira,
+  );
   /**
    * O item ativo vem do proprio menu, nao do `isActive` do NavLink.
    *
