@@ -40,7 +40,6 @@ enum SituacaoCredenciamento {
 model Credenciamento {
   id              String    @id @default(uuid())
   organizacaoId   String    @map("organizacao_id")
-  numero          Int       // sequencial por organizacao, mesmo padrao do Ticket.numero
   contatoId       String    @map("contato_id")   // o parceiro (pessoa)
   contaId         String?   @map("conta_id")     // empresa do parceiro, se houver
   funilId         String    @map("funil_id")
@@ -60,15 +59,20 @@ model Credenciamento {
   responsavel   User?        @relation(fields: [responsavelId], references: [id], onDelete: SetNull)
   organizacao   Organizacao  @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
-  @@unique([organizacaoId, numero])
   @@index([organizacaoId, estagioId, atualizadoEm])
   @@map("credenciamentos")
 }
 ```
 
+Sem numero sequencial: diferente do Protocolo (que precisa de um numero legivel para comunicar com o cliente por telefone/e-mail), o Credenciamento e uso interno do CRM — mesma razao pela qual `Lead` e `Opportunity` tambem nao tem.
+
 `situacaoExcecao` fica fora do fluxo principal de estágios: um card pode estar parado em "Pendência" e simultaneamente marcado `CANCELADO`. Isso evita que exceções virem colunas extras do kanban misturadas com progresso normal — o card some do fluxo ativo (fica visualmente marcado, mas não bloqueia a contagem de "quantos estão avançando").
 
 `Ticket`/`TicketStatus`, `Lead`/`LeadFase` e `Opportunity` continuam sem nenhuma alteração.
+
+## Visibilidade e perfis
+
+Mesmo corte de Oportunidades: processo comercial/operacional, `AGENTE` fora (`requireRole('ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL')`). Escopo por carteira via `politicaCredenciamentos`, no mesmo molde de `politicaOportunidades` em `lib/politicas.ts` — quem vê tudo (ADMIN/SUPERVISOR) vê tudo; os demais veem os próprios/da equipe.
 
 ## API
 
