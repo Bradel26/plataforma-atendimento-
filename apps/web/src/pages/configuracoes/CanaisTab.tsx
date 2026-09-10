@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { Alerta, Badge, Button, Card, EmptyState, Field, Input, Select } from '../../components/ui';
 import { useConfirm } from '../../components/ui/ConfirmDialog';
 import { ApiError, api } from '../../lib/api';
@@ -36,10 +36,15 @@ const numeroVazio = {
   id: null as string | null,
   nome: '',
   donoId: '',
+  modo: 'OFICIAL' as 'OFICIAL' | 'NAO_OFICIAL',
   phoneNumberId: '',
   accessToken: '',
   appSecret: '',
   verifyToken: '',
+  ponteUrl: '',
+  ponteToken: '',
+  ponteSegredo: '',
+  ponteSessao: '',
   filaId: '',
   ativo: true,
   iaAtiva: false,
@@ -127,6 +132,11 @@ export function CanaisTab() {
   const [numeroErro, setNumeroErro] = useState<string | null>(null);
   const [numeroOk, setNumeroOk] = useState<string | null>(null);
   const [numeroOcupado, setNumeroOcupado] = useState(false);
+  /** Qual linha pessoal esta com o painel de conexao aberto — nulo = nenhuma. */
+  const [linhaAberta, setLinhaAberta] = useState<string | null>(null);
+  const [estadoLinha, setEstadoLinha] = useState<EstadoDaPonte | null>(null);
+  const [qrLinha, setQrLinha] = useState<QrDaPonte | null>(null);
+  const [trocandoLinha, setTrocandoLinha] = useState(false);
 
   const carregar = async () => {
     try {
@@ -219,6 +229,42 @@ export function CanaisTab() {
     };
   }, [editando, modo]);
 
+  useEffect(() => {
+    if (!linhaAberta) {
+      setQrLinha(null);
+      setEstadoLinha(null);
+      return;
+    }
+
+    let vivo = true;
+
+    const buscar = async () => {
+      try {
+        const [e, q] = await Promise.all([
+          api.get<{ estado: EstadoDaPonte }>(`/canais/numeros/${linhaAberta}/ponte/estado`),
+          api.get<QrDaPonte>(`/canais/numeros/${linhaAberta}/ponte/qr`),
+        ]);
+        if (vivo) {
+          setEstadoLinha(e.estado);
+          setQrLinha(q);
+        }
+      } catch {
+        // Mesma razao do polling compartilhado: a ponte cair nao pode apagar o
+        // QR que a pessoa esta escaneando agora.
+      }
+    };
+
+    void buscar();
+    const timer = window.setInterval(() => {
+      void buscar();
+    }, 5_000);
+
+    return () => {
+      vivo = false;
+      window.clearInterval(timer);
+    };
+  }, [linhaAberta]);
+
   /**
    * Trocar de numero: desfaz o pareamento e volta a pedir QR.
    *
@@ -242,6 +288,28 @@ export function CanaisTab() {
           setErro(e instanceof ApiError ? e.message : 'Falha ao desconectar a ponte');
         } finally {
           setTrocandoNumero(false);
+        }
+      },
+    });
+  };
+
+  const trocarLinha = (numero: CanalConfig) => {
+    confirmar({
+      titulo: `Desconectar o WhatsApp de ${numero.dono?.nome}?`,
+      descricao: 'Ele para de receber pelo WhatsApp ate escanear o novo QR.',
+      variante: 'perigo',
+      rotuloConfirmar: 'Desconectar',
+      aoConfirmar: async () => {
+        setTrocandoLinha(true);
+        setNumeroErro(null);
+        try {
+          await api.post(`/canais/numeros/${numero.id}/ponte/desconectar`, {});
+          setQrLinha(null);
+          setEstadoLinha(null);
+        } catch (e) {
+          setNumeroErro(e instanceof ApiError ? e.message : 'Falha ao desconectar o numero');
+        } finally {
+          setTrocandoLinha(false);
         }
       },
     });
@@ -304,6 +372,7 @@ export function CanaisTab() {
       id: numero.id,
       nome: numero.nome ?? '',
       donoId: numero.dono?.id ?? '',
+      modo: numero.modo ?? 'OFICIAL',
       filaId: numero.fila?.id ?? '',
       ativo: numero.ativo,
       iaAtiva: ia?.ativa ?? false,
@@ -325,14 +394,21 @@ export function CanaisTab() {
     }
     setNumeroOcupado(true);
     try {
-      const corpo: Record<string, unknown> = { ativo: numeroForm.ativo };
+      const corpo: Record<string, unknown> = { ativo: numeroForm.ativo, modo: numeroForm.modo };
       if (numeroForm.nome) corpo.nome = numeroForm.nome;
       if (numeroForm.donoId) corpo.donoId = numeroForm.donoId;
-      if (numeroForm.phoneNumberId) corpo.phoneNumberId = numeroForm.phoneNumberId;
-      if (numeroForm.accessToken) corpo.accessToken = numeroForm.accessToken;
-      if (numeroForm.appSecret) corpo.appSecret = numeroForm.appSecret;
-      if (numeroForm.verifyToken) corpo.verifyToken = numeroForm.verifyToken;
       if (numeroForm.filaId) corpo.filaId = numeroForm.filaId;
+      if (numeroForm.modo === 'NAO_OFICIAL') {
+        if (numeroForm.ponteUrl) corpo.ponteUrl = numeroForm.ponteUrl;
+        if (numeroForm.ponteToken) corpo.ponteToken = numeroForm.ponteToken;
+        if (numeroForm.ponteSegredo) corpo.ponteSegredo = numeroForm.ponteSegredo;
+        if (numeroForm.ponteSessao) corpo.ponteSessao = numeroForm.ponteSessao;
+      } else {
+        if (numeroForm.phoneNumberId) corpo.phoneNumberId = numeroForm.phoneNumberId;
+        if (numeroForm.accessToken) corpo.accessToken = numeroForm.accessToken;
+        if (numeroForm.appSecret) corpo.appSecret = numeroForm.appSecret;
+        if (numeroForm.verifyToken) corpo.verifyToken = numeroForm.verifyToken;
+      }
 
       const id = numeroForm.id
         ? (await api.put<{ canal: CanalConfig }>(`/canais/numeros/${numeroForm.id}`, corpo)).canal.id
@@ -702,20 +778,89 @@ export function CanaisTab() {
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {numeros.map((n) => (
-                      <tr key={n.id}>
-                        <td className="py-2 pr-2 text-slate-800">{n.dono?.nome}</td>
-                        <td className="py-2 pr-2 text-slate-600">{n.phoneNumberId ?? '—'}</td>
-                        <td className="py-2 pr-2 text-slate-600">{n.fila?.nome ?? 'nenhuma (linha direta)'}</td>
-                        <td className="py-2 pr-2">
-                          {n.ativo ? <Badge tom="sucesso">Ativo</Badge> : <Badge>Inativo</Badge>}
-                        </td>
-                        <td className="py-2 text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button variante="neutro" onClick={() => void editarNumero(n)}>Editar</Button>
-                            <Button variante="perigo" onClick={() => void excluirNumero(n)}>Remover</Button>
-                          </div>
-                        </td>
-                      </tr>
+                      <Fragment key={n.id}>
+                        <tr>
+                          <td className="py-2 pr-2 text-slate-800">{n.dono?.nome}</td>
+                          <td className="py-2 pr-2 text-slate-600">{n.phoneNumberId ?? n.ponteSessao ?? '—'}</td>
+                          <td className="py-2 pr-2 text-slate-600">{n.fila?.nome ?? 'nenhuma (linha direta)'}</td>
+                          <td className="py-2 pr-2">
+                            {n.ativo ? <Badge tom="sucesso">Ativo</Badge> : <Badge>Inativo</Badge>}
+                          </td>
+                          <td className="py-2 text-right">
+                            <div className="flex justify-end gap-2">
+                              {n.modo === 'NAO_OFICIAL' && (
+                                <Button
+                                  variante="neutro"
+                                  onClick={() => setLinhaAberta(linhaAberta === n.id ? null : n.id)}
+                                >
+                                  {linhaAberta === n.id ? 'Fechar' : 'Conectar'}
+                                </Button>
+                              )}
+                              <Button variante="neutro" onClick={() => void editarNumero(n)}>Editar</Button>
+                              <Button variante="perigo" onClick={() => void excluirNumero(n)}>Remover</Button>
+                            </div>
+                          </td>
+                        </tr>
+                        {linhaAberta === n.id && (
+                          <tr>
+                            <td colSpan={5} className="bg-slate-50 px-2 py-3">
+                              {estadoLinha && (
+                                <p className="mb-2 flex items-center gap-2 text-xs">
+                                  <span className="text-slate-500">Sessao:</span>
+                                  <Badge
+                                    tom={
+                                      estadoLinha.situacao === 'CONECTADO'
+                                        ? 'sucesso'
+                                        : estadoLinha.situacao === 'DESCONECTADO'
+                                          ? 'alerta'
+                                          : 'neutro'
+                                    }
+                                  >
+                                    {estadoLinha.situacao === 'CONECTADO'
+                                      ? 'conectada'
+                                      : estadoLinha.situacao === 'DESCONECTADO'
+                                        ? 'desconectada'
+                                        : 'nao confirmada'}
+                                  </Badge>
+                                </p>
+                              )}
+                              {qrLinha?.conectado ? (
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                  <p className="text-sm text-slate-700">
+                                    <span className="font-medium text-emerald-700">Numero conectado.</span>
+                                  </p>
+                                  <button
+                                    type="button"
+                                    onClick={() => trocarLinha(n)}
+                                    disabled={trocandoLinha}
+                                    className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                                  >
+                                    {trocandoLinha ? 'Desconectando...' : 'Trocar de numero'}
+                                  </button>
+                                </div>
+                              ) : qrLinha?.qr ? (
+                                <div className="flex flex-wrap items-center gap-4">
+                                  <img
+                                    src={qrLinha.qr}
+                                    alt={`QR Code para conectar o WhatsApp de ${n.dono?.nome}`}
+                                    width={180}
+                                    height={180}
+                                    className="rounded border border-slate-200"
+                                  />
+                                  <p className="text-xs text-slate-600">
+                                    Peca para {n.dono?.nome} abrir o WhatsApp, tocar em{' '}
+                                    <strong>Aparelhos conectados</strong> e apontar a camera para este codigo.
+                                  </p>
+                                </div>
+                              ) : (
+                                <p className="text-xs text-slate-500">
+                                  {qrLinha?.motivo ?? 'Gerando o QR Code...'}
+                                </p>
+                              )}
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>
@@ -746,32 +891,85 @@ export function CanaisTab() {
                     onChange={(e) => setNumeroForm({ ...numeroForm, nome: e.target.value })}
                   />
                 </Field>
-                <Field label="Phone Number ID">
-                  <Input
-                    value={numeroForm.phoneNumberId}
-                    onChange={(e) => setNumeroForm({ ...numeroForm, phoneNumberId: e.target.value })}
-                  />
-                </Field>
-                <Field label="Access Token" hint="Nunca e exibido de volta">
-                  <Input
-                    type="password"
-                    value={numeroForm.accessToken}
-                    onChange={(e) => setNumeroForm({ ...numeroForm, accessToken: e.target.value })}
-                  />
-                </Field>
-                <Field label="App Secret">
-                  <Input
-                    type="password"
-                    value={numeroForm.appSecret}
-                    onChange={(e) => setNumeroForm({ ...numeroForm, appSecret: e.target.value })}
-                  />
-                </Field>
-                <Field label="Verify Token">
-                  <Input
-                    value={numeroForm.verifyToken}
-                    onChange={(e) => setNumeroForm({ ...numeroForm, verifyToken: e.target.value })}
-                  />
-                </Field>
+                <div className="sm:col-span-2 rounded-lg border border-slate-200 p-3">
+                  <p className="text-xs font-medium text-slate-700">Como este vendedor conecta</p>
+                  <div className="mt-2 flex gap-4">
+                    {(['OFICIAL', 'NAO_OFICIAL'] as const).map((opcao) => (
+                      <label key={opcao} className="flex cursor-pointer items-center gap-2 text-sm">
+                        <input
+                          type="radio"
+                          name="modo-numero"
+                          value={opcao}
+                          checked={numeroForm.modo === opcao}
+                          onChange={() => setNumeroForm({ ...numeroForm, modo: opcao })}
+                        />
+                        {opcao === 'OFICIAL' ? 'API oficial (Meta)' : 'Ponte (QR Code)'}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {numeroForm.modo === 'NAO_OFICIAL' ? (
+                  <>
+                    <Field label="Endereco da ponte" hint="Em branco = usa o mesmo endereco do WhatsApp compartilhado">
+                      <Input
+                        value={numeroForm.ponteUrl}
+                        placeholder="http://localhost:3000/api"
+                        onChange={(e) => setNumeroForm({ ...numeroForm, ponteUrl: e.target.value })}
+                      />
+                    </Field>
+                    <Field label="Token da ponte">
+                      <Input
+                        type="password"
+                        value={numeroForm.ponteToken}
+                        onChange={(e) => setNumeroForm({ ...numeroForm, ponteToken: e.target.value })}
+                      />
+                    </Field>
+                    <Field label="Segredo de assinatura" hint="Minimo 16 caracteres — sem ele a mensagem recebida e recusada">
+                      <Input
+                        type="password"
+                        value={numeroForm.ponteSegredo}
+                        onChange={(e) => setNumeroForm({ ...numeroForm, ponteSegredo: e.target.value })}
+                      />
+                    </Field>
+                    <Field label="Sessao na ponte" hint="Nome unico desta linha na ponte — e ele que identifica de qual vendedor veio cada mensagem">
+                      <Input
+                        value={numeroForm.ponteSessao}
+                        placeholder={`vendedor-${numeroForm.donoId.slice(0, 8) || 'novo'}`}
+                        onChange={(e) => setNumeroForm({ ...numeroForm, ponteSessao: e.target.value })}
+                      />
+                    </Field>
+                  </>
+                ) : (
+                  <>
+                    <Field label="Phone Number ID">
+                      <Input
+                        value={numeroForm.phoneNumberId}
+                        onChange={(e) => setNumeroForm({ ...numeroForm, phoneNumberId: e.target.value })}
+                      />
+                    </Field>
+                    <Field label="Access Token" hint="Nunca e exibido de volta">
+                      <Input
+                        type="password"
+                        value={numeroForm.accessToken}
+                        onChange={(e) => setNumeroForm({ ...numeroForm, accessToken: e.target.value })}
+                      />
+                    </Field>
+                    <Field label="App Secret">
+                      <Input
+                        type="password"
+                        value={numeroForm.appSecret}
+                        onChange={(e) => setNumeroForm({ ...numeroForm, appSecret: e.target.value })}
+                      />
+                    </Field>
+                    <Field label="Verify Token">
+                      <Input
+                        value={numeroForm.verifyToken}
+                        onChange={(e) => setNumeroForm({ ...numeroForm, verifyToken: e.target.value })}
+                      />
+                    </Field>
+                  </>
+                )}
                 <Field
                   label="Fila de espera (opcional)"
                   hint="Deixe vazio: a conversa vai direto para o vendedor, sem espera"
