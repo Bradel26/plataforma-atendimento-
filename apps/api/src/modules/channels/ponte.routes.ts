@@ -36,6 +36,13 @@ export const ponteRoutes = Router();
 const mensagemSchema = z.object({
   /** Numero de quem mandou, em qualquer formato: normalizamos aqui. */
   numero: z.string().trim().min(8).max(30),
+  /**
+   * Nome da sessao/instancia da ponte que recebeu esta mensagem — o mesmo
+   * valor de `ChannelConfig.ponteSessao` cadastrado na linha pessoal do
+   * vendedor. Opcional: uma ponte antiga (ou de sessao unica) que nao manda
+   * este campo cai na config compartilhada, como sempre foi.
+   */
+  sessao: z.string().trim().min(1).max(60).optional(),
   nome: z.string().trim().max(120).nullable().optional(),
   texto: z.string().max(4096).optional(),
   /**
@@ -150,9 +157,11 @@ ponteRoutes.post(
         // A ponte nao tem media id: ela manda a URL ou nada.
         anexoIdExterno: null,
         anexoNome: corpo.anexoNome ?? null,
-        // A ponte ainda so atende UM numero por organizacao (a sessao unica de
-        // `ponteSessao`); nulo cai na config compartilhada, que e essa mesma.
-        identificadorDestino: null,
+        // O nome da sessao identifica a linha pessoal (`ChannelConfig.ponteSessao`).
+        // Sem ele (ponte antiga, ou sessao unica sem apelido cadastrado),
+        // `configDoDestino` cai na config compartilhada — mesmo comportamento
+        // de antes desta mudanca.
+        identificadorDestino: corpo.sessao?.trim() || null,
       });
 
       // 200 tambem para reentrega: `duplicada` diz que nada foi criado, e a ponte

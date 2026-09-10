@@ -272,7 +272,19 @@ export async function obterConfigPorId(id: string) {
 export async function configDoDestino(canal: Channel, identificador: string | null) {
   if (identificador) {
     const porId = await prisma.channelConfig.findFirst({
-      where: { canal, OR: [{ phoneNumberId: identificador }, { pageId: identificador }, { igUserId: identificador }] },
+      where: {
+        canal,
+        OR: [
+          { phoneNumberId: identificador },
+          { pageId: identificador },
+          { igUserId: identificador },
+          // Identificador da ponte nao oficial: o nome da sessao/instancia
+          // Baileys que recebeu a mensagem. Nao colide com os ids da Meta —
+          // sao espacos de nomes diferentes (ids numericos da Meta vs. nome
+          // livre de sessao) — entao um OR simples basta, sem checar o modo.
+          { ponteSessao: identificador },
+        ],
+      },
     });
     if (porId) return aberto(porId);
   }
