@@ -4,7 +4,7 @@ import { asyncHandler } from '../../http/async-handler';
 import { badRequest } from '../../lib/errors';
 import { prismaSemIsolamento } from '../../lib/prisma';
 import { comOrganizacao, semOrganizacao } from '../../lib/tenant';
-import { assinaturaValida, obterConfig } from './channels.service';
+import { assinaturaValida, configDoDestino } from './channels.service';
 import { registrarMensagemEntrante } from './inbound.service';
 import { modoEfetivo, numeroNormalizado } from './whatsapp.modo';
 
@@ -86,7 +86,32 @@ ponteRoutes.post(
     }
 
     await comOrganizacao(organizacaoId, async () => {
-      const config = await obterConfig('WHATSAPP');
+      let corpoJson: unknown;
+      try {
+        corpoJson = JSON.parse(corpoBruto.toString('utf8'));
+      } catch (erro) {
+        // 400 e o fim da linha: a ponte nao deve reentregar o que nunca vai
+        // passar, e responder 200 esconderia o defeito de integracao.
+        throw badRequest(
+          `Corpo invalido: ${erro instanceof Error ? erro.message.slice(0, 200) : 'nao e JSON'}`,
+        );
+      }
+
+      // O nome da sessao precisa ser lido antes de validar a assinatura: e ele
+      // que diz qual ChannelConfig recebeu a mensagem, e cada linha pessoal tem
+      // o proprio ponteSegredo — validar sempre contra a config compartilhada
+      // (ou a primeira linha cadastrada) rejeitaria a mensagem de qualquer outra
+      // linha pessoal quando nao ha config compartilhada.
+      const sessaoBruta: string | null =
+        typeof corpoJson === 'object' &&
+        corpoJson !== null &&
+        'sessao' in corpoJson &&
+        typeof (corpoJson as { sessao?: unknown }).sessao === 'string' &&
+        (corpoJson as { sessao: string }).sessao.trim().length > 0
+          ? (corpoJson as { sessao: string }).sessao.trim()
+          : null;
+
+      const config = await configDoDestino('WHATSAPP', sessaoBruta);
 
       if (!config?.ativo || modoEfetivo(config.modo) !== 'NAO_OFICIAL') {
         res.status(503).json({
@@ -126,7 +151,7 @@ ponteRoutes.post(
 
       let corpo: z.infer<typeof mensagemSchema>;
       try {
-        corpo = mensagemSchema.parse(JSON.parse(corpoBruto.toString('utf8')));
+        corpo = mensagemSchema.parse(corpoJson);
       } catch (erro) {
         // 400 e o fim da linha: a ponte nao deve reentregar o que nunca vai
         // passar, e responder 200 esconderia o defeito de integracao.
