@@ -9,12 +9,14 @@ async function mediaSegundos(
   campoFim: string,
   tabela: string,
   desde: Date,
+  agenteId?: string,
 ): Promise<number | null> {
+  const filtroAgente = agenteId ? ` AND "agente_id" = $2` : '';
   const linhas = await prisma.$queryRawUnsafe<Array<{ media: number | null }>>(
     `SELECT AVG(EXTRACT(EPOCH FROM ("${campoFim}" - "${campoInicio}")))::float AS media
      FROM "${tabela}"
-     WHERE "${campoFim}" IS NOT NULL AND "${campoInicio}" IS NOT NULL AND "${campoInicio}" >= $1`,
-    desde,
+     WHERE "${campoFim}" IS NOT NULL AND "${campoInicio}" IS NOT NULL AND "${campoInicio}" >= $1${filtroAgente}`,
+    ...(agenteId ? [desde, agenteId] : [desde]),
   );
   const media = linhas[0]?.media;
   return media === null || media === undefined ? null : Math.round(media);
