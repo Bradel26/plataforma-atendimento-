@@ -48,6 +48,8 @@ const COM_ORGANIZACAO = new Set([
   'Filial',
   // Campos customizados (item 6.4): tabela raiz, com organizacao e CHECK proprio.
   'CampoCustomizado',
+  // Esteira de credenciamento: tabela raiz, com organizacao e CHECK proprio.
+  'Credenciamento',
 ]);
 
 /** Operacoes que leem ou alteram por filtro: ganham `where`. */
