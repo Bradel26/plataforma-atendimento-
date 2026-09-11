@@ -1,5 +1,6 @@
 import { prisma } from '../../lib/prisma';
 import { contextoVisibilidade } from '../../lib/visibilidade';
+import { organizacaoAtual } from '../../lib/tenant';
 import { notFound } from '../../lib/errors';
 import { competencia, proximoMes } from '../crm/metas';
 import { conversao } from './vendedores';
@@ -43,7 +44,16 @@ async function idsVisiveis(): Promise<string[] | null> {
 export async function listarVendedoresVisiveis() {
   const ids = await idsVisiveis();
   return prisma.user.findMany({
-    where: { ativo: true, ...(ids ? { id: { in: ids } } : {}) },
+    where: {
+      ativo: true,
+      ...(ids
+        ? { id: { in: ids } }
+        // ADMIN/SUPERVISOR (veTudo, sem `ids`): so os perfis que plausivelmente
+        // sao `responsavelId` de uma oportunidade neste modelo de papeis. A
+        // propria equipe do GESTOR e o "so eu mesmo" dos demais ficam como
+        // estavam — sempre selecionaveis, qualquer que seja o perfil.
+        : { perfil: { in: ['GESTOR', 'COMERCIAL'] } }),
+    },
     select: { id: true, nome: true },
     orderBy: { nome: 'asc' },
   });
@@ -67,7 +77,7 @@ export async function resumoDoVendedor(vendedorId: string, mes: Date): Promise<R
     tme,
     tma,
     oportunidadesPorStatus,
-    oportunidadesDoVendedor,
+    gruposDePropostas,
     metaRegistrada,
     canais,
   ] = await Promise.all([
@@ -95,33 +105,36 @@ export async function resumoDoVendedor(vendedorId: string, mes: Date): Promise<R
     /*
      * As propostas geradas (`PropostaGerada`) nao carregam `organizacaoId` — sao
      * filho de `Opportunity`, alcancado so por `oportunidadeId`, e por isso NAO
-     * estao em `COM_ORGANIZACAO` (ver `lib/prisma.ts`). Um filtro aninhado
-     * (`propostaGerada.count({ where: { oportunidade: { responsavelId } } })`)
-     * compilaria como join e nao ganharia o `organizacaoId` que a extensao so
-     * injeta no modelo de topo da chamada — vazaria propostas de outra
-     * organizacao. Por isso resolvemos os ids de oportunidade do vendedor aqui,
-     * com uma chamada de topo em `Opportunity` (que ESTA em `COM_ORGANIZACAO` e
-     * ganha o filtro automaticamente), e contamos `propostas` por esses ids.
+     * estao em `COM_ORGANIZACAO` (ver `lib/prisma.ts`). Um filtro aninhado em
+     * relacao nao passa pela extensao — por isso `organizacaoId` entra aqui a
+     * mao, explicitamente, dentro do `where.oportunidade`. Isso so e seguro
+     * porque `Opportunity.responsavelId` agora e validado (`exigirUsuarioDaOrganizacao`
+     * em `opportunities.service.ts`) para sempre pertencer a esta organizacao —
+     * sem essa garantia um id de vendedor de outra organizacao poderia, em tese,
+     * ter sido gravado aqui e vazar dados.
+     *
+     * `groupBy` por `oportunidadeId`, e nao `count`: a pergunta certa e "quantas
+     * oportunidades distintas tiveram proposta gerada no periodo", nao "quantos
+     * PDFs foram baixados" — um refresh ou retry no download nao pode inflar o
+     * numero.
      */
-    prisma.opportunity.findMany({
-      where: { responsavelId: vendedorId },
-      select: { id: true },
+    prisma.propostaGerada.groupBy({
+      by: ['oportunidadeId'],
+      where: {
+        criadoEm: { gte: inicio, lt: fim },
+        oportunidade: { responsavelId: vendedorId, organizacaoId: organizacaoAtual() },
+      },
     }),
     prisma.meta.findFirst({ where: { usuarioId: vendedorId, escopo: 'INDIVIDUAL', mes: inicio } }),
     prisma.channelConfig.findMany({
-      where: { donoId: vendedorId },
+      where: { donoId: vendedorId, canal: 'WHATSAPP' },
       select: { id: true, nome: true, ativo: true, modo: true },
     }),
   ]);
 
   if (!vendedor) throw notFound('Vendedor nao encontrado');
 
-  const propostas = await prisma.propostaGerada.count({
-    where: {
-      oportunidadeId: { in: oportunidadesDoVendedor.map((o) => o.id) },
-      criadoEm: { gte: inicio, lt: fim },
-    },
-  });
+  const propostas = gruposDePropostas.length;
 
   const contarStatus = (grupos: Array<{ status: string; _count: { _all: number } }>, status: string) =>
     grupos.find((g) => g.status === status)?._count._all ?? 0;

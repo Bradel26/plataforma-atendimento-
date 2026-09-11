@@ -33,11 +33,17 @@ export function PainelVendedorTab() {
   }, []);
 
   const carregarResumo = useCallback(async () => {
-    if (!vendedorId) return;
+    // Campo "month" pode ser limpo pelo usuario; mandar `?mes=` vazio so faria o
+    // regex do backend recusar e aparecer erro cru na tela. Sem mes, deixa o
+    // backend usar o proprio padrao (mes corrente).
+    if (!vendedorId || !mes) return;
     try {
       setResumo(await api.get<ResumoVendedor>(`/vendedores/${vendedorId}/resumo?mes=${mes}`));
       setErro(null);
     } catch (e) {
+      // Nao deixa o resumo do vendedor/mes anterior na tela sob um erro novo —
+      // pareceria que os numeros antigos ainda valem.
+      setResumo(null);
       setErro(e instanceof ApiError ? e.message : 'Falha ao carregar o resumo');
     }
   }, [vendedorId, mes]);
@@ -120,7 +126,10 @@ export function PainelVendedorTab() {
                 {resumo.whatsapp.map((c) => (
                   <li key={c.id} className="flex items-center justify-between gap-3">
                     <span className="text-slate-700">{c.nome ?? 'Sem rotulo'}</span>
-                    <Badge tom={c.ativo ? 'sucesso' : 'neutro'}>{c.ativo ? 'Ativo' : 'Inativo'}</Badge>
+                    <span className="flex items-center gap-2">
+                      {c.modo && <span className="text-xs text-slate-500">{c.modo === 'OFICIAL' ? 'Oficial' : 'Nao oficial'}</span>}
+                      <Badge tom={c.ativo ? 'sucesso' : 'neutro'}>{c.ativo ? 'Ativo' : 'Inativo'}</Badge>
+                    </span>
                   </li>
                 ))}
               </ul>

@@ -1,9 +1,16 @@
 import { prisma } from '../../lib/prisma';
 import { indicadoresVoz } from '../voice/voice.service';
+import { organizacaoAtual } from '../../lib/tenant';
 
 const ABERTOS_TICKET = ['ABERTO', 'EM_ANDAMENTO', 'AGUARDANDO_CLIENTE'] as const;
 
-/** Media de segundos entre dois instantes, calculada no banco. */
+/**
+ * Media de segundos entre dois instantes, calculada no banco.
+ *
+ * Consulta crua nao passa pela extensao multi-tenant do Prisma — ela so
+ * reescreve chamadas de modelo, nao SQL cru —, entao o filtro de organizacao
+ * entra aqui a mao, sempre, e nao so quando `agenteId` vem informado.
+ */
 export async function mediaSegundos(
   campoInicio: string,
   campoFim: string,
@@ -11,12 +18,13 @@ export async function mediaSegundos(
   desde: Date,
   agenteId?: string,
 ): Promise<number | null> {
-  const filtroAgente = agenteId ? ` AND "agente_id" = $2` : '';
+  const filtroAgente = agenteId ? ` AND "agente_id" = $3` : '';
   const linhas = await prisma.$queryRawUnsafe<Array<{ media: number | null }>>(
     `SELECT AVG(EXTRACT(EPOCH FROM ("${campoFim}" - "${campoInicio}")))::float AS media
      FROM "${tabela}"
-     WHERE "${campoFim}" IS NOT NULL AND "${campoInicio}" IS NOT NULL AND "${campoInicio}" >= $1${filtroAgente}`,
-    ...(agenteId ? [desde, agenteId] : [desde]),
+     WHERE "${campoFim}" IS NOT NULL AND "${campoInicio}" IS NOT NULL AND "${campoInicio}" >= $1
+       AND "organizacao_id" = $2${filtroAgente}`,
+    ...(agenteId ? [desde, organizacaoAtual(), agenteId] : [desde, organizacaoAtual()]),
   );
   const media = linhas[0]?.media;
   return media === null || media === undefined ? null : Math.round(media);
