@@ -90,7 +90,13 @@ export async function issueRefreshToken(userId: string, organizacaoId: string): 
   const jti = randomUUID();
   // `<organizacao>:<usuario>` no valor: a renovacao devolve os dois, e assim ela
   // nao pode mudar de organizacao no caminho.
-  await redis.set(refreshKey(jti), `${organizacaoId}:${userId}`, 'EX', REFRESH_TTL_SECONDS);
+  // Redis fora do ar nao pode derrubar o login inteiro — so a renovacao futura
+  // fica impossivel (o jti nunca foi registrado), um problema muito menor.
+  try {
+    await redis.set(refreshKey(jti), `${organizacaoId}:${userId}`, 'EX', REFRESH_TTL_SECONDS);
+  } catch {
+    console.warn(`[auth] issueRefreshToken: Redis indisponivel, sessao criada sem registro — renovacao futura desta sessao nao sera possivel`);
+  }
   return jwt.sign({ sub: userId, jti } satisfies RefreshPayload, env.JWT_REFRESH_SECRET, {
     expiresIn: `${env.JWT_REFRESH_TTL_DAYS}d`,
   });
