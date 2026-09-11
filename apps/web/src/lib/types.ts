@@ -1412,3 +1412,19 @@ export type FunilDeCicloDeVida = {
     fracao: number | null;
   }>;
 };
+
+export type VendedorOpcao = { id: string; nome: string };
+
+export type ResumoVendedor = {
+  vendedor: { id: string; nome: string };
+  mes: string;
+  clientesAtendidos: number;
+  conversas: { total: number; abertas: number; encerradas: number };
+  tempos: { tmeSegundos: number | null; tmaSegundos: number | null };
+  oportunidades: { abertas: number; ganhas: number; perdidas: number };
+  propostas: number;
+  vendas: { quantidade: number; valor: number };
+  conversao: number | null;
+  meta: { valor: number; definida: boolean };
+  whatsapp: Array<{ id: string; nome: string | null; ativo: boolean; modo: string | null }>;
+};

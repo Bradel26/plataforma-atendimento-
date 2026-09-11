@@ -14,6 +14,7 @@ import { LeadsTab } from './LeadsTab';
 import { OportunidadesTab } from './OportunidadesTab';
 import { EtiquetasTab } from './EtiquetasTab';
 import { ProdutosTab } from './ProdutosTab';
+import { PainelVendedorTab } from './PainelVendedorTab';
 
 /**
  * `perfis` na aba restringe quem a ve.
@@ -59,6 +60,10 @@ const ABAS = [
   { id: 'metas', label: 'Metas', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR'], grupo: 'mais' },
   // Mesmo corte de leitura de metas e da leitura comercial: e painel de gestao.
   { id: 'produtividade', label: 'Produtividade', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR'], grupo: 'mais' },
+  // Mesmo corte de leitura de metas e produtividade: e painel de gestao. COMERCIAL
+  // entra tambem porque, ao contrario das outras tres, esta aba serve para a propria
+  // pessoa ver o proprio resumo — nao so para quem gerencia.
+  { id: 'painel-vendedor', label: 'Painel do vendedor', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'], grupo: 'mais' },
   { id: 'produtos', label: 'Produtos e precos', perfis: ['ADMIN', 'SUPERVISOR'], grupo: 'mais' },
   // Renomear e remover etiqueta alcancam registros que quem clica nao ve, entao
   // a aba segue o mesmo perfil da rota: ADMIN e SUPERVISOR.
@@ -179,6 +184,7 @@ export function CrmPage() {
       {aba === 'comercial' && <ComercialTab />}
       {aba === 'metas' && <MetasTab />}
       {aba === 'produtividade' && <ProdutividadeTab />}
+      {aba === 'painel-vendedor' && <PainelVendedorTab />}
       {aba === 'produtos' && <ProdutosTab />}
       {aba === 'etiquetas' && <EtiquetasTab />}
       {aba === 'dados' && <DadosTab />}
