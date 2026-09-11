@@ -29,6 +29,7 @@ import {
   listarFunis,
   listarOportunidades,
   obterOportunidade,
+  registrarPropostaGerada,
 } from './opportunities.service';
 
 export const opportunitiesRoutes = Router();
@@ -136,6 +137,7 @@ opportunitiesRoutes.get(
     const branding = await getBranding();
     const proposta = await dadosDaProposta(param(req, 'id'), branding.appName);
     const pdf = await gerarPropostaPdf(proposta, branding.corPrimaria);
+    await registrarPropostaGerada(param(req, 'id'), req.user?.sub);
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="proposta-${proposta.numero}.pdf"`);

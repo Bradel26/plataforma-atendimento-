@@ -158,6 +158,7 @@ model User {
   tokensIntegracao      IntegrationToken[]
   /// Numeros de canal (ex.: WhatsApp) cadastrados como linha pessoal deste usuario.
   canaisProprios        ChannelConfig[]
+  propostasGeradas      PropostaGerada[]
   credenciamentos       Credenciamento[]
   organizacao           Organizacao           @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
   /// SetNull: desligar o gestor nao pode apagar a equipe dele.
@@ -707,6 +708,7 @@ model Opportunity {
   organizacao        Organizacao                         @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
   /// Campos customizados (item 6.4): apagar a oportunidade apaga os valores junto.
   camposCustomizados ValorCampoCustomizadoOportunidade[]
+  propostasGeradas   PropostaGerada[]
 
   @@index([organizacaoId, status, atualizadoEm])
   @@index([organizacaoId, funilId, estagioId])
@@ -889,6 +891,27 @@ model OpportunityAudit {
 
   @@index([oportunidadeId, criadoEm])
   @@map("oportunidade_auditoria")
+}
+
+/// Rastreio de quando uma proposta em PDF foi gerada (item §16 do painel do vendedor).
+///
+/// A proposta em si nunca foi um registro — e um PDF montado sob demanda a partir da
+/// oportunidade (`GET /oportunidades/:id/proposta.pdf`). Sem esta tabela, "quantas
+/// propostas o vendedor enviou no mes" nao tem como ser respondido: nao ha coluna,
+/// evento ou trilha que registre a acao de gerar o PDF hoje.
+model PropostaGerada {
+  id             String   @id @default(uuid())
+  oportunidadeId String   @map("oportunidade_id")
+  /// Quem clicou em gerar. Nulo se a autenticacao um dia permitir geracao anonima
+  /// (nao permite hoje, mas SetNull evita que apagar o usuario apague o evento).
+  autorId        String?  @map("autor_id")
+  criadoEm       DateTime @default(now()) @map("criado_em")
+
+  oportunidade Opportunity @relation(fields: [oportunidadeId], references: [id], onDelete: Cascade)
+  autor        User?       @relation(fields: [autorId], references: [id], onDelete: SetNull)
+
+  @@index([oportunidadeId, criadoEm])
+  @@map("propostas_geradas")
 }
 
 /// De quem e a meta (item 4.1).

@@ -878,3 +878,16 @@ export async function criarFunil(input: { nome: string; estagios: Array<{ nome: 
     include: { estagios: { orderBy: { ordem: 'asc' } } },
   });
 }
+
+/**
+ * Registra que o PDF da proposta foi gerado (item §16 do painel do vendedor).
+ *
+ * Sem verificar se a oportunidade existe: a rota que chama isto ja carregou a
+ * oportunidade com sucesso (`dadosDaProposta` teria lancado 404 antes) — verificar de
+ * novo aqui seria uma segunda consulta so para confirmar o que a primeira ja provou.
+ */
+export async function registrarPropostaGerada(oportunidadeId: string, autorId: string | undefined) {
+  await prisma.propostaGerada.create({
+    data: { oportunidadeId, autorId: autorId ?? null },
+  });
+}
