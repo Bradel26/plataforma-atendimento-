@@ -4,7 +4,7 @@ import { indicadoresVoz } from '../voice/voice.service';
 const ABERTOS_TICKET = ['ABERTO', 'EM_ANDAMENTO', 'AGUARDANDO_CLIENTE'] as const;
 
 /** Media de segundos entre dois instantes, calculada no banco. */
-async function mediaSegundos(
+export async function mediaSegundos(
   campoInicio: string,
   campoFim: string,
   tabela: string,
