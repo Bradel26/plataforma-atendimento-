@@ -81,16 +81,24 @@ const { dados: novaConta } = await req('POST', '/contas', {
 const contaId = novaConta.conta.id;
 checar(Boolean(contaId), '3. conta de teste criada');
 
-const criarOportunidade = async (titulo, valor) => {
+// A oportunidade "ganha" precisa de itens: dadosDaProposta exige itens.length > 0
+// para gerar o PDF (e assim faz a UI real, guiada pelo catalogo de precos).
+const { dados: produtosResp } = await req('GET', '/produtos', { token: admin });
+const produto = produtosResp.produtos?.[0];
+checar(Boolean(produto?.id), '   seed tem ao menos um produto para compor a proposta');
+
+const criarOportunidade = async (titulo, extra) => {
   const { dados } = await req('POST', '/oportunidades', {
     token: admin,
-    corpo: { titulo, contaId, funilId, responsavelId: vendedor1.id, valor },
+    corpo: { titulo, contaId, funilId, responsavelId: vendedor1.id, ...extra },
   });
   return dados.oportunidade;
 };
 
-const ganha = await criarOportunidade(`Smoke ganha ${EXECUCAO}`, 1000);
-const perdida = await criarOportunidade(`Smoke perdida ${EXECUCAO}`, 500);
+const ganha = await criarOportunidade(`Smoke ganha ${EXECUCAO}`, {
+  itens: [{ produtoId: produto.id, quantidade: 1, precoUnitario: 1000 }],
+});
+const perdida = await criarOportunidade(`Smoke perdida ${EXECUCAO}`, { valor: 500 });
 checar(Boolean(ganha?.id && perdida?.id), '   duas oportunidades criadas para vendedor1');
 
 await req('POST', `/oportunidades/${ganha.id}/fechar`, { token: admin, corpo: { status: 'GANHA' } });
