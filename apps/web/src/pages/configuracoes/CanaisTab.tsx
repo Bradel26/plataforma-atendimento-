@@ -230,9 +230,19 @@ export function CanaisTab() {
   }, [editando, modo]);
 
   useEffect(() => {
+    /*
+     * Limpa o estado da linha ANTERIOR assim que `linhaAberta` muda — inclusive
+     * quando muda direto de uma linha para outra, sem passar por nulo.
+     *
+     * Sem isto, clicar "Conectar" na linha do vendedor B enquanto o painel do
+     * vendedor A ainda esta aberto deixava o QR e o estado de A visiveis sob o
+     * rotulo de B ate a primeira busca desta linha responder (ate 5s) — risco
+     * real de parear o celular errado com a linha errada.
+     */
+    setQrLinha(null);
+    setEstadoLinha(null);
+
     if (!linhaAberta) {
-      setQrLinha(null);
-      setEstadoLinha(null);
       return;
     }
 
@@ -911,7 +921,7 @@ export function CanaisTab() {
 
                 {numeroForm.modo === 'NAO_OFICIAL' ? (
                   <>
-                    <Field label="Endereco da ponte" hint="Em branco = usa o mesmo endereco do WhatsApp compartilhado">
+                    <Field label="Endereco da ponte" hint="Obrigatorio: esta linha pessoal nao cai no endereco do WhatsApp compartilhado se ficar em branco">
                       <Input
                         value={numeroForm.ponteUrl}
                         placeholder="http://localhost:3000/api"

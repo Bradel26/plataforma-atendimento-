@@ -5,7 +5,7 @@ import { asyncHandler } from '../../http/async-handler';
 import { requireAuth, requireRole } from '../../http/middleware/auth';
 import { validateBody } from '../../http/middleware/validate';
 import { param } from '../../http/params';
-import { forbidden, notFound } from '../../lib/errors';
+import { badRequest, forbidden, notFound } from '../../lib/errors';
 import { organizacaoAtual } from '../../lib/tenant';
 import {
   CANAIS_EXTERNOS,
@@ -33,7 +33,7 @@ channelsRoutes.use(requireAuth);
  * precisa de um ADMIN por perto so para escanear o proprio QR de novo quando
  * o celular ficar sem bateria.
  */
-function exigirDonoOuAdmin(req: Request, donoId: string | null): void {
+export function exigirDonoOuAdmin(req: Request, donoId: string | null): void {
   const usuario = req.user!;
   if (usuario.perfil === 'ADMIN') return;
   if (donoId && usuario.sub === donoId) return;
@@ -277,6 +277,11 @@ channelsRoutes.get(
     const config = await obterConfigPorId(param(req, 'id'));
     if (!config) throw notFound('Numero nao encontrado');
     exigirDonoOuAdmin(req, config.donoId);
+    if (config.donoId && !config.ponteSessao) {
+      throw badRequest(
+        'Esta linha pessoal nao tem nome de sessao configurado — configure antes de conectar, para nao usar a sessao da linha compartilhada.',
+      );
+    }
 
     const caminhoWebhook = `/api/webhooks/ponte/whatsapp/${organizacaoAtual()}`;
 
@@ -305,6 +310,11 @@ channelsRoutes.get(
     const config = await obterConfigPorId(param(req, 'id'));
     if (!config) throw notFound('Numero nao encontrado');
     exigirDonoOuAdmin(req, config.donoId);
+    if (config.donoId && !config.ponteSessao) {
+      throw badRequest(
+        'Esta linha pessoal nao tem nome de sessao configurado — configure antes de conectar, para nao usar a sessao da linha compartilhada.',
+      );
+    }
 
     if (config.canal !== 'WHATSAPP' || modoEfetivo(config.modo) !== 'NAO_OFICIAL') {
       res.json({ qr: null, conectado: false, motivo: 'este numero nao esta no modo nao oficial' });
@@ -321,6 +331,11 @@ channelsRoutes.post(
     const config = await obterConfigPorId(param(req, 'id'));
     if (!config) throw notFound('Numero nao encontrado');
     exigirDonoOuAdmin(req, config.donoId);
+    if (config.donoId && !config.ponteSessao) {
+      throw badRequest(
+        'Esta linha pessoal nao tem nome de sessao configurado — configure antes de conectar, para nao usar a sessao da linha compartilhada.',
+      );
+    }
 
     if (config.canal !== 'WHATSAPP' || modoEfetivo(config.modo) !== 'NAO_OFICIAL') {
       throw notFound('Este numero nao esta no modo nao oficial');

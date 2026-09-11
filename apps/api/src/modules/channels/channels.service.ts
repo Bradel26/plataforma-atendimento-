@@ -135,7 +135,12 @@ type SalvarNumeroInput = SalvarCanalInput & { nome?: string | null; donoId?: str
  * empresa nao acha nada, a extensao do Prisma cuida disso), credencial bate com
  * o modo, e cifra o que for segredo. Devolve o que vai para o banco.
  */
-async function prepararGravacao(canal: CanalExterno, atual: SalvarCanalInput | null, input: SalvarNumeroInput) {
+async function prepararGravacao(
+  canal: CanalExterno,
+  atual: SalvarCanalInput | null,
+  input: SalvarNumeroInput,
+  idAtual?: string,
+) {
   if (input.filaId) {
     const fila = await prisma.queue.findUnique({ where: { id: input.filaId } });
     if (!fila) throw notFound('Fila nao encontrada');
@@ -146,6 +151,22 @@ async function prepararGravacao(canal: CanalExterno, atual: SalvarCanalInput | n
   }
 
   const futuro = { ...atual, ...input };
+
+  /*
+   * Duas linhas do mesmo canal com a mesma sessao fariam `configDoDestino`
+   * escolher uma arbitrariamente por `findFirst` — a mesma classe de bug ja
+   * corrigida noutro ponto deste modulo, so que aqui trancaria o vendedor
+   * perdedor fora da propria linha para sempre, sem aviso nenhum.
+   */
+  if (futuro.ponteSessao) {
+    const conflito = await prisma.channelConfig.findFirst({
+      where: { canal, ponteSessao: futuro.ponteSessao, ...(idAtual ? { id: { not: idAtual } } : {}) },
+      select: { id: true },
+    });
+    if (conflito) {
+      throw badRequest(`Ja existe uma linha com a sessao "${futuro.ponteSessao}" nesta organizacao`);
+    }
+  }
 
   /*
    * O que "ativar" exige depende do MODO (item do WhatsApp nos dois modos).
@@ -163,6 +184,14 @@ async function prepararGravacao(canal: CanalExterno, atual: SalvarCanalInput | n
       // que envia e nunca recebe, e o sintoma ("o cliente respondeu e nao
       // apareceu") e dificil de ligar a esta causa.
       throw badRequest('Informe o segredo da ponte: sem ele a plataforma nao aceita mensagem recebida');
+    }
+    if (futuro.ativo && futuro.donoId && !futuro.ponteSessao) {
+      // Sem nome de sessao uma linha PESSOAL endereca a mesma sessao padrao da
+      // ponte que a linha compartilhada usa — o vendedor pareia o proprio
+      // celular no numero da empresa, ve/derruba o QR e o estado dela.
+      throw badRequest(
+        'Informe o nome da sessao desta linha: sem ele ela seria confundida com a linha compartilhada',
+      );
     }
   } else if (futuro.ativo && !(futuro.accessToken && futuro.appSecret && futuro.verifyToken)) {
     throw badRequest('Para ativar o canal informe accessToken, appSecret e verifyToken');
@@ -229,7 +258,7 @@ async function carregarNumeroOuFalhar(id: string) {
 
 export async function atualizarNumero(id: string, input: SalvarNumeroInput) {
   const gravado = await carregarNumeroOuFalhar(id);
-  const paraGravar = await prepararGravacao(gravado.canal as CanalExterno, aberto(gravado), input);
+  const paraGravar = await prepararGravacao(gravado.canal as CanalExterno, aberto(gravado), input, gravado.id);
   await prisma.channelConfig.update({ where: { id }, data: paraGravar });
 
   const canais = await listarCanais();

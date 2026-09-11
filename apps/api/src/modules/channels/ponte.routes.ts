@@ -113,6 +113,12 @@ ponteRoutes.post(
 
       const config = await configDoDestino('WHATSAPP', sessaoBruta);
 
+      if (sessaoBruta && config?.ponteSessao !== sessaoBruta) {
+        console.warn(
+          `[ponte] sessao "${sessaoBruta}" nao corresponde a nenhuma linha cadastrada; a mensagem caiu na config compartilhada/primeira do canal`,
+        );
+      }
+
       if (!config?.ativo || modoEfetivo(config.modo) !== 'NAO_OFICIAL') {
         res.status(503).json({
           error: {
@@ -185,8 +191,10 @@ ponteRoutes.post(
         // O nome da sessao identifica a linha pessoal (`ChannelConfig.ponteSessao`).
         // Sem ele (ponte antiga, ou sessao unica sem apelido cadastrado),
         // `configDoDestino` cai na config compartilhada — mesmo comportamento
-        // de antes desta mudanca.
-        identificadorDestino: corpo.sessao?.trim() || null,
+        // de antes desta mudanca. Reaproveita `sessaoBruta` (ja usado para
+        // resolver `config` e validar a assinatura) em vez de recalcular a
+        // partir de `corpo.sessao`, para os dois nunca poderem divergir.
+        identificadorDestino: sessaoBruta,
       });
 
       // 200 tambem para reentrega: `duplicada` diz que nada foi criado, e a ponte
