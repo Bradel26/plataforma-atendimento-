@@ -80,6 +80,17 @@ describe.skipIf(!temFront)('API servindo o front', () => {
     expect(res.headers.get('content-security-policy')).toContain('frame-ancestors *');
   });
 
+  /**
+   * O CSP do webchat e montado a mao, fora do helmet (para liberar o
+   * enquadramento) — por isso precisa do mesmo cuidado do teste da raiz: sem
+   * HSTS configurado, nao pode mandar o navegador trocar os assets do widget
+   * por HTTPS.
+   */
+  it('nao manda o navegador trocar os assets do webchat por HTTPS quando HSTS nao esta configurado', async () => {
+    const res = await fetch(base + '/webchat');
+    expect(res.headers.get('content-security-policy')).not.toContain('upgrade-insecure-requests');
+  });
+
   it('mantem o resto do app protegido contra clickjacking', async () => {
     for (const rota of ['/', '/atendimento', '/configuracoes']) {
       const res = await fetch(base + rota);

@@ -204,7 +204,10 @@ function servirFront(app: Express) {
         "script-src 'self'",
         "script-src-attr 'none'",
         "style-src 'self' https: 'unsafe-inline'",
-        'upgrade-insecure-requests',
+        // Mesmo cuidado do helmet acima: sem HTTPS real, essa diretiva forca o
+        // navegador a trocar os assets do proprio widget por HTTPS e quebra o
+        // carregamento no dominio temporario.
+        ...(env.HSTS_ATIVO ? ['upgrade-insecure-requests'] : []),
       ].join(';'),
     );
   };
