@@ -48,10 +48,28 @@ const { dados: loginGestor } = await req('POST', '/auth/login', {
 });
 const tokenGestor = loginGestor.accessToken;
 
-/* ── 1. vendedor1 NAO esta na equipe do gestor (so comercial esta, pelo seed) ── */
+/* ── 1. gestor sem um vendedor na equipe recebe 403 ────────────────────── */
 
-const semAcesso = await req('GET', `/vendedores/${vendedor1.id}/resumo`, { token: tokenGestor });
-checar(semAcesso.status === 403, '1. gestor sem vendedor1 na equipe recebe 403', `HTTP ${semAcesso.status}`);
+// Usuario novo e proprio do teste, e nao vendedor1: o passo 2 abaixo seta
+// gestorId de vendedor1 permanentemente no banco (o seed nao reseta esse campo
+// em re-seed), entao rodar este script uma segunda vez contra o mesmo banco ja
+// encontraria vendedor1 na equipe do gestor e o 403 esperado nunca ocorreria.
+// Um usuario recem-criado nasce sempre sem gestorId, garantindo o cenario
+// independente de quantas vezes o script ja rodou.
+const { dados: novoVendedor } = await req('POST', '/usuarios', {
+  token: admin,
+  corpo: {
+    nome: `Smoke vendedor ${EXECUCAO}`,
+    email: `smoke-vendedor-${EXECUCAO}@plataforma.local`,
+    senha: 'Smoke@123',
+    perfil: 'COMERCIAL',
+  },
+});
+const vendedorNovo = novoVendedor.usuario;
+checar(Boolean(vendedorNovo?.id), '1. usuario novo criado para o teste de acesso');
+
+const semAcesso = await req('GET', `/vendedores/${vendedorNovo.id}/resumo`, { token: tokenGestor });
+checar(semAcesso.status === 403, '   gestor sem o vendedor novo na equipe recebe 403', `HTTP ${semAcesso.status}`);
 
 /* ── 2. Coloca vendedor1 na equipe do gestor e confirma acesso ────────── */
 
