@@ -1,8 +1,9 @@
 import type { WAMessage } from '@whiskeysockets/baileys';
 import { config } from './config.js';
+import { avisarStatus } from './plataforma.js';
 import { receber } from './recebida.js';
 import { criarServidor } from './servidor.js';
-import { garantirNoAr, quandoReceber, type Sessao } from './sessao.js';
+import { garantirNoAr, quandoMudarStatus, quandoReceber, type Sessao } from './sessao.js';
 
 /**
  * Sobe a ponte.
@@ -14,6 +15,10 @@ import { garantirNoAr, quandoReceber, type Sessao } from './sessao.js';
 
 quandoReceber((sessao, msg) => {
   void receber(sessao as Sessao, msg as WAMessage);
+});
+
+quandoMudarStatus((sessao) => {
+  void avisarStatus(sessao.nome, sessao.situacao === 'CONECTADO' ? 'CONECTADO' : 'DESCONECTADO', sessao.detalhe);
 });
 
 const app = criarServidor();

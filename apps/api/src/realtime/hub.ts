@@ -82,6 +82,10 @@ export const notificarChamada = (
   destinos: { agenteId?: string | null; filaId?: string | null },
 ) => emitir(EVENTOS.chamadaAtualizada, chamada, destinos);
 
+/** Status de conexao da ponte (WhatsApp pessoal): interessa ao dono da linha e a gestao. */
+export const notificarStatusCanal = (payload: unknown, destinos: { agenteId?: string | null }) =>
+  emitir(EVENTOS.canalStatus, payload, destinos);
+
 export const notificarStatusAgente = (payload: unknown) => {
   const org = organizacaoDoContexto();
   if (!org) return;

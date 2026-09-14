@@ -2,7 +2,8 @@ import { Router, raw } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../../http/async-handler';
 import { badRequest } from '../../lib/errors';
-import { prismaSemIsolamento } from '../../lib/prisma';
+import { prisma, prismaSemIsolamento } from '../../lib/prisma';
+import { notificarStatusCanal } from '../../realtime/hub';
 import { comOrganizacao, semOrganizacao } from '../../lib/tenant';
 import { assinaturaValida, configDoDestino } from './channels.service';
 import { registrarMensagemEntrante } from './inbound.service';
@@ -200,6 +201,114 @@ ponteRoutes.post(
       // 200 tambem para reentrega: `duplicada` diz que nada foi criado, e a ponte
       // pode parar de tentar.
       res.json({ ok: true, duplicada: 'duplicada' in resultado ? resultado.duplicada : false });
+    });
+  }),
+);
+
+const statusSchema = z.object({
+  /** Mesmo valor de `ChannelConfig.ponteSessao` — identifica qual linha mudou. */
+  sessao: z.string().trim().min(1).max(60),
+  status: z.enum(['CONECTADO', 'DESCONECTADO']),
+  detalhe: z.string().max(500).nullable().optional(),
+});
+
+/**
+ * Aviso de conexao/queda de uma sessao da ponte (WhatsApp nao oficial).
+ *
+ * Mesmo padrao da rota `/whatsapp/:organizacaoId` acima: corpo cru + assinatura
+ * HMAC com o `ponteSegredo` da linha, porque este endereco tambem e publico e
+ * so a assinatura separa "aviso de verdade" de "qualquer um postando aqui".
+ *
+ * Existe porque, antes, ninguem no CRM sabia que o WhatsApp pessoal de um
+ * vendedor tinha caido ate ele reclamar que parou de receber mensagem.
+ */
+ponteRoutes.post(
+  '/status/:organizacaoId',
+  raw({ type: '*/*', limit: '2mb' }),
+  asyncHandler(async (req, res) => {
+    const organizacaoId = req.params.organizacaoId!;
+    const corpoBruto = Buffer.isBuffer(req.body) ? req.body : Buffer.from('');
+
+    if (!(await organizacaoExiste(organizacaoId))) {
+      res.status(404).json({ error: { code: 'NAO_ENCONTRADO', message: 'Organizacao nao encontrada' } });
+      return;
+    }
+
+    await comOrganizacao(organizacaoId, async () => {
+      let corpoJson: unknown;
+      try {
+        corpoJson = JSON.parse(corpoBruto.toString('utf8'));
+      } catch (erro) {
+        throw badRequest(
+          `Corpo invalido: ${erro instanceof Error ? erro.message.slice(0, 200) : 'nao e JSON'}`,
+        );
+      }
+
+      const sessaoBruta: string | null =
+        typeof corpoJson === 'object' &&
+        corpoJson !== null &&
+        'sessao' in corpoJson &&
+        typeof (corpoJson as { sessao?: unknown }).sessao === 'string' &&
+        (corpoJson as { sessao: string }).sessao.trim().length > 0
+          ? (corpoJson as { sessao: string }).sessao.trim()
+          : null;
+
+      const config = await configDoDestino('WHATSAPP', sessaoBruta);
+
+      if (!config?.ativo || modoEfetivo(config.modo) !== 'NAO_OFICIAL') {
+        res.status(503).json({
+          error: {
+            code: 'CANAL_INDISPONIVEL',
+            message: 'O WhatsApp desta organizacao nao esta no modo nao oficial',
+          },
+        });
+        return;
+      }
+
+      if (!config.ponteSegredo) {
+        res.status(503).json({
+          error: {
+            code: 'PONTE_SEM_SEGREDO',
+            message: 'Configure o segredo da ponte antes de receber avisos de status',
+          },
+        });
+        return;
+      }
+
+      const assinatura = req.header('x-ponte-assinatura') ?? req.header('x-hub-signature-256');
+      if (!assinaturaValida(corpoBruto, assinatura, config.ponteSegredo)) {
+        res
+          .status(401)
+          .json({ error: { code: 'ASSINATURA_INVALIDA', message: 'Assinatura da ponte invalida' } });
+        return;
+      }
+
+      let corpo: z.infer<typeof statusSchema>;
+      try {
+        corpo = statusSchema.parse(corpoJson);
+      } catch (erro) {
+        throw badRequest(
+          `Corpo invalido: ${erro instanceof Error ? erro.message.slice(0, 200) : 'nao e JSON'}`,
+        );
+      }
+
+      await prisma.channelConfig.update({
+        where: { id: config.id },
+        data: { ponteStatus: corpo.status, ponteStatusEm: new Date() },
+      });
+
+      notificarStatusCanal(
+        {
+          id: config.id,
+          ponteSessao: config.ponteSessao,
+          status: corpo.status,
+          detalhe: corpo.detalhe ?? null,
+          em: new Date().toISOString(),
+        },
+        { agenteId: config.donoId },
+      );
+
+      res.json({ ok: true });
     });
   }),
 );

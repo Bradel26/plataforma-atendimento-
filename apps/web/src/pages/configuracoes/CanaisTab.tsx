@@ -1,7 +1,8 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { Alerta, Badge, Button, Card, EmptyState, Field, Input, Select } from '../../components/ui';
 import { useConfirm } from '../../components/ui/ConfirmDialog';
-import { ApiError, api } from '../../lib/api';
+import { ApiError, api, getAccessToken } from '../../lib/api';
+import { EVENTOS, conectar } from '../../lib/realtime';
 import type { Canal, Fila, Usuario } from '../../lib/types';
 
 type CanalConfig = {
@@ -28,6 +29,9 @@ type CanalConfig = {
   ponteSessao?: string | null;
   ponteTokenMascarado?: string | null;
   ponteSegredoMascarado?: string | null;
+  /** Ultimo status que a ponte avisou para esta linha. Nulo antes do primeiro aviso. */
+  ponteStatus?: string | null;
+  ponteStatusEm?: string | null;
 };
 
 type IaDoNumero = { ativa: boolean; webhook: string | null; assinado: boolean };
@@ -188,6 +192,29 @@ export function CanaisTab() {
 
   useEffect(() => {
     void carregar();
+  }, []);
+
+  /**
+   * Aviso em tempo real de que uma sessao da ponte conectou ou caiu.
+   *
+   * Sem isto so daria para saber pelo botao "Conectar" de cada linha, um por
+   * vez — e o vendedor cujo WhatsApp caiu no meio do expediente nao esperaria a
+   * gestao ir clicar cada linha para descobrir qual e a dele.
+   */
+  useEffect(() => {
+    const token = getAccessToken();
+    if (!token) return;
+    const socket = conectar({ token });
+
+    socket.on(EVENTOS.canalStatus, (payload: { id: string; status: string; detalhe: string | null; em: string }) => {
+      setCanais((atual) =>
+        atual.map((c) => (c.id === payload.id ? { ...c, ponteStatus: payload.status, ponteStatusEm: payload.em } : c)),
+      );
+    });
+
+    return () => {
+      socket.disconnect();
+    };
   }, []);
 
   /**
@@ -794,7 +821,15 @@ export function CanaisTab() {
                           <td className="py-2 pr-2 text-slate-600">{n.phoneNumberId ?? n.ponteSessao ?? '—'}</td>
                           <td className="py-2 pr-2 text-slate-600">{n.fila?.nome ?? 'nenhuma (linha direta)'}</td>
                           <td className="py-2 pr-2">
-                            {n.ativo ? <Badge tom="sucesso">Ativo</Badge> : <Badge>Inativo</Badge>}
+                            <div className="flex flex-wrap gap-1">
+                              {n.ativo ? <Badge tom="sucesso">Ativo</Badge> : <Badge>Inativo</Badge>}
+                              {n.modo === 'NAO_OFICIAL' && n.ponteStatus === 'CONECTADO' && (
+                                <Badge tom="sucesso">Conectado</Badge>
+                              )}
+                              {n.modo === 'NAO_OFICIAL' && n.ponteStatus === 'DESCONECTADO' && (
+                                <Badge tom="alerta">Desconectado</Badge>
+                              )}
+                            </div>
                           </td>
                           <td className="py-2 text-right">
                             <div className="flex justify-end gap-2">

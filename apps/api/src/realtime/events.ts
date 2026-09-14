@@ -15,6 +15,8 @@ export const EVENTOS = {
   protocoloAtualizado: 'protocolo:atualizado',
   /** Chamada de voz criada ou com status alterado. */
   chamadaAtualizada: 'chamada:atualizada',
+  /** A ponte avisou que um WhatsApp pessoal (nao oficial) conectou ou caiu. */
+  canalStatus: 'canal:status',
 } as const;
 
 /**

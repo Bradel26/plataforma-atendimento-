@@ -94,6 +94,11 @@ export async function listarCanais() {
     ponteSessao: c.ponteSessao,
     ponteTokenMascarado: mascarar(c.ponteToken),
     ponteSegredoMascarado: mascarar(c.ponteSegredo),
+    /// Ultimo status que a ponte avisou para esta linha (ver ponte.routes.ts:/status).
+    /// Nulo fora do modo nao oficial ou antes do primeiro aviso — a tela so
+    /// mostra o badge quando ha algo para mostrar.
+    ponteStatus: c.ponteStatus,
+    ponteStatusEm: c.ponteStatusEm,
     /*
      * Pronto para operar, por modo.
      *
@@ -129,6 +134,35 @@ type SalvarCanalInput = {
 /** Campos aceitos so nas linhas pessoais — a de sempre nao tem dono nem rotulo. */
 type SalvarNumeroInput = SalvarCanalInput & { nome?: string | null; donoId?: string | null };
 
+type CredenciaisPonte = { ponteUrl: string | null; ponteToken: string | null; ponteSegredo: string | null };
+
+/**
+ * Pra cada campo da ponte, usa o que veio no input; sem isso, cai para o da
+ * config compartilhada. Existe para a linha pessoal de um vendedor nao
+ * precisar repetir endereco/token/segredo que ja estao na linha compartilhada
+ * do mesmo canal — o admin so digita de novo quando quer uma ponte diferente.
+ */
+export function herdarCredenciaisDaPonte(
+  input: CredenciaisPonte,
+  compartilhada: CredenciaisPonte | null,
+): CredenciaisPonte {
+  const campo = (valor: string | null, herdado: string | null) => (valor && valor.length > 0 ? valor : herdado ?? null);
+  return {
+    ponteUrl: campo(input.ponteUrl, compartilhada?.ponteUrl ?? null),
+    ponteToken: campo(input.ponteToken, compartilhada?.ponteToken ?? null),
+    ponteSegredo: campo(input.ponteSegredo, compartilhada?.ponteSegredo ?? null),
+  };
+}
+
+/**
+ * Nome de sessao automatico para linha pessoal quando o admin nao informou
+ * um. Determinístico (mesmo donoId sempre gera o mesmo nome) para nao gerar
+ * duas sessoes diferentes para o mesmo vendedor em duas edicoes.
+ */
+export function gerarNomeSessao(donoId: string): string {
+  return `vendedor-${donoId.slice(0, 8)}`;
+}
+
 /**
  * Valida o que `salvarCanal`/`criarNumero`/`atualizarNumero` tem em comum:
  * fila existe, dono existe (e e da mesma organizacao — `findUnique` de outra
@@ -151,6 +185,40 @@ async function prepararGravacao(
   }
 
   const futuro = { ...atual, ...input };
+
+  /*
+   * Linha pessoal de WhatsApp em modo ponte: herda da config compartilhada o
+   * que o admin nao preencheu, e gera o nome de sessao quando faltar — sem
+   * isso o admin teria de redigitar a mesma ponte em toda linha pessoal nova.
+   * Precisa acontecer ANTES da checagem de conflito de sessao logo abaixo,
+   * senao o nome gerado aqui nunca seria validado contra colisao.
+   */
+  if (canal === 'WHATSAPP' && futuro.modo === 'NAO_OFICIAL' && futuro.donoId) {
+    const compartilhadaRegistro = await prisma.channelConfig.findFirst({ where: { canal, donoId: null } });
+    const compartilhada = compartilhadaRegistro ? aberto(compartilhadaRegistro) : null;
+    const herdado = herdarCredenciaisDaPonte(
+      {
+        ponteUrl: futuro.ponteUrl ?? null,
+        ponteToken: futuro.ponteToken ?? null,
+        ponteSegredo: futuro.ponteSegredo ?? null,
+      },
+      compartilhada
+        ? { ponteUrl: compartilhada.ponteUrl, ponteToken: compartilhada.ponteToken, ponteSegredo: compartilhada.ponteSegredo }
+        : null,
+    );
+    futuro.ponteUrl = herdado.ponteUrl;
+    futuro.ponteToken = herdado.ponteToken;
+    futuro.ponteSegredo = herdado.ponteSegredo;
+    input.ponteUrl = herdado.ponteUrl;
+    input.ponteToken = herdado.ponteToken;
+    input.ponteSegredo = herdado.ponteSegredo;
+
+    if (!futuro.ponteSessao) {
+      const nomeGerado = gerarNomeSessao(futuro.donoId);
+      futuro.ponteSessao = nomeGerado;
+      input.ponteSessao = nomeGerado;
+    }
+  }
 
   /*
    * Duas linhas do mesmo canal com a mesma sessao fariam `configDoDestino`
@@ -286,6 +354,17 @@ export async function obterConfig(canal: Channel) {
 export async function obterConfigPorId(id: string) {
   const config = await prisma.channelConfig.findUnique({ where: { id } });
   return config ? aberto(config) : null;
+}
+
+/**
+ * A propria linha pessoal de WhatsApp do usuario logado — usada pela tela de
+ * Atendimento para oferecer "Conectar WhatsApp" sem passar por Configuracoes.
+ * Devolve so o essencial para chamar as rotas de ponte por id; nunca segredo.
+ */
+export async function minhaLinhaWhatsapp(usuarioId: string) {
+  const config = await prisma.channelConfig.findFirst({ where: { canal: 'WHATSAPP', donoId: usuarioId } });
+  if (!config) return null;
+  return { id: config.id, ponteSessao: config.ponteSessao, modo: config.modo, ativo: config.ativo };
 }
 
 /**

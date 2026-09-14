@@ -49,7 +49,9 @@ const admin = login.accessToken;
 const { dados: usuarios } = await req('GET', '/usuarios', { token: admin });
 const vendedor1 = usuarios.usuarios.find((u) => u.email === 'vendedor1@plataforma.local');
 const vendedor2 = usuarios.usuarios.find((u) => u.email === 'vendedor2@plataforma.local');
-checar(Boolean(vendedor1 && vendedor2), 'seed tem vendedor1 e vendedor2');
+const vendedor3 = usuarios.usuarios.find((u) => u.email === 'vendedor3@plataforma.local');
+const agente1 = usuarios.usuarios.find((u) => u.email === 'agente1@plataforma.local');
+checar(Boolean(vendedor1 && vendedor2 && vendedor3 && agente1), 'seed tem vendedor1, vendedor2, vendedor3 e agente1');
 
 /* ── 1. Duas linhas pessoais, cada uma com sua propria sessao ─────────── */
 
@@ -144,6 +146,126 @@ checar(r3.status === 401, '5. segredo da sessao 2 nao assina mensagem da sessao 
 const zap = await req('GET', '/canais', { token: admin });
 const canalCompartilhado = zap.dados.canais.find((c) => c.canal === 'WHATSAPP' && !c.dono);
 checar(Boolean(canalCompartilhado), '6. ainda existe (ou nunca existiu) config compartilhada — checagem informativa');
+
+/* ── 7. Aviso de status (conectou/caiu) da sessao 1 ─────────────────────── */
+
+const avisarStatusPelaPonte = async (sessao, segredo, status, detalhe) => {
+  const corpoBruto = JSON.stringify({ sessao, status, detalhe });
+  return req('POST', `/webhooks/ponte/status/${organizacaoId}`, {
+    corpoBruto,
+    headers: { 'X-Ponte-Assinatura': assinar(corpoBruto, segredo) },
+  });
+};
+
+const avisoConectado = await avisarStatusPelaPonte(SESSAO_1, SEGREDO_1, 'CONECTADO', null);
+checar(
+  avisoConectado.status === 200 && avisoConectado.dados.ok === true,
+  '7. aviso de status CONECTADO da sessao 1 aceito',
+  `HTTP ${avisoConectado.status}`,
+);
+
+const avisoDesconectado = await avisarStatusPelaPonte(
+  SESSAO_1,
+  SEGREDO_1,
+  'DESCONECTADO',
+  'conexao caiu (428); tentando voltar',
+);
+checar(
+  avisoDesconectado.status === 200 && avisoDesconectado.dados.ok === true,
+  '   aviso de status DESCONECTADO da sessao 1 aceito',
+  `HTTP ${avisoDesconectado.status}`,
+);
+
+const { dados: canaisDepois } = await req('GET', '/canais', { token: admin });
+const linha1Depois = canaisDepois.canais.find((c) => c.id === linha1.dados.canal.id);
+checar(
+  linha1Depois?.ponteStatus === 'DESCONECTADO',
+  '   GET /canais reflete o ultimo status avisado (DESCONECTADO)',
+  `ponteStatus=${linha1Depois?.ponteStatus}`,
+);
+
+const avisoSegredoErrado = await avisarStatusPelaPonte(SESSAO_1, SEGREDO_2, 'CONECTADO', null);
+checar(
+  avisoSegredoErrado.status === 401,
+  '   segredo da sessao 2 nao assina aviso de status da sessao 1',
+  `HTTP ${avisoSegredoErrado.status}`,
+);
+
+/* ── 8. Linha pessoal herda a config compartilhada e a rota self-service ── */
+
+/*
+ * Config compartilhada com as 3 credenciais da ponte preenchidas — a linha
+ * pessoal do vendedor 3, criada logo abaixo SEM nenhuma delas, precisa
+ * herdar as 3 e ganhar um nome de sessao gerado automaticamente.
+ */
+const SEGREDO_COMPARTILHADA = `segredo-compartilhada-${EXECUCAO}`;
+const compartilhada = await req('PUT', '/canais/whatsapp', {
+  token: admin,
+  corpo: {
+    modo: 'NAO_OFICIAL',
+    ativo: false,
+    ponteUrl: 'http://ponte-compartilhada:9999/api',
+    ponteToken: 'token-compartilhado-1234567890',
+    ponteSegredo: SEGREDO_COMPARTILHADA,
+  },
+});
+checar(compartilhada.status === 200, '8. config compartilhada da ponte configurada', `HTTP ${compartilhada.status}`);
+
+/*
+ * Limpa uma linha pessoal do vendedor 3 de uma execucao anterior: o nome de
+ * sessao gerado e deterministico (mesmo donoId sempre gera o mesmo nome), e
+ * sem esta limpeza a segunda rodada do smoke test bateria de frente com a
+ * checagem de conflito de sessao (secao 166-174 de channels.service.ts).
+ */
+const { dados: canaisAntes } = await req('GET', '/canais', { token: admin });
+const linha3Antiga = canaisAntes.canais.find((c) => c.canal === 'WHATSAPP' && c.dono?.id === vendedor3.id);
+if (linha3Antiga) await req('DELETE', `/canais/numeros/${linha3Antiga.id}`, { token: admin });
+
+const linha3 = await req('POST', '/canais/whatsapp/numeros', {
+  token: admin,
+  corpo: {
+    donoId: vendedor3.id,
+    nome: 'Vendedor 3 (smoke)',
+    modo: 'NAO_OFICIAL',
+    ativo: true,
+  },
+});
+checar(linha3.status === 201, '   linha pessoal do vendedor 3 criada sem informar credenciais da ponte', `HTTP ${linha3.status}`);
+checar(
+  linha3.dados.canal?.ponteUrl === 'http://ponte-compartilhada:9999/api',
+  '   herdou ponteUrl da config compartilhada',
+  `ponteUrl=${linha3.dados.canal?.ponteUrl}`,
+);
+checar(
+  Boolean(linha3.dados.canal?.ponteTokenMascarado && linha3.dados.canal?.ponteSegredoMascarado),
+  '   herdou ponteToken/ponteSegredo da config compartilhada (mascarados na leitura)',
+);
+const sessaoGerada = linha3.dados.canal?.ponteSessao;
+checar(
+  sessaoGerada === `vendedor-${vendedor3.id.slice(0, 8)}`,
+  '   gerou nome de sessao automatico a partir do donoId',
+  `ponteSessao=${sessaoGerada}`,
+);
+
+const { dados: loginV3 } = await req('POST', '/auth/login', {
+  corpo: { email: 'vendedor3@plataforma.local', senha: 'Vendedor@123' },
+});
+const { dados: minhaLinhaV3 } = await req('GET', '/canais/numeros/meu', { token: loginV3.accessToken });
+checar(
+  minhaLinhaV3.numero?.id === linha3.dados.canal?.id && minhaLinhaV3.numero?.ponteSessao === sessaoGerada,
+  '9. GET /canais/numeros/meu devolve a propria linha do vendedor 3',
+  JSON.stringify(minhaLinhaV3),
+);
+
+const { dados: loginAgente1 } = await req('POST', '/auth/login', {
+  corpo: { email: 'agente1@plataforma.local', senha: 'Agente@123' },
+});
+const { dados: minhaLinhaAgente1 } = await req('GET', '/canais/numeros/meu', { token: loginAgente1.accessToken });
+checar(
+  minhaLinhaAgente1.numero === null,
+  '   GET /canais/numeros/meu devolve null para quem nao tem linha pessoal',
+  JSON.stringify(minhaLinhaAgente1),
+);
 
 console.log(falhas === 0 ? `\nOK — ${EXECUCAO}` : `\n${falhas} falha(s) — ${EXECUCAO}`);
 process.exit(falhas === 0 ? 0 : 1);

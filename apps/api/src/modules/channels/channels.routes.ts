@@ -13,6 +13,7 @@ import {
   criarNumero,
   excluirNumero,
   listarCanais,
+  minhaLinhaWhatsapp,
   obterConfig,
   obterConfigPorId,
   salvarCanal,
@@ -225,6 +226,20 @@ channelsRoutes.get(
  * trocada, `PUT /numeros/xyz` seria lido como canal "numeros" e cairia no 404
  * de canal invalido.
  */
+/**
+ * Self-service: qualquer usuario logado ve a propria linha, sem precisar de
+ * ADMIN nem de abrir Configuracoes — e o que a tela de Atendimento usa para
+ * oferecer "Conectar WhatsApp". Registrada ANTES de `PUT /numeros/:id` pelo
+ * mesmo motivo: path literal tem que vir antes do `:id` correspondente.
+ */
+channelsRoutes.get(
+  '/numeros/meu',
+  asyncHandler(async (req, res) => {
+    const numero = await minhaLinhaWhatsapp(req.user!.sub);
+    res.json({ numero });
+  }),
+);
+
 channelsRoutes.put(
   '/numeros/:id',
   requireRole('ADMIN'),

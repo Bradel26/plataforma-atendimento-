@@ -1,16 +1,15 @@
-import { mkdir, rm } from 'node:fs/promises';
-import { join } from 'node:path';
 import {
   Browsers,
   DisconnectReason,
   fetchLatestBaileysVersion,
   makeWASocket,
-  useMultiFileAuthState,
   type AnyMessageContent,
   type WASocket,
 } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import { toDataURL } from 'qrcode';
+import { criarAuthStatePersistido } from './autenticacaoPostgres.js';
+import { bancoDeSessaoPg } from './banco.js';
 import { config } from './config.js';
 
 /**
@@ -70,7 +69,7 @@ export function numeroDoJid(valor: string | null | undefined): string | null {
 }
 
 async function limparCredenciais(nome: string) {
-  await rm(join(config.dados, nome), { recursive: true, force: true });
+  await bancoDeSessaoPg.apagar(nome);
 }
 
 /**
@@ -85,11 +84,19 @@ export function quandoReceber(handler: (sessao: Sessao, msg: unknown) => void) {
   aoReceber = handler;
 }
 
-async function conectar(sessao: Sessao) {
-  const pasta = join(config.dados, sessao.nome);
-  await mkdir(pasta, { recursive: true });
+/**
+ * Quem avisa a plataforma que a sessao caiu ou voltou. Mesma tecnica de
+ * `aoReceber`: hook injetavel, para nao criar dependencia circular com
+ * `plataforma.ts` e para o teste conseguir observar sem rede.
+ */
+let aoMudarStatus: ((sessao: Sessao) => void) | null = null;
 
-  const { state, saveCreds } = await useMultiFileAuthState(pasta);
+export function quandoMudarStatus(handler: (sessao: Sessao) => void) {
+  aoMudarStatus = handler;
+}
+
+async function conectar(sessao: Sessao) {
+  const { state, saveCreds } = await criarAuthStatePersistido(sessao.nome, bancoDeSessaoPg);
 
   /*
    * A versao do WhatsApp Web vem de FORA, e nao da constante embutida no
@@ -150,6 +157,7 @@ async function conectar(sessao: Sessao) {
       sessao.qr = null;
       sessao.numero = numeroDoJid(sock.user?.id);
       console.log('[ponte] sessao "' + sessao.nome + '" conectada' + (sessao.numero ? ' como ' + sessao.numero : ''));
+      aoMudarStatus?.(sessao);
     }
 
     if (u.connection === 'close') {
@@ -163,6 +171,7 @@ async function conectar(sessao: Sessao) {
       sessao.detalhe = deslogado
         ? 'o aparelho desconectou esta sessao — escaneie o QR de novo'
         : 'conexao caiu (' + (motivo ?? 'sem codigo') + '); tentando voltar';
+      aoMudarStatus?.(sessao);
 
       if (deslogado) {
         /*

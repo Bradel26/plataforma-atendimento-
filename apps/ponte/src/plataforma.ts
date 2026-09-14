@@ -24,7 +24,7 @@ export type MensagemRecebida = {
   anexoNome?: string | null;
 };
 
-const ENDERECO = `${config.plataformaUrl}/api/webhooks/ponte/whatsapp/${config.organizacaoId}`;
+const BASE = `${config.plataformaUrl}/api/webhooks/ponte`;
 
 /** Espera entre as tentativas. Cresce para nao martelar plataforma reiniciando. */
 const ESPERAS = [1_000, 5_000, 15_000];
@@ -33,10 +33,13 @@ function assinar(corpo: string) {
   return `sha256=${createHmac('sha256', config.segredo).update(corpo).digest('hex')}`;
 }
 
-async function tentar(corpo: string): Promise<{ ok: true } | { ok: false; motivo: string; definitivo: boolean }> {
+async function tentar(
+  endereco: string,
+  corpo: string,
+): Promise<{ ok: true } | { ok: false; motivo: string; definitivo: boolean }> {
   let resposta: Response;
   try {
-    resposta = await fetch(ENDERECO, {
+    resposta = await fetch(endereco, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Ponte-Assinatura': assinar(corpo) },
       body: corpo,
@@ -63,28 +66,53 @@ async function tentar(corpo: string): Promise<{ ok: true } | { ok: false; motivo
 }
 
 /**
+ * POST assinado com reentrega, reaproveitado por `entregar` e `avisarStatus`.
+ * Nunca lanca: quem chama decide o que fazer com `false` — para mensagem
+ * recebida isso e so log (a ponte nao pode cair por causa disso); para aviso de
+ * status e a mesma logica, o numero nao pode desconectar so porque a plataforma
+ * estava fora do ar no instante do aviso.
+ */
+async function postComRetentativa(endereco: string, corpo: string, rotulo: string): Promise<boolean> {
+  for (let tentativa = 0; ; tentativa += 1) {
+    const r = await tentar(endereco, corpo);
+    if (r.ok) return true;
+
+    if (r.definitivo) {
+      console.error(`[ponte] plataforma recusou ${rotulo}: ${r.motivo}`);
+      return false;
+    }
+
+    if (tentativa >= ESPERAS.length) {
+      console.error(`[ponte] desisti de ${rotulo} apos ${tentativa} tentativas: ${r.motivo}`);
+      return false;
+    }
+
+    console.warn(`[ponte] falha ao entregar ${rotulo} (${r.motivo}); tento de novo`);
+    await new Promise((ok) => setTimeout(ok, ESPERAS[tentativa]));
+  }
+}
+
+/**
  * Entrega com reentrega. Nunca lanca: mensagem perdida vira log, e nao queda da
  * ponte — derrubar a sessao inteira porque UMA mensagem nao entrou desconectaria
  * o numero da empresa.
  */
 export async function entregar(mensagem: MensagemRecebida): Promise<boolean> {
-  const corpo = JSON.stringify(mensagem);
+  const endereco = `${BASE}/whatsapp/${config.organizacaoId}`;
+  return postComRetentativa(endereco, JSON.stringify(mensagem), `a mensagem ${mensagem.idExterno}`);
+}
 
-  for (let tentativa = 0; ; tentativa += 1) {
-    const r = await tentar(corpo);
-    if (r.ok) return true;
-
-    if (r.definitivo) {
-      console.error(`[ponte] plataforma recusou a mensagem ${mensagem.idExterno}: ${r.motivo}`);
-      return false;
-    }
-
-    if (tentativa >= ESPERAS.length) {
-      console.error(`[ponte] desisti da mensagem ${mensagem.idExterno} apos ${tentativa} tentativas: ${r.motivo}`);
-      return false;
-    }
-
-    console.warn(`[ponte] falha ao entregar ${mensagem.idExterno} (${r.motivo}); tento de novo`);
-    await new Promise((ok) => setTimeout(ok, ESPERAS[tentativa]));
-  }
+/**
+ * Avisa a plataforma que uma sessao conectou ou caiu, para o painel de Canais
+ * mostrar isso em tempo real — hoje ninguem sabia que o WhatsApp de um vendedor
+ * tinha desconectado ate ele reclamar que parou de receber mensagem.
+ */
+export async function avisarStatus(
+  sessao: string,
+  status: 'CONECTADO' | 'DESCONECTADO',
+  detalhe: string | null,
+): Promise<boolean> {
+  const endereco = `${BASE}/status/${config.organizacaoId}`;
+  const corpo = JSON.stringify({ sessao, status, detalhe });
+  return postComRetentativa(endereco, corpo, `o status (${status}) da sessao "${sessao}"`);
 }

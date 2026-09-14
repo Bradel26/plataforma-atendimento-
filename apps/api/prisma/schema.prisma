@@ -1488,6 +1488,10 @@ model ChannelConfig {
   ponteSegredo String? @map("ponte_segredo")
   /// Nome da sessao/instancia na ponte, quando ela hospeda mais de um numero.
   ponteSessao  String? @map("ponte_sessao")
+  /// Ultimo status de conexao que a ponte reportou para esta linha (CONECTADO/DESCONECTADO). Nulo fora do modo NAO_OFICIAL ou antes do primeiro aviso.
+  ponteStatus   String?   @map("ponte_status")
+  /// Quando `ponteStatus` mudou pela ultima vez.
+  ponteStatusEm DateTime? @map("ponte_status_em")
 
   /// Fila que recebe as conversas deste canal.
   filaId String? @map("fila_id")
@@ -1544,6 +1548,19 @@ model ChannelConfig {
   @@unique([canal, igUserId])
   @@index([organizacaoId])
   @@map("canais_config")
+}
+
+/// Credenciais de sessao do Baileys (WhatsApp Web nao oficial) da ponte,
+/// persistidas para sobreviver a reinicio/redeploy do processo — antes
+/// ficavam so em arquivo local e se perdiam a cada deploy.
+model PonteSessaoAuth {
+  /// Nome da sessao (mesmo valor de `ChannelConfig.ponteSessao`).
+  sessao       String   @id
+  /// JSON (creds + chaves do Baileys) cifrado em AES-256-GCM por apps/ponte/src/segredo.ts.
+  dados        String
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  @@map("ponte_sessoes_auth")
 }
 
 // ---------------------------------------------------------------------------

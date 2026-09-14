@@ -6,7 +6,8 @@ import { PainelContato } from '../features/atendimento/PainelContato';
 import { useConversas } from '../features/atendimento/useConversas';
 import { useAuth } from '../features/auth/AuthProvider';
 import { FiltroEtiquetas } from './crm/Etiquetas';
-import { ApiError, api } from '../lib/api';
+import { ApiError, api, getAccessToken } from '../lib/api';
+import { EVENTOS, conectar } from '../lib/realtime';
 import { useFaixaDeLargura } from '../lib/useFaixaDeLargura';
 import {
   ABAS_ATENDIMENTO,
@@ -21,6 +22,15 @@ import {
  * ficha, sempre uma por vez, com volta explicita — nunca as tres espremidas.
  */
 type PassoMobile = 'lista' | 'chat' | 'ficha';
+
+type MinhaLinhaWhatsapp = { id: string; ponteSessao: string | null; modo: string | null; ativo: boolean };
+
+type QrDaPonte = {
+  /** PNG em data URL. Nulo quando nao ha nada para escanear agora. */
+  qr: string | null;
+  conectado: boolean;
+  motivo: string | null;
+};
 
 export function AtendimentoPage() {
   const { temPerfil } = useAuth();
@@ -49,6 +59,89 @@ export function AtendimentoPage() {
   const [erroAberta, setErroAberta] = useState<string | null>(null);
   const [agentes, setAgentes] = useState<Usuario[]>([]);
   const abertaIdRef = useRef<string | null>(null);
+
+  /**
+   * Linha pessoal de WhatsApp do proprio usuario logado, e se ela ja esta
+   * conectada — self-service para o vendedor conectar o proprio numero sem
+   * precisar de um ADMIN em Configuracoes. `null` cobre tanto "ainda nao
+   * carregou" quanto "nao tem linha pessoal" (o placeholder de hoje serve
+   * igualmente para os dois casos).
+   */
+  const [minhaLinha, setMinhaLinha] = useState<MinhaLinhaWhatsapp | null>(null);
+  const [minhaLinhaConectada, setMinhaLinhaConectada] = useState(false);
+  const [mostrarConectar, setMostrarConectar] = useState(false);
+  const [qrConectar, setQrConectar] = useState<QrDaPonte | null>(null);
+
+  useEffect(() => {
+    void api
+      .get<{ numero: MinhaLinhaWhatsapp | null }>('/canais/numeros/meu')
+      .then(({ numero }) => setMinhaLinha(numero))
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    if (!minhaLinha || minhaLinha.modo !== 'NAO_OFICIAL') return;
+    void api
+      .get<{ estado: { situacao: string; detalhe: string | null } }>(
+        `/canais/numeros/${minhaLinha.id}/ponte/estado`,
+      )
+      .then(({ estado }) => setMinhaLinhaConectada(estado.situacao === 'CONECTADO'))
+      .catch(() => undefined);
+  }, [minhaLinha]);
+
+  // Aviso em tempo real de que a propria linha conectou/caiu, sem repetir a
+  // consulta acima a cada troca de tela.
+  useEffect(() => {
+    if (!minhaLinha) return;
+    const token = getAccessToken();
+    if (!token) return;
+    const socket = conectar({ token });
+    socket.on(EVENTOS.canalStatus, (payload: { id: string; status: string }) => {
+      if (payload.id !== minhaLinha.id) return;
+      setMinhaLinhaConectada(payload.status === 'CONECTADO');
+    });
+    return () => {
+      socket.disconnect();
+    };
+  }, [minhaLinha]);
+
+  // Enquanto o card "Conectar WhatsApp" esta aberto, busca o QR e faz
+  // polling leve ate a conexao acontecer — mesmo padrao de CanaisTab.tsx.
+  useEffect(() => {
+    if (!mostrarConectar || !minhaLinha) return;
+    let vivo = true;
+
+    const buscar = async () => {
+      try {
+        const r = await api.get<QrDaPonte>(`/canais/numeros/${minhaLinha.id}/ponte/qr`);
+        if (!vivo) return;
+        setQrConectar(r);
+        if (r.conectado) {
+          setMinhaLinhaConectada(true);
+          setMostrarConectar(false);
+        }
+      } catch {
+        // Silencio proposital: a ponte cair nao pode apagar o QR ja exibido.
+      }
+    };
+
+    void buscar();
+    const timer = window.setInterval(() => {
+      void buscar();
+    }, 3_000);
+
+    return () => {
+      vivo = false;
+      window.clearInterval(timer);
+    };
+  }, [mostrarConectar, minhaLinha]);
+
+  // A conexao confirmada por evento fecha o card mesmo sem o polling ter rodado ainda.
+  useEffect(() => {
+    if (minhaLinhaConectada) setMostrarConectar(false);
+  }, [minhaLinhaConectada]);
+
+  const precisaConectarWhatsapp = Boolean(minhaLinha && minhaLinha.modo === 'NAO_OFICIAL' && !minhaLinhaConectada);
 
   const {
     conversas,
@@ -230,6 +323,40 @@ export function AtendimentoPage() {
               aoAlternarFicha={faixa === 'desktop' ? undefined : alternarFicha}
               fichaAberta={fichaVisivel}
             />
+          ) : precisaConectarWhatsapp ? (
+            <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+              <p className="text-sm font-medium text-slate-700">Conecte seu WhatsApp para comecar a atender</p>
+              <p className="mt-1 max-w-sm text-xs text-slate-500">
+                Sua linha pessoal de WhatsApp ainda nao esta pareada. Conecte para receber as conversas dos seus
+                clientes aqui.
+              </p>
+
+              {!mostrarConectar ? (
+                <button
+                  type="button"
+                  onClick={() => setMostrarConectar(true)}
+                  className="mt-4 rounded-md bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+                >
+                  Conectar
+                </button>
+              ) : (
+                <div className="mt-4 rounded-lg border border-slate-200 bg-white p-4">
+                  {qrConectar?.qr ? (
+                    <div className="flex flex-col items-center gap-3">
+                      <img src={qrConectar.qr} alt="QR Code do WhatsApp" className="h-48 w-48 rounded border border-slate-200" />
+                      <p className="max-w-xs text-xs text-slate-600">
+                        Abra o WhatsApp no seu celular, toque em <strong>Aparelhos conectados</strong> e depois em{' '}
+                        <strong>Conectar aparelho</strong> apontando a camera para este codigo.
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-500">
+                      {qrConectar?.motivo ?? 'Gerando o QR Code...'}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
           ) : (
             <div className="flex h-full flex-col items-center justify-center px-6 text-center">
               <p className="text-sm font-medium text-slate-700">Selecione uma conversa</p>

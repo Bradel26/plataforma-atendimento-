@@ -15,6 +15,7 @@
     "@whiskeysockets/baileys": "6.17.16",
     "express": "^4.21.2",
     "multer": "^2.2.0",
+    "pg": "^8.23.0",
     "pino": "^9.5.0",
     "qrcode": "^1.5.4"
   },
@@ -22,6 +23,7 @@
     "@types/express": "^4.17.21",
     "@types/multer": "^2.2.0",
     "@types/node": "^22.10.5",
+    "@types/pg": "^8.23.1",
     "@types/qrcode": "^1.5.5",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3"

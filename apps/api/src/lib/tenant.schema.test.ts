@@ -60,7 +60,14 @@ const FILHAS: Record<string, string> = {
 };
 
 /** Globais: existem acima ou fora de qualquer organizacao. */
-const GLOBAIS = new Set(['Organizacao']);
+const GLOBAIS = new Set([
+  'Organizacao',
+  // Blob de credenciais do Baileys, indexado pelo nome da sessao — nao pela
+  // organizacao. A ponte (processo separado, sem contexto de tenant) e quem
+  // le/escreve aqui, e o nome da sessao ja e globalmente unico (mesmo valor de
+  // `ChannelConfig.ponteSessao`).
+  'PonteSessaoAuth',
+]);
 
 /** Modelos do schema, com o corpo de cada um. */
 function modelos(): Map<string, string> {

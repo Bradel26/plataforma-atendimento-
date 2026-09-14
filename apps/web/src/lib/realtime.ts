@@ -8,6 +8,7 @@ export const EVENTOS = {
   agenteStatus: 'agente:status',
   protocoloAtualizado: 'protocolo:atualizado',
   chamadaAtualizada: 'chamada:atualizada',
+  canalStatus: 'canal:status',
 } as const;
 
 /**
