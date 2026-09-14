@@ -55,9 +55,25 @@ function nomeValido(nome: string) {
   return /^[a-zA-Z0-9_-]{1,60}$/.test(nome);
 }
 
-/** O numero em digitos vira o endereco que o WhatsApp entende. */
+/**
+ * Jid completo de quem ja mandou mensagem nesta sessao, por numero em digitos.
+ *
+ * O WhatsApp passou a endereçar parte dos contatos por "LID" (`@lid`, opaco,
+ * por privacidade) em vez do numero de telefone (`@s.whatsapp.net`). Sem isto,
+ * responder um desses contatos reconstruiria "<digitos>@s.whatsapp.net" — um
+ * endereco que nao existe: o envio nao da erro nenhum (o WhatsApp aceita
+ * qualquer jid bem formado), mas a mensagem nunca chega a lugar nenhum.
+ */
+const jidOriginal = new Map<string, string>();
+
+/** Chamado ao receber uma mensagem, para a resposta poder usar o MESMO jid. */
+export function lembrarJid(numero: string, jidCompleto: string) {
+  jidOriginal.set(numero, jidCompleto);
+}
+
+/** O jid de destino: o original lembrado, ou o formato padrao de telefone. */
 export function jid(numero: string) {
-  return numero + '@s.whatsapp.net';
+  return jidOriginal.get(numero) ?? numero + '@s.whatsapp.net';
 }
 
 /** So os digitos de um jid, sem sufixo nem id de aparelho. */
