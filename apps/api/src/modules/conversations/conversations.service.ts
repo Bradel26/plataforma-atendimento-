@@ -120,20 +120,24 @@ export function motivoSemTelefone(contato: { telefone: string | null }): string 
 }
 
 /**
- * Config de WhatsApp que atenderia uma conversa iniciada a partir deste
- * contato: a linha PESSOAL do responsavel pelo contato, se houver uma; senao
- * a config compartilhada do canal (mesma regra de `obterConfig`).
+ * Config de WhatsApp que atenderia uma conversa iniciada por este usuario: a
+ * linha PESSOAL dele, se tiver uma conectada; senao a config compartilhada do
+ * canal (mesma regra de `obterConfig`).
+ *
+ * E a linha de QUEM CLICOU em "Iniciar conversa", nao a do responsavel
+ * cadastrado no contato — o mesmo comportamento do WhatsApp Web: conectando o
+ * proprio numero, a pessoa fala com qualquer contato por ele, nao so com os
+ * que ja tinha vinculo previo. Um contato importado do celular do vendedor,
+ * por exemplo, nao tem "responsavel" formal nenhum ate alguem definir um na
+ * ficha — mas o vendedor que importou continua podendo falar com ele.
  *
  * Diferente de `configDoDestino` (channels.service): aquela resolve pelo
  * identificador que a MENSAGEM trouxe (phoneNumberId, sessao da ponte); aqui
- * nao existe mensagem nenhuma ainda — quem decide a linha pessoal e o
- * responsavel CADASTRADO no contato.
+ * nao existe mensagem nenhuma ainda.
  */
-async function configWhatsappDoContato(contato: { responsavelId: string | null }) {
-  if (contato.responsavelId) {
-    const pessoal = await prisma.channelConfig.findFirst({ where: { canal: 'WHATSAPP', donoId: contato.responsavelId } });
-    if (pessoal) return pessoal;
-  }
+async function configWhatsappDoSolicitante(solicitante: Solicitante) {
+  const pessoal = await prisma.channelConfig.findFirst({ where: { canal: 'WHATSAPP', donoId: solicitante.sub } });
+  if (pessoal) return pessoal;
   return obterConfig('WHATSAPP');
 }
 
@@ -160,7 +164,7 @@ export async function iniciarConversa(solicitante: Solicitante, contatoId: strin
   });
   if (existente) return { id: existente.id };
 
-  const config = await configWhatsappDoContato(contato);
+  const config = await configWhatsappDoSolicitante(solicitante);
   const impedimento = config
     ? impedimentoDeEnvio(config.modo, {
         ativo: config.ativo,
