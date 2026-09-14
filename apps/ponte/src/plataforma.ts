@@ -13,6 +13,8 @@ import { config } from './config.js';
 
 export type MensagemRecebida = {
   numero: string;
+  /** Nome da sessao/instancia que recebeu, para a plataforma achar a linha certa entre varias. */
+  sessao: string;
   nome?: string | null;
   texto?: string;
   /** Id da mensagem no WhatsApp. E ele que impede duplicata na reentrega. */

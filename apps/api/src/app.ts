@@ -22,6 +22,7 @@ import { conversationsRoutes } from './modules/conversations/conversations.route
 import { accountsRoutes } from './modules/crm/accounts.routes';
 import { dadosRoutes } from './modules/dados/dados.routes';
 import { metricsRoutes } from './modules/metrics/metrics.routes';
+import { vendedoresRoutes } from './modules/metrics/vendedores.routes';
 import { relatoriosRoutes } from './modules/reports/reports.routes';
 import { escalasRoutes } from './modules/shifts/shifts.routes';
 import { pesquisasPublicasRoutes, pesquisasRoutes } from './modules/surveys/surveys.routes';
@@ -140,6 +141,7 @@ export function createApp() {
   app.use('/api/dados', dadosRoutes);
   app.use('/api/canais', channelsRoutes);
   app.use('/api/metricas', metricsRoutes);
+  app.use('/api/vendedores', vendedoresRoutes);
   app.use('/api/relatorios', relatoriosRoutes);
   app.use('/api/escalas', escalasRoutes);
   app.use('/api/pesquisas', pesquisasRoutes);
@@ -204,7 +206,10 @@ function servirFront(app: Express) {
         "script-src 'self'",
         "script-src-attr 'none'",
         "style-src 'self' https: 'unsafe-inline'",
-        'upgrade-insecure-requests',
+        // Mesmo cuidado do helmet acima: sem HTTPS real, essa diretiva forca o
+        // navegador a trocar os assets do proprio widget por HTTPS e quebra o
+        // carregamento no dominio temporario.
+        ...(env.HSTS_ATIVO ? ['upgrade-insecure-requests'] : []),
       ].join(';'),
     );
   };

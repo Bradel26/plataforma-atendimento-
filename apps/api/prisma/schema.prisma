@@ -72,6 +72,7 @@ model Organizacao {
   leads              Lead[]
   funis              Funnel[]
   oportunidades      Opportunity[]
+  credenciamentos    Credenciamento[]
   produtos           Product[]
   catalogos          PriceCatalog[]
   protocolos         Ticket[]
@@ -157,6 +158,8 @@ model User {
   tokensIntegracao      IntegrationToken[]
   /// Numeros de canal (ex.: WhatsApp) cadastrados como linha pessoal deste usuario.
   canaisProprios        ChannelConfig[]
+  propostasGeradas      PropostaGerada[]
+  credenciamentos       Credenciamento[]
   organizacao           Organizacao           @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
   /// SetNull: desligar o gestor nao pode apagar a equipe dele.
   gestor                User?                 @relation("Equipe", fields: [gestorId], references: [id], onDelete: SetNull)
@@ -312,15 +315,16 @@ model Contact {
   /// responsavel da conta nao propaga.
   responsavelId   String?       @map("responsavel_id")
 
-  conta         Account?       @relation(fields: [contaId], references: [id], onDelete: SetNull)
-  responsavel   User?          @relation("ContatoResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
-  conversas     Conversation[]
-  leads         Lead[]
-  protocolos    Ticket[]
-  itensCampanha CampaignItem[]
-  chamadas      Call[]
-  atividades    Activity[]
-  organizacao   Organizacao    @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  conta           Account?       @relation(fields: [contaId], references: [id], onDelete: SetNull)
+  responsavel     User?          @relation("ContatoResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+  conversas       Conversation[]
+  leads           Lead[]
+  protocolos      Ticket[]
+  itensCampanha   CampaignItem[]
+  chamadas        Call[]
+  atividades      Activity[]
+  credenciamentos Credenciamento[]
+  organizacao     Organizacao    @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
   @@index([organizacaoId, email])
   @@index([organizacaoId, telefone])
@@ -497,6 +501,7 @@ model Account {
   oportunidades      Opportunity[]
   protocolos         Ticket[]
   atividades         Activity[]
+  credenciamentos    Credenciamento[]
   /// Base instalada (item 5.1): equipamentos entregues a esta conta.
   produtosInstalados ProdutoDoCliente[]
   responsavel        User?                        @relation("ContaResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
@@ -544,17 +549,27 @@ model Lead {
   @@map("leads")
 }
 
+/// Tipo de funil: comercial (Oportunidades) ou esteira operacional (ex.: credenciamento).
+/// Existe para permitir que uma organizacao tenha os dois tipos de pipeline
+/// configuravel sem misturar dominio comercial (valor, itens) com operacional.
+enum FunnelTipo {
+  COMERCIAL
+  ESTEIRA
+}
+
 /// Funil customizavel de oportunidades.
 model Funnel {
-  id            String   @id @default(uuid())
-  organizacaoId String   @default("") @map("organizacao_id")
+  id            String     @id @default(uuid())
+  organizacaoId String     @default("") @map("organizacao_id")
   nome          String
-  ativo         Boolean  @default(true)
-  criadoEm      DateTime @default(now()) @map("criado_em")
+  tipo          FunnelTipo @default(COMERCIAL)
+  ativo         Boolean    @default(true)
+  criadoEm      DateTime   @default(now()) @map("criado_em")
 
-  estagios      FunnelStage[]
-  oportunidades Opportunity[]
-  organizacao   Organizacao   @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  estagios        FunnelStage[]
+  oportunidades   Opportunity[]
+  credenciamentos Credenciamento[]
+  organizacao     Organizacao      @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
   /// Nome unico por organizacao.
   @@unique([organizacaoId, nome])
@@ -577,11 +592,12 @@ model FunnelStage {
   /// booleano obrigaria o vendedor a adivinhar o que falta fazer.
   tarefaObrigatoria String? @map("tarefa_obrigatoria")
 
-  funil         Funnel                @relation(fields: [funilId], references: [id], onDelete: Cascade)
-  oportunidades Opportunity[]
-  atividades    Activity[]
-  saidas        OpportunityStageLog[] @relation("EstagioSaida")
-  entradas      OpportunityStageLog[] @relation("EstagioEntrada")
+  funil           Funnel                @relation(fields: [funilId], references: [id], onDelete: Cascade)
+  oportunidades   Opportunity[]
+  credenciamentos Credenciamento[]
+  atividades      Activity[]
+  saidas          OpportunityStageLog[] @relation("EstagioSaida")
+  entradas        OpportunityStageLog[] @relation("EstagioEntrada")
 
   @@unique([funilId, ordem])
   @@map("funil_estagios")
@@ -692,6 +708,7 @@ model Opportunity {
   organizacao        Organizacao                         @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
   /// Campos customizados (item 6.4): apagar a oportunidade apaga os valores junto.
   camposCustomizados ValorCampoCustomizadoOportunidade[]
+  propostasGeradas   PropostaGerada[]
 
   @@index([organizacaoId, status, atualizadoEm])
   @@index([organizacaoId, funilId, estagioId])
@@ -874,6 +891,27 @@ model OpportunityAudit {
 
   @@index([oportunidadeId, criadoEm])
   @@map("oportunidade_auditoria")
+}
+
+/// Rastreio de quando uma proposta em PDF foi gerada (item §16 do painel do vendedor).
+///
+/// A proposta em si nunca foi um registro — e um PDF montado sob demanda a partir da
+/// oportunidade (`GET /oportunidades/:id/proposta.pdf`). Sem esta tabela, "quantas
+/// propostas o vendedor enviou no mes" nao tem como ser respondido: nao ha coluna,
+/// evento ou trilha que registre a acao de gerar o PDF hoje.
+model PropostaGerada {
+  id             String   @id @default(uuid())
+  oportunidadeId String   @map("oportunidade_id")
+  /// Quem clicou em gerar. Nulo se a autenticacao um dia permitir geracao anonima
+  /// (nao permite hoje, mas SetNull evita que apagar o usuario apague o evento).
+  autorId        String?  @map("autor_id")
+  criadoEm       DateTime @default(now()) @map("criado_em")
+
+  oportunidade Opportunity @relation(fields: [oportunidadeId], references: [id], onDelete: Cascade)
+  autor        User?       @relation(fields: [autorId], references: [id], onDelete: SetNull)
+
+  @@index([oportunidadeId, criadoEm])
+  @@map("propostas_geradas")
 }
 
 /// De quem e a meta (item 4.1).
@@ -1418,6 +1456,44 @@ model TicketSchedule {
 
   @@index([inicio])
   @@map("protocolo_agendamentos")
+}
+
+/// Situacao de excecao de um credenciamento: fora do fluxo principal de
+/// estagios (Novo cadastro -> Pendencia -> Aprovacao -> Credenciado -> Ativo).
+/// Um card pode estar parado num estagio normal e MARCADO como excecao ao
+/// mesmo tempo — nao vira mais uma coluna do kanban.
+enum SituacaoCredenciamento {
+  REPROVADO
+  CANCELADO
+  INATIVADO
+}
+
+model Credenciamento {
+  id            String   @id @default(uuid())
+  organizacaoId String   @default("") @map("organizacao_id")
+  contatoId     String   @map("contato_id")
+  contaId       String?  @map("conta_id")
+  funilId       String   @map("funil_id")
+  estagioId     String   @map("estagio_id")
+  responsavelId String?  @map("responsavel_id")
+
+  situacaoExcecao SituacaoCredenciamento? @map("situacao_excecao")
+  motivoExcecao   String?                 @map("motivo_excecao")
+  observacoes     String?
+
+  criadoEm     DateTime  @default(now()) @map("criado_em")
+  atualizadoEm DateTime  @updatedAt @map("atualizado_em")
+  fechadoEm    DateTime? @map("fechado_em")
+
+  contato     Contact     @relation(fields: [contatoId], references: [id], onDelete: Cascade)
+  conta       Account?    @relation(fields: [contaId], references: [id], onDelete: SetNull)
+  funil       Funnel      @relation(fields: [funilId], references: [id], onDelete: Cascade)
+  estagio     FunnelStage @relation(fields: [estagioId], references: [id])
+  responsavel User?       @relation(fields: [responsavelId], references: [id], onDelete: SetNull)
+  organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+
+  @@index([organizacaoId, estagioId, atualizadoEm])
+  @@map("credenciamentos")
 }
 
 // ---------------------------------------------------------------------------

@@ -57,6 +57,10 @@ const FILHAS: Record<string, string> = {
   ValorCampoCustomizadoConta: 'Account',
   ValorCampoCustomizadoLead: 'Lead',
   ValorCampoCustomizadoOportunidade: 'Opportunity',
+  // Rastreio de proposta gerada (painel do vendedor): mesma logica da trilha de
+  // auditoria acima — toda leitura conta por oportunidadeId, que ja passou pela
+  // politica de visibilidade da oportunidade antes de qualquer consulta aqui.
+  PropostaGerada: 'Opportunity',
 };
 
 /** Globais: existem acima ou fora de qualquer organizacao. */

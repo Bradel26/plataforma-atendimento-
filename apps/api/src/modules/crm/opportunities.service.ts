@@ -1,6 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import { prisma, type ClienteDeEscrita } from '../../lib/prisma';
-import { filtroDe, politicaContas, politicaOportunidades } from '../../lib/politicas';
+import { exigirUsuarioDaOrganizacao, filtroDe, politicaContas, politicaOportunidades } from '../../lib/politicas';
 import { apenasVisivel } from '../../lib/visibilidade';
 import { organizacaoAtual, usuarioAtual } from '../../lib/tenant';
 import { badRequest, conflict, notFound } from '../../lib/errors';
@@ -250,6 +250,10 @@ export async function criarOportunidade(input: CriarOportunidadeInput, usuarioId
     where: apenasVisivel(input.contaId, await filtroDe(politicaContas)),
   });
   if (!conta) throw notFound('Conta nao encontrada');
+
+  // O responsavel, quando informado, tem de existir nesta organizacao — senao a
+  // oportunidade fica "dona" de alguem que ninguem com acesso legitimo enxerga.
+  await exigirUsuarioDaOrganizacao(input.responsavelId);
 
   const { funil, estagio } = await resolverFunil(input.funilId, input.estagioId);
   const itens = input.itens?.length ? await montarItens({ catalogoId: input.catalogoId, itens: input.itens }) : [];
@@ -548,6 +552,9 @@ export async function atualizarOportunidade(
    */
   if (input.canalOrigem !== undefined) depois.ORIGEM = input.canalOrigem;
   if (input.responsavelId !== undefined) {
+    // Mesma exigencia de `criarOportunidade`: um id que nao existe nesta
+    // organizacao nao pode virar responsavel, mesmo so para a trilha.
+    await exigirUsuarioDaOrganizacao(input.responsavelId);
     depois.RESPONSAVEL = input.responsavelId
       ? await prisma.user.findFirst({ where: { id: input.responsavelId }, select: { id: true, nome: true } })
       : null;
@@ -876,5 +883,18 @@ export async function criarFunil(input: { nome: string; estagios: Array<{ nome: 
       },
     },
     include: { estagios: { orderBy: { ordem: 'asc' } } },
+  });
+}
+
+/**
+ * Registra que o PDF da proposta foi gerado (item §16 do painel do vendedor).
+ *
+ * Sem verificar se a oportunidade existe: a rota que chama isto ja carregou a
+ * oportunidade com sucesso (`dadosDaProposta` teria lancado 404 antes) — verificar de
+ * novo aqui seria uma segunda consulta so para confirmar o que a primeira ja provou.
+ */
+export async function registrarPropostaGerada(oportunidadeId: string, autorId: string | undefined) {
+  await prisma.propostaGerada.create({
+    data: { oportunidadeId, autorId: autorId ?? null },
   });
 }

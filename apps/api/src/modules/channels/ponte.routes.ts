@@ -4,7 +4,7 @@ import { asyncHandler } from '../../http/async-handler';
 import { badRequest } from '../../lib/errors';
 import { prismaSemIsolamento } from '../../lib/prisma';
 import { comOrganizacao, semOrganizacao } from '../../lib/tenant';
-import { assinaturaValida, obterConfig } from './channels.service';
+import { assinaturaValida, configDoDestino } from './channels.service';
 import { registrarMensagemEntrante } from './inbound.service';
 import { modoEfetivo, numeroNormalizado } from './whatsapp.modo';
 
@@ -36,6 +36,13 @@ export const ponteRoutes = Router();
 const mensagemSchema = z.object({
   /** Numero de quem mandou, em qualquer formato: normalizamos aqui. */
   numero: z.string().trim().min(8).max(30),
+  /**
+   * Nome da sessao/instancia da ponte que recebeu esta mensagem — o mesmo
+   * valor de `ChannelConfig.ponteSessao` cadastrado na linha pessoal do
+   * vendedor. Opcional: uma ponte antiga (ou de sessao unica) que nao manda
+   * este campo cai na config compartilhada, como sempre foi.
+   */
+  sessao: z.string().trim().min(1).max(60).optional(),
   nome: z.string().trim().max(120).nullable().optional(),
   texto: z.string().max(4096).optional(),
   /**
@@ -79,7 +86,38 @@ ponteRoutes.post(
     }
 
     await comOrganizacao(organizacaoId, async () => {
-      const config = await obterConfig('WHATSAPP');
+      let corpoJson: unknown;
+      try {
+        corpoJson = JSON.parse(corpoBruto.toString('utf8'));
+      } catch (erro) {
+        // 400 e o fim da linha: a ponte nao deve reentregar o que nunca vai
+        // passar, e responder 200 esconderia o defeito de integracao.
+        throw badRequest(
+          `Corpo invalido: ${erro instanceof Error ? erro.message.slice(0, 200) : 'nao e JSON'}`,
+        );
+      }
+
+      // O nome da sessao precisa ser lido antes de validar a assinatura: e ele
+      // que diz qual ChannelConfig recebeu a mensagem, e cada linha pessoal tem
+      // o proprio ponteSegredo — validar sempre contra a config compartilhada
+      // (ou a primeira linha cadastrada) rejeitaria a mensagem de qualquer outra
+      // linha pessoal quando nao ha config compartilhada.
+      const sessaoBruta: string | null =
+        typeof corpoJson === 'object' &&
+        corpoJson !== null &&
+        'sessao' in corpoJson &&
+        typeof (corpoJson as { sessao?: unknown }).sessao === 'string' &&
+        (corpoJson as { sessao: string }).sessao.trim().length > 0
+          ? (corpoJson as { sessao: string }).sessao.trim()
+          : null;
+
+      const config = await configDoDestino('WHATSAPP', sessaoBruta);
+
+      if (sessaoBruta && config?.ponteSessao !== sessaoBruta) {
+        console.warn(
+          `[ponte] sessao "${sessaoBruta}" nao corresponde a nenhuma linha cadastrada; a mensagem caiu na config compartilhada/primeira do canal`,
+        );
+      }
 
       if (!config?.ativo || modoEfetivo(config.modo) !== 'NAO_OFICIAL') {
         res.status(503).json({
@@ -119,7 +157,7 @@ ponteRoutes.post(
 
       let corpo: z.infer<typeof mensagemSchema>;
       try {
-        corpo = mensagemSchema.parse(JSON.parse(corpoBruto.toString('utf8')));
+        corpo = mensagemSchema.parse(corpoJson);
       } catch (erro) {
         // 400 e o fim da linha: a ponte nao deve reentregar o que nunca vai
         // passar, e responder 200 esconderia o defeito de integracao.
@@ -150,9 +188,13 @@ ponteRoutes.post(
         // A ponte nao tem media id: ela manda a URL ou nada.
         anexoIdExterno: null,
         anexoNome: corpo.anexoNome ?? null,
-        // A ponte ainda so atende UM numero por organizacao (a sessao unica de
-        // `ponteSessao`); nulo cai na config compartilhada, que e essa mesma.
-        identificadorDestino: null,
+        // O nome da sessao identifica a linha pessoal (`ChannelConfig.ponteSessao`).
+        // Sem ele (ponte antiga, ou sessao unica sem apelido cadastrado),
+        // `configDoDestino` cai na config compartilhada — mesmo comportamento
+        // de antes desta mudanca. Reaproveita `sessaoBruta` (ja usado para
+        // resolver `config` e validar a assinatura) em vez de recalcular a
+        // partir de `corpo.sessao`, para os dois nunca poderem divergir.
+        identificadorDestino: sessaoBruta,
       });
 
       // 200 tambem para reentrega: `duplicada` diz que nada foi criado, e a ponte

@@ -165,6 +165,7 @@ export async function receber(sessao: Sessao, msg: WAMessage) {
 
     await entregar({
       numero,
+      sessao: sessao.nome,
       nome: msg.pushName ?? null,
       texto,
       idExterno,

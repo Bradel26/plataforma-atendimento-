@@ -1,11 +1,11 @@
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import { z } from 'zod';
 import type { Channel } from '@prisma/client';
 import { asyncHandler } from '../../http/async-handler';
 import { requireAuth, requireRole } from '../../http/middleware/auth';
 import { validateBody } from '../../http/middleware/validate';
 import { param } from '../../http/params';
-import { notFound } from '../../lib/errors';
+import { badRequest, forbidden, notFound } from '../../lib/errors';
 import { organizacaoAtual } from '../../lib/tenant';
 import {
   CANAIS_EXTERNOS,
@@ -14,6 +14,7 @@ import {
   excluirNumero,
   listarCanais,
   obterConfig,
+  obterConfigPorId,
   salvarCanal,
   type CanalExterno,
 } from './channels.service';
@@ -24,6 +25,20 @@ import { estadoDaIa, estadoDaIaDoNumero, salvarIa, salvarIaDoNumero } from '../b
 export const channelsRoutes = Router();
 
 channelsRoutes.use(requireAuth);
+
+/**
+ * ADMIN mexe em qualquer numero; o vendedor dono da linha mexe na propria.
+ *
+ * E a mesma logica de "Meu WhatsApp" do vendedor (a ficha 360 dele): ele nao
+ * precisa de um ADMIN por perto so para escanear o proprio QR de novo quando
+ * o celular ficar sem bateria.
+ */
+export function exigirDonoOuAdmin(req: Request, donoId: string | null): void {
+  const usuario = req.user!;
+  if (usuario.perfil === 'ADMIN') return;
+  if (donoId && usuario.sub === donoId) return;
+  throw forbidden();
+}
 
 const camposDoCanal = {
   ativo: z.boolean().optional(),
@@ -246,6 +261,87 @@ channelsRoutes.put(
   validateBody(iaSchema),
   asyncHandler(async (req, res) => {
     res.json({ ia: await salvarIaDoNumero(param(req, 'id'), req.body) });
+  }),
+);
+
+/**
+ * Estado da sessao da ponte de uma linha PESSOAL — o irmao de
+ * `/whatsapp/ponte/estado`, so que por numero em vez do canal compartilhado.
+ *
+ * ADMIN ve qualquer numero; o proprio vendedor ve so o dele — e o "Meu
+ * WhatsApp: conectado" que a ficha dele mostra.
+ */
+channelsRoutes.get(
+  '/numeros/:id/ponte/estado',
+  asyncHandler(async (req, res) => {
+    const config = await obterConfigPorId(param(req, 'id'));
+    if (!config) throw notFound('Numero nao encontrado');
+    exigirDonoOuAdmin(req, config.donoId);
+    if (config.donoId && !config.ponteSessao) {
+      throw badRequest(
+        'Esta linha pessoal nao tem nome de sessao configurado — configure antes de conectar, para nao usar a sessao da linha compartilhada.',
+      );
+    }
+
+    const caminhoWebhook = `/api/webhooks/ponte/whatsapp/${organizacaoAtual()}`;
+
+    if (config.canal !== 'WHATSAPP' || modoEfetivo(config.modo) !== 'NAO_OFICIAL') {
+      res.json({
+        estado: { situacao: 'DESCONHECIDO', detalhe: 'este numero nao esta no modo nao oficial' },
+        aviso: AVISO_NAO_OFICIAL,
+        caminhoWebhook,
+      });
+      return;
+    }
+    res.json({ estado: await estadoDaPonte(config), aviso: AVISO_NAO_OFICIAL, caminhoWebhook });
+  }),
+);
+
+/**
+ * QR para parear a linha pessoal — o vendedor escaneia com o proprio celular.
+ *
+ * Diferente do QR do canal compartilhado (ADMIN-only, porque pareia o numero
+ * da empresa inteira): aqui quem escaneia esta pareando o proprio numero, e o
+ * dono da linha pode fazer isso sozinho.
+ */
+channelsRoutes.get(
+  '/numeros/:id/ponte/qr',
+  asyncHandler(async (req, res) => {
+    const config = await obterConfigPorId(param(req, 'id'));
+    if (!config) throw notFound('Numero nao encontrado');
+    exigirDonoOuAdmin(req, config.donoId);
+    if (config.donoId && !config.ponteSessao) {
+      throw badRequest(
+        'Esta linha pessoal nao tem nome de sessao configurado — configure antes de conectar, para nao usar a sessao da linha compartilhada.',
+      );
+    }
+
+    if (config.canal !== 'WHATSAPP' || modoEfetivo(config.modo) !== 'NAO_OFICIAL') {
+      res.json({ qr: null, conectado: false, motivo: 'este numero nao esta no modo nao oficial' });
+      return;
+    }
+    res.json(await qrDaPonte(config));
+  }),
+);
+
+/** Desfaz o pareamento da linha pessoal — o "trocar de numero" do vendedor. */
+channelsRoutes.post(
+  '/numeros/:id/ponte/desconectar',
+  asyncHandler(async (req, res) => {
+    const config = await obterConfigPorId(param(req, 'id'));
+    if (!config) throw notFound('Numero nao encontrado');
+    exigirDonoOuAdmin(req, config.donoId);
+    if (config.donoId && !config.ponteSessao) {
+      throw badRequest(
+        'Esta linha pessoal nao tem nome de sessao configurado — configure antes de conectar, para nao usar a sessao da linha compartilhada.',
+      );
+    }
+
+    if (config.canal !== 'WHATSAPP' || modoEfetivo(config.modo) !== 'NAO_OFICIAL') {
+      throw notFound('Este numero nao esta no modo nao oficial');
+    }
+    await desconectarPonte(config);
+    res.json({ ok: true });
   }),
 );
 
