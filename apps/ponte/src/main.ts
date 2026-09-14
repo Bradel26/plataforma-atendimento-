@@ -1,9 +1,10 @@
 import type { WAMessage } from '@whiskeysockets/baileys';
 import { config } from './config.js';
-import { avisarStatus } from './plataforma.js';
+import { GerenciadorDeContatos } from './contatos.js';
+import { avisarStatus, entregarContatos } from './plataforma.js';
 import { receber } from './recebida.js';
 import { criarServidor } from './servidor.js';
-import { garantirNoAr, quandoMudarStatus, quandoReceber, type Sessao } from './sessao.js';
+import { garantirNoAr, quandoMudarStatus, quandoReceber, quandoReceberContatos, type Sessao } from './sessao.js';
 
 /**
  * Sobe a ponte.
@@ -19,6 +20,24 @@ quandoReceber((sessao, msg) => {
 
 quandoMudarStatus((sessao) => {
   void avisarStatus(sessao.nome, sessao.situacao === 'CONECTADO' ? 'CONECTADO' : 'DESCONECTADO', sessao.detalhe);
+});
+
+/*
+ * Um gerenciador de debounce POR SESSAO: contato de um vendedor nunca pode
+ * entrar acumulado junto com o de outro, senao a entrega marcaria a sessao
+ * errada no corpo do POST.
+ */
+const gerenciadoresDeContatos = new Map<string, GerenciadorDeContatos>();
+
+quandoReceberContatos((sessao, contatos) => {
+  let gerenciador = gerenciadoresDeContatos.get(sessao.nome);
+  if (!gerenciador) {
+    gerenciador = new GerenciadorDeContatos((acumulados) => {
+      void entregarContatos(sessao.nome, acumulados);
+    });
+    gerenciadoresDeContatos.set(sessao.nome, gerenciador);
+  }
+  gerenciador.adicionar(contatos);
 });
 
 const app = criarServidor();

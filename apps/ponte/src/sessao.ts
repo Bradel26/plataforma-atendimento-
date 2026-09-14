@@ -84,6 +84,27 @@ export function numeroDoJid(valor: string | null | undefined): string | null {
   return digitos.length >= 10 ? digitos : null;
 }
 
+/** So os campos do `Contact` do Baileys que a importacao usa. */
+export type ContatoBaileys = { id: string; name?: string; notify?: string };
+
+/**
+ * Decide se um contato bruto do Baileys entra na importacao, e com qual nome.
+ *
+ * So contato com numero de telefone de verdade (`@s.whatsapp.net`) entra: um
+ * `@lid` e um endereco opaco de privacidade, sem numero por tras — mesma
+ * limitacao ja documentada em `numeroDoJid` (ver `lembrarJid`/`jid` acima).
+ * Nome preferido e o que o vendedor salvou no celular; na falta dele, o que a
+ * propria pessoa definiu no WhatsApp; na falta dos dois, o proprio numero.
+ */
+export function contatoValido(c: ContatoBaileys): { numero: string; nome: string } | null {
+  if (!c.id.endsWith('@s.whatsapp.net')) return null;
+
+  const numero = numeroDoJid(c.id);
+  if (!numero) return null;
+
+  return { numero, nome: c.name ?? c.notify ?? numero };
+}
+
 async function limparCredenciais(nome: string) {
   await bancoDeSessaoPg.apagar(nome);
 }
@@ -109,6 +130,19 @@ let aoMudarStatus: ((sessao: Sessao) => void) | null = null;
 
 export function quandoMudarStatus(handler: (sessao: Sessao) => void) {
   aoMudarStatus = handler;
+}
+
+/**
+ * Quem recebe os contatos importados do celular. Mesma tecnica de `aoReceber`
+ * e `aoMudarStatus`: hook injetavel, para nao acoplar a sessao a plataforma e
+ * dar para testar sem rede.
+ */
+let aoReceberContatos: ((sessao: Sessao, contatos: { numero: string; nome: string }[]) => void) | null = null;
+
+export function quandoReceberContatos(
+  handler: (sessao: Sessao, contatos: { numero: string; nome: string }[]) => void,
+) {
+  aoReceberContatos = handler;
 }
 
 async function conectar(sessao: Sessao) {
@@ -209,6 +243,14 @@ async function conectar(sessao: Sessao) {
     // reentregariam conversas antigas como se tivessem acabado de chegar.
     if (evento.type !== 'notify') return;
     for (const msg of evento.messages) aoReceber?.(sessao, msg);
+  });
+
+  sock.ev.on('contacts.upsert', (lista) => {
+    // O Baileys dispara este evento varias vezes em pedacos (agenda inteira ao
+    // conectar, depois atualizacoes incrementais) — filtra e transforma aqui
+    // ANTES do hook, para quem recebe so lidar com contato ja valido.
+    const validos = lista.map(contatoValido).filter((c): c is { numero: string; nome: string } => c !== null);
+    if (validos.length) aoReceberContatos?.(sessao, validos);
   });
 }
 

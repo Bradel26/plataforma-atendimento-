@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { gerarNomeSessao, herdarCredenciaisDaPonte } from './channels.service';
+import { dadosContatoImportado, gerarNomeSessao, herdarCredenciaisDaPonte } from './channels.service';
 
 /**
  * Herdar credenciais da ponte compartilhada evita que o ADMIN redigite
@@ -55,5 +55,34 @@ describe('gerarNomeSessao', () => {
     const a = gerarNomeSessao('11111111-0000-0000-0000-000000000000');
     const b = gerarNomeSessao('22222222-0000-0000-0000-000000000000');
     expect(a).not.toBe(b);
+  });
+});
+
+/**
+ * `dadosContatoImportado` e a parte pura de `importarContatos`: monta os
+ * campos do `Contact` a criar a partir de um contato vindo da ponte, sem
+ * tocar em banco. O `findFirst`+`create` em loop nao tem teste de unidade —
+ * fica para o smoke test, como o `vitest.config.ts` documenta.
+ */
+describe('dadosContatoImportado', () => {
+  it('monta os dados do Contact com origem WHATSAPP e o responsavel informado', () => {
+    expect(
+      dadosContatoImportado(
+        { numero: '5511999998888', nome: 'Fulano da Silva' },
+        { organizacaoId: 'org-1', responsavelId: 'user-1' },
+      ),
+    ).toEqual({
+      organizacaoId: 'org-1',
+      nome: 'Fulano da Silva',
+      telefone: '5511999998888',
+      canalOrigem: 'WHATSAPP',
+      responsavelId: 'user-1',
+    });
+  });
+
+  it('sem responsavel (linha sem dono), o contato fica sem responsavel', () => {
+    expect(
+      dadosContatoImportado({ numero: '5511999998888', nome: 'Fulano' }, { organizacaoId: 'org-1', responsavelId: null }),
+    ).toMatchObject({ responsavelId: null });
   });
 });

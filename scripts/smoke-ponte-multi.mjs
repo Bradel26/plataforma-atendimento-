@@ -267,5 +267,60 @@ checar(
   JSON.stringify(minhaLinhaAgente1),
 );
 
+/* ── 10. Importacao de contatos do celular (agenda -> cadastro de Contato) ── */
+
+/*
+ * Simula o que a ponte manda ao conectar (`entregarContatos` em
+ * apps/ponte/src/plataforma.ts): so cria o que ainda nao existe, e repetir a
+ * mesma chamada nao pode duplicar.
+ */
+const enviarContatosPelaPonte = async (sessao, segredo, contatos) => {
+  const corpoBruto = JSON.stringify({ sessao, contatos });
+  return req('POST', `/webhooks/ponte/contatos/${organizacaoId}`, {
+    corpoBruto,
+    headers: { 'X-Ponte-Assinatura': assinar(corpoBruto, segredo) },
+  });
+};
+
+const contatoA = { numero: `5511${String(Date.now() + 2).slice(-9)}`, nome: 'Contato Agenda A' };
+const contatoB = { numero: `5511${String(Date.now() + 3).slice(-9)}`, nome: 'Contato Agenda B' };
+
+const importacao1 = await enviarContatosPelaPonte(SESSAO_1, SEGREDO_1, [contatoA, contatoB]);
+checar(
+  importacao1.status === 200 && importacao1.dados.criados === 2,
+  '10. importacao de 2 contatos novos da sessao 1 cria 2 Contatos',
+  `HTTP ${importacao1.status} criados=${importacao1.dados.criados}`,
+);
+
+const { dados: achadosA } = await req('GET', `/contatos?busca=${contatoA.numero}`, { token: admin });
+const { dados: achadosB } = await req('GET', `/contatos?busca=${contatoB.numero}`, { token: admin });
+const contatoCriadoA = achadosA.contatos?.find((c) => c.telefone === contatoA.numero);
+const contatoCriadoB = achadosB.contatos?.find((c) => c.telefone === contatoB.numero);
+
+checar(
+  Boolean(contatoCriadoA && contatoCriadoA.nome === contatoA.nome),
+  '   contato A aparece em /contatos com o nome da agenda',
+  JSON.stringify(contatoCriadoA),
+);
+checar(
+  Boolean(contatoCriadoB && contatoCriadoB.responsavelId === vendedor1.id),
+  '   contato B ficou associado ao vendedor 1 (dono da linha)',
+  JSON.stringify(contatoCriadoB),
+);
+
+/* Repete a MESMA importacao: nao pode duplicar nem sobrescrever. */
+const importacao2 = await enviarContatosPelaPonte(SESSAO_1, SEGREDO_1, [contatoA, contatoB]);
+checar(
+  importacao2.status === 200 && importacao2.dados.criados === 0,
+  '11. repetir a mesma importacao nao cria nada de novo (idempotente)',
+  `HTTP ${importacao2.status} criados=${importacao2.dados.criados}`,
+);
+
+const { dados: achadosDepois } = await req('GET', `/contatos?busca=${contatoA.numero}`, { token: admin });
+checar(
+  achadosDepois.contatos?.filter((c) => c.telefone === contatoA.numero).length === 1,
+  '   continua existindo exatamente 1 Contato com aquele telefone',
+);
+
 console.log(falhas === 0 ? `\nOK — ${EXECUCAO}` : `\n${falhas} falha(s) — ${EXECUCAO}`);
 process.exit(falhas === 0 ? 0 : 1);

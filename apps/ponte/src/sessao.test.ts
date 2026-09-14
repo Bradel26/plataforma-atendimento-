@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { jid, lembrarJid, numeroDoJid } from './sessao.js';
+import { contatoValido, jid, lembrarJid, numeroDoJid } from './sessao.js';
 
 /**
  * O WhatsApp passou a identificar alguns contatos por "LID" (endereco
@@ -31,5 +31,41 @@ describe('numeroDoJid', () => {
 
   it('extrai so os digitos de um jid @lid', () => {
     expect(numeroDoJid('79233992933473@lid')).toBe('79233992933473');
+  });
+});
+
+/**
+ * Importacao de contatos do celular (evento `contacts.upsert` do Baileys).
+ * `contatoValido` decide, por contato bruto, se ele entra na importacao e com
+ * qual nome — sem tocar em rede nem no socket, para dar para testar isolado.
+ */
+describe('contatoValido', () => {
+  it('contato @s.whatsapp.net com nome salvo no celular usa esse nome', () => {
+    expect(contatoValido({ id: '5511999998888@s.whatsapp.net', name: 'Fulano da Silva', notify: 'Fulano' })).toEqual({
+      numero: '5511999998888',
+      nome: 'Fulano da Silva',
+    });
+  });
+
+  it('sem nome salvo no celular, usa o nome que a propria pessoa definiu no WhatsApp (notify)', () => {
+    expect(contatoValido({ id: '5511999998888@s.whatsapp.net', notify: 'Fulano' })).toEqual({
+      numero: '5511999998888',
+      nome: 'Fulano',
+    });
+  });
+
+  it('sem nome nem notify, usa o proprio numero como nome', () => {
+    expect(contatoValido({ id: '5511999998888@s.whatsapp.net' })).toEqual({
+      numero: '5511999998888',
+      nome: '5511999998888',
+    });
+  });
+
+  it('contato @lid (sem numero de telefone) fica de fora', () => {
+    expect(contatoValido({ id: '79233992933473@lid', name: 'Fulano' })).toBeNull();
+  });
+
+  it('jid sem digitos suficientes (menos de 10) fica de fora', () => {
+    expect(contatoValido({ id: '123@s.whatsapp.net', name: 'Fulano' })).toBeNull();
   });
 });

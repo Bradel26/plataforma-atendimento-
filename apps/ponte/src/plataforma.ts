@@ -102,6 +102,32 @@ export async function entregar(mensagem: MensagemRecebida): Promise<boolean> {
   return postComRetentativa(endereco, JSON.stringify(mensagem), `a mensagem ${mensagem.idExterno}`);
 }
 
+/** Contatos vao em lotes de no maximo isto por requisicao. */
+const TAMANHO_DO_LOTE = 200;
+
+/**
+ * Entrega os contatos importados do celular do vendedor. So cria cadastro no
+ * CRM (a API decide o que ja existe); nunca lanca, mesma logica de `entregar`.
+ *
+ * Mais de `TAMANHO_DO_LOTE` contatos vao em varias chamadas EM SEQUENCIA (nao
+ * em paralelo), para uma agenda grande nao martelar a plataforma em rajada.
+ */
+export async function entregarContatos(
+  sessao: string,
+  contatos: { numero: string; nome: string }[],
+): Promise<boolean> {
+  const endereco = `${BASE}/contatos/${config.organizacaoId}`;
+
+  let tudoOk = true;
+  for (let i = 0; i < contatos.length; i += TAMANHO_DO_LOTE) {
+    const lote = contatos.slice(i, i + TAMANHO_DO_LOTE);
+    const corpo = JSON.stringify({ sessao, contatos: lote });
+    const ok = await postComRetentativa(endereco, corpo, `${lote.length} contato(s) da sessao "${sessao}"`);
+    tudoOk = tudoOk && ok;
+  }
+  return tudoOk;
+}
+
 /**
  * Avisa a plataforma que uma sessao conectou ou caiu, para o painel de Canais
  * mostrar isso em tempo real — hoje ninguem sabia que o WhatsApp de um vendedor

@@ -400,6 +400,52 @@ export async function configDoDestino(canal: Channel, identificador: string | nu
 }
 
 /**
+ * Monta os campos do `Contact` a criar a partir de um contato importado da
+ * ponte. Pura — nenhuma chamada ao banco — para dar para testar sem Prisma;
+ * `importarContatos`, logo abaixo, decide se ja existe (findFirst) e chama o
+ * `create` com o que isto devolve.
+ */
+export function dadosContatoImportado(
+  contato: { numero: string; nome: string },
+  destino: { organizacaoId: string; responsavelId: string | null },
+) {
+  return {
+    organizacaoId: destino.organizacaoId,
+    nome: contato.nome,
+    telefone: contato.numero,
+    canalOrigem: 'WHATSAPP' as const,
+    responsavelId: destino.responsavelId,
+  };
+}
+
+/**
+ * Importa contatos do celular do vendedor (evento `contacts.upsert` da ponte)
+ * como cadastro de `Contact` no CRM.
+ *
+ * So CRIA o que falta: nunca sobrescreve um contato ja cadastrado com aquele
+ * telefone, o que torna a importacao segura de repetir a cada reconexao. Nao
+ * abre conversa nem mensagem — so o cadastro.
+ */
+export async function importarContatos(
+  organizacaoId: string,
+  responsavelId: string | null,
+  contatos: { numero: string; nome: string }[],
+): Promise<number> {
+  let criados = 0;
+  for (const contato of contatos) {
+    const existente = await prisma.contact.findFirst({
+      where: { organizacaoId, telefone: contato.numero },
+      select: { id: true },
+    });
+    if (existente) continue;
+
+    await prisma.contact.create({ data: dadosContatoImportado(contato, { organizacaoId, responsavelId }) });
+    criados += 1;
+  }
+  return criados;
+}
+
+/**
  * Descobre a organizacao dona de um webhook de entrada.
  *
  * A URL do webhook e compartilhada — `/api/webhooks/whatsapp` e a mesma para

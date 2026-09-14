@@ -5,7 +5,7 @@ import { badRequest } from '../../lib/errors';
 import { prisma, prismaSemIsolamento } from '../../lib/prisma';
 import { notificarStatusCanal } from '../../realtime/hub';
 import { comOrganizacao, semOrganizacao } from '../../lib/tenant';
-import { assinaturaValida, configDoDestino } from './channels.service';
+import { assinaturaValida, configDoDestino, importarContatos } from './channels.service';
 import { registrarMensagemEntrante } from './inbound.service';
 import { modoEfetivo, numeroNormalizado } from './whatsapp.modo';
 
@@ -309,6 +309,110 @@ ponteRoutes.post(
       );
 
       res.json({ ok: true });
+    });
+  }),
+);
+
+const contatosSchema = z.object({
+  /** Mesmo valor de `ChannelConfig.ponteSessao` — identifica a linha pessoal dona dos contatos. */
+  sessao: z.string().trim().min(1).max(60),
+  /**
+   * O `.max(200)` reforca do lado do servidor o mesmo limite de lote que
+   * `apps/ponte/src/plataforma.ts` usa para quebrar o envio — nenhuma
+   * requisicao legitima chega com mais que isso.
+   */
+  contatos: z
+    .array(
+      z.object({
+        numero: z.string().trim().min(8).max(20),
+        nome: z.string().trim().min(1).max(200),
+      }),
+    )
+    .max(200),
+});
+
+/**
+ * Importa contatos do celular (nome + telefone) da agenda do vendedor, ao
+ * conectar a ponte de WhatsApp nao oficial.
+ *
+ * Mesmo padrao de seguranca das rotas acima: corpo cru + assinatura HMAC com o
+ * `ponteSegredo` da linha. So CRIA cadastro de `Contact` que ainda nao existe
+ * (mesmo telefone) — nunca sobrescreve, o que torna a chamada segura de repetir
+ * a cada reconexao.
+ */
+ponteRoutes.post(
+  '/contatos/:organizacaoId',
+  raw({ type: '*/*', limit: '2mb' }),
+  asyncHandler(async (req, res) => {
+    const organizacaoId = req.params.organizacaoId!;
+    const corpoBruto = Buffer.isBuffer(req.body) ? req.body : Buffer.from('');
+
+    if (!(await organizacaoExiste(organizacaoId))) {
+      res.status(404).json({ error: { code: 'NAO_ENCONTRADO', message: 'Organizacao nao encontrada' } });
+      return;
+    }
+
+    await comOrganizacao(organizacaoId, async () => {
+      let corpoJson: unknown;
+      try {
+        corpoJson = JSON.parse(corpoBruto.toString('utf8'));
+      } catch (erro) {
+        throw badRequest(
+          `Corpo invalido: ${erro instanceof Error ? erro.message.slice(0, 200) : 'nao e JSON'}`,
+        );
+      }
+
+      const sessaoBruta: string | null =
+        typeof corpoJson === 'object' &&
+        corpoJson !== null &&
+        'sessao' in corpoJson &&
+        typeof (corpoJson as { sessao?: unknown }).sessao === 'string' &&
+        (corpoJson as { sessao: string }).sessao.trim().length > 0
+          ? (corpoJson as { sessao: string }).sessao.trim()
+          : null;
+
+      const config = await configDoDestino('WHATSAPP', sessaoBruta);
+
+      if (!config?.ativo || modoEfetivo(config.modo) !== 'NAO_OFICIAL') {
+        res.status(503).json({
+          error: {
+            code: 'CANAL_INDISPONIVEL',
+            message: 'O WhatsApp desta organizacao nao esta no modo nao oficial',
+          },
+        });
+        return;
+      }
+
+      if (!config.ponteSegredo) {
+        res.status(503).json({
+          error: {
+            code: 'PONTE_SEM_SEGREDO',
+            message: 'Configure o segredo da ponte antes de receber contatos',
+          },
+        });
+        return;
+      }
+
+      const assinatura = req.header('x-ponte-assinatura') ?? req.header('x-hub-signature-256');
+      if (!assinaturaValida(corpoBruto, assinatura, config.ponteSegredo)) {
+        res
+          .status(401)
+          .json({ error: { code: 'ASSINATURA_INVALIDA', message: 'Assinatura da ponte invalida' } });
+        return;
+      }
+
+      let corpo: z.infer<typeof contatosSchema>;
+      try {
+        corpo = contatosSchema.parse(corpoJson);
+      } catch (erro) {
+        throw badRequest(
+          `Corpo invalido: ${erro instanceof Error ? erro.message.slice(0, 200) : 'nao e JSON'}`,
+        );
+      }
+
+      const criados = await importarContatos(organizacaoId, config.donoId, corpo.contatos);
+
+      res.json({ ok: true, criados });
     });
   }),
 );
