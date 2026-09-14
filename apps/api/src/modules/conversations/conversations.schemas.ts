@@ -44,6 +44,11 @@ export const enviarMensagemSchema = z.object({
   conteudo: z.string().trim().min(1, 'Escreva uma mensagem').max(4000),
 });
 
+/** Iniciar conversa a partir de um Contato do CRM (botao "Iniciar conversa" na ficha). */
+export const iniciarConversaSchema = z.object({
+  contatoId: z.string().uuid(),
+});
+
 export const transferirSchema = z
   .object({
     agenteId: z.string().uuid().optional(),
@@ -57,3 +62,4 @@ export const transferirSchema = z
 export type ListarConversasQuery = z.infer<typeof listarConversasSchema>;
 export type TransferirInput = z.infer<typeof transferirSchema>;
 export type DefinirTagsInput = z.infer<typeof definirTagsSchema>;
+export type IniciarConversaInput = z.infer<typeof iniciarConversaSchema>;

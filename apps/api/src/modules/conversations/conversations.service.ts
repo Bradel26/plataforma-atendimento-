@@ -1,13 +1,16 @@
 import type { AttachmentType, Prisma, Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
-import { filtroDe, politicaConversas } from '../../lib/politicas';
+import { filtroDe, politicaContatos, politicaConversas } from '../../lib/politicas';
 import { apenasVisivel } from '../../lib/visibilidade';
 import { salvar } from '../../lib/storage';
 import { apos, decodificarCursor, fatiar } from '../../lib/paginacao';
 import { normalizarTags } from '../../lib/tags';
-import { badRequest, forbidden, notFound } from '../../lib/errors';
+import { AppError, badRequest, forbidden, notFound } from '../../lib/errors';
 import { notificarConversaAtualizada, notificarMensagem } from '../../realtime/hub';
 import { enviarArquivoParaCanal, enviarParaCanal, exigeEnvioExterno } from '../channels/outbound.service';
+import { obterConfig } from '../channels/channels.service';
+import { decidirDestino } from '../channels/inbound.service';
+import { impedimentoDeEnvio } from '../channels/whatsapp.modo';
 import { entregarParaIa } from '../bots/ia.service';
 import { TIPO_CONVITE_PESQUISA, criarPesquisa, entregarPesquisa } from '../surveys/surveys.service';
 import { enfileirar } from '../../lib/fila';
@@ -108,6 +111,82 @@ export async function contarPorStatus(solicitante: Solicitante) {
   const base = { EM_ESPERA: 0, ATRIBUIDO: 0, EM_ATENDIMENTO: 0, FINALIZADO: 0 };
   for (const g of grupos) base[g.status] = g._count._all;
   return base;
+}
+
+/** Motivo pelo qual um contato sem telefone nao pode receber conversa de WhatsApp, ou nulo se pode. Pura, sem banco. */
+export function motivoSemTelefone(contato: { telefone: string | null }): string | null {
+  if (!contato.telefone) return 'Contato sem telefone cadastrado — nao e possivel iniciar conversa por WhatsApp';
+  return null;
+}
+
+/**
+ * Config de WhatsApp que atenderia uma conversa iniciada a partir deste
+ * contato: a linha PESSOAL do responsavel pelo contato, se houver uma; senao
+ * a config compartilhada do canal (mesma regra de `obterConfig`).
+ *
+ * Diferente de `configDoDestino` (channels.service): aquela resolve pelo
+ * identificador que a MENSAGEM trouxe (phoneNumberId, sessao da ponte); aqui
+ * nao existe mensagem nenhuma ainda — quem decide a linha pessoal e o
+ * responsavel CADASTRADO no contato.
+ */
+async function configWhatsappDoContato(contato: { responsavelId: string | null }) {
+  if (contato.responsavelId) {
+    const pessoal = await prisma.channelConfig.findFirst({ where: { canal: 'WHATSAPP', donoId: contato.responsavelId } });
+    if (pessoal) return pessoal;
+  }
+  return obterConfig('WHATSAPP');
+}
+
+/**
+ * Abre uma conversa de WhatsApp com um Contato do CRM que ainda nao escreveu
+ * — botao "Iniciar conversa" na ficha do contato.
+ *
+ * Idempotente: se ja existe uma conversa ABERTA (nao finalizada) com este
+ * contato no WhatsApp, devolve ela em vez de criar outra — reabrir a ficha e
+ * clicar de novo nao pode duplicar o atendimento.
+ */
+export async function iniciarConversa(solicitante: Solicitante, contatoId: string): Promise<{ id: string }> {
+  const contato = await prisma.contact.findFirst({
+    where: apenasVisivel(contatoId, await filtroDe(politicaContatos)),
+  });
+  if (!contato) throw notFound('Contato nao encontrado');
+
+  const motivo = motivoSemTelefone(contato);
+  if (motivo) throw badRequest(motivo);
+
+  const existente = await prisma.conversation.findFirst({
+    where: { contatoId, canal: 'WHATSAPP', status: { not: 'FINALIZADO' } },
+    orderBy: { criadoEm: 'desc' },
+  });
+  if (existente) return { id: existente.id };
+
+  const config = await configWhatsappDoContato(contato);
+  const impedimento = config
+    ? impedimentoDeEnvio(config.modo, {
+        ativo: config.ativo,
+        accessToken: config.accessToken,
+        phoneNumberId: config.phoneNumberId,
+        ponteUrl: config.ponteUrl,
+        ponteToken: config.ponteToken,
+      })
+    : 'Canal WhatsApp nao configurado';
+  if (impedimento) throw new AppError(503, 'CANAL_INDISPONIVEL', impedimento);
+
+  const destino = decidirDestino(config);
+  const conversa = await prisma.conversation.create({
+    data: {
+      canal: 'WHATSAPP',
+      status: destino.agenteId ? 'ATRIBUIDO' : 'EM_ESPERA',
+      contatoId: contato.id,
+      filaId: destino.filaId,
+      agenteId: destino.agenteId,
+      atribuidoEm: destino.agenteId ? new Date() : null,
+      canalConfigId: destino.canalConfigId,
+      enderecoExterno: contato.telefone,
+    },
+  });
+
+  return { id: conversa.id };
 }
 
 /**

@@ -9,6 +9,7 @@ import { validateBody, validateQuery } from '../../http/middleware/validate';
 import {
   definirTagsSchema,
   enviarMensagemSchema,
+  iniciarConversaSchema,
   listarConversasSchema,
   listarMensagensSchema,
   transferirSchema,
@@ -20,6 +21,7 @@ import {
   enviarArquivo,
   enviarMensagem,
   finalizarConversa,
+  iniciarConversa,
   listarConversas,
   listarMensagens,
   marcarComoLida,
@@ -46,6 +48,19 @@ conversationsRoutes.get(
   validateQuery(listarConversasSchema),
   asyncHandler(async (req, res) => {
     res.json(await listarConversas(quem(req), res.locals.query));
+  }),
+);
+
+/**
+ * Inicia uma conversa de WhatsApp a partir de um Contato do CRM — botao
+ * "Iniciar conversa" na ficha, para o contato que nunca escreveu primeiro.
+ * Idempotente: chamar de novo para o mesmo contato devolve a mesma conversa.
+ */
+conversationsRoutes.post(
+  '/',
+  validateBody(iniciarConversaSchema),
+  asyncHandler(async (req, res) => {
+    res.status(201).json({ conversa: await iniciarConversa(quem(req), req.body.contatoId) });
   }),
 );
 

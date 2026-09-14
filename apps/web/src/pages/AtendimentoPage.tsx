@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Alerta, Input } from '../components/ui';
 import { ListaConversas } from '../features/atendimento/ListaConversas';
 import { PainelChat } from '../features/atendimento/PainelChat';
@@ -34,6 +35,7 @@ type QrDaPonte = {
 
 export function AtendimentoPage() {
   const { temPerfil } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { ref: containerRef, faixa } = useFaixaDeLargura<HTMLDivElement>();
   const [aba, setAba] = useState<ConversaStatus>('EM_ESPERA');
   const [busca, setBusca] = useState('');
@@ -188,6 +190,20 @@ export function AtendimentoPage() {
     },
     [aplicarEvento, focarConversa],
   );
+
+  /**
+   * Chega aqui vindo do botao "Iniciar conversa" da ficha do contato
+   * (`/atendimento?conversa=<id>`): abre a conversa direto, sem exigir clique
+   * na lista. Limpa o parametro logo depois — sem isso, um F5 reabriria a
+   * mesma conversa toda vez.
+   */
+  useEffect(() => {
+    const id = searchParams.get('conversa');
+    if (!id) return;
+    void abrir(id);
+    setSearchParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   // Mensagens novas entram direto na conversa aberta, sem recarregar.
   useEffect(

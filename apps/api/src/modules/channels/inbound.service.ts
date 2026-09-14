@@ -12,6 +12,27 @@ import type { MensagemNormalizada } from './meta.types';
 type DestinoConversa = { canalConfigId: string | null; filaId: string | null; agenteId: string | null };
 
 /**
+ * Parte PURA de `destinoDaMensagem`: dada uma config ja resolvida, decide
+ * fila-vs-dono sem tocar em banco. Extraida para ser reaproveitada por
+ * `iniciarConversa` (conversations.service.ts) — o vendedor que abre uma
+ * conversa a partir da ficha do contato resolve a config de outro jeito
+ * (linha pessoal do RESPONSAVEL do contato, nao do identificador da mensagem),
+ * mas a regra de "linha pessoal atribui, linha comum cai na fila dela" e a
+ * mesma e nao pode ser duplicada.
+ */
+export function decidirDestino(
+  config: { id: string; donoId: string | null; filaId: string | null } | null,
+): DestinoConversa {
+  if (config?.donoId) {
+    return { canalConfigId: config.id, filaId: null, agenteId: config.donoId };
+  }
+  if (config?.filaId) {
+    return { canalConfigId: config?.id ?? null, filaId: config.filaId, agenteId: null };
+  }
+  return { canalConfigId: config?.id ?? null, filaId: null, agenteId: null };
+}
+
+/**
  * Destino de uma conversa nova: a linha que recebeu a mensagem decide.
  *
  * Linha pessoal (`donoId` preenchido — o vendedor com WhatsApp proprio): a
@@ -20,20 +41,15 @@ type DestinoConversa = { canalConfigId: string | null; filaId: string | null; ag
  * dono. Linha comum: cai na fila configurada, ou na primeira fila ativa do
  * canal, como sempre foi.
  */
-async function destinoDaMensagem(canal: Channel, identificadorDestino: string | null): Promise<DestinoConversa> {
+export async function destinoDaMensagem(canal: Channel, identificadorDestino: string | null): Promise<DestinoConversa> {
   const config = await configDoDestino(canal, identificadorDestino);
-
-  if (config?.donoId) {
-    return { canalConfigId: config.id, filaId: null, agenteId: config.donoId };
-  }
-  if (config?.filaId) {
-    return { canalConfigId: config?.id ?? null, filaId: config.filaId, agenteId: null };
-  }
+  const decidido = decidirDestino(config);
+  if (decidido.filaId || decidido.agenteId) return decidido;
 
   const fila =
     (await prisma.queue.findFirst({ where: { ativa: true, canalPadrao: canal }, orderBy: { criadoEm: 'asc' } })) ??
     (await prisma.queue.findFirst({ where: { ativa: true }, orderBy: { criadoEm: 'asc' } }));
-  return { canalConfigId: config?.id ?? null, filaId: fila?.id ?? null, agenteId: null };
+  return { ...decidido, filaId: fila?.id ?? null };
 }
 
 /**

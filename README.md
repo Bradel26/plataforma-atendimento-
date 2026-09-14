@@ -246,6 +246,13 @@ Para simular um cliente, abra **http://localhost:5173/webchat** numa aba anônim
 preenche nome e e-mail, a conversa cai na primeira fila de Webchat ativa e aparece na hora no
 painel do agente vinculado a essa fila.
 
+Uma conversa de WhatsApp também pode nascer do lado da empresa, e não só de mensagem do cliente:
+na ficha de um Contato do CRM com telefone cadastrado, o botão **Iniciar conversa** cria a
+conversa (vazia, sem mensagem) e abre direto o Atendimento com ela em foco. O destino segue a
+mesma regra de sempre — linha pessoal de WhatsApp do responsável pelo contato atribui direto a
+ele; senão cai na fila da linha compartilhada — e é idempotente: clicar de novo no mesmo contato
+reabre a mesma conversa em vez de duplicar.
+
 ### Smoke test do tempo real
 
 ```bash
