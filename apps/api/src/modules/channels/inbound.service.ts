@@ -33,6 +33,22 @@ export function decidirDestino(
 }
 
 /**
+ * Fila para uma conversa sem linha pessoal e sem fila propria configurada:
+ * a fila ativa do canal, ou a primeira fila ativa que houver.
+ *
+ * Existe para NUNCA deixar uma conversa sem fila e sem agente ao mesmo tempo
+ * — esse estado ("EM_ESPERA" com `filaId: null`) fica invisivel para todo
+ * mundo, porque a politica de visibilidade so mostra espera de uma fila em
+ * que a pessoa atua. Uma conversa assim nao aparece nem para quem a criou.
+ */
+export async function filaPadraoDoCanal(canal: Channel): Promise<string | null> {
+  const fila =
+    (await prisma.queue.findFirst({ where: { ativa: true, canalPadrao: canal }, orderBy: { criadoEm: 'asc' } })) ??
+    (await prisma.queue.findFirst({ where: { ativa: true }, orderBy: { criadoEm: 'asc' } }));
+  return fila?.id ?? null;
+}
+
+/**
  * Destino de uma conversa nova: a linha que recebeu a mensagem decide.
  *
  * Linha pessoal (`donoId` preenchido — o vendedor com WhatsApp proprio): a
@@ -46,10 +62,7 @@ export async function destinoDaMensagem(canal: Channel, identificadorDestino: st
   const decidido = decidirDestino(config);
   if (decidido.filaId || decidido.agenteId) return decidido;
 
-  const fila =
-    (await prisma.queue.findFirst({ where: { ativa: true, canalPadrao: canal }, orderBy: { criadoEm: 'asc' } })) ??
-    (await prisma.queue.findFirst({ where: { ativa: true }, orderBy: { criadoEm: 'asc' } }));
-  return { ...decidido, filaId: fila?.id ?? null };
+  return { ...decidido, filaId: await filaPadraoDoCanal(canal) };
 }
 
 /**

@@ -9,7 +9,7 @@ import { AppError, badRequest, forbidden, notFound } from '../../lib/errors';
 import { notificarConversaAtualizada, notificarMensagem } from '../../realtime/hub';
 import { enviarArquivoParaCanal, enviarParaCanal, exigeEnvioExterno } from '../channels/outbound.service';
 import { obterConfig } from '../channels/channels.service';
-import { decidirDestino } from '../channels/inbound.service';
+import { decidirDestino, filaPadraoDoCanal } from '../channels/inbound.service';
 import { impedimentoDeEnvio } from '../channels/whatsapp.modo';
 import { entregarParaIa } from '../bots/ia.service';
 import { TIPO_CONVITE_PESQUISA, criarPesquisa, entregarPesquisa } from '../surveys/surveys.service';
@@ -172,7 +172,10 @@ export async function iniciarConversa(solicitante: Solicitante, contatoId: strin
     : 'Canal WhatsApp nao configurado';
   if (impedimento) throw new AppError(503, 'CANAL_INDISPONIVEL', impedimento);
 
-  const destino = decidirDestino(config);
+  const decidido = decidirDestino(config);
+  const destino = decidido.filaId || decidido.agenteId
+    ? decidido
+    : { ...decidido, filaId: await filaPadraoDoCanal('WHATSAPP') };
   const conversa = await prisma.conversation.create({
     data: {
       canal: 'WHATSAPP',
