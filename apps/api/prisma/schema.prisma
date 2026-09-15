@@ -1523,6 +1523,7 @@ model ChannelConfig {
   dono        User?          @relation(fields: [donoId], references: [id], onDelete: SetNull)
   organizacao Organizacao    @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
   conversas   Conversation[]
+  previasChat ChatPreview[]
 
   /**
    * Antes, um canal de cada tipo POR ORGANIZACAO (`@@unique([organizacaoId,
@@ -1548,6 +1549,35 @@ model ChannelConfig {
   @@unique([canal, igUserId])
   @@index([organizacaoId])
   @@map("canais_config")
+}
+
+/// Espelho do WhatsApp pessoal de um vendedor: um chat que existe no celular
+/// dele mas ainda nao virou `Conversation` formal na plataforma. So-leitura
+/// ate o vendedor (ou o cliente) mandar a primeira mensagem de verdade -- ai
+/// vira `Conversation` e esta linha e apagada (ver `promoverPrevia`).
+model ChatPreview {
+  id            String @id @default(uuid())
+  organizacaoId String @default("") @map("organizacao_id")
+  canalConfigId String @map("canal_config_id")
+  numero        String
+  nome          String
+
+  ultimaMensagem   String   @map("ultima_mensagem")
+  ultimaMensagemEm DateTime @map("ultima_mensagem_em")
+  naoLidas         Int      @default(0) @map("nao_lidas")
+
+  /// Cache das ultimas ~30 mensagens (texto/resumo, sem midia), mais novo por
+  /// ultimo -- formato `{ autor: 'CLIENTE'|'AGENTE', texto, criadoEm }[]`.
+  mensagens Json @default("[]")
+
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  canalConfig ChannelConfig @relation(fields: [canalConfigId], references: [id], onDelete: Cascade)
+
+  @@unique([canalConfigId, numero])
+  @@index([canalConfigId, ultimaMensagemEm])
+  @@map("previas_chat")
 }
 
 /// Credenciais de sessao do Baileys (WhatsApp Web nao oficial) da ponte,
