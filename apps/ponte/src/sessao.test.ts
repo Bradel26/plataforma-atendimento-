@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { contatoValido, jid, lembrarJid, numeroDoJid } from './sessao.js';
+import { chatValido, contatoValido, jid, lembrarJid, numeroDoJid } from './sessao.js';
 
 /**
  * O WhatsApp passou a identificar alguns contatos por "LID" (endereco
@@ -67,5 +67,37 @@ describe('contatoValido', () => {
 
   it('jid sem digitos suficientes (menos de 10) fica de fora', () => {
     expect(contatoValido({ id: '123@s.whatsapp.net', name: 'Fulano' })).toBeNull();
+  });
+});
+
+describe('chatValido', () => {
+  it('chat @s.whatsapp.net com nome e timestamp validos entra na sincronizacao', () => {
+    expect(
+      chatValido({ id: '5511999998888@s.whatsapp.net', name: 'Fulano', unreadCount: 2 }),
+    ).toEqual({ numero: '5511999998888', nome: 'Fulano', naoLidas: 2 });
+  });
+
+  it('sem nome, usa o proprio numero', () => {
+    expect(chatValido({ id: '5511999998888@s.whatsapp.net', unreadCount: 0 })).toEqual({
+      numero: '5511999998888',
+      nome: '5511999998888',
+      naoLidas: 0,
+    });
+  });
+
+  it('sem unreadCount, assume zero nao lidas', () => {
+    expect(chatValido({ id: '5511999998888@s.whatsapp.net', name: 'Fulano' })).toEqual({
+      numero: '5511999998888',
+      nome: 'Fulano',
+      naoLidas: 0,
+    });
+  });
+
+  it('chat @lid fica de fora, mesma regra de contatoValido', () => {
+    expect(chatValido({ id: '79233992933473@lid', name: 'Fulano' })).toBeNull();
+  });
+
+  it('chat de grupo (@g.us) fica de fora', () => {
+    expect(chatValido({ id: '123456-78901234@g.us', name: 'Grupo da Firma' })).toBeNull();
   });
 });

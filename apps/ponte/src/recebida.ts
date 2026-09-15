@@ -15,7 +15,7 @@ import { entregar, type MensagemRecebida } from './plataforma.js';
 
 type Tipo = NonNullable<MensagemRecebida['tipoAnexo']>;
 
-type Extraido = {
+export type Extraido = {
   texto: string;
   tipo: Tipo;
   /** Presente quando ha binario a baixar. */
@@ -31,7 +31,7 @@ const RESUMO: Record<Tipo, string> = {
   ARQUIVO: '[arquivo recebido]',
 };
 
-function extrair(msg: WAMessage): Extraido | null {
+export function extrair(msg: WAMessage): Extraido | null {
   const m = msg.message;
   if (!m) return null;
 

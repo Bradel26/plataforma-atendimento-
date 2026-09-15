@@ -11,6 +11,7 @@ import { toDataURL } from 'qrcode';
 import { criarAuthStatePersistido } from './autenticacaoPostgres.js';
 import { bancoDeSessaoPg } from './banco.js';
 import { config } from './config.js';
+import { extrair } from './recebida.js';
 
 /**
  * A sessao do WhatsApp Web: o unico lugar do sistema que fala com o WhatsApp.
@@ -105,6 +106,27 @@ export function contatoValido(c: ContatoBaileys): { numero: string; nome: string
   return { numero, nome: c.name ?? c.notify ?? numero };
 }
 
+/** So os campos de `Chat` do Baileys que a sincronizacao de previa usa. */
+export type ChatBaileysBruto = {
+  id: string;
+  name?: string | null;
+  unreadCount?: number | null;
+};
+
+/**
+ * Decide se um chat bruto do Baileys entra no espelho de previa, e com que
+ * nome/contador. Mesma regra de `contatoValido`: so numero de telefone de
+ * verdade entra -- grupo (`@g.us`), broadcast e `@lid` ficam de fora.
+ */
+export function chatValido(c: ChatBaileysBruto): { numero: string; nome: string; naoLidas: number } | null {
+  if (!c.id.endsWith('@s.whatsapp.net')) return null;
+
+  const numero = numeroDoJid(c.id);
+  if (!numero) return null;
+
+  return { numero, nome: c.name ?? numero, naoLidas: c.unreadCount ?? 0 };
+}
+
 async function limparCredenciais(nome: string) {
   await bancoDeSessaoPg.apagar(nome);
 }
@@ -143,6 +165,25 @@ export function quandoReceberContatos(
   handler: (sessao: Sessao, contatos: { numero: string; nome: string }[]) => void,
 ) {
   aoReceberContatos = handler;
+}
+
+export type ChatBruto = {
+  numero: string;
+  nome: string;
+  naoLidas: number;
+  ultimaMensagemEm: number;
+  mensagens: { autor: 'CLIENTE' | 'AGENTE'; texto: string; criadoEm: number }[];
+};
+
+/**
+ * Quem recebe o espelho de chats sincronizado do celular. Mesma tecnica de
+ * `aoReceberContatos`: hook injetavel, para a sessao nao conhecer a
+ * plataforma.
+ */
+let aoReceberChats: ((sessao: Sessao, chats: ChatBruto[]) => void) | null = null;
+
+export function quandoReceberChats(handler: (sessao: Sessao, chats: ChatBruto[]) => void) {
+  aoReceberChats = handler;
 }
 
 async function conectar(sessao: Sessao) {
@@ -251,6 +292,53 @@ async function conectar(sessao: Sessao) {
     // ANTES do hook, para quem recebe so lidar com contato ja valido.
     const validos = lista.map(contatoValido).filter((c): c is { numero: string; nome: string } => c !== null);
     if (validos.length) aoReceberContatos?.(sessao, validos);
+  });
+
+  /*
+   * Carga historica completa -- dispara uma vez por conexao nova (ou quando o
+   * historico do celular mudou desde a ultima vez). `messages` vem achatado
+   * (todas as mensagens de todos os chats juntas), entao agrupa por
+   * remetente antes de montar o lote por chat.
+   */
+  sock.ev.on('messaging-history.set', ({ chats, messages }) => {
+    const porNumero = new Map<string, { autor: 'CLIENTE' | 'AGENTE'; texto: string; criadoEm: number }[]>();
+    for (const msg of messages) {
+      const remetente = msg.key?.remoteJid ?? '';
+      if (remetente.endsWith('@g.us') || remetente === 'status@broadcast' || remetente.endsWith('@broadcast')) continue;
+      const numero = numeroDoJid(remetente);
+      if (!numero) continue;
+
+      const extraido = extrair(msg);
+      if (!extraido || !extraido.texto) continue;
+
+      const lista = porNumero.get(numero) ?? [];
+      lista.push({
+        autor: msg.key?.fromMe ? 'AGENTE' : 'CLIENTE',
+        texto: extraido.texto,
+        criadoEm: Number(msg.messageTimestamp ?? 0) * 1000,
+      });
+      porNumero.set(numero, lista);
+    }
+
+    const validos: ChatBruto[] = [];
+    for (const chat of chats) {
+      const info = chatValido(chat as ChatBaileysBruto);
+      if (!info) continue;
+      const mensagens = (porNumero.get(info.numero) ?? []).sort((a, b) => a.criadoEm - b.criadoEm);
+      const ultima = mensagens[mensagens.length - 1];
+      if (!ultima) continue; // chat sem nenhuma mensagem de texto reconhecida: nao ha previa util a mostrar
+      validos.push({ ...info, ultimaMensagemEm: ultima.criadoEm, mensagens });
+    }
+    if (validos.length) aoReceberChats?.(sessao, validos);
+  });
+
+  /** Atualizacao incremental depois da carga inicial: nova mensagem, contador de nao lidas mudou. */
+  sock.ev.on('chats.upsert', (lista) => {
+    const validos = lista
+      .map((c) => chatValido(c as ChatBaileysBruto))
+      .filter((c): c is { numero: string; nome: string; naoLidas: number } => c !== null)
+      .map((info) => ({ ...info, ultimaMensagemEm: Date.now(), mensagens: [] as ChatBruto['mensagens'] }));
+    if (validos.length) aoReceberChats?.(sessao, validos);
   });
 }
 
