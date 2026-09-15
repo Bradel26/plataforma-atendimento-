@@ -11,6 +11,7 @@ import { enviarArquivoParaCanal, enviarParaCanal, exigeEnvioExterno } from '../c
 import { obterConfig } from '../channels/channels.service';
 import { decidirDestino, filaPadraoDoCanal } from '../channels/inbound.service';
 import { impedimentoDeEnvio } from '../channels/whatsapp.modo';
+import { promoverPrevia } from '../channels/chat-previews.service';
 import { entregarParaIa } from '../bots/ia.service';
 import { TIPO_CONVITE_PESQUISA, criarPesquisa, entregarPesquisa } from '../surveys/surveys.service';
 import { enfileirar } from '../../lib/fila';
@@ -221,6 +222,10 @@ export async function iniciarConversa(solicitante: Solicitante, contatoId: strin
       enderecoExterno: contato.telefone,
     },
   });
+
+  if (destino.canalConfigId) {
+    await promoverPrevia(conversa.id, destino.canalConfigId, contato.telefone!);
+  }
 
   return { id: conversa.id };
 }

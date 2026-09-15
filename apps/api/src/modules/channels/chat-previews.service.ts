@@ -63,3 +63,42 @@ export async function buscarPrevia(canalConfigId: string, numero: string) {
     where: { canalConfigId_numero: { canalConfigId, numero } },
   });
 }
+
+/**
+ * Traduz o cache de uma previa para linhas de `Message` prontas para
+ * `createMany` -- pura, para dar para testar sem banco. `conversaId` vem de
+ * fora porque a conversa so existe depois que quem chama a criou.
+ */
+export function mensagensParaHistorico(conversaId: string, cache: MensagemPrevia[]) {
+  return cache.map((m) => ({
+    conversaId,
+    autor: m.autor,
+    conteudo: m.texto,
+    criadoEm: new Date(m.criadoEm),
+  }));
+}
+
+/**
+ * Promove uma previa (se existir) para dentro de uma `Conversation` recem-
+ * criada: o cache de mensagens vira historico real, e a previa e apagada --
+ * ela vira superflua, a Conversation passa a ser a fonte da verdade.
+ *
+ * Silenciosa se nao houver previa: o caminho normal (sem historico previo) e
+ * so criar a conversa vazia, como sempre foi.
+ */
+export async function promoverPrevia(conversaId: string, canalConfigId: string, numero: string): Promise<void> {
+  const previa = await buscarPrevia(canalConfigId, numero);
+  if (!previa) return;
+
+  const cache = previa.mensagens as unknown as MensagemPrevia[];
+  if (cache.length > 0) {
+    await prisma.message.createMany({ data: mensagensParaHistorico(conversaId, cache) });
+    const maisRecente = cache[cache.length - 1]!;
+    await prisma.conversation.update({
+      where: { id: conversaId },
+      data: { ultimaMensagemEm: new Date(maisRecente.criadoEm) },
+    });
+  }
+
+  await prisma.chatPreview.delete({ where: { id: previa.id } });
+}
