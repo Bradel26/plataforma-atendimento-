@@ -1,10 +1,19 @@
 import type { WAMessage } from '@whiskeysockets/baileys';
 import { config } from './config.js';
+import { GerenciadorDeChats } from './chats.js';
 import { GerenciadorDeContatos } from './contatos.js';
-import { avisarStatus, entregarContatos } from './plataforma.js';
+import { avisarStatus, entregarChats, entregarContatos } from './plataforma.js';
 import { receber } from './recebida.js';
 import { criarServidor } from './servidor.js';
-import { garantirNoAr, quandoMudarStatus, quandoReceber, quandoReceberContatos, type Sessao } from './sessao.js';
+import {
+  garantirNoAr,
+  quandoMudarStatus,
+  quandoReceber,
+  quandoReceberChats,
+  quandoReceberContatos,
+  type ChatBruto,
+  type Sessao,
+} from './sessao.js';
 
 /**
  * Sobe a ponte.
@@ -38,6 +47,23 @@ quandoReceberContatos((sessao, contatos) => {
     gerenciadoresDeContatos.set(sessao.nome, gerenciador);
   }
   gerenciador.adicionar(contatos);
+});
+
+/*
+ * Mesma logica dos contatos acima: um gerenciador de debounce POR SESSAO, para
+ * o chat de um vendedor nunca entrar acumulado junto com o de outro.
+ */
+const gerenciadoresDeChats = new Map<string, GerenciadorDeChats>();
+
+quandoReceberChats((sessao, chats: ChatBruto[]) => {
+  let gerenciador = gerenciadoresDeChats.get(sessao.nome);
+  if (!gerenciador) {
+    gerenciador = new GerenciadorDeChats((acumulados) => {
+      void entregarChats(sessao.nome, acumulados);
+    });
+    gerenciadoresDeChats.set(sessao.nome, gerenciador);
+  }
+  gerenciador.adicionar(chats);
 });
 
 const app = criarServidor();

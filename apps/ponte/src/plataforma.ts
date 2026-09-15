@@ -1,5 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { config } from './config.js';
+import type { ChatBruto } from './sessao.js';
 
 /**
  * O caminho de volta: a ponte entrega na plataforma o que o cliente mandou.
@@ -123,6 +124,40 @@ export async function entregarContatos(
     const lote = contatos.slice(i, i + TAMANHO_DO_LOTE);
     const corpo = JSON.stringify({ sessao, contatos: lote });
     const ok = await postComRetentativa(endereco, corpo, `${lote.length} contato(s) da sessao "${sessao}"`);
+    tudoOk = tudoOk && ok;
+  }
+  return tudoOk;
+}
+
+/** Chats vao em lotes de no maximo isto por requisicao, mesmo limite de `chatsSchema` na API. */
+const TAMANHO_DO_LOTE_CHATS = 200;
+
+/**
+ * Entrega o espelho de chats sincronizado do celular do vendedor. Nunca
+ * lanca, mesma logica de `entregar`/`entregarContatos`.
+ *
+ * O corpo carrega os timestamps como ISO (contrato de `chatsSchema` na API),
+ * mas `ChatBruto` guarda epoch ms internamente (mesma unidade que o Baileys
+ * usa) — a conversao acontece so aqui, na borda de rede.
+ */
+export async function entregarChats(sessao: string, chats: ChatBruto[]): Promise<boolean> {
+  const endereco = `${BASE}/chats/${config.organizacaoId}`;
+
+  let tudoOk = true;
+  for (let i = 0; i < chats.length; i += TAMANHO_DO_LOTE_CHATS) {
+    const lote = chats.slice(i, i + TAMANHO_DO_LOTE_CHATS);
+    const corpo = JSON.stringify({
+      sessao,
+      chats: lote.map((c) => ({
+        numero: c.numero,
+        nome: c.nome,
+        ultimaMensagem: c.mensagens[c.mensagens.length - 1]?.texto ?? '',
+        ultimaMensagemEm: new Date(c.ultimaMensagemEm).toISOString(),
+        naoLidas: c.naoLidas,
+        mensagens: c.mensagens.map((m) => ({ ...m, criadoEm: new Date(m.criadoEm).toISOString() })),
+      })),
+    });
+    const ok = await postComRetentativa(endereco, corpo, `${lote.length} chat(s) da sessao "${sessao}"`);
     tudoOk = tudoOk && ok;
   }
   return tudoOk;

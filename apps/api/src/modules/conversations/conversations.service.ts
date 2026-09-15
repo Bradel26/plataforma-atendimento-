@@ -113,6 +113,35 @@ export async function contarPorStatus(solicitante: Solicitante) {
   return base;
 }
 
+/**
+ * Previas de chat da linha PESSOAL do proprio solicitante -- nunca lista
+ * previa de outro vendedor, e nao passa pela politica de visibilidade de
+ * `Conversation` (previa e o celular do dono, nao um recurso compartilhado).
+ */
+export async function listarPrevias(solicitante: Solicitante) {
+  const config = await prisma.channelConfig.findFirst({
+    where: { canal: 'WHATSAPP', donoId: solicitante.sub },
+    select: { id: true },
+  });
+  if (!config) return { previas: [] };
+
+  const previas = await prisma.chatPreview.findMany({
+    where: { canalConfigId: config.id },
+    orderBy: { ultimaMensagemEm: 'desc' },
+  });
+
+  return {
+    previas: previas.map((p) => ({
+      id: p.id,
+      numero: p.numero,
+      nome: p.nome,
+      ultimaMensagem: p.ultimaMensagem,
+      ultimaMensagemEm: p.ultimaMensagemEm,
+      naoLidas: p.naoLidas,
+    })),
+  };
+}
+
 /** Motivo pelo qual um contato sem telefone nao pode receber conversa de WhatsApp, ou nulo se pode. Pura, sem banco. */
 export function motivoSemTelefone(contato: { telefone: string | null }): string | null {
   if (!contato.telefone) return 'Contato sem telefone cadastrado — nao e possivel iniciar conversa por WhatsApp';

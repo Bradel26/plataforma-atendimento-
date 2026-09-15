@@ -322,5 +322,57 @@ checar(
   '   continua existindo exatamente 1 Contato com aquele telefone',
 );
 
+/* ── 12. Sincronizacao de previa de chat (WhatsApp pessoal) ────────────── */
+
+/*
+ * Simula o que a ponte manda ao sincronizar o espelho de chats
+ * (`entregarChats` em apps/ponte/src/plataforma.ts). Reaproveita a sessao/
+ * linha pessoal do vendedor 1 ja criada na secao 1 — nao cria linha nova so
+ * para isto.
+ */
+const enviarChatsPelaPonte = async (sessao, segredo, chats) => {
+  const corpoBruto = JSON.stringify({ sessao, chats });
+  return req('POST', `/webhooks/ponte/chats/${organizacaoId}`, {
+    corpoBruto,
+    headers: { 'X-Ponte-Assinatura': assinar(corpoBruto, segredo) },
+  });
+};
+
+const numeroChatDeTeste = `5511${String(Date.now() + 4).slice(-9)}`;
+const chatDeTeste = {
+  numero: numeroChatDeTeste,
+  nome: 'Cliente de teste (smoke)',
+  ultimaMensagem: 'Oi, tudo bem?',
+  ultimaMensagemEm: new Date().toISOString(),
+  naoLidas: 1,
+  mensagens: [{ autor: 'CLIENTE', texto: 'Oi, tudo bem?', criadoEm: new Date().toISOString() }],
+};
+
+const respostaChats = await enviarChatsPelaPonte(SESSAO_1, SEGREDO_1, [chatDeTeste]);
+checar(
+  respostaChats.status === 200 && respostaChats.dados.sincronizados === 1,
+  '12. webhook de chats aceita o lote assinado da sessao 1',
+  `HTTP ${respostaChats.status}`,
+);
+
+const { dados: loginVendedor1 } = await req('POST', '/auth/login', {
+  corpo: { email: 'vendedor1@plataforma.local', senha: 'Vendedor@123' },
+});
+const { dados: previasVendedor1 } = await req('GET', '/conversas/previas', { token: loginVendedor1.accessToken });
+checar(
+  previasVendedor1.previas?.some((p) => p.numero === numeroChatDeTeste && p.ultimaMensagem === 'Oi, tudo bem?'),
+  '   a previa sincronizada aparece em GET /conversas/previas do vendedor 1',
+  JSON.stringify(previasVendedor1.previas?.find((p) => p.numero === numeroChatDeTeste)),
+);
+
+const { dados: loginVendedor2 } = await req('POST', '/auth/login', {
+  corpo: { email: 'vendedor2@plataforma.local', senha: 'Vendedor@123' },
+});
+const { dados: previasDoVendedor2 } = await req('GET', '/conversas/previas', { token: loginVendedor2.accessToken });
+checar(
+  !previasDoVendedor2.previas?.some((p) => p.numero === numeroChatDeTeste),
+  '   a previa da linha do vendedor 1 NAO aparece para o vendedor 2 (isolamento por linha)',
+);
+
 console.log(falhas === 0 ? `\nOK — ${EXECUCAO}` : `\n${falhas} falha(s) — ${EXECUCAO}`);
 process.exit(falhas === 0 ? 0 : 1);

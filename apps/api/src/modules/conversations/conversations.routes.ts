@@ -24,6 +24,7 @@ import {
   iniciarConversa,
   listarConversas,
   listarMensagens,
+  listarPrevias,
   marcarComoLida,
   obterConversa,
   transferirConversa,
@@ -69,6 +70,17 @@ conversationsRoutes.get(
   validateQuery(listarMensagensSchema),
   asyncHandler(async (req, res) => {
     res.json(await listarMensagens(quem(req), param(req, 'id'), res.locals.query));
+  }),
+);
+
+/**
+ * Previas de chat da linha pessoal do proprio solicitante — antes de
+ * `/:id` para nao ser engolida por ela.
+ */
+conversationsRoutes.get(
+  '/previas',
+  asyncHandler(async (req, res) => {
+    res.json(await listarPrevias(quem(req)));
   }),
 );
 
