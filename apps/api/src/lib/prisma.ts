@@ -26,6 +26,7 @@ const COM_ORGANIZACAO = new Set([
   'PriceCatalog',
   'Ticket',
   'Campaign',
+  'ChatPreview',
   'Bot',
   'WorkShift',
   'Branding',

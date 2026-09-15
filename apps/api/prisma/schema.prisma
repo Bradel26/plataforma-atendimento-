@@ -1576,6 +1576,7 @@ model ChatPreview {
   canalConfig ChannelConfig @relation(fields: [canalConfigId], references: [id], onDelete: Cascade)
 
   @@unique([canalConfigId, numero])
+  @@index([organizacaoId, canalConfigId, numero])
   @@index([canalConfigId, ultimaMensagemEm])
   @@map("previas_chat")
 }
