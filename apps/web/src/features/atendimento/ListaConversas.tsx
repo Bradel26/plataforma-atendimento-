@@ -1,7 +1,7 @@
 import { Badge } from '../../components/ui';
 import { SkeletonBloco } from '../../components/ui/Skeleton';
 import { EtiquetasCompactas } from '../../pages/crm/Etiquetas';
-import type { ConversaResumo } from '../../lib/types';
+import type { ConversaResumo, Previa } from '../../lib/types';
 
 /** Silhueta de um cartao de conversa: avatar, nome+hora, previa. */
 function SkeletonConversa() {
@@ -35,8 +35,12 @@ function previa(conversa: ConversaResumo) {
   return `${prefixo}${m.conteudo}`;
 }
 
+type Item = { tipo: 'conversa'; dado: ConversaResumo } | { tipo: 'previa'; dado: Previa };
+
 export function ListaConversas({
   conversas,
+  previas,
+  onAbrirPrevia,
   selecionadaId,
   onSelecionar,
   carregando,
@@ -44,13 +48,15 @@ export function ListaConversas({
   onCarregarMais,
 }: {
   conversas: ConversaResumo[];
+  previas: Previa[];
+  onAbrirPrevia: (previa: Previa) => void;
   selecionadaId: string | null;
   onSelecionar: (id: string) => void;
   carregando: boolean;
   temMais?: boolean;
   onCarregarMais?: () => void;
 }) {
-  if (carregando && conversas.length === 0) {
+  if (carregando && conversas.length === 0 && previas.length === 0) {
     return (
       <ul className="divide-y divide-slate-100">
         {Array.from({ length: 6 }, (_, i) => (
@@ -60,13 +66,57 @@ export function ListaConversas({
     );
   }
 
-  if (conversas.length === 0) {
+  // Prevista e conversa formal disputam a mesma lista, ordenadas por data —
+  // e assim que o WhatsApp pessoal do vendedor mostra os dois tipos de papo
+  // juntos, sem separar "ainda nao promovido" do resto.
+  const itens: Item[] = [
+    ...conversas.map((c): Item => ({ tipo: 'conversa', dado: c })),
+    ...previas.map((p): Item => ({ tipo: 'previa', dado: p })),
+  ].sort((a, b) => new Date(b.dado.ultimaMensagemEm).getTime() - new Date(a.dado.ultimaMensagemEm).getTime());
+
+  if (itens.length === 0) {
     return <p className="p-4 text-sm text-slate-500">Nenhuma conversa nesta aba.</p>;
   }
 
   return (
     <ul className="divide-y divide-slate-100">
-      {conversas.map((c) => {
+      {itens.map((item) => {
+        if (item.tipo === 'previa') {
+          const p = item.dado;
+          return (
+            <li key={`previa-${p.id}`}>
+              <button
+                type="button"
+                onClick={() => onAbrirPrevia(p)}
+                className="flex w-full items-start gap-2.5 px-4 py-3 text-left transition hover:bg-slate-50"
+                style={{ borderLeft: '3px solid transparent' }}
+              >
+                <span
+                  className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold"
+                  style={{ backgroundColor: 'var(--brand-primary-soft)', color: 'var(--brand-primary)' }}
+                >
+                  {p.nome.charAt(0).toUpperCase()}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="truncate text-sm font-medium text-slate-800">{p.nome}</span>
+                    <span className="shrink-0 text-xs text-slate-500">{horaCurta(p.ultimaMensagemEm)}</span>
+                  </div>
+                  <p className="mt-0.5 truncate text-xs text-slate-500">{p.ultimaMensagem}</p>
+                  {p.naoLidas > 0 && (
+                    <div className="mt-1.5 flex items-center gap-1.5">
+                      <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-semibold text-white">
+                        {p.naoLidas}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </button>
+            </li>
+          );
+        }
+
+        const c = item.dado;
         const ativa = c.id === selecionadaId;
         return (
           <li key={c.id}>

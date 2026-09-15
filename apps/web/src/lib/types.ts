@@ -185,6 +185,15 @@ export type ConversaDetalhe = ConversaBase & {
   cursorAnterior?: string | null;
 };
 
+export type Previa = {
+  id: string;
+  numero: string;
+  nome: string;
+  ultimaMensagem: string;
+  ultimaMensagemEm: string;
+  naoLidas: number;
+};
+
 export type Contadores = Record<ConversaStatus, number>;
 
 /** Uma linha do relatorio de atendimentos por assunto (etiqueta da conversa). */
@@ -1145,6 +1154,7 @@ export type FichaContato = {
   contato: Contato & { conta: { id: string; nome: string } | null };
   indicadores: IndicadoresFicha;
   atividadesAbertas: Atividade[];
+  temPreviaWhatsapp: boolean;
 };
 
 /* ── Ponte com o motor de IA externo ──────────────────────────────────── */

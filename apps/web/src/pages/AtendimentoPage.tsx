@@ -15,6 +15,7 @@ import {
   LABEL_CONVERSA_STATUS,
   type ConversaDetalhe,
   type ConversaStatus,
+  type Previa,
   type Usuario,
 } from '../lib/types';
 
@@ -60,6 +61,7 @@ export function AtendimentoPage() {
   const [aberta, setAberta] = useState<ConversaDetalhe | null>(null);
   const [erroAberta, setErroAberta] = useState<string | null>(null);
   const [agentes, setAgentes] = useState<Usuario[]>([]);
+  const [previas, setPrevias] = useState<Previa[]>([]);
   const abertaIdRef = useRef<string | null>(null);
 
   /**
@@ -167,6 +169,13 @@ export function AtendimentoPage() {
       .catch(() => undefined);
   }, [temPerfil]);
 
+  useEffect(() => {
+    void api
+      .get<{ previas: Previa[] }>('/conversas/previas')
+      .then(({ previas }) => setPrevias(previas))
+      .catch(() => undefined);
+  }, []);
+
   const abrir = useCallback(
     async (id: string) => {
       setErroAberta(null);
@@ -189,6 +198,29 @@ export function AtendimentoPage() {
       }
     },
     [aplicarEvento, focarConversa],
+  );
+
+  /**
+   * Abre uma previa: reaproveita o Contact existente por telefone, ou cria um
+   * minimo -- a ficha completa o vendedor preenche depois, no CRM, se quiser;
+   * a prioridade aqui e nao bloquear a conversa por falta de cadastro.
+   */
+  const abrirPrevia = useCallback(
+    async (previa: Previa) => {
+      setErroAberta(null);
+      try {
+        const { contato } = await api.post<{ contato: { id: string } }>('/contatos/por-telefone', {
+          telefone: previa.numero,
+          nome: previa.nome,
+        });
+        const { conversa } = await api.post<{ conversa: { id: string } }>('/conversas', { contatoId: contato.id });
+        setPrevias((atual) => atual.filter((p) => p.id !== previa.id));
+        await abrir(conversa.id);
+      } catch (err) {
+        setErroAberta(err instanceof ApiError ? err.message : 'Nao foi possivel abrir a conversa');
+      }
+    },
+    [abrir],
   );
 
   /**
@@ -315,6 +347,8 @@ export function AtendimentoPage() {
             ) : (
               <ListaConversas
                 conversas={filtradas}
+                previas={previas}
+                onAbrirPrevia={(p) => void abrirPrevia(p)}
                 selecionadaId={aberta?.id ?? null}
                 onSelecionar={(id) => void abrir(id)}
                 carregando={carregando}
