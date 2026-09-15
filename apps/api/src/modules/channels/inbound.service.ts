@@ -1,6 +1,7 @@
 import type { Channel } from '@prisma/client';
 import { baixarAnexo } from './media.service';
 import { configDoDestino } from './channels.service';
+import { promoverPrevia } from './chat-previews.service';
 import { prisma } from '../../lib/prisma';
 import { redigirTexto } from '../../lib/redacao';
 import { notificarConversaAtualizada, notificarConversaNova, notificarMensagem } from '../../realtime/hub';
@@ -109,6 +110,14 @@ export async function registrarMensagemEntrante(dados: MensagemNormalizada) {
         enderecoExterno: dados.enderecoExterno,
       },
     }));
+
+  // So promove previa quando a conversa acabou de nascer -- uma ja aberta ou
+  // ja foi promovida antes, ou nasceu por `iniciarConversa` (que promove no
+  // proprio caminho, Task 6). `dados.telefone` e o mesmo numero usado para
+  // gravar a previa (`salvarPrevia`, Task 3).
+  if (nova && destino.canalConfigId && dados.telefone) {
+    await promoverPrevia(conversa.id, destino.canalConfigId, dados.telefone);
+  }
 
   // Traz a midia para o storage proprio. Se falhar, guarda a URL da Meta como
   // ela veio: expira em pouco tempo, mas e melhor que anexo nenhum, e o motivo

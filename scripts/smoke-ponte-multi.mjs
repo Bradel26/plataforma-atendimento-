@@ -374,5 +374,44 @@ checar(
   '   a previa da linha do vendedor 1 NAO aparece para o vendedor 2 (isolamento por linha)',
 );
 
+/* ── 13. Promocao automatica ao chegar mensagem nova do mesmo numero da previa ── */
+
+/*
+ * Usa o mesmo numero da previa sincronizada na secao anterior
+ * (numeroChatDeTeste) para testar que a conversa e criada E a previa
+ * promovida quando uma mensagem nova chega do mesmo cliente.
+ */
+const idExternoDaMensagem = 'smoke-promocao-' + Date.now();
+const corpoMensagem = {
+  numero: numeroChatDeTeste,
+  sessao: SESSAO_1,
+  nome: 'Cliente de teste (smoke)',
+  texto: 'Mensagem nova, depois da previa',
+  idExterno: idExternoDaMensagem,
+};
+const corpoTexto = JSON.stringify(corpoMensagem);
+const assinatura = 'sha256=' + createHmac('sha256', SEGREDO_1).update(corpoTexto).digest('hex');
+
+const respostaWebhook = await req('POST', `/webhooks/ponte/whatsapp/${organizacaoId}`, {
+  corpoBruto: corpoTexto,
+  headers: { 'X-Ponte-Assinatura': assinatura },
+});
+checar(respostaWebhook.status === 200 && respostaWebhook.dados.ok === true, '13. mensagem que promove a previa aceita', `HTTP ${respostaWebhook.status}`);
+checar(!respostaWebhook.dados.duplicada, '   a mensagem nao eh duplicada');
+
+const { dados: previasAntesPromoção } = await req('GET', '/conversas/previas', { token: loginVendedor1.accessToken });
+checar(
+  !previasAntesPromoção.previas?.some((p) => p.numero === numeroChatDeTeste),
+  '   a previa do numero promovido foi removida da lista (ja eh conversa)',
+  JSON.stringify(previasAntesPromoção.previas?.find((p) => p.numero === numeroChatDeTeste)),
+);
+
+const { dados: conversasDepois } = await req('GET', `/conversas?busca=${numeroChatDeTeste}`, { token: loginVendedor1.accessToken });
+checar(
+  conversasDepois.conversas?.length > 0,
+  '   a conversa promovida aparece na listagem do vendedor 1',
+  conversasDepois.conversas?.length || 'nenhuma conversa encontrada',
+);
+
 console.log(falhas === 0 ? `\nOK — ${EXECUCAO}` : `\n${falhas} falha(s) — ${EXECUCAO}`);
 process.exit(falhas === 0 ? 0 : 1);
