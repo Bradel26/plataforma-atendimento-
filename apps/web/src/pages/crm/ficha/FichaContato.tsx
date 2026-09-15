@@ -156,7 +156,7 @@ export function FichaContato({ contatoId, aoMudarEtiquetas }: FichaProps) {
   if (erro && !ficha) return <Alerta>{erro}</Alerta>;
   if (!ficha) return <Card titulo="Ficha do contato"><p className="text-sm text-slate-500">Carregando ficha...</p></Card>;
 
-  const { contato, indicadores: i, atividadesAbertas } = ficha;
+  const { contato, indicadores: i, atividadesAbertas, temPreviaWhatsapp } = ficha;
   const agora = Date.now();
 
   return (
@@ -172,6 +172,7 @@ export function FichaContato({ contatoId, aoMudarEtiquetas }: FichaProps) {
                 {iniciando ? 'Iniciando...' : 'Iniciar conversa'}
               </Button>
             )}
+            {temPreviaWhatsapp && <Badge tom="marca">Já tem conversa no WhatsApp</Badge>}
             {/* Vincular fica no cabecalho porque e onde a falta aparece: sem
                empresa, metade dos numeros abaixo e sempre zero — proposta e
                oportunidade vivem na conta, nao na pessoa. */}

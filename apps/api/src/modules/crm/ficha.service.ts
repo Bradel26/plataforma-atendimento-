@@ -331,7 +331,11 @@ export async function fichaContato(contatoId: string) {
     }),
   ]);
 
-  return { contato, indicadores, atividadesAbertas: atividades };
+  const temPreviaWhatsapp = contato.telefone
+    ? (await prisma.chatPreview.count({ where: { numero: contato.telefone } })) > 0
+    : false;
+
+  return { contato, indicadores, atividadesAbertas: atividades, temPreviaWhatsapp };
 }
 
 export async function fichaConta(contaId: string) {
