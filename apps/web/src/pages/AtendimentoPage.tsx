@@ -83,6 +83,7 @@ export function AtendimentoPage() {
    */
   const [carregandoMinhaLinha, setCarregandoMinhaLinha] = useState(true);
   const [conectandoLinha, setConectandoLinha] = useState(false);
+  const [desconectandoLinha, setDesconectandoLinha] = useState(false);
   const [erroConectar, setErroConectar] = useState<string | null>(null);
   const [mostrarSucessoConexao, setMostrarSucessoConexao] = useState(false);
 
@@ -207,6 +208,8 @@ export function AtendimentoPage() {
   const desconectarWhatsapp = useCallback(async () => {
     if (!minhaLinha) return;
     if (!window.confirm('Desconectar seu WhatsApp? Voce vai precisar escanear o QR Code de novo para reconectar.')) return;
+    setErroConectar(null);
+    setDesconectandoLinha(true);
     try {
       await api.post(`/canais/numeros/${minhaLinha.id}/ponte/desconectar`);
       setMinhaLinhaConectada(false);
@@ -216,6 +219,8 @@ export function AtendimentoPage() {
       setErroConectar(
         erro instanceof ApiError ? erro.message : 'Nao foi possivel desconectar agora. Tente novamente.',
       );
+    } finally {
+      setDesconectandoLinha(false);
     }
   }, [minhaLinha]);
 
@@ -541,10 +546,22 @@ export function AtendimentoPage() {
 
               {minhaLinha && minhaLinhaConectada && (
                 <div className="mt-4 flex flex-col items-center gap-2">
-                  {mostrarSucessoConexao && <Alerta tipo="sucesso">WhatsApp conectado</Alerta>}
+                  {erroConectar ? (
+                    <div className="w-full max-w-xs">
+                      <Alerta>{erroConectar}</Alerta>
+                    </div>
+                  ) : (
+                    mostrarSucessoConexao && <Alerta tipo="sucesso">WhatsApp conectado</Alerta>
+                  )}
                   <Badge tom="sucesso">🟢 WhatsApp conectado</Badge>
-                  <Button type="button" variante="neutro" tamanho="sm" onClick={() => void desconectarWhatsapp()}>
-                    Desconectar
+                  <Button
+                    type="button"
+                    variante="neutro"
+                    tamanho="sm"
+                    disabled={desconectandoLinha}
+                    onClick={() => void desconectarWhatsapp()}
+                  >
+                    {desconectandoLinha ? 'Desconectando...' : 'Desconectar'}
                   </Button>
                 </div>
               )}
