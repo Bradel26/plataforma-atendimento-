@@ -108,6 +108,33 @@ function conferirData(data: unknown, organizacaoId: string) {
 /** `Contact` -> `contact`. O cliente expoe os modelos em minuscula inicial. */
 const minuscula = (model: string) => model.charAt(0).toLowerCase() + model.slice(1);
 
+/**
+ * Desembrulha o `where` de `findUnique`/`findUniqueOrThrow` para os campos
+ * escalares reais, antes de virar `findFirst`/`findFirstOrThrow`.
+ *
+ * Para chave unica simples (`{ id: 'x' }`) nao ha nada a desembrulhar. Para
+ * chave unica COMPOSTA (`@@unique([a, b])`), o Prisma exige um campo sintetico
+ * (`a_b: { a, b }`) que so existe no tipo de `where` do findUnique — repassar
+ * esse objeto direto para findFirst e onde vinha o `Unknown argument a_b`.
+ *
+ * O `where` de findUnique so aceita, por campo, um valor escalar ou esse
+ * objeto sintetico (nunca filtro de relacao nem operador de comparacao) — por
+ * isso todo valor que for objeto aqui e seguro tratar como chave composta e
+ * espalhar seus campos internos no nivel de cima.
+ */
+function desembrulharChaveComposta(where: Record<string, unknown> | undefined): Record<string, unknown> {
+  if (!where) return {};
+  const achatado: Record<string, unknown> = {};
+  for (const [campo, valor] of Object.entries(where)) {
+    if (valor && typeof valor === 'object' && !(valor instanceof Date) && !Array.isArray(valor)) {
+      Object.assign(achatado, valor as Record<string, unknown>);
+    } else {
+      achatado[campo] = valor;
+    }
+  }
+  return achatado;
+}
+
 const base = new PrismaClient({
   log: env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
 });
@@ -145,16 +172,20 @@ export const prisma = base.$extends({
 
         if (FILTRADAS.has(operation)) {
           const a = args as Record<string, unknown>;
-          const where = { ...((a.where as Record<string, unknown>) ?? {}), organizacaoId };
 
           // Chave unica composta nao aceita campo extra; vira findFirst.
           if (operation === 'findUnique' || operation === 'findUniqueOrThrow') {
             const alvo = operation === 'findUnique' ? 'findFirst' : 'findFirstOrThrow';
+            const where = {
+              ...desembrulharChaveComposta(a.where as Record<string, unknown> | undefined),
+              organizacaoId,
+            };
             return (base as unknown as Record<string, Record<string, (x: unknown) => unknown>>)[
               minuscula(model)
             ]![alvo]!({ ...a, where });
           }
 
+          const where = { ...((a.where as Record<string, unknown>) ?? {}), organizacaoId };
           return query({ ...a, where } as typeof args);
         }
 

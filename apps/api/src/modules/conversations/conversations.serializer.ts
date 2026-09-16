@@ -50,6 +50,7 @@ export function toConversaResumo(c: ConversaResumo) {
     // onde o atendente decide qual conversa abrir.
     tags: c.tags,
     naoLidas: c.naoLidas,
+    arquivada: c.arquivada,
     criadoEm: c.criadoEm,
     atribuidoEm: c.atribuidoEm,
     finalizadoEm: c.finalizadoEm,
@@ -74,6 +75,7 @@ export function toConversaDetalhe(c: ConversaDetalhe) {
     assunto: c.assunto,
     tags: c.tags,
     naoLidas: c.naoLidas,
+    arquivada: c.arquivada,
     criadoEm: c.criadoEm,
     atribuidoEm: c.atribuidoEm,
     finalizadoEm: c.finalizadoEm,

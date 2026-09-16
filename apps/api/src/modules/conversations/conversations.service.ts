@@ -6,7 +6,7 @@ import { salvar } from '../../lib/storage';
 import { apos, decodificarCursor, fatiar } from '../../lib/paginacao';
 import { normalizarTags } from '../../lib/tags';
 import { AppError, badRequest, forbidden, notFound } from '../../lib/errors';
-import { notificarConversaAtualizada, notificarMensagem } from '../../realtime/hub';
+import { notificarConversaAtualizada, notificarConversaNova, notificarMensagem } from '../../realtime/hub';
 import { enviarArquivoParaCanal, enviarParaCanal, exigeEnvioExterno } from '../channels/outbound.service';
 import { obterConfig } from '../channels/channels.service';
 import { decidirDestino, filaPadraoDoCanal } from '../channels/inbound.service';
@@ -44,6 +44,10 @@ export async function listarConversas(solicitante: Solicitante, query: ListarCon
 
   if (query.status) filtros.push({ status: query.status });
   if (query.minhas === 'true') filtros.push({ agenteId: solicitante.sub });
+  // Padrao: so as nao arquivadas — arquivar so faz sentido se a conversa sai
+  // da experiencia do dia a dia. `arquivadas=true` inverte para a lista de
+  // arquivadas; nunca as duas junto (Fase 11.9-A, item 5).
+  filtros.push({ arquivada: query.arquivadas === 'true' });
   if (query.busca) {
     filtros.push({
       OR: [
@@ -101,11 +105,17 @@ export async function listarMensagens(
   return { mensagens: itens.reverse().map(toMensagem), proximoCursor };
 }
 
-/** Contadores por aba do painel. */
+/**
+ * Contadores por aba do painel.
+ *
+ * So conta as nao arquivadas — os mesmos numeros que `listarConversas` sem
+ * `arquivadas=true` devolveria, senao o contador da aba mostraria um numero
+ * que a lista embaixo dele nunca bate (Fase 11.9-A, item 8).
+ */
 export async function contarPorStatus(solicitante: Solicitante) {
   const grupos = await prisma.conversation.groupBy({
     by: ['status'],
-    where: await escopoVisivel(),
+    where: { AND: [await escopoVisivel(), { arquivada: false }] },
     _count: { _all: true },
   });
 
@@ -192,7 +202,16 @@ export async function iniciarConversa(solicitante: Solicitante, contatoId: strin
     where: { contatoId, canal: 'WHATSAPP', status: { not: 'FINALIZADO' } },
     orderBy: { criadoEm: 'desc' },
   });
-  if (existente) return { id: existente.id };
+  if (existente) {
+    // Reabrir pela ficha uma conversa que estava arquivada tem que tira-la do
+    // arquivo — senao "Iniciar conversa" devolveria um id que a lista de
+    // ninguem mostra (Fase 11.9-A, item 6).
+    if (existente.arquivada) {
+      await prisma.conversation.update({ where: { id: existente.id }, data: { arquivada: false } });
+      await publicar(existente.id, { filaAnteriorId: existente.filaId });
+    }
+    return { id: existente.id };
+  }
 
   const config = await configWhatsappDoSolicitante(solicitante);
   const impedimento = config
@@ -226,6 +245,8 @@ export async function iniciarConversa(solicitante: Solicitante, contatoId: strin
   if (destino.canalConfigId) {
     await promoverPrevia(conversa.id, destino.canalConfigId, contato.telefone!);
   }
+
+  await publicarNova(conversa.id);
 
   return { id: conversa.id };
 }
@@ -289,6 +310,31 @@ export async function definirTags(solicitante: Solicitante, id: string, tags: re
   await prisma.conversation.update({ where: { id }, data: { tags: novas } });
   return publicar(id, { filaAnteriorId: conversa.filaId });
 }
+
+/**
+ * Arquiva/desarquiva — sai (ou volta) das listas padrao (Minhas/Nao
+ * atribuidas/Todas) e dos contadores, sem tocar status, agente, fila ou
+ * historico (Fase 11.9-B).
+ *
+ * Mesmas duas decisoes de `definirTags`, e pelo mesmo motivo: arquivar e
+ * organizacao de tela, nao mudanca de responsavel — **nao exige ser o dono**
+ * (qualquer perfil que ve a conversa pode arquivar/desarquivar) e **nao grava
+ * evento no historico** (nao e algo que aconteceu NO atendimento, e algo que
+ * aconteceu na lista de quem administra).
+ *
+ * Funciona em qualquer status, inclusive `FINALIZADO` — arquivamento e
+ * ortogonal ao ciclo de vida do atendimento, nunca um status a mais.
+ */
+async function definirArquivada(id: string, arquivada: boolean) {
+  const conversa = await carregarOuFalhar(id);
+  if (conversa.arquivada === arquivada) return toConversaDetalhe(conversa);
+
+  await prisma.conversation.update({ where: { id }, data: { arquivada } });
+  return publicar(id, { filaAnteriorId: conversa.filaId });
+}
+
+export const arquivarConversa = (solicitante: Solicitante, id: string) => definirArquivada(id, true);
+export const desarquivarConversa = (solicitante: Solicitante, id: string) => definirArquivada(id, false);
 
 /** Registra evento do sistema no historico (atribuicao, transferencia, encerramento). */
 async function registrarEventoSistema(conversaId: string, texto: string) {
@@ -481,6 +527,28 @@ export async function marcarComoLida(solicitante: Solicitante, id: string) {
 
   await prisma.conversation.update({ where: { id }, data: { naoLidas: 0 } });
   return publicar(id, { filaAnteriorId: conversa.filaId });
+}
+
+/**
+ * Avisa quem deveria ver uma conversa RECEM-CRIADA — mesmos destinatarios de
+ * `publicar` (fila, agente, quem tem a conversa aberta, supervisao), mas pelo
+ * evento `conversa:nova`. Sem "anterior": conversa nova nao tira ninguem de
+ * lugar nenhum, so entra numa lista.
+ *
+ * Espelha o que `inbound.service.ts` ja faz para conversa criada por mensagem
+ * de cliente (`if (nova) notificarConversaNova(...)`) — `iniciarConversa` e o
+ * outro lugar que cria `Conversation` e, ate aqui, nao avisava ninguem.
+ */
+async function publicarNova(id: string) {
+  const detalhe = toConversaDetalhe(await carregarOuFalhar(id));
+
+  notificarConversaNova(detalhe, {
+    conversaId: id,
+    filaId: detalhe.fila?.id,
+    agenteId: detalhe.agente?.id,
+  });
+
+  return detalhe;
 }
 
 /**

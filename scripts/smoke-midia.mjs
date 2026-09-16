@@ -14,7 +14,11 @@
  */
 import { createHmac } from 'node:crypto';
 
-const API = 'http://localhost:3333/api';
+// SMOKE_API permite apontar para uma instancia isolada (ex.: ambiente de smoke
+// com schema/porta proprios) sem mexer no script — mesmo padrao ja usado em
+// smoke-tags.mjs, smoke-tenant.mjs e smoke-visibilidade.mjs.
+const API = process.env.SMOKE_API ?? 'http://localhost:3333/api';
+const HOST = API.replace(/\/api$/, '');
 const APP_SECRET = 'segredo-de-teste-do-app-meta';
 const TOKEN_FALSO = 'EAAG-token-falso-para-teste-de-erro';
 const EXECUCAO = Date.now().toString(36);
@@ -75,7 +79,7 @@ checar(anexo?.tipo === 'image/png', '   tipo registrado', String(anexo?.tipo));
 
 // 2. A URL assinada entrega o arquivo, byte a byte
 // A API ja devolve a URL assinada; o navegador so precisa seguir o link.
-const baixado = await fetch(`http://localhost:3333${anexo.url}`);
+const baixado = await fetch(`${HOST}${anexo.url}`);
 const bytes = Buffer.from(await baixado.arrayBuffer());
 checar(baixado.status === 200, '2. URL assinada entrega o arquivo', `status ${baixado.status}`);
 checar(bytes.equals(PNG), '   conteudo identico ao enviado', `${bytes.length} bytes`);
@@ -91,14 +95,14 @@ checar(
 
 // 3. Sem assinatura, com assinatura adulterada e fora do storage: nao entrega
 const caminho = anexo.url.split('?')[0];
-const semToken = await fetch(`http://localhost:3333${caminho}`);
+const semToken = await fetch(`${HOST}${caminho}`);
 checar(semToken.status === 401, '3. sem assinatura o arquivo nao abre', `status ${semToken.status}`);
 
 const adulterada = anexo.url.replace(/t=(\d+)\.(\w)/, (_m, exp, c) => `t=${exp}.${c === 'a' ? 'b' : 'a'}`);
-const comLixo = await fetch(`http://localhost:3333${adulterada}`);
+const comLixo = await fetch(`${HOST}${adulterada}`);
 checar(comLixo.status === 401, '   assinatura adulterada recusada', `status ${comLixo.status}`);
 
-const travessia = await fetch('http://localhost:3333/api/arquivos/2026/08/..%2f..%2fpackage.json?t=1.2');
+const travessia = await fetch(`${HOST}/api/arquivos/2026/08/..%2f..%2fpackage.json?t=1.2`);
 checar(travessia.status === 401, '   travessia de diretorio recusada', `status ${travessia.status}`);
 
 // 4. Tipo fora da lista (SVG executa script no dominio da aplicacao)
@@ -163,7 +167,7 @@ const igCorpo = JSON.stringify({
       timestamp: 1787577200,
       message: {
         mid: `mid.midia-${EXECUCAO}`,
-        attachments: [{ type: 'image', payload: { url: `http://localhost:3333${anexo.url}` } }],
+        attachments: [{ type: 'image', payload: { url: `${HOST}${anexo.url}` } }],
       },
     }],
   }],

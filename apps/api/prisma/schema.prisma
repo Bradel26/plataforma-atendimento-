@@ -353,6 +353,12 @@ model Conversation {
   naoLidas         Int       @default(0) @map("nao_lidas")
   /// Identificador do interlocutor no canal externo (wa_id, PSID, IGSID).
   enderecoExterno  String?   @map("endereco_externo")
+  /// Fora da lista padrao (Minhas/Nao atribuidas/Todas), sem mudar status nem
+  /// historico — ortogonal a `status` de proposito (ver Fase 11.9-A): uma
+  /// conversa arquivada pode estar em qualquer status, inclusive FINALIZADO.
+  /// Mensagem nova desarquiva automaticamente (ver `inbound.service.ts`) —
+  /// nunca fica presa arquivada com mensagem do cliente sem ninguem ver.
+  arquivada        Boolean   @default(false)
 
   /// Etiquetas de assunto, normalizadas por `lib/tags.ts` e compartilhando o
   /// vocabulario com contato e conta.
@@ -1547,6 +1553,19 @@ model ChannelConfig {
   @@unique([canal, phoneNumberId])
   @@unique([canal, pageId])
   @@unique([canal, igUserId])
+  /**
+   * `ponteSessao` e o mesmo tipo de identificador global que `phoneNumberId`
+   * acima, so que para o modo nao oficial (Fase 12.1) — nao por organizacao,
+   * pelo mesmo motivo: `apps/ponte/src/banco.ts` grava as credenciais Baileys
+   * cifradas numa tabela (`ponte_sessoes_auth`) COMPARTILHADA entre todas as
+   * organizacoes, chaveada so pelo nome da sessao (sem `organizacaoId`), com
+   * `ON CONFLICT (sessao) DO UPDATE`. Se duas organizacoes pudessem escolher
+   * o mesmo `ponteSessao`, a segunda a conectar sobrescreveria a sessao
+   * Baileys da primeira nessa tabela. `NULL` (linha sem sessao propria, ou
+   * canal que nao usa) nao entra nesta unicidade — indice unico do Postgres
+   * permite varios NULL.
+   */
+  @@unique([canal, ponteSessao])
   @@index([organizacaoId])
   @@map("canais_config")
 }

@@ -1,4 +1,4 @@
-import type { Channel } from '@prisma/client';
+import { Prisma, type Channel } from '@prisma/client';
 import { baixarAnexo } from './media.service';
 import { configDoDestino } from './channels.service';
 import { promoverPrevia } from './chat-previews.service';
@@ -127,16 +127,8 @@ export async function registrarMensagemEntrante(dados: MensagemNormalizada) {
     console.warn(`[anexo] ${dados.canal} ${dados.idExterno}: ${redigirTexto(anexo.motivo)}`);
   }
 
-  const mensagem = await prisma.message.create({
-    data: {
-      conversaId: conversa.id,
-      autor: 'CLIENTE',
-      conteudo: dados.conteudo,
-      tipoAnexo: dados.tipoAnexo,
-      anexoUrl: anexo.url ?? dados.anexoUrl,
-      idExterno: dados.idExterno,
-    },
-  });
+  const mensagem = await criarMensagemOuDetectarCorrida(conversa.id, dados, anexo);
+  if (mensagem === null) return { duplicada: true as const };
 
   const atualizada = await prisma.conversation.update({
     where: { id: conversa.id },
@@ -145,6 +137,12 @@ export async function registrarMensagemEntrante(dados: MensagemNormalizada) {
       naoLidas: { increment: 1 },
       // Endereco pode mudar de forma (ex.: numero reportado com/sem prefixo).
       enderecoExterno: dados.enderecoExterno,
+      // Mensagem do cliente sempre desarquiva (Fase 11.9-B) -- uma conversa
+      // arquivada nao pode ficar recebendo mensagem sem que ninguem veja: a
+      // mesma garantia que `filaPadraoDoCanal` ja da para fila/agente.
+      // Incondicional (sem checar se ja era false) -- e mais barato escrever
+      // sempre do que ler o valor atual so para decidir se escreve.
+      arquivada: false,
     },
     include: inclusaoDetalhe,
   });
@@ -163,6 +161,62 @@ export async function registrarMensagemEntrante(dados: MensagemNormalizada) {
   if (!ia.entregue) await responderAutomaticamente(conversa.id, dados.conteudo);
 
   return { duplicada: false as const, conversaId: conversa.id, mensagemId: mensagem.id };
+}
+
+/**
+ * Cria a Message, tratando a corrida entre o `findUnique` de topo de
+ * `registrarMensagemEntrante` e este `create`: duas requisicoes com o mesmo
+ * `idExterno` podem passar as duas pelo `findUnique` (nenhuma via ainda
+ * existir) antes de qualquer commit. So a constraint `@unique` em
+ * `idExterno` (schema.prisma) pega esse caso.
+ *
+ * Confirma que o P2002 pertence mesmo a essa constraint (via `meta.target`,
+ * mesmo padrao de `comColisaoDeSessaoTratada` em channels.service.ts) antes
+ * de tratar como duplicata — nunca mascara um conflito de outra origem.
+ *
+ * Devolve `null` quando a corrida foi detectada e a Message vencedora foi
+ * confirmada (chamador trata como duplicata, sem repetir efeitos colaterais
+ * que ainda nao rodaram: Conversation.update, realtime, IA/bot).
+ *
+ * NAO cobre efeitos colaterais que JA rodaram antes deste ponto (Contact,
+ * Conversation.create, ChatPreview) — numa corrida real, ambas as
+ * requisicoes os executam antes de uma perder aqui. Resolver isso exigiria
+ * mover a checagem de idempotencia para antes desses passos, fora do escopo
+ * desta correcao.
+ */
+async function criarMensagemOuDetectarCorrida(
+  conversaId: string,
+  dados: MensagemNormalizada,
+  anexo: { url?: string | null },
+) {
+  try {
+    return await prisma.message.create({
+      data: {
+        conversaId,
+        autor: 'CLIENTE',
+        conteudo: dados.conteudo,
+        tipoAnexo: dados.tipoAnexo,
+        anexoUrl: anexo.url ?? dados.anexoUrl,
+        idExterno: dados.idExterno,
+      },
+    });
+  } catch (erro) {
+    const alvo = erro instanceof Prisma.PrismaClientKnownRequestError ? erro.meta?.target : undefined;
+    const textoDoAlvo = typeof alvo === 'string' ? alvo : Array.isArray(alvo) ? alvo.join(',') : '';
+    const colidiuNoIdExterno =
+      erro instanceof Prisma.PrismaClientKnownRequestError &&
+      erro.code === 'P2002' &&
+      (textoDoAlvo.includes('id_externo') || textoDoAlvo.includes('idExterno'));
+    if (!colidiuNoIdExterno) throw erro;
+
+    // Mesmo `findUnique` do topo da funcao: tenant-scoped pela extensao do
+    // Prisma. Se a Message vencedora for de outra organizacao (idExterno e
+    // @unique global, nao @@unique([organizacaoId, idExterno])), este
+    // findUnique nao a enxerga — nao mascara: relanca o erro original.
+    const vencedora = await prisma.message.findUnique({ where: { idExterno: dados.idExterno } });
+    if (!vencedora) throw erro;
+    return null;
+  }
 }
 
 async function encontrarOuCriarContato(dados: MensagemNormalizada) {

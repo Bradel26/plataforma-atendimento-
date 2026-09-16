@@ -18,7 +18,10 @@
 import { createHmac } from 'node:crypto';
 import { createServer } from 'node:http';
 
-const API = 'http://localhost:3333/api';
+// SMOKE_API permite apontar para uma instancia isolada (ex.: ambiente de smoke
+// com schema/porta proprios) sem mexer no script — mesmo padrao ja usado em
+// smoke-tags.mjs, smoke-tenant.mjs e smoke-visibilidade.mjs.
+const API = process.env.SMOKE_API ?? 'http://localhost:3333/api';
 const EXECUCAO = Date.now().toString(36);
 const PORTA_WEBHOOK = 4599;
 

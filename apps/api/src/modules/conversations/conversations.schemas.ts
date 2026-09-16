@@ -5,6 +5,12 @@ export const listarConversasSchema = z.object({
   status: z.enum(['EM_ESPERA', 'ATRIBUIDO', 'EM_ATENDIMENTO', 'FINALIZADO']).optional(),
   /** minhas=true limita as conversas atribuidas ao usuario autenticado. */
   minhas: z.enum(['true', 'false']).optional(),
+  /**
+   * arquivadas=true troca a lista padrao (so nao arquivadas) pela lista de
+   * arquivadas — nunca as duas juntas. Sem o parametro, o comportamento e o
+   * de sempre: `arquivada = false` (Fase 11.9).
+   */
+  arquivadas: z.enum(['true', 'false']).optional(),
   busca: z.string().trim().min(1).optional(),
   /**
    * Filtro por etiqueta, repetivel: `?tags=boleto&tags=urgente`.

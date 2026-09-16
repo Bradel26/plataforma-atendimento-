@@ -435,12 +435,10 @@ export function CanaisTab() {
       if (numeroForm.nome) corpo.nome = numeroForm.nome;
       if (numeroForm.donoId) corpo.donoId = numeroForm.donoId;
       if (numeroForm.filaId) corpo.filaId = numeroForm.filaId;
-      if (numeroForm.modo === 'NAO_OFICIAL') {
-        if (numeroForm.ponteUrl) corpo.ponteUrl = numeroForm.ponteUrl;
-        if (numeroForm.ponteToken) corpo.ponteToken = numeroForm.ponteToken;
-        if (numeroForm.ponteSegredo) corpo.ponteSegredo = numeroForm.ponteSegredo;
-        if (numeroForm.ponteSessao) corpo.ponteSessao = numeroForm.ponteSessao;
-      } else {
+      // Modo NAO_OFICIAL nao manda campos de ponte: o formulario nao os
+      // exibe mais, e o backend herda da configuracao compartilhada quando
+      // eles vem em branco — mandar vazio/nulo apagaria credenciais existentes.
+      if (numeroForm.modo !== 'NAO_OFICIAL') {
         if (numeroForm.phoneNumberId) corpo.phoneNumberId = numeroForm.phoneNumberId;
         if (numeroForm.accessToken) corpo.accessToken = numeroForm.accessToken;
         if (numeroForm.appSecret) corpo.appSecret = numeroForm.appSecret;
@@ -955,36 +953,10 @@ export function CanaisTab() {
                 </div>
 
                 {numeroForm.modo === 'NAO_OFICIAL' ? (
-                  <>
-                    <Field label="Endereco da ponte" hint="Obrigatorio: esta linha pessoal nao cai no endereco do WhatsApp compartilhado se ficar em branco">
-                      <Input
-                        value={numeroForm.ponteUrl}
-                        placeholder="http://localhost:3000/api"
-                        onChange={(e) => setNumeroForm({ ...numeroForm, ponteUrl: e.target.value })}
-                      />
-                    </Field>
-                    <Field label="Token da ponte">
-                      <Input
-                        type="password"
-                        value={numeroForm.ponteToken}
-                        onChange={(e) => setNumeroForm({ ...numeroForm, ponteToken: e.target.value })}
-                      />
-                    </Field>
-                    <Field label="Segredo de assinatura" hint="Minimo 16 caracteres — sem ele a mensagem recebida e recusada">
-                      <Input
-                        type="password"
-                        value={numeroForm.ponteSegredo}
-                        onChange={(e) => setNumeroForm({ ...numeroForm, ponteSegredo: e.target.value })}
-                      />
-                    </Field>
-                    <Field label="Sessao na ponte" hint="Nome unico desta linha na ponte — e ele que identifica de qual vendedor veio cada mensagem">
-                      <Input
-                        value={numeroForm.ponteSessao}
-                        placeholder={`vendedor-${numeroForm.donoId.slice(0, 8) || 'novo'}`}
-                        onChange={(e) => setNumeroForm({ ...numeroForm, ponteSessao: e.target.value })}
-                      />
-                    </Field>
-                  </>
+                  <div className="sm:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+                    As configuracoes de conexao sao definidas automaticamente pela configuracao do
+                    WhatsApp da empresa. Depois de salvar, use o botao "Conectar" para escanear o QR Code.
+                  </div>
                 ) : (
                   <>
                     <Field label="Phone Number ID">

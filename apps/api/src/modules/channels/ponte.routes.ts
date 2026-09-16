@@ -526,6 +526,7 @@ ponteRoutes.post(
         await salvarPrevia({
           canalConfigId: config.id,
           organizacaoId,
+          donoId: config.donoId,
           numero: chat.numero,
           nome: chat.nome,
           ultimaMensagem: chat.ultimaMensagem,

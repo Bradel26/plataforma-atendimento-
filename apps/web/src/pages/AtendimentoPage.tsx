@@ -5,19 +5,14 @@ import { ListaConversas } from '../features/atendimento/ListaConversas';
 import { PainelChat } from '../features/atendimento/PainelChat';
 import { PainelContato } from '../features/atendimento/PainelContato';
 import { useConversas } from '../features/atendimento/useConversas';
+import { upsertPrevia } from '../features/atendimento/previas';
+import { LABEL_VISAO_INBOX, VISOES_INBOX, type VisaoInbox } from '../features/atendimento/visao';
 import { useAuth } from '../features/auth/AuthProvider';
 import { FiltroEtiquetas } from './crm/Etiquetas';
 import { ApiError, api, getAccessToken } from '../lib/api';
 import { EVENTOS, conectar } from '../lib/realtime';
 import { useFaixaDeLargura } from '../lib/useFaixaDeLargura';
-import {
-  ABAS_ATENDIMENTO,
-  LABEL_CONVERSA_STATUS,
-  type ConversaDetalhe,
-  type ConversaStatus,
-  type Previa,
-  type Usuario,
-} from '../lib/types';
+import type { ConversaDetalhe, Previa, Usuario } from '../lib/types';
 
 /**
  * Passo do fluxo em telas de uma coluna so (mobile): lista -> conversa ->
@@ -35,10 +30,15 @@ type QrDaPonte = {
 };
 
 export function AtendimentoPage() {
-  const { temPerfil } = useAuth();
+  const { usuario, temPerfil } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const { ref: containerRef, faixa } = useFaixaDeLargura<HTMLDivElement>();
-  const [aba, setAba] = useState<ConversaStatus>('EM_ESPERA');
+  /**
+   * Visao da Inbox (Fase 11.3) — Minhas / Nao atribuidas / Todas. Comeca em
+   * "Nao atribuidas": e a fila que precisa de alguem pegando, o mesmo motivo
+   * que fazia `EM_ESPERA` ser a aba padrao antes desta fase.
+   */
+  const [visao, setVisao] = useState<VisaoInbox>('NAO_ATRIBUIDAS');
   const [busca, setBusca] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   /**
@@ -93,8 +93,14 @@ export function AtendimentoPage() {
       .catch(() => undefined);
   }, [minhaLinha]);
 
-  // Aviso em tempo real de que a propria linha conectou/caiu, sem repetir a
-  // consulta acima a cada troca de tela.
+  /** Insere ou atualiza uma previa recebida por evento de socket — ver `upsertPrevia` (Fase 11.7). */
+  const aplicarPrevia = useCallback((p: Previa) => {
+    setPrevias((atual) => upsertPrevia(atual, p));
+  }, []);
+
+  // Aviso em tempo real de que a propria linha conectou/caiu, e de que uma
+  // previa dela foi criada/atualizada — mesmo socket, ja gated por
+  // `minhaLinha`: previa so existe para linha pessoal, a mesma condicao.
   useEffect(() => {
     if (!minhaLinha) return;
     const token = getAccessToken();
@@ -104,13 +110,19 @@ export function AtendimentoPage() {
       if (payload.id !== minhaLinha.id) return;
       setMinhaLinhaConectada(payload.status === 'CONECTADO');
     });
+    // O payload traz `canalConfigId` (usado pelo backend para escopar o
+    // destinatario), que `Previa` nao tem — descartado aqui, sem precisar
+    // estender o tipo compartilhado por um campo que a tela nunca usa.
+    socket.on(EVENTOS.previaAtualizada, ({ canalConfigId: _canalConfigId, ...previa }: Previa & { canalConfigId: string }) => {
+      aplicarPrevia(previa);
+    });
     return () => {
       socket.disconnect();
     };
-  }, [minhaLinha]);
+  }, [minhaLinha, aplicarPrevia]);
 
   // Enquanto o card "Conectar WhatsApp" esta aberto, busca o QR e faz
-  // polling leve ate a conexao acontecer — mesmo padrao de CanaisTab.tsx.
+  // polling a cada 5s ate a conexao acontecer — mesmo intervalo de CanaisTab.tsx.
   useEffect(() => {
     if (!mostrarConectar || !minhaLinha) return;
     let vivo = true;
@@ -132,7 +144,7 @@ export function AtendimentoPage() {
     void buscar();
     const timer = window.setInterval(() => {
       void buscar();
-    }, 3_000);
+    }, 5_000);
 
     return () => {
       vivo = false;
@@ -158,7 +170,22 @@ export function AtendimentoPage() {
     inscreverMensagens,
     focarConversa,
     recarregarContadores,
-  } = useConversas(aba, tags);
+  } = useConversas(visao, tags, usuario?.id ?? null);
+
+  /**
+   * Contador exibido em cada aba, so quando o backend fornece um numero exato
+   * para aquela visao — `GET /conversas/contadores` agrupa por `status`, sem
+   * separar "atribuida a mim" de "atribuida a outro agente". "Nao atribuidas"
+   * usa `contadores.EM_ESPERA` direto (a mesma contagem exata de antes desta
+   * fase); "Todas" soma os quatro status (tambem exato, ja escopado pela
+   * politica de visibilidade no backend). "Minhas" fica sem numero: inventar
+   * um contador que a API nao fornece pareceria dado, sem ser.
+   */
+  const contadorDaVisao = (v: VisaoInbox): number | null => {
+    if (v === 'NAO_ATRIBUIDAS') return contadores.EM_ESPERA;
+    if (v === 'TODAS') return Object.values(contadores).reduce((soma, n) => soma + n, 0);
+    return null;
+  };
 
   // A lista de destinos de transferencia so e visivel para admin e supervisor.
   useEffect(() => {
@@ -313,19 +340,19 @@ export function AtendimentoPage() {
           </div>
 
           <nav className="flex border-b border-slate-200 text-xs">
-            {ABAS_ATENDIMENTO.map((status) => (
+            {VISOES_INBOX.map((v) => (
               <button
-                key={status}
+                key={v}
                 type="button"
-                onClick={() => setAba(status)}
+                onClick={() => setVisao(v)}
                 className={`flex-1 border-b-2 px-1 py-2.5 transition ${
-                  aba === status
+                  visao === v
                     ? 'border-[var(--brand-primary)] font-semibold text-[var(--brand-primary)]'
                     : 'border-transparent text-slate-500 hover:text-slate-700'
                 }`}
               >
-                <span className="block truncate">{LABEL_CONVERSA_STATUS[status]}</span>
-                <span className="text-[11px] text-slate-500">{contadores[status]}</span>
+                <span className="block truncate">{LABEL_VISAO_INBOX[v]}</span>
+                <span className="text-[11px] text-slate-500">{contadorDaVisao(v) ?? ''}</span>
               </button>
             ))}
           </nav>

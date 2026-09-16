@@ -12,6 +12,7 @@ build/
 .env
 .env.*
 !.env.example
+!.env.smoke.example
 
 # Logs
 logs/
@@ -63,3 +64,8 @@ backups/
 .playwright-mcp/
 .superpowers/
 .worktrees/
+# Zip do diretorio de worktrees (mesmo artefato de sessao acima, compactado).
+.worktrees.zip
+
+# Saida de `vitest run > test-output.txt` rodado manualmente na raiz.
+/test-output.txt

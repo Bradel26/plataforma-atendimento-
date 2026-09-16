@@ -15,9 +15,11 @@ import {
   transferirSchema,
 } from './conversations.schemas';
 import {
+  arquivarConversa,
   assumirConversa,
   contarPorStatus,
   definirTags,
+  desarquivarConversa,
   enviarArquivo,
   enviarMensagem,
   finalizarConversa,
@@ -150,6 +152,25 @@ conversationsRoutes.post(
   '/:id/ler',
   asyncHandler(async (req, res) => {
     res.json({ conversa: await marcarComoLida(quem(req), param(req, 'id')) });
+  }),
+);
+
+/**
+ * Arquivar/desarquivar (Fase 11.9-B) — sai/volta das listas padrao sem mudar
+ * status, agente, fila ou historico. Funciona em qualquer status, inclusive
+ * `FINALIZADO`: arquivamento e ortogonal ao ciclo de vida do atendimento.
+ */
+conversationsRoutes.post(
+  '/:id/arquivar',
+  asyncHandler(async (req, res) => {
+    res.json({ conversa: await arquivarConversa(quem(req), param(req, 'id')) });
+  }),
+);
+
+conversationsRoutes.post(
+  '/:id/desarquivar',
+  asyncHandler(async (req, res) => {
+    res.json({ conversa: await desarquivarConversa(quem(req), param(req, 'id')) });
   }),
 );
 

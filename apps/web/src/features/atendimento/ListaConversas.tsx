@@ -103,13 +103,20 @@ export function ListaConversas({
                     <span className="shrink-0 text-xs text-slate-500">{horaCurta(p.ultimaMensagemEm)}</span>
                   </div>
                   <p className="mt-0.5 truncate text-xs text-slate-500">{p.ultimaMensagem}</p>
-                  {p.naoLidas > 0 && (
-                    <div className="mt-1.5 flex items-center gap-1.5">
+                  {/*
+                    Ainda nao e um atendimento formal — so um chat espelhado do
+                    celular do vendedor (ver ChatPreview, Fase 11.4/11.5). O
+                    badge e a unica pista visual disso; sem ele o cartao fica
+                    identico ao de uma Conversation de verdade.
+                  */}
+                  <div className="mt-1.5 flex items-center gap-1.5">
+                    <Badge tom="alerta">Prévia</Badge>
+                    {p.naoLidas > 0 && (
                       <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-semibold text-white">
                         {p.naoLidas}
                       </span>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               </button>
             </li>

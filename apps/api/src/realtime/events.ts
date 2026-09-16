@@ -17,6 +17,12 @@ export const EVENTOS = {
   chamadaAtualizada: 'chamada:atualizada',
   /** A ponte avisou que um WhatsApp pessoal (nao oficial) conectou ou caiu. */
   canalStatus: 'canal:status',
+  /**
+   * ChatPreview criada ou atualizada (Fase 11.7) -- so o dono da linha
+   * pessoal recebe. Nao e uma Conversation: sem fila, sem agente formal, sem
+   * sala de supervisao -- ver `notificarPreviaAtualizada` em `hub.ts`.
+   */
+  previaAtualizada: 'previa:atualizada',
 } as const;
 
 /**

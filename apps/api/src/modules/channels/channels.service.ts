@@ -1,8 +1,8 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import type { Channel } from '@prisma/client';
+import { Prisma, type Channel } from '@prisma/client';
 import { prisma, prismaSemIsolamento } from '../../lib/prisma';
 import { semOrganizacao } from '../../lib/tenant';
-import { badRequest, notFound } from '../../lib/errors';
+import { badRequest, conflict, notFound } from '../../lib/errors';
 import { cifrar, decifrar } from '../../lib/crypto-box';
 
 export const CANAIS_EXTERNOS = ['WHATSAPP', 'INSTAGRAM', 'FACEBOOK'] as const;
@@ -281,6 +281,41 @@ async function prepararGravacao(
 }
 
 /**
+ * A checagem previa de `prepararGravacao` roda dentro da organizacao atual
+ * (a extensao do Prisma escopa o `findFirst`), entao ela nunca enxerga uma
+ * sessao ja usada por OUTRA organizacao — so a constraint `@@unique([canal,
+ * ponteSessao])` (Fase 12.1) pega esse caso, e tambem fecha a corrida entre
+ * a checagem e a escrita (duas requisicoes concorrentes podem passar as duas
+ * pelo `findFirst` antes de qualquer commit).
+ *
+ * Traduz a violacao dessa constraint especifica num erro de dominio (409,
+ * a mesma classe de "ja existe" que a checagem previa usa) em vez de deixar
+ * subir como erro do Prisma nao tratado (500 generico). Nunca apaga nem
+ * altera a linha que ja tinha a sessao — so recusa a escrita nova.
+ */
+async function comColisaoDeSessaoTratada<T>(sessao: string | null | undefined, escrever: () => Promise<T>): Promise<T> {
+  try {
+    return await escrever();
+  } catch (erro) {
+    const alvo = erro instanceof Prisma.PrismaClientKnownRequestError ? erro.meta?.target : undefined;
+    // O formato de `meta.target` varia (nome da constraint como string, ou
+    // array de colunas/campos) conforme driver/versao do Prisma — checa as
+    // variantes plausiveis em vez de assumir uma so.
+    const textoDoAlvo = typeof alvo === 'string' ? alvo : Array.isArray(alvo) ? alvo.join(',') : '';
+    const colidiuNaSessao =
+      erro instanceof Prisma.PrismaClientKnownRequestError &&
+      erro.code === 'P2002' &&
+      (textoDoAlvo.includes('ponte_sessao') || textoDoAlvo.includes('ponteSessao'));
+    if (colidiuNaSessao) {
+      throw conflict(
+        `Ja existe uma linha usando a sessao "${sessao}" — pode ser de outra organizacao. Escolha outro nome de sessao.`,
+      );
+    }
+    throw erro;
+  }
+}
+
+/**
  * Numero compartilhado do canal — o que existia antes de linha pessoal ser
  * possivel, e continua sendo: `donoId` nulo, um so por organizacao.
  *
@@ -293,11 +328,11 @@ export async function salvarCanal(canal: CanalExterno, input: SalvarCanalInput) 
   const atual = gravado ? aberto(gravado) : null;
   const paraGravar = await prepararGravacao(canal, atual, input);
 
-  if (gravado) {
-    await prisma.channelConfig.update({ where: { id: gravado.id }, data: paraGravar });
-  } else {
-    await prisma.channelConfig.create({ data: { canal, ...paraGravar } });
-  }
+  await comColisaoDeSessaoTratada(paraGravar.ponteSessao, () =>
+    gravado
+      ? prisma.channelConfig.update({ where: { id: gravado.id }, data: paraGravar })
+      : prisma.channelConfig.create({ data: { canal, ...paraGravar } }),
+  );
 
   const canais = await listarCanais();
   return canais.find((c) => c.canal === canal && !c.dono)!;
@@ -310,7 +345,9 @@ export async function salvarCanal(canal: CanalExterno, input: SalvarCanalInput) 
  */
 export async function criarNumero(canal: CanalExterno, input: SalvarNumeroInput) {
   const paraGravar = await prepararGravacao(canal, null, input);
-  await prisma.channelConfig.create({ data: { canal, ...paraGravar } });
+  await comColisaoDeSessaoTratada(paraGravar.ponteSessao, () =>
+    prisma.channelConfig.create({ data: { canal, ...paraGravar } }),
+  );
 
   const canais = await listarCanais();
   const criado = canais.find((c) => c.canal === canal && c.dono?.id === input.donoId);
@@ -327,7 +364,9 @@ async function carregarNumeroOuFalhar(id: string) {
 export async function atualizarNumero(id: string, input: SalvarNumeroInput) {
   const gravado = await carregarNumeroOuFalhar(id);
   const paraGravar = await prepararGravacao(gravado.canal as CanalExterno, aberto(gravado), input, gravado.id);
-  await prisma.channelConfig.update({ where: { id }, data: paraGravar });
+  await comColisaoDeSessaoTratada(paraGravar.ponteSessao, () =>
+    prisma.channelConfig.update({ where: { id }, data: paraGravar }),
+  );
 
   const canais = await listarCanais();
   return canais.find((c) => c.id === id)!;

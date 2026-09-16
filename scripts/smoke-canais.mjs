@@ -13,7 +13,10 @@
  */
 import { createHmac } from 'node:crypto';
 
-const API = 'http://localhost:3333/api';
+// SMOKE_API permite apontar para uma instancia isolada (ex.: ambiente de smoke
+// com schema/porta proprios) sem mexer no script — mesmo padrao ja usado em
+// smoke-tags.mjs, smoke-tenant.mjs e smoke-visibilidade.mjs.
+const API = process.env.SMOKE_API ?? 'http://localhost:3333/api';
 const APP_SECRET = 'segredo-de-teste-do-app-meta';
 const VERIFY_TOKEN = 'token-de-verificacao-123';
 const TOKEN_FALSO = 'EAAG-token-falso-para-teste-de-erro';
@@ -232,9 +235,14 @@ await json(`/bots/${botWhats.corpo.bot.id}`, { method: 'DELETE', headers: admin 
  *
  * Precisa rodar com o WhatsApp ainda ATIVO (por isso antes do passo que
  * desativa o canal, mais abaixo). Cria uma linha PESSOAL de WhatsApp para um
- * agente e um Contato com esse agente como responsavel: a conversa tem de
- * nascer ATRIBUIDO a ele, sem passar pela fila — a mesma regra de
- * `destinoDaMensagem`, aqui reaproveitada por `iniciarConversa`.
+ * agente e um Contato com esse agente como responsavel — de proposito, para
+ * provar que o `responsavelId` do contato NAO decide mais a linha (commit
+ * 9e4062d): quem decide e o SOLICITANTE que clicou em "Iniciar conversa", e
+ * aqui quem chama e o ADMIN, nao o agente dono da linha pessoal. Como o ADMIN
+ * nao tem linha propria, cai na config compartilhada; como essa config tem
+ * fila mas nenhum agente atribuido diretamente, a conversa nasce EM_ESPERA —
+ * e nao ATRIBUIDO ao responsavel do contato, que e o comportamento antigo
+ * (anterior a 9e4062d) que este teste chegou a esperar.
  */
 const { corpo: agentesResp } = await json('/usuarios?perfil=AGENTE', { headers: admin });
 const agente = agentesResp.usuarios[0];
@@ -272,10 +280,13 @@ const r7 = await json('/conversas', {
   body: JSON.stringify({ contatoId: contatoNovo.contato.id }),
 });
 const { corpo: detalheNova } = await json(`/conversas/${r7.corpo.conversa?.id}`, { headers: admin });
-console.log('    conversa nasce ATRIBUIDO ao responsavel do contato:', ok(
+// ADMIN e quem chama (o solicitante), nao o agente dono da linha pessoal nem
+// o responsavel do contato: sem linha propria, cai na fila da compartilhada,
+// sem agente atribuido — EM_ESPERA e o resultado correto aqui.
+console.log('    ADMIN sem linha propria: conversa cai na fila da compartilhada, EM_ESPERA:', ok(
   r7.status === 201 &&
-  detalheNova.conversa?.status === 'ATRIBUIDO' &&
-  detalheNova.conversa?.agente?.id === agente.id &&
+  detalheNova.conversa?.status === 'EM_ESPERA' &&
+  !detalheNova.conversa?.agente &&
   detalheNova.conversa?.canal === 'WHATSAPP',
 ), `status=${detalheNova.conversa?.status} agente=${detalheNova.conversa?.agente?.id}`);
 

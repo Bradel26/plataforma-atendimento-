@@ -1,4 +1,6 @@
 import { prisma } from '../../lib/prisma';
+import { notificarPreviaAtualizada } from '../../realtime/hub';
+import { numeroNormalizado } from './whatsapp.modo';
 
 export type MensagemPrevia = { autor: 'CLIENTE' | 'AGENTE'; texto: string; criadoEm: string };
 
@@ -23,10 +25,34 @@ export function cortarCache(
  * (`messaging-history.set`) quanto em atualizacoes incrementais
  * (`chats.upsert`), sempre substituindo o cache pelo mais recente que a ponte
  * mandou.
+ *
+ * **Nao recria a previa quando ja existe atendimento formal.** A ponte
+ * sincroniza os chats do celular por um caminho HTTP independente do webhook
+ * de mensagem (`POST /whatsapp/:organizacaoId`) — sem essa checagem, um lote
+ * de sincronizacao chegando depois de `promoverPrevia` ja ter apagado a previa
+ * recriaria a mesma pessoa como previa E conversa formal ao mesmo tempo na
+ * Inbox (Fase 11.4). `canalConfigId` + `numero` (normalizado do mesmo jeito
+ * que `enderecoExterno`, ver `numeroNormalizado`) e a mesma identidade que
+ * `Conversation.enderecoExterno` usa — nunca so o telefone: duas linhas
+ * WhatsApp podem falar com o mesmo numero, e cada uma tem a propria previa.
+ * `status: { not: 'FINALIZADO' }` e a mesma definicao de "aberta" usada em
+ * todo o resto do modulo (`inbound.service.ts`, `conversations.service.ts`);
+ * uma conversa finalizada nao bloqueia a previa — sincronizacao futura pode
+ * voltar a mostrar o chat como previa, o mesmo comportamento de "finalizado
+ * nao impede nova conversa" que ja existe em `registrarMensagemEntrante`.
+ * A checagem e por organizacao (contexto do tenant, nunca global) e por
+ * canal+numero — uma consulta so, sem loop por mensagem do cache.
+ *
+ * **Avisa o dono da linha em tempo real** (Fase 11.7) depois do upsert —
+ * nunca quando a checagem acima decide nao criar/atualizar nada: sem previa
+ * gravada, nao ha o que notificar, e a `Conversation` formal ja tem seus
+ * proprios eventos (`conversa:nova`/`conversa:atualizada`).
  */
 export async function salvarPrevia(dados: {
   canalConfigId: string;
   organizacaoId: string;
+  /** Dono da linha pessoal -- unico destinatario do evento de tempo real. */
+  donoId: string;
   numero: string;
   nome: string;
   ultimaMensagem: string;
@@ -34,13 +60,21 @@ export async function salvarPrevia(dados: {
   naoLidas: number;
   mensagens: MensagemPrevia[];
 }): Promise<void> {
+  const numero = numeroNormalizado(dados.numero) ?? dados.numero;
+
+  const conversaFormalAberta = await prisma.conversation.findFirst({
+    where: { canalConfigId: dados.canalConfigId, enderecoExterno: numero, status: { not: 'FINALIZADO' } },
+    select: { id: true },
+  });
+  if (conversaFormalAberta) return;
+
   const mensagens = cortarCache(dados.mensagens);
-  await prisma.chatPreview.upsert({
-    where: { canalConfigId_numero: { canalConfigId: dados.canalConfigId, numero: dados.numero } },
+  const previa = await prisma.chatPreview.upsert({
+    where: { canalConfigId_numero: { canalConfigId: dados.canalConfigId, numero } },
     create: {
       canalConfigId: dados.canalConfigId,
       organizacaoId: dados.organizacaoId,
-      numero: dados.numero,
+      numero,
       nome: dados.nome,
       ultimaMensagem: dados.ultimaMensagem,
       ultimaMensagemEm: dados.ultimaMensagemEm,
@@ -55,6 +89,19 @@ export async function salvarPrevia(dados: {
       mensagens,
     },
   });
+
+  notificarPreviaAtualizada(
+    {
+      id: previa.id,
+      canalConfigId: previa.canalConfigId,
+      numero: previa.numero,
+      nome: previa.nome,
+      ultimaMensagem: previa.ultimaMensagem,
+      ultimaMensagemEm: previa.ultimaMensagemEm,
+      naoLidas: previa.naoLidas,
+    },
+    { agenteId: dados.donoId },
+  );
 }
 
 /** Previa de um numero numa linha, ou null se o chat ainda nao foi sincronizado. */

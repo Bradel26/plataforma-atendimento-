@@ -167,6 +167,8 @@ type ConversaBase = {
    */
   tags: string[];
   naoLidas: number;
+  /** Fora das listas padrao (Minhas/Nao atribuidas/Todas) e dos contadores — ortogonal a `status` (Fase 11.9). */
+  arquivada: boolean;
   criadoEm: string;
   atribuidoEm: string | null;
   finalizadoEm: string | null;
