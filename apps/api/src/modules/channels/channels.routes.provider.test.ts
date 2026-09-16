@@ -27,6 +27,7 @@ vi.mock('./channels.service', () => ({
   excluirNumero: vi.fn(),
   listarCanais: vi.fn(),
   minhaLinhaWhatsapp: vi.fn(),
+  conectarMinhaLinhaWhatsapp: vi.fn(),
   obterConfig: vi.fn(async () => configFalsa),
   obterConfigPorId: vi.fn(async () => configFalsa),
   salvarCanal: vi.fn(),
@@ -228,5 +229,57 @@ describe('channels.routes — QR/estado/desconectar passam pelo WhatsAppProvider
     await vi.waitFor(() => expect(res.json).toHaveBeenCalled());
 
     expect(getQRCode).toHaveBeenCalledWith(configFalsa);
+  });
+});
+
+describe('POST /whatsapp/pessoal/conectar — self-service', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('cria/recupera a linha do usuario autenticado e devolve so o essencial', async () => {
+    const { conectarMinhaLinhaWhatsapp } = await import('./channels.service');
+    vi.mocked(conectarMinhaLinhaWhatsapp).mockResolvedValue({
+      id: 'linha-1',
+      ponteSessao: 'vendedor-user-1',
+      modo: 'NAO_OFICIAL',
+      ativo: true,
+    });
+
+    const handler = handlerDe('/whatsapp/pessoal/conectar', 'post');
+    const res = fakeRes();
+    const req = fakeReq();
+    req.user!.sub = 'user-1';
+
+    await rodar(handler, req, res);
+    await vi.waitFor(() => expect(res.json).toHaveBeenCalled());
+
+    expect(conectarMinhaLinhaWhatsapp).toHaveBeenCalledWith('user-1');
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith({
+      numero: { id: 'linha-1', ponteSessao: 'vendedor-user-1', modo: 'NAO_OFICIAL', ativo: true },
+    });
+    const corpo = vi.mocked(res.json).mock.calls[0]?.[0];
+    expect(corpo.numero).not.toHaveProperty('ponteUrl');
+    expect(corpo.numero).not.toHaveProperty('ponteToken');
+    expect(corpo.numero).not.toHaveProperty('ponteSegredo');
+  });
+
+  it('erro amigavel do service (ex.: WhatsApp da empresa nao configurado) sobe sem alteracao', async () => {
+    const { conectarMinhaLinhaWhatsapp } = await import('./channels.service');
+    const erroAmigavel = Object.assign(new Error('A conexao direta do WhatsApp ainda nao foi habilitada pelo administrador da sua organizacao.'), {
+      status: 400,
+      code: 'BAD_REQUEST',
+    });
+    vi.mocked(conectarMinhaLinhaWhatsapp).mockRejectedValue(erroAmigavel);
+
+    const handler = handlerDe('/whatsapp/pessoal/conectar', 'post');
+    const res = fakeRes();
+
+    await expect(
+      comOrganizacao('org-1', () => new Promise<void>((resolve, reject) => handler(fakeReq(), res, (e) => (e ? reject(e) : resolve())))),
+    ).rejects.toMatchObject({ status: 400 });
+
+    expect(res.json).not.toHaveBeenCalled();
   });
 });

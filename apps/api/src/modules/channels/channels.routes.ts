@@ -12,6 +12,7 @@ import { notificarStatusCanal } from '../../realtime/hub';
 import {
   CANAIS_EXTERNOS,
   atualizarNumero,
+  conectarMinhaLinhaWhatsapp,
   criarNumero,
   excluirNumero,
   listarCanais,
@@ -281,6 +282,20 @@ channelsRoutes.get(
   asyncHandler(async (req, res) => {
     const numero = await minhaLinhaWhatsapp(req.user!.sub);
     res.json({ numero });
+  }),
+);
+
+/**
+ * Self-service: cria (ou recupera, se ja existir) a propria linha pessoal e
+ * devolve so o essencial para a tela seguir para o QR — nunca ponteUrl,
+ * ponteToken ou ponteSegredo. E o "Conectar WhatsApp" de um clique so: o
+ * usuario nao escolhe sessao nem preenche nada da ponte.
+ */
+channelsRoutes.post(
+  '/whatsapp/pessoal/conectar',
+  asyncHandler(async (req, res) => {
+    const numero = await conectarMinhaLinhaWhatsapp(req.user!.sub);
+    res.status(201).json({ numero });
   }),
 );
 
