@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Alerta, Input } from '../components/ui';
+import { Alerta, Badge, Button, Card, Input } from '../components/ui';
 import { ListaConversas } from '../features/atendimento/ListaConversas';
 import { PainelChat } from '../features/atendimento/PainelChat';
 import { PainelContato } from '../features/atendimento/PainelContato';
@@ -76,11 +76,22 @@ export function AtendimentoPage() {
   const [mostrarConectar, setMostrarConectar] = useState(false);
   const [qrConectar, setQrConectar] = useState<QrDaPonte | null>(null);
 
+  /**
+   * `carregandoMinhaLinha` evita mostrar "Conectar WhatsApp" por um instante
+   * antes do GET /numeros/meu responder — sem isso a tela piscaria o botao de
+   * conectar mesmo para quem ja esta conectado, ate a primeira resposta chegar.
+   */
+  const [carregandoMinhaLinha, setCarregandoMinhaLinha] = useState(true);
+  const [conectandoLinha, setConectandoLinha] = useState(false);
+  const [erroConectar, setErroConectar] = useState<string | null>(null);
+  const [mostrarSucessoConexao, setMostrarSucessoConexao] = useState(false);
+
   useEffect(() => {
     void api
       .get<{ numero: MinhaLinhaWhatsapp | null }>('/canais/numeros/meu')
       .then(({ numero }) => setMinhaLinha(numero))
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => setCarregandoMinhaLinha(false));
   }, []);
 
   useEffect(() => {
@@ -157,7 +168,56 @@ export function AtendimentoPage() {
     if (minhaLinhaConectada) setMostrarConectar(false);
   }, [minhaLinhaConectada]);
 
-  const precisaConectarWhatsapp = Boolean(minhaLinha && minhaLinha.modo === 'NAO_OFICIAL' && !minhaLinhaConectada);
+  useEffect(() => {
+    if (!minhaLinhaConectada) return;
+    setMostrarSucessoConexao(true);
+    const tempo = setTimeout(() => setMostrarSucessoConexao(false), 4000);
+    return () => clearTimeout(tempo);
+  }, [minhaLinhaConectada]);
+
+  const semLinhaPessoal = !carregandoMinhaLinha && !minhaLinha;
+  const precisaConectarWhatsapp =
+    semLinhaPessoal || Boolean(minhaLinha && minhaLinha.modo === 'NAO_OFICIAL' && !minhaLinhaConectada);
+
+  /**
+   * "Conectar WhatsApp" de um clique: se a linha pessoal ainda nao existe, cria
+   * na hora (self-service — Fase 13.5); se ja existe, so abre o QR. O usuario
+   * nunca ve a diferenca entre os dois casos.
+   */
+  const conectarWhatsapp = useCallback(async () => {
+    setErroConectar(null);
+    if (minhaLinha) {
+      setMostrarConectar(true);
+      return;
+    }
+    setConectandoLinha(true);
+    try {
+      const { numero } = await api.post<{ numero: MinhaLinhaWhatsapp }>('/canais/whatsapp/pessoal/conectar');
+      setMinhaLinha(numero);
+      setMostrarConectar(true);
+    } catch (erro) {
+      setErroConectar(
+        erro instanceof ApiError ? erro.message : 'Nao foi possivel conectar o WhatsApp. Verifique sua internet e tente novamente.',
+      );
+    } finally {
+      setConectandoLinha(false);
+    }
+  }, [minhaLinha]);
+
+  const desconectarWhatsapp = useCallback(async () => {
+    if (!minhaLinha) return;
+    if (!window.confirm('Desconectar seu WhatsApp? Voce vai precisar escanear o QR Code de novo para reconectar.')) return;
+    try {
+      await api.post(`/canais/numeros/${minhaLinha.id}/ponte/desconectar`);
+      setMinhaLinhaConectada(false);
+      setMostrarConectar(false);
+      setQrConectar(null);
+    } catch (erro) {
+      setErroConectar(
+        erro instanceof ApiError ? erro.message : 'Nao foi possivel desconectar agora. Tente novamente.',
+      );
+    }
+  }, [minhaLinha]);
 
   const {
     conversas,
@@ -401,38 +461,72 @@ export function AtendimentoPage() {
               fichaAberta={fichaVisivel}
             />
           ) : precisaConectarWhatsapp ? (
-            <div className="flex h-full flex-col items-center justify-center px-6 text-center">
-              <p className="text-sm font-medium text-slate-700">Conecte seu WhatsApp para comecar a atender</p>
-              <p className="mt-1 max-w-sm text-xs text-slate-500">
-                Sua linha pessoal de WhatsApp ainda nao esta pareada. Conecte para receber as conversas dos seus
-                clientes aqui.
-              </p>
+            <div className="flex h-full items-center justify-center overflow-y-auto px-4 py-8">
+              <div className="w-full max-w-sm">
+                <Card>
+                  <div className="flex flex-col items-center gap-3 text-center">
+                    <Badge tom={erroConectar ? 'erro' : mostrarConectar ? 'alerta' : 'erro'}>
+                      {erroConectar ? '⚠️ Erro' : mostrarConectar ? '🟡 Conectando' : '🔴 Nao conectado'}
+                    </Badge>
 
-              {!mostrarConectar ? (
-                <button
-                  type="button"
-                  onClick={() => setMostrarConectar(true)}
-                  className="mt-4 rounded-md bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-                >
-                  Conectar
-                </button>
-              ) : (
-                <div className="mt-4 rounded-lg border border-slate-200 bg-white p-4">
-                  {qrConectar?.qr ? (
-                    <div className="flex flex-col items-center gap-3">
-                      <img src={qrConectar.qr} alt="QR Code do WhatsApp" className="h-48 w-48 rounded border border-slate-200" />
-                      <p className="max-w-xs text-xs text-slate-600">
-                        Abra o WhatsApp no seu celular, toque em <strong>Aparelhos conectados</strong> e depois em{' '}
-                        <strong>Conectar aparelho</strong> apontando a camera para este codigo.
-                      </p>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-slate-500">
-                      {qrConectar?.motivo ?? 'Gerando o QR Code...'}
-                    </p>
-                  )}
-                </div>
-              )}
+                    {!mostrarConectar ? (
+                      <>
+                        <h2 className="text-base font-semibold text-slate-800">Conecte seu WhatsApp ao Atendimento</h2>
+                        <p className="text-xs text-slate-500">
+                          Receba e responda as mensagens dos seus clientes diretamente por aqui.
+                        </p>
+                        {erroConectar && (
+                          <div className="w-full">
+                            <Alerta>{erroConectar}</Alerta>
+                          </div>
+                        )}
+                        <Button
+                          type="button"
+                          onClick={() => void conectarWhatsapp()}
+                          disabled={conectandoLinha}
+                          className="mt-1 w-full"
+                        >
+                          {conectandoLinha ? 'Conectando...' : erroConectar ? 'Tentar novamente' : 'Conectar WhatsApp'}
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <h2 className="text-base font-semibold text-slate-800">Escaneie o QR Code pelo WhatsApp</h2>
+                        {qrConectar?.qr ? (
+                          <>
+                            <img
+                              src={qrConectar.qr}
+                              alt="QR Code do WhatsApp"
+                              className="h-56 w-56 rounded-lg border border-slate-200"
+                            />
+                            <ol className="w-full space-y-1 text-left text-xs text-slate-600">
+                              <li>1. Abra o WhatsApp no seu celular</li>
+                              <li>
+                                2. Toque em <strong>Aparelhos conectados</strong>
+                              </li>
+                              <li>
+                                3. Toque em <strong>Conectar aparelho</strong>
+                              </li>
+                              <li>4. Aponte a camera para o codigo acima</li>
+                            </ol>
+                            <p className="text-xs text-slate-400">Aguardando conexao...</p>
+                          </>
+                        ) : (
+                          <p className="text-xs text-slate-500">{qrConectar?.motivo ?? 'Gerando o QR Code...'}</p>
+                        )}
+                        <Button
+                          type="button"
+                          variante="neutro"
+                          onClick={() => setMostrarConectar(false)}
+                          className="mt-1 w-full"
+                        >
+                          Cancelar
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </Card>
+              </div>
             </div>
           ) : (
             <div className="flex h-full flex-col items-center justify-center px-6 text-center">
@@ -444,6 +538,16 @@ export function AtendimentoPage() {
                 </a>{' '}
                 para simular um cliente.
               </p>
+
+              {minhaLinha && minhaLinhaConectada && (
+                <div className="mt-4 flex flex-col items-center gap-2">
+                  {mostrarSucessoConexao && <Alerta tipo="sucesso">WhatsApp conectado</Alerta>}
+                  <Badge tom="sucesso">🟢 WhatsApp conectado</Badge>
+                  <Button type="button" variante="neutro" tamanho="sm" onClick={() => void desconectarWhatsapp()}>
+                    Desconectar
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </section>
