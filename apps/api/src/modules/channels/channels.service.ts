@@ -4,6 +4,7 @@ import { prisma, prismaSemIsolamento } from '../../lib/prisma';
 import { semOrganizacao } from '../../lib/tenant';
 import { badRequest, conflict, notFound } from '../../lib/errors';
 import { cifrar, decifrar } from '../../lib/crypto-box';
+import { modoEfetivo } from './whatsapp.modo';
 
 export const CANAIS_EXTERNOS = ['WHATSAPP', 'INSTAGRAM', 'FACEBOOK'] as const;
 export type CanalExterno = (typeof CANAIS_EXTERNOS)[number];
@@ -404,6 +405,39 @@ export async function minhaLinhaWhatsapp(usuarioId: string) {
   const config = await prisma.channelConfig.findFirst({ where: { canal: 'WHATSAPP', donoId: usuarioId } });
   if (!config) return null;
   return { id: config.id, ponteSessao: config.ponteSessao, modo: config.modo, ativo: config.ativo };
+}
+
+/**
+ * Self-service: cria a linha pessoal de WhatsApp do usuario logado na hora em
+ * que ele pede para conectar — sem exigir que um ADMIN cadastre a linha antes
+ * pela tela de Canais. Reconexao (linha ja existente) devolve a mesma linha
+ * em vez de criar outra, para nao violar `@@unique([canal, ponteSessao])`.
+ *
+ * A criacao em si passa por `criarNumero`, que ja faz tudo que uma linha
+ * pessoal de WhatsApp precisa sem o usuario informar nada: herda
+ * endereco/token/segredo da linha compartilhada (`herdarCredenciaisDaPonte`)
+ * e gera o nome de sessao (`gerarNomeSessao`). O unico caso que este self-
+ * service recusa antes de chamar `criarNumero` e quando nao ha o que herdar —
+ * a organizacao nunca configurou (ou nao ativou) o modo nao oficial, e ai a
+ * mensagem tem de apontar para o ADMIN em vez de estourar o erro tecnico que
+ * `prepararGravacao` daria (falar de "token da ponte" para o vendedor).
+ */
+export async function conectarMinhaLinhaWhatsapp(usuarioId: string) {
+  const existente = await minhaLinhaWhatsapp(usuarioId);
+  if (existente) return existente;
+
+  const compartilhada = await prisma.channelConfig.findFirst({ where: { canal: 'WHATSAPP', donoId: null } });
+  if (!compartilhada || modoEfetivo(compartilhada.modo) !== 'NAO_OFICIAL') {
+    throw badRequest(
+      'A conexao direta do WhatsApp ainda nao foi habilitada pelo administrador da sua organizacao. Peca para um administrador configurar o WhatsApp da empresa antes de conectar sua linha pessoal.',
+    );
+  }
+
+  await criarNumero('WHATSAPP', { donoId: usuarioId, modo: 'NAO_OFICIAL', ativo: true });
+
+  const criada = await minhaLinhaWhatsapp(usuarioId);
+  if (!criada) throw notFound('Linha pessoal nao encontrada logo apos a criacao');
+  return criada;
 }
 
 /**
