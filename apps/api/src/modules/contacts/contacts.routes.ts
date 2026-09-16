@@ -70,6 +70,11 @@ const criarSchema = z.object({
   responsavelId: z.string().uuid().nullable().optional(),
 });
 
+const porTelefoneSchema = z.object({
+  telefone: z.string().trim().min(8).max(20),
+  nome: z.string().trim().min(1).max(200),
+});
+
 const atualizarSchema = z
   .object({
     nome: z.string().trim().min(2).max(120).optional(),
@@ -260,6 +265,29 @@ contactsRoutes.post(
       },
     });
     res.status(201).json({ contato, possivelDuplicado: duplicado });
+  }),
+);
+
+/** Busca ou cria contato por telefone (para abrir previa de chat do WhatsApp). */
+contactsRoutes.post(
+  '/por-telefone',
+  validateBody(porTelefoneSchema),
+  asyncHandler(async (req, res) => {
+    const { telefone, nome } = req.body as z.infer<typeof porTelefoneSchema>;
+
+    const existente = await prisma.contact.findFirst({
+      where: { telefone, AND: [await filtroDe(politicaContatos)] },
+    });
+    if (existente) return res.json({ contato: existente });
+
+    const contato = await prisma.contact.create({
+      data: {
+        nome,
+        telefone,
+        canalOrigem: 'WHATSAPP',
+      },
+    });
+    res.status(201).json({ contato });
   }),
 );
 

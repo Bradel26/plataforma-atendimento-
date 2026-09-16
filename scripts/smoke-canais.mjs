@@ -13,7 +13,10 @@
  */
 import { createHmac } from 'node:crypto';
 
-const API = 'http://localhost:3333/api';
+// SMOKE_API permite apontar para uma instancia isolada (ex.: ambiente de smoke
+// com schema/porta proprios) sem mexer no script — mesmo padrao ja usado em
+// smoke-tags.mjs, smoke-tenant.mjs e smoke-visibilidade.mjs.
+const API = process.env.SMOKE_API ?? 'http://localhost:3333/api';
 const APP_SECRET = 'segredo-de-teste-do-app-meta';
 const VERIFY_TOKEN = 'token-de-verificacao-123';
 const TOKEN_FALSO = 'EAAG-token-falso-para-teste-de-erro';
@@ -227,13 +230,96 @@ console.log('     mensagem do cliente preservada:', ok(mensagensBot.some((m) => 
 
 await json(`/bots/${botWhats.corpo.bot.id}`, { method: 'DELETE', headers: admin });
 
-// 11. Canal desativado recusa o webhook
+/*
+ * 11. "Iniciar conversa" a partir da ficha do contato — sem mensagem previa.
+ *
+ * Precisa rodar com o WhatsApp ainda ATIVO (por isso antes do passo que
+ * desativa o canal, mais abaixo). Cria uma linha PESSOAL de WhatsApp para um
+ * agente e um Contato com esse agente como responsavel — de proposito, para
+ * provar que o `responsavelId` do contato NAO decide mais a linha (commit
+ * 9e4062d): quem decide e o SOLICITANTE que clicou em "Iniciar conversa", e
+ * aqui quem chama e o ADMIN, nao o agente dono da linha pessoal. Como o ADMIN
+ * nao tem linha propria, cai na config compartilhada; como essa config tem
+ * fila mas nenhum agente atribuido diretamente, a conversa nasce EM_ESPERA —
+ * e nao ATRIBUIDO ao responsavel do contato, que e o comportamento antigo
+ * (anterior a 9e4062d) que este teste chegou a esperar.
+ */
+const { corpo: agentesResp } = await json('/usuarios?perfil=AGENTE', { headers: admin });
+const agente = agentesResp.usuarios[0];
+
+const { status: statusNumero } = await json('/canais/whatsapp/numeros', {
+  method: 'POST',
+  headers: admin,
+  body: JSON.stringify({
+    donoId: agente.id,
+    nome: `Linha smoke ${EXECUCAO}`,
+    ativo: true,
+    accessToken: TOKEN_FALSO,
+    appSecret: APP_SECRET,
+    verifyToken: VERIFY_TOKEN,
+    phoneNumberId: `999${EXECUCAO}`,
+  }),
+});
+console.log('11. linha pessoal de WhatsApp do agente criada:', ok(statusNumero === 201));
+
+const telefoneContato = `5511${String(Date.now()).slice(-9)}`;
+const { corpo: contatoNovo, status: statusContato } = await json('/contatos', {
+  method: 'POST',
+  headers: admin,
+  body: JSON.stringify({
+    nome: `Contato Iniciar Conversa ${EXECUCAO}`,
+    telefone: telefoneContato,
+    responsavelId: agente.id,
+  }),
+});
+console.log('    contato com responsavel criado:', ok(statusContato === 201));
+
+const r7 = await json('/conversas', {
+  method: 'POST',
+  headers: admin,
+  body: JSON.stringify({ contatoId: contatoNovo.contato.id }),
+});
+const { corpo: detalheNova } = await json(`/conversas/${r7.corpo.conversa?.id}`, { headers: admin });
+// ADMIN e quem chama (o solicitante), nao o agente dono da linha pessoal nem
+// o responsavel do contato: sem linha propria, cai na fila da compartilhada,
+// sem agente atribuido — EM_ESPERA e o resultado correto aqui.
+console.log('    ADMIN sem linha propria: conversa cai na fila da compartilhada, EM_ESPERA:', ok(
+  r7.status === 201 &&
+  detalheNova.conversa?.status === 'EM_ESPERA' &&
+  !detalheNova.conversa?.agente &&
+  detalheNova.conversa?.canal === 'WHATSAPP',
+), `status=${detalheNova.conversa?.status} agente=${detalheNova.conversa?.agente?.id}`);
+
+// Idempotencia: chamar de novo para o MESMO contato devolve a mesma conversa, nao cria outra.
+const r8 = await json('/conversas', {
+  method: 'POST',
+  headers: admin,
+  body: JSON.stringify({ contatoId: contatoNovo.contato.id }),
+});
+console.log('    chamar de novo devolve a MESMA conversa (idempotente):', ok(
+  r8.status === 201 && r8.corpo.conversa?.id === r7.corpo.conversa?.id,
+));
+
+// Contato sem telefone: iniciar conversa por WhatsApp e recusado.
+const { corpo: semTelefone } = await json('/contatos', {
+  method: 'POST',
+  headers: admin,
+  body: JSON.stringify({ nome: `Sem telefone ${EXECUCAO}` }),
+});
+const r9 = await json('/conversas', {
+  method: 'POST',
+  headers: admin,
+  body: JSON.stringify({ contatoId: semTelefone.contato.id }),
+});
+console.log('    contato sem telefone recusado com 400:', ok(r9.status === 400));
+
+// 12. Canal desativado recusa o webhook
 await json('/canais/whatsapp', { method: 'PUT', headers: admin, body: JSON.stringify({ ativo: false }) });
 const r5 = await enviarWebhook('whatsapp', payloadWhatsApp(`wamid.${EXECUCAO}-003`, 'y'));
-console.log('11. canal inativo recusa webhook:', ok(r5.status === 503));
+console.log('12. canal inativo recusa webhook:', ok(r5.status === 503));
 
-// 12. Canal nao suportado
+// 13. Canal nao suportado
 const r6 = await fetch(`${API}/webhooks/telegram?hub.mode=subscribe`);
-console.log('12. canal nao suportado:', ok(r6.status === 404));
+console.log('13. canal nao suportado:', ok(r6.status === 404));
 
 process.exit(0);

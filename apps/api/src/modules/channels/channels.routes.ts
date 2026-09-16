@@ -6,23 +6,34 @@ import { requireAuth, requireRole } from '../../http/middleware/auth';
 import { validateBody } from '../../http/middleware/validate';
 import { param } from '../../http/params';
 import { badRequest, forbidden, notFound } from '../../lib/errors';
+import { prisma } from '../../lib/prisma';
 import { organizacaoAtual } from '../../lib/tenant';
+import { notificarStatusCanal } from '../../realtime/hub';
 import {
   CANAIS_EXTERNOS,
   atualizarNumero,
   criarNumero,
   excluirNumero,
   listarCanais,
+  minhaLinhaWhatsapp,
   obterConfig,
   obterConfigPorId,
   salvarCanal,
   type CanalExterno,
 } from './channels.service';
 import { AVISO_NAO_OFICIAL, modoEfetivo } from './whatsapp.modo';
-import { desconectarPonte, estadoDaPonte, qrDaPonte } from './whatsapp.ponte';
+import { BaileysProvider } from './providers/baileys.provider';
 import { estadoDaIa, estadoDaIaDoNumero, salvarIa, salvarIaDoNumero } from '../bots/ia.service';
 
 export const channelsRoutes = Router();
+
+/**
+ * QR/estado/desconexao passam pelo `WhatsAppProvider` em vez de falar direto
+ * com `whatsapp.ponte.ts` — o primeiro passo para esta rota parar de saber que
+ * o modo nao oficial e "a ponte" (ver whatsapp.provider.ts). O envio de
+ * mensagens ainda nao foi migrado (fica para uma proxima fase).
+ */
+const whatsAppProvider = new BaileysProvider();
 
 channelsRoutes.use(requireAuth);
 
@@ -70,6 +81,39 @@ const camposDoCanal = {
     .optional(),
   ponteSessao: z.string().trim().max(60).nullable().optional(),
 };
+
+/**
+ * Atualiza o estado local para desconectado logo depois que o provider
+ * confirma, reutilizando a mesma escrita e o mesmo evento Socket.IO que o
+ * webhook da ponte usa quando ELA reporta a desconexao por conta propria
+ * (`ponte.routes.ts`) — sem isto a tela ficava mostrando "conectado" ate a
+ * ponte decidir avisar, o que pode nunca acontecer se ela estiver fora do ar.
+ *
+ * So e chamada DEPOIS de `provider.disconnect` ter retornado com sucesso: se
+ * ele lancar, esta funcao nem roda, e o estado local so muda quando a ponte de
+ * fato confirmar depois.
+ */
+async function marcarDesconectadoLocalmente(config: {
+  id: string;
+  ponteSessao: string | null;
+  donoId: string | null;
+}): Promise<void> {
+  await prisma.channelConfig.update({
+    where: { id: config.id },
+    data: { ponteStatus: 'DESCONECTADO', ponteStatusEm: new Date() },
+  });
+
+  notificarStatusCanal(
+    {
+      id: config.id,
+      ponteSessao: config.ponteSessao,
+      status: 'DESCONECTADO',
+      detalhe: null,
+      em: new Date().toISOString(),
+    },
+    { agenteId: config.donoId },
+  );
+}
 
 const naoVazio = { message: 'Informe ao menos um campo' } as const;
 
@@ -159,7 +203,7 @@ channelsRoutes.get(
       });
       return;
     }
-    res.json({ estado: await estadoDaPonte(config), aviso: AVISO_NAO_OFICIAL, caminhoWebhook });
+    res.json({ estado: await whatsAppProvider.getStatus(config), aviso: AVISO_NAO_OFICIAL, caminhoWebhook });
   }),
 );
 
@@ -184,7 +228,7 @@ channelsRoutes.get(
       return;
     }
 
-    res.json(await qrDaPonte(config));
+    res.json(await whatsAppProvider.getQRCode(config));
   }),
 );
 
@@ -204,7 +248,8 @@ channelsRoutes.post(
       throw notFound('O WhatsApp nao esta no modo nao oficial');
     }
 
-    await desconectarPonte(config);
+    await whatsAppProvider.disconnect(config);
+    await marcarDesconectadoLocalmente(config);
     res.json({ ok: true });
   }),
 );
@@ -225,6 +270,20 @@ channelsRoutes.get(
  * trocada, `PUT /numeros/xyz` seria lido como canal "numeros" e cairia no 404
  * de canal invalido.
  */
+/**
+ * Self-service: qualquer usuario logado ve a propria linha, sem precisar de
+ * ADMIN nem de abrir Configuracoes — e o que a tela de Atendimento usa para
+ * oferecer "Conectar WhatsApp". Registrada ANTES de `PUT /numeros/:id` pelo
+ * mesmo motivo: path literal tem que vir antes do `:id` correspondente.
+ */
+channelsRoutes.get(
+  '/numeros/meu',
+  asyncHandler(async (req, res) => {
+    const numero = await minhaLinhaWhatsapp(req.user!.sub);
+    res.json({ numero });
+  }),
+);
+
 channelsRoutes.put(
   '/numeros/:id',
   requireRole('ADMIN'),
@@ -293,7 +352,7 @@ channelsRoutes.get(
       });
       return;
     }
-    res.json({ estado: await estadoDaPonte(config), aviso: AVISO_NAO_OFICIAL, caminhoWebhook });
+    res.json({ estado: await whatsAppProvider.getStatus(config), aviso: AVISO_NAO_OFICIAL, caminhoWebhook });
   }),
 );
 
@@ -320,7 +379,7 @@ channelsRoutes.get(
       res.json({ qr: null, conectado: false, motivo: 'este numero nao esta no modo nao oficial' });
       return;
     }
-    res.json(await qrDaPonte(config));
+    res.json(await whatsAppProvider.getQRCode(config));
   }),
 );
 
@@ -340,7 +399,8 @@ channelsRoutes.post(
     if (config.canal !== 'WHATSAPP' || modoEfetivo(config.modo) !== 'NAO_OFICIAL') {
       throw notFound('Este numero nao esta no modo nao oficial');
     }
-    await desconectarPonte(config);
+    await whatsAppProvider.disconnect(config);
+    await marcarDesconectadoLocalmente(config);
     res.json({ ok: true });
   }),
 );

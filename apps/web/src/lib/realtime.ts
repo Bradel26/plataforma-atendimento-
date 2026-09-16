@@ -8,6 +8,9 @@ export const EVENTOS = {
   agenteStatus: 'agente:status',
   protocoloAtualizado: 'protocolo:atualizado',
   chamadaAtualizada: 'chamada:atualizada',
+  canalStatus: 'canal:status',
+  /** ChatPreview criada ou atualizada (Fase 11.7) -- so chega a quem e dono daquela linha pessoal. */
+  previaAtualizada: 'previa:atualizada',
 } as const;
 
 /**

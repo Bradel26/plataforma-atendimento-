@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Socket } from 'socket.io-client';
 import { api, getAccessToken } from '../../lib/api';
 import { EVENTOS, conectar } from '../../lib/realtime';
-import type { Contadores, ConversaDetalhe, ConversaResumo, ConversaStatus, Mensagem } from '../../lib/types';
+import type { Contadores, ConversaDetalhe, ConversaResumo, Mensagem } from '../../lib/types';
+import { parametrosDaVisao, pertenceALista, type VisaoInbox } from './visao';
 
 type MensagemEvento = { conversaId: string; mensagem: Mensagem };
 
@@ -26,11 +27,25 @@ function paraResumo(c: ConversaDetalhe | ConversaResumo): ConversaResumo {
   return c;
 }
 
+/** Parte da query correspondente a visao ativa — sem o `&` de etiquetas, que `queryTags` ja resolve. */
+function partesDaVisao(visao: VisaoInbox): string {
+  const p = parametrosDaVisao(visao);
+  const partes: string[] = [];
+  if (p.status) partes.push(`status=${p.status}`);
+  if (p.minhas) partes.push('minhas=true');
+  return partes.join('&');
+}
+
 /**
- * Estado do painel de atendimento: lista da aba ativa, contadores e conversa
- * aberta, mantidos em sincronia por WebSocket.
+ * Estado do painel de atendimento: lista da visao ativa (Minhas / Nao
+ * atribuidas / Todas — Fase 11.3), contadores e conversa aberta, mantidos em
+ * sincronia por WebSocket.
+ *
+ * `meuUsuarioId` so serve para decidir se uma conversa que chegou por evento
+ * pertence a visao "Minhas" (ver `pertenceAVisao`) — nunca para filtrar o que
+ * a API devolve, que continua sendo autoridade exclusiva do backend.
  */
-export function useConversas(aba: ConversaStatus, tags: readonly string[] = []) {
+export function useConversas(visao: VisaoInbox, tags: readonly string[] = [], meuUsuarioId: string | null = null) {
   const [conversas, setConversas] = useState<ConversaResumo[]>([]);
   const [contadores, setContadores] = useState<Contadores>(CONTADORES_ZERADOS);
   const [carregando, setCarregando] = useState(true);
@@ -39,8 +54,10 @@ export function useConversas(aba: ConversaStatus, tags: readonly string[] = []) 
   // Estado (nao ref) de proposito: consumidores precisam reinscrever quando a
   // instancia do socket trocar.
   const [socket, setSocket] = useState<Socket | null>(null);
-  const abaRef = useRef(aba);
-  abaRef.current = aba;
+  const visaoRef = useRef(visao);
+  visaoRef.current = visao;
+  const meuUsuarioIdRef = useRef(meuUsuarioId);
+  meuUsuarioIdRef.current = meuUsuarioId;
 
   /*
    * As etiquetas ativas viram uma string, e e ela que entra nas dependencias.
@@ -65,13 +82,13 @@ export function useConversas(aba: ConversaStatus, tags: readonly string[] = []) 
   }, []);
 
   const carregarLista = useCallback(
-    async (status: ConversaStatus) => {
+    async (visaoParaCarregar: VisaoInbox) => {
       setCarregando(true);
       try {
         const { conversas: lista, proximoCursor: proximo } = await api.get<{
           conversas: ConversaResumo[];
           proximoCursor: string | null;
-        }>(`/conversas?status=${status}${queryTags()}`);
+        }>(`/conversas?${partesDaVisao(visaoParaCarregar)}${queryTags()}`);
         setConversas(lista.sort(porAtividade));
         setCursor(proximo);
         setErro(null);
@@ -95,7 +112,7 @@ export function useConversas(aba: ConversaStatus, tags: readonly string[] = []) 
       const { conversas: lista, proximoCursor: proximo } = await api.get<{
         conversas: ConversaResumo[];
         proximoCursor: string | null;
-      }>(`/conversas?status=${abaRef.current}&cursor=${encodeURIComponent(cursor)}${queryTags()}`);
+      }>(`/conversas?${partesDaVisao(visaoRef.current)}&cursor=${encodeURIComponent(cursor)}${queryTags()}`);
       setConversas((atual) => {
         const vistos = new Set(atual.map((c) => c.id));
         return [...atual, ...lista.filter((c) => !vistos.has(c.id))].sort(porAtividade);
@@ -106,31 +123,45 @@ export function useConversas(aba: ConversaStatus, tags: readonly string[] = []) 
     }
   }, [cursor, queryTags]);
 
-  // `chaveTags` nas dependencias, e nao `tags`: ver o comentario na declaracao.
+  // Troca de visao ou de etiqueta: reseta a lista e a paginacao, carregando a
+  // primeira pagina da visao nova — nunca mistura com o que a visao anterior
+  // tinha carregado. `chaveTags` nas dependencias, e nao `tags`: ver o
+  // comentario na declaracao.
   useEffect(() => {
-    void carregarLista(aba);
+    void carregarLista(visao);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aba, chaveTags, carregarLista]);
+  }, [visao, chaveTags, carregarLista]);
 
   useEffect(() => {
     void carregarContadores().catch(() => undefined);
   }, [carregarContadores]);
 
   /**
-   * Insere ou remove a conversa da aba ativa conforme o status dela mudou.
+   * Insere ou remove a conversa da visao ativa conforme ela mudou.
+   *
+   * A visao selecionada (Minhas / Nao atribuidas / Todas) fica estavel aqui:
+   * a funcao so decide se a conversa CABE na visao corrente, nunca troca a
+   * visao em si — uma mensagem nova ou uma conversa nova nao tira o atendente
+   * de "Minhas" de volta para "Todas".
    *
    * O filtro de etiqueta entra aqui tambem, e nao so na consulta: um evento de
    * WebSocket chega para todas as conversas da fila, e sem esta checagem uma
    * conversa sem a etiqueta filtrada apareceria na lista filtrada — a tela
    * mostrando o oposto do que o filtro pede. Vale nos dois sentidos: retirar a
    * etiqueta de uma conversa a faz sair da lista na hora.
+   *
+   * Arquivada sai pelo mesmo motivo (Fase 11.9-B): a consulta inicial ja
+   * exclui arquivadas (`GET /conversas` sem `arquivadas=true`), mas o evento
+   * de socket carrega a conversa inteira sem saber qual filtro a tela pediu —
+   * sem esta checagem, arquivar uma conversa a deixaria visivel ate a proxima
+   * consulta em vez de sumir na hora.
    */
   const aplicarEvento = useCallback(
     (detalhe: ConversaDetalhe) => {
       const resumo = paraResumo(detalhe);
       setConversas((atual) => {
         const semEla = atual.filter((c) => c.id !== resumo.id);
-        if (resumo.status !== abaRef.current) return semEla;
+        if (!pertenceALista(resumo, visaoRef.current, meuUsuarioIdRef.current)) return semEla;
         const cabeNoFiltro = tagsRef.current.every((t) => resumo.tags.includes(t));
         if (!cabeNoFiltro) return semEla;
         return [...semEla, resumo].sort(porAtividade);
@@ -189,7 +220,7 @@ export function useConversas(aba: ConversaStatus, tags: readonly string[] = []) 
       erro,
       temMais: cursor !== null,
       carregarMais,
-      recarregar: () => carregarLista(abaRef.current),
+      recarregar: () => carregarLista(visaoRef.current),
       recarregarContadores: carregarContadores,
       aplicarEvento,
       inscreverMensagens,

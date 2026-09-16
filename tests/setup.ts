@@ -15,3 +15,10 @@ process.env.SECRETS_KEY = '11'.repeat(32);
 process.env.STORAGE_DIR = './storage-teste';
 // Front compilado, para o teste do modo em que a propria API serve o site.
 process.env.STATIC_DIR = 'apps/web/dist';
+
+/** Variaveis da ponte (apps/ponte/src/config.ts) — mesma logica: import falha sem elas. */
+process.env.PONTE_TOKEN ??= 'token-de-teste-para-unidade';
+process.env.PONTE_SEGREDO ??= 'segredo-de-teste-para-unidade';
+process.env.PONTE_PLATAFORMA_URL ??= 'http://localhost:3000';
+process.env.PONTE_ORGANIZACAO_ID ??= 'org-de-teste';
+process.env.PONTE_CIFRA_CHAVE ??= '22'.repeat(32);

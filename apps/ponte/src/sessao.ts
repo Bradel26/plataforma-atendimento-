@@ -1,17 +1,17 @@
-import { mkdir, rm } from 'node:fs/promises';
-import { join } from 'node:path';
 import {
   Browsers,
   DisconnectReason,
   fetchLatestBaileysVersion,
   makeWASocket,
-  useMultiFileAuthState,
   type AnyMessageContent,
   type WASocket,
 } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import { toDataURL } from 'qrcode';
+import { criarAuthStatePersistido } from './autenticacaoPostgres.js';
+import { bancoDeSessaoPg } from './banco.js';
 import { config } from './config.js';
+import { extrair } from './recebida.js';
 
 /**
  * A sessao do WhatsApp Web: o unico lugar do sistema que fala com o WhatsApp.
@@ -56,9 +56,25 @@ function nomeValido(nome: string) {
   return /^[a-zA-Z0-9_-]{1,60}$/.test(nome);
 }
 
-/** O numero em digitos vira o endereco que o WhatsApp entende. */
+/**
+ * Jid completo de quem ja mandou mensagem nesta sessao, por numero em digitos.
+ *
+ * O WhatsApp passou a endereçar parte dos contatos por "LID" (`@lid`, opaco,
+ * por privacidade) em vez do numero de telefone (`@s.whatsapp.net`). Sem isto,
+ * responder um desses contatos reconstruiria "<digitos>@s.whatsapp.net" — um
+ * endereco que nao existe: o envio nao da erro nenhum (o WhatsApp aceita
+ * qualquer jid bem formado), mas a mensagem nunca chega a lugar nenhum.
+ */
+const jidOriginal = new Map<string, string>();
+
+/** Chamado ao receber uma mensagem, para a resposta poder usar o MESMO jid. */
+export function lembrarJid(numero: string, jidCompleto: string) {
+  jidOriginal.set(numero, jidCompleto);
+}
+
+/** O jid de destino: o original lembrado, ou o formato padrao de telefone. */
 export function jid(numero: string) {
-  return numero + '@s.whatsapp.net';
+  return jidOriginal.get(numero) ?? numero + '@s.whatsapp.net';
 }
 
 /** So os digitos de um jid, sem sufixo nem id de aparelho. */
@@ -69,8 +85,50 @@ export function numeroDoJid(valor: string | null | undefined): string | null {
   return digitos.length >= 10 ? digitos : null;
 }
 
+/** So os campos do `Contact` do Baileys que a importacao usa. */
+export type ContatoBaileys = { id: string; name?: string; notify?: string };
+
+/**
+ * Decide se um contato bruto do Baileys entra na importacao, e com qual nome.
+ *
+ * So contato com numero de telefone de verdade (`@s.whatsapp.net`) entra: um
+ * `@lid` e um endereco opaco de privacidade, sem numero por tras — mesma
+ * limitacao ja documentada em `numeroDoJid` (ver `lembrarJid`/`jid` acima).
+ * Nome preferido e o que o vendedor salvou no celular; na falta dele, o que a
+ * propria pessoa definiu no WhatsApp; na falta dos dois, o proprio numero.
+ */
+export function contatoValido(c: ContatoBaileys): { numero: string; nome: string } | null {
+  if (!c.id.endsWith('@s.whatsapp.net')) return null;
+
+  const numero = numeroDoJid(c.id);
+  if (!numero) return null;
+
+  return { numero, nome: c.name ?? c.notify ?? numero };
+}
+
+/** So os campos de `Chat` do Baileys que a sincronizacao de previa usa. */
+export type ChatBaileysBruto = {
+  id: string;
+  name?: string | null;
+  unreadCount?: number | null;
+};
+
+/**
+ * Decide se um chat bruto do Baileys entra no espelho de previa, e com que
+ * nome/contador. Mesma regra de `contatoValido`: so numero de telefone de
+ * verdade entra -- grupo (`@g.us`), broadcast e `@lid` ficam de fora.
+ */
+export function chatValido(c: ChatBaileysBruto): { numero: string; nome: string; naoLidas: number } | null {
+  if (!c.id.endsWith('@s.whatsapp.net')) return null;
+
+  const numero = numeroDoJid(c.id);
+  if (!numero) return null;
+
+  return { numero, nome: c.name ?? numero, naoLidas: c.unreadCount ?? 0 };
+}
+
 async function limparCredenciais(nome: string) {
-  await rm(join(config.dados, nome), { recursive: true, force: true });
+  await bancoDeSessaoPg.apagar(nome);
 }
 
 /**
@@ -85,11 +143,51 @@ export function quandoReceber(handler: (sessao: Sessao, msg: unknown) => void) {
   aoReceber = handler;
 }
 
-async function conectar(sessao: Sessao) {
-  const pasta = join(config.dados, sessao.nome);
-  await mkdir(pasta, { recursive: true });
+/**
+ * Quem avisa a plataforma que a sessao caiu ou voltou. Mesma tecnica de
+ * `aoReceber`: hook injetavel, para nao criar dependencia circular com
+ * `plataforma.ts` e para o teste conseguir observar sem rede.
+ */
+let aoMudarStatus: ((sessao: Sessao) => void) | null = null;
 
-  const { state, saveCreds } = await useMultiFileAuthState(pasta);
+export function quandoMudarStatus(handler: (sessao: Sessao) => void) {
+  aoMudarStatus = handler;
+}
+
+/**
+ * Quem recebe os contatos importados do celular. Mesma tecnica de `aoReceber`
+ * e `aoMudarStatus`: hook injetavel, para nao acoplar a sessao a plataforma e
+ * dar para testar sem rede.
+ */
+let aoReceberContatos: ((sessao: Sessao, contatos: { numero: string; nome: string }[]) => void) | null = null;
+
+export function quandoReceberContatos(
+  handler: (sessao: Sessao, contatos: { numero: string; nome: string }[]) => void,
+) {
+  aoReceberContatos = handler;
+}
+
+export type ChatBruto = {
+  numero: string;
+  nome: string;
+  naoLidas: number;
+  ultimaMensagemEm: number;
+  mensagens: { autor: 'CLIENTE' | 'AGENTE'; texto: string; criadoEm: number }[];
+};
+
+/**
+ * Quem recebe o espelho de chats sincronizado do celular. Mesma tecnica de
+ * `aoReceberContatos`: hook injetavel, para a sessao nao conhecer a
+ * plataforma.
+ */
+let aoReceberChats: ((sessao: Sessao, chats: ChatBruto[]) => void) | null = null;
+
+export function quandoReceberChats(handler: (sessao: Sessao, chats: ChatBruto[]) => void) {
+  aoReceberChats = handler;
+}
+
+async function conectar(sessao: Sessao) {
+  const { state, saveCreds } = await criarAuthStatePersistido(sessao.nome, bancoDeSessaoPg);
 
   /*
    * A versao do WhatsApp Web vem de FORA, e nao da constante embutida no
@@ -150,6 +248,7 @@ async function conectar(sessao: Sessao) {
       sessao.qr = null;
       sessao.numero = numeroDoJid(sock.user?.id);
       console.log('[ponte] sessao "' + sessao.nome + '" conectada' + (sessao.numero ? ' como ' + sessao.numero : ''));
+      aoMudarStatus?.(sessao);
     }
 
     if (u.connection === 'close') {
@@ -163,6 +262,7 @@ async function conectar(sessao: Sessao) {
       sessao.detalhe = deslogado
         ? 'o aparelho desconectou esta sessao — escaneie o QR de novo'
         : 'conexao caiu (' + (motivo ?? 'sem codigo') + '); tentando voltar';
+      aoMudarStatus?.(sessao);
 
       if (deslogado) {
         /*
@@ -184,6 +284,61 @@ async function conectar(sessao: Sessao) {
     // reentregariam conversas antigas como se tivessem acabado de chegar.
     if (evento.type !== 'notify') return;
     for (const msg of evento.messages) aoReceber?.(sessao, msg);
+  });
+
+  sock.ev.on('contacts.upsert', (lista) => {
+    // O Baileys dispara este evento varias vezes em pedacos (agenda inteira ao
+    // conectar, depois atualizacoes incrementais) — filtra e transforma aqui
+    // ANTES do hook, para quem recebe so lidar com contato ja valido.
+    const validos = lista.map(contatoValido).filter((c): c is { numero: string; nome: string } => c !== null);
+    if (validos.length) aoReceberContatos?.(sessao, validos);
+  });
+
+  /*
+   * Carga historica completa -- dispara uma vez por conexao nova (ou quando o
+   * historico do celular mudou desde a ultima vez). `messages` vem achatado
+   * (todas as mensagens de todos os chats juntas), entao agrupa por
+   * remetente antes de montar o lote por chat.
+   */
+  sock.ev.on('messaging-history.set', ({ chats, messages }) => {
+    const porNumero = new Map<string, { autor: 'CLIENTE' | 'AGENTE'; texto: string; criadoEm: number }[]>();
+    for (const msg of messages) {
+      const remetente = msg.key?.remoteJid ?? '';
+      if (remetente.endsWith('@g.us') || remetente === 'status@broadcast' || remetente.endsWith('@broadcast')) continue;
+      const numero = numeroDoJid(remetente);
+      if (!numero) continue;
+
+      const extraido = extrair(msg);
+      if (!extraido || !extraido.texto) continue;
+
+      const lista = porNumero.get(numero) ?? [];
+      lista.push({
+        autor: msg.key?.fromMe ? 'AGENTE' : 'CLIENTE',
+        texto: extraido.texto,
+        criadoEm: Number(msg.messageTimestamp ?? 0) * 1000,
+      });
+      porNumero.set(numero, lista);
+    }
+
+    const validos: ChatBruto[] = [];
+    for (const chat of chats) {
+      const info = chatValido(chat as ChatBaileysBruto);
+      if (!info) continue;
+      const mensagens = (porNumero.get(info.numero) ?? []).sort((a, b) => a.criadoEm - b.criadoEm);
+      const ultima = mensagens[mensagens.length - 1];
+      if (!ultima) continue; // chat sem nenhuma mensagem de texto reconhecida: nao ha previa util a mostrar
+      validos.push({ ...info, ultimaMensagemEm: ultima.criadoEm, mensagens });
+    }
+    if (validos.length) aoReceberChats?.(sessao, validos);
+  });
+
+  /** Atualizacao incremental depois da carga inicial: nova mensagem, contador de nao lidas mudou. */
+  sock.ev.on('chats.upsert', (lista) => {
+    const validos = lista
+      .map((c) => chatValido(c as ChatBaileysBruto))
+      .filter((c): c is { numero: string; nome: string; naoLidas: number } => c !== null)
+      .map((info) => ({ ...info, ultimaMensagemEm: Date.now(), mensagens: [] as ChatBruto['mensagens'] }));
+    if (validos.length) aoReceberChats?.(sessao, validos);
   });
 }
 

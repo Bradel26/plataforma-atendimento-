@@ -9,19 +9,24 @@ import { validateBody, validateQuery } from '../../http/middleware/validate';
 import {
   definirTagsSchema,
   enviarMensagemSchema,
+  iniciarConversaSchema,
   listarConversasSchema,
   listarMensagensSchema,
   transferirSchema,
 } from './conversations.schemas';
 import {
+  arquivarConversa,
   assumirConversa,
   contarPorStatus,
   definirTags,
+  desarquivarConversa,
   enviarArquivo,
   enviarMensagem,
   finalizarConversa,
+  iniciarConversa,
   listarConversas,
   listarMensagens,
+  listarPrevias,
   marcarComoLida,
   obterConversa,
   transferirConversa,
@@ -49,11 +54,35 @@ conversationsRoutes.get(
   }),
 );
 
+/**
+ * Inicia uma conversa de WhatsApp a partir de um Contato do CRM — botao
+ * "Iniciar conversa" na ficha, para o contato que nunca escreveu primeiro.
+ * Idempotente: chamar de novo para o mesmo contato devolve a mesma conversa.
+ */
+conversationsRoutes.post(
+  '/',
+  validateBody(iniciarConversaSchema),
+  asyncHandler(async (req, res) => {
+    res.status(201).json({ conversa: await iniciarConversa(quem(req), req.body.contatoId) });
+  }),
+);
+
 conversationsRoutes.get(
   '/:id/mensagens',
   validateQuery(listarMensagensSchema),
   asyncHandler(async (req, res) => {
     res.json(await listarMensagens(quem(req), param(req, 'id'), res.locals.query));
+  }),
+);
+
+/**
+ * Previas de chat da linha pessoal do proprio solicitante — antes de
+ * `/:id` para nao ser engolida por ela.
+ */
+conversationsRoutes.get(
+  '/previas',
+  asyncHandler(async (req, res) => {
+    res.json(await listarPrevias(quem(req)));
   }),
 );
 
@@ -123,6 +152,25 @@ conversationsRoutes.post(
   '/:id/ler',
   asyncHandler(async (req, res) => {
     res.json({ conversa: await marcarComoLida(quem(req), param(req, 'id')) });
+  }),
+);
+
+/**
+ * Arquivar/desarquivar (Fase 11.9-B) — sai/volta das listas padrao sem mudar
+ * status, agente, fila ou historico. Funciona em qualquer status, inclusive
+ * `FINALIZADO`: arquivamento e ortogonal ao ciclo de vida do atendimento.
+ */
+conversationsRoutes.post(
+  '/:id/arquivar',
+  asyncHandler(async (req, res) => {
+    res.json({ conversa: await arquivarConversa(quem(req), param(req, 'id')) });
+  }),
+);
+
+conversationsRoutes.post(
+  '/:id/desarquivar',
+  asyncHandler(async (req, res) => {
+    res.json({ conversa: await desarquivarConversa(quem(req), param(req, 'id')) });
   }),
 );
 

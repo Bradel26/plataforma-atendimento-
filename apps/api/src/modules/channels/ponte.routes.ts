@@ -2,11 +2,13 @@ import { Router, raw } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../../http/async-handler';
 import { badRequest } from '../../lib/errors';
-import { prismaSemIsolamento } from '../../lib/prisma';
+import { prisma, prismaSemIsolamento } from '../../lib/prisma';
+import { notificarStatusCanal } from '../../realtime/hub';
 import { comOrganizacao, semOrganizacao } from '../../lib/tenant';
-import { assinaturaValida, configDoDestino } from './channels.service';
+import { assinaturaValida, configDoDestino, importarContatos } from './channels.service';
 import { registrarMensagemEntrante } from './inbound.service';
 import { modoEfetivo, numeroNormalizado } from './whatsapp.modo';
+import { salvarPrevia } from './chat-previews.service';
 
 /**
  * Entrada do WhatsApp nao oficial: a ponte posta aqui o que o cliente mandou.
@@ -200,6 +202,341 @@ ponteRoutes.post(
       // 200 tambem para reentrega: `duplicada` diz que nada foi criado, e a ponte
       // pode parar de tentar.
       res.json({ ok: true, duplicada: 'duplicada' in resultado ? resultado.duplicada : false });
+    });
+  }),
+);
+
+const statusSchema = z.object({
+  /** Mesmo valor de `ChannelConfig.ponteSessao` — identifica qual linha mudou. */
+  sessao: z.string().trim().min(1).max(60),
+  status: z.enum(['CONECTADO', 'DESCONECTADO']),
+  detalhe: z.string().max(500).nullable().optional(),
+});
+
+/**
+ * Aviso de conexao/queda de uma sessao da ponte (WhatsApp nao oficial).
+ *
+ * Mesmo padrao da rota `/whatsapp/:organizacaoId` acima: corpo cru + assinatura
+ * HMAC com o `ponteSegredo` da linha, porque este endereco tambem e publico e
+ * so a assinatura separa "aviso de verdade" de "qualquer um postando aqui".
+ *
+ * Existe porque, antes, ninguem no CRM sabia que o WhatsApp pessoal de um
+ * vendedor tinha caido ate ele reclamar que parou de receber mensagem.
+ */
+ponteRoutes.post(
+  '/status/:organizacaoId',
+  raw({ type: '*/*', limit: '2mb' }),
+  asyncHandler(async (req, res) => {
+    const organizacaoId = req.params.organizacaoId!;
+    const corpoBruto = Buffer.isBuffer(req.body) ? req.body : Buffer.from('');
+
+    if (!(await organizacaoExiste(organizacaoId))) {
+      res.status(404).json({ error: { code: 'NAO_ENCONTRADO', message: 'Organizacao nao encontrada' } });
+      return;
+    }
+
+    await comOrganizacao(organizacaoId, async () => {
+      let corpoJson: unknown;
+      try {
+        corpoJson = JSON.parse(corpoBruto.toString('utf8'));
+      } catch (erro) {
+        throw badRequest(
+          `Corpo invalido: ${erro instanceof Error ? erro.message.slice(0, 200) : 'nao e JSON'}`,
+        );
+      }
+
+      const sessaoBruta: string | null =
+        typeof corpoJson === 'object' &&
+        corpoJson !== null &&
+        'sessao' in corpoJson &&
+        typeof (corpoJson as { sessao?: unknown }).sessao === 'string' &&
+        (corpoJson as { sessao: string }).sessao.trim().length > 0
+          ? (corpoJson as { sessao: string }).sessao.trim()
+          : null;
+
+      const config = await configDoDestino('WHATSAPP', sessaoBruta);
+
+      if (!config?.ativo || modoEfetivo(config.modo) !== 'NAO_OFICIAL') {
+        res.status(503).json({
+          error: {
+            code: 'CANAL_INDISPONIVEL',
+            message: 'O WhatsApp desta organizacao nao esta no modo nao oficial',
+          },
+        });
+        return;
+      }
+
+      if (!config.ponteSegredo) {
+        res.status(503).json({
+          error: {
+            code: 'PONTE_SEM_SEGREDO',
+            message: 'Configure o segredo da ponte antes de receber avisos de status',
+          },
+        });
+        return;
+      }
+
+      const assinatura = req.header('x-ponte-assinatura') ?? req.header('x-hub-signature-256');
+      if (!assinaturaValida(corpoBruto, assinatura, config.ponteSegredo)) {
+        res
+          .status(401)
+          .json({ error: { code: 'ASSINATURA_INVALIDA', message: 'Assinatura da ponte invalida' } });
+        return;
+      }
+
+      let corpo: z.infer<typeof statusSchema>;
+      try {
+        corpo = statusSchema.parse(corpoJson);
+      } catch (erro) {
+        throw badRequest(
+          `Corpo invalido: ${erro instanceof Error ? erro.message.slice(0, 200) : 'nao e JSON'}`,
+        );
+      }
+
+      await prisma.channelConfig.update({
+        where: { id: config.id },
+        data: { ponteStatus: corpo.status, ponteStatusEm: new Date() },
+      });
+
+      notificarStatusCanal(
+        {
+          id: config.id,
+          ponteSessao: config.ponteSessao,
+          status: corpo.status,
+          detalhe: corpo.detalhe ?? null,
+          em: new Date().toISOString(),
+        },
+        { agenteId: config.donoId },
+      );
+
+      res.json({ ok: true });
+    });
+  }),
+);
+
+const contatosSchema = z.object({
+  /** Mesmo valor de `ChannelConfig.ponteSessao` — identifica a linha pessoal dona dos contatos. */
+  sessao: z.string().trim().min(1).max(60),
+  /**
+   * O `.max(200)` reforca do lado do servidor o mesmo limite de lote que
+   * `apps/ponte/src/plataforma.ts` usa para quebrar o envio — nenhuma
+   * requisicao legitima chega com mais que isso.
+   */
+  contatos: z
+    .array(
+      z.object({
+        numero: z.string().trim().min(8).max(20),
+        nome: z.string().trim().min(1).max(200),
+      }),
+    )
+    .max(200),
+});
+
+/**
+ * Importa contatos do celular (nome + telefone) da agenda do vendedor, ao
+ * conectar a ponte de WhatsApp nao oficial.
+ *
+ * Mesmo padrao de seguranca das rotas acima: corpo cru + assinatura HMAC com o
+ * `ponteSegredo` da linha. So CRIA cadastro de `Contact` que ainda nao existe
+ * (mesmo telefone) — nunca sobrescreve, o que torna a chamada segura de repetir
+ * a cada reconexao.
+ */
+ponteRoutes.post(
+  '/contatos/:organizacaoId',
+  raw({ type: '*/*', limit: '2mb' }),
+  asyncHandler(async (req, res) => {
+    const organizacaoId = req.params.organizacaoId!;
+    const corpoBruto = Buffer.isBuffer(req.body) ? req.body : Buffer.from('');
+
+    if (!(await organizacaoExiste(organizacaoId))) {
+      res.status(404).json({ error: { code: 'NAO_ENCONTRADO', message: 'Organizacao nao encontrada' } });
+      return;
+    }
+
+    await comOrganizacao(organizacaoId, async () => {
+      let corpoJson: unknown;
+      try {
+        corpoJson = JSON.parse(corpoBruto.toString('utf8'));
+      } catch (erro) {
+        throw badRequest(
+          `Corpo invalido: ${erro instanceof Error ? erro.message.slice(0, 200) : 'nao e JSON'}`,
+        );
+      }
+
+      const sessaoBruta: string | null =
+        typeof corpoJson === 'object' &&
+        corpoJson !== null &&
+        'sessao' in corpoJson &&
+        typeof (corpoJson as { sessao?: unknown }).sessao === 'string' &&
+        (corpoJson as { sessao: string }).sessao.trim().length > 0
+          ? (corpoJson as { sessao: string }).sessao.trim()
+          : null;
+
+      const config = await configDoDestino('WHATSAPP', sessaoBruta);
+
+      if (!config?.ativo || modoEfetivo(config.modo) !== 'NAO_OFICIAL') {
+        res.status(503).json({
+          error: {
+            code: 'CANAL_INDISPONIVEL',
+            message: 'O WhatsApp desta organizacao nao esta no modo nao oficial',
+          },
+        });
+        return;
+      }
+
+      if (!config.ponteSegredo) {
+        res.status(503).json({
+          error: {
+            code: 'PONTE_SEM_SEGREDO',
+            message: 'Configure o segredo da ponte antes de receber contatos',
+          },
+        });
+        return;
+      }
+
+      const assinatura = req.header('x-ponte-assinatura') ?? req.header('x-hub-signature-256');
+      if (!assinaturaValida(corpoBruto, assinatura, config.ponteSegredo)) {
+        res
+          .status(401)
+          .json({ error: { code: 'ASSINATURA_INVALIDA', message: 'Assinatura da ponte invalida' } });
+        return;
+      }
+
+      let corpo: z.infer<typeof contatosSchema>;
+      try {
+        corpo = contatosSchema.parse(corpoJson);
+      } catch (erro) {
+        throw badRequest(
+          `Corpo invalido: ${erro instanceof Error ? erro.message.slice(0, 200) : 'nao e JSON'}`,
+        );
+      }
+
+      const criados = await importarContatos(organizacaoId, config.donoId, corpo.contatos);
+
+      res.json({ ok: true, criados });
+    });
+  }),
+);
+
+const chatsSchema = z.object({
+  /** Mesmo valor de `ChannelConfig.ponteSessao` -- identifica a linha pessoal dona dos chats. */
+  sessao: z.string().trim().min(1).max(60),
+  chats: z
+    .array(
+      z.object({
+        numero: z.string().trim().min(8).max(20),
+        nome: z.string().trim().min(1).max(200),
+        ultimaMensagem: z.string().max(4096),
+        ultimaMensagemEm: z.string().datetime(),
+        naoLidas: z.number().int().min(0).max(999_999),
+        mensagens: z
+          .array(
+            z.object({
+              autor: z.enum(['CLIENTE', 'AGENTE']),
+              texto: z.string().max(4096),
+              criadoEm: z.string().datetime(),
+            }),
+          )
+          .max(30),
+      }),
+    )
+    .max(200),
+});
+
+/**
+ * Sincroniza o espelho de chats do WhatsApp pessoal de um vendedor -- carga
+ * inicial (`messaging-history.set`) e atualizacoes incrementais
+ * (`chats.upsert`/`chats.update`) do lado da ponte.
+ *
+ * Mesmo padrao de seguranca das rotas acima: corpo cru + assinatura HMAC com o
+ * `ponteSegredo` da linha. So se aplica a linha PESSOAL (`donoId` preenchido)
+ * -- sem dono, o lote e descartado em silencio (204), porque a linha
+ * compartilhada nao tem um celular unico para espelhar.
+ */
+ponteRoutes.post(
+  '/chats/:organizacaoId',
+  raw({ type: '*/*', limit: '4mb' }),
+  asyncHandler(async (req, res) => {
+    const organizacaoId = req.params.organizacaoId!;
+    const corpoBruto = Buffer.isBuffer(req.body) ? req.body : Buffer.from('');
+
+    if (!(await organizacaoExiste(organizacaoId))) {
+      res.status(404).json({ error: { code: 'NAO_ENCONTRADO', message: 'Organizacao nao encontrada' } });
+      return;
+    }
+
+    await comOrganizacao(organizacaoId, async () => {
+      let corpoJson: unknown;
+      try {
+        corpoJson = JSON.parse(corpoBruto.toString('utf8'));
+      } catch (erro) {
+        throw badRequest(
+          `Corpo invalido: ${erro instanceof Error ? erro.message.slice(0, 200) : 'nao e JSON'}`,
+        );
+      }
+
+      const sessaoBruta: string | null =
+        typeof corpoJson === 'object' &&
+        corpoJson !== null &&
+        'sessao' in corpoJson &&
+        typeof (corpoJson as { sessao?: unknown }).sessao === 'string' &&
+        (corpoJson as { sessao: string }).sessao.trim().length > 0
+          ? (corpoJson as { sessao: string }).sessao.trim()
+          : null;
+
+      const config = await configDoDestino('WHATSAPP', sessaoBruta);
+
+      if (!config?.ativo || modoEfetivo(config.modo) !== 'NAO_OFICIAL') {
+        res.status(503).json({
+          error: { code: 'CANAL_INDISPONIVEL', message: 'O WhatsApp desta organizacao nao esta no modo nao oficial' },
+        });
+        return;
+      }
+
+      if (!config.ponteSegredo) {
+        res.status(503).json({
+          error: { code: 'PONTE_SEM_SEGREDO', message: 'Configure o segredo da ponte antes de receber chats' },
+        });
+        return;
+      }
+
+      const assinatura = req.header('x-ponte-assinatura') ?? req.header('x-hub-signature-256');
+      if (!assinaturaValida(corpoBruto, assinatura, config.ponteSegredo)) {
+        res.status(401).json({ error: { code: 'ASSINATURA_INVALIDA', message: 'Assinatura da ponte invalida' } });
+        return;
+      }
+
+      // Linha compartilhada: nao ha dono de celular para espelhar. Descarta em
+      // silencio -- 4xx aqui so faria a ponte logar erro por um caso esperado.
+      if (!config.donoId) {
+        res.status(204).end();
+        return;
+      }
+
+      let corpo: z.infer<typeof chatsSchema>;
+      try {
+        corpo = chatsSchema.parse(corpoJson);
+      } catch (erro) {
+        throw badRequest(
+          `Corpo invalido: ${erro instanceof Error ? erro.message.slice(0, 200) : 'nao e JSON'}`,
+        );
+      }
+
+      for (const chat of corpo.chats) {
+        await salvarPrevia({
+          canalConfigId: config.id,
+          organizacaoId,
+          donoId: config.donoId,
+          numero: chat.numero,
+          nome: chat.nome,
+          ultimaMensagem: chat.ultimaMensagem,
+          ultimaMensagemEm: new Date(chat.ultimaMensagemEm),
+          naoLidas: chat.naoLidas,
+          mensagens: chat.mensagens,
+        });
+      }
+
+      res.json({ ok: true, sincronizados: corpo.chats.length });
     });
   }),
 );

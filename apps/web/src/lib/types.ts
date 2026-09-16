@@ -167,6 +167,8 @@ type ConversaBase = {
    */
   tags: string[];
   naoLidas: number;
+  /** Fora das listas padrao (Minhas/Nao atribuidas/Todas) e dos contadores — ortogonal a `status` (Fase 11.9). */
+  arquivada: boolean;
   criadoEm: string;
   atribuidoEm: string | null;
   finalizadoEm: string | null;
@@ -183,6 +185,15 @@ export type ConversaDetalhe = ConversaBase & {
   /** O detalhe traz as ultimas 50; o resto vem por /conversas/:id/mensagens. */
   temHistoricoAnterior?: boolean;
   cursorAnterior?: string | null;
+};
+
+export type Previa = {
+  id: string;
+  numero: string;
+  nome: string;
+  ultimaMensagem: string;
+  ultimaMensagemEm: string;
+  naoLidas: number;
 };
 
 export type Contadores = Record<ConversaStatus, number>;
@@ -1145,6 +1156,7 @@ export type FichaContato = {
   contato: Contato & { conta: { id: string; nome: string } | null };
   indicadores: IndicadoresFicha;
   atividadesAbertas: Atividade[];
+  temPreviaWhatsapp: boolean;
 };
 
 /* ── Ponte com o motor de IA externo ──────────────────────────────────── */

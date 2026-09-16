@@ -38,6 +38,12 @@ export const config = {
   /** Para quem entregar a mensagem recebida. Vem da tela de Canais. */
   organizacaoId: obrigatorio('PONTE_ORGANIZACAO_ID'),
 
+  /** Chave de cifra (hex, 32 bytes) das credenciais de sessao persistidas no Postgres. */
+  cifraChave: obrigatorio('PONTE_CIFRA_CHAVE'),
+
+  /** Postgres onde a sessao do Baileys fica persistida (o mesmo banco da plataforma). */
+  bancoUrl: obrigatorio('DATABASE_URL'),
+
   /**
    * Pasta das credenciais de sessao.
    *

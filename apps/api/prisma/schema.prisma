@@ -357,6 +357,12 @@ model Conversation {
   naoLidas         Int       @default(0) @map("nao_lidas")
   /// Identificador do interlocutor no canal externo (wa_id, PSID, IGSID).
   enderecoExterno  String?   @map("endereco_externo")
+  /// Fora da lista padrao (Minhas/Nao atribuidas/Todas), sem mudar status nem
+  /// historico — ortogonal a `status` de proposito (ver Fase 11.9-A): uma
+  /// conversa arquivada pode estar em qualquer status, inclusive FINALIZADO.
+  /// Mensagem nova desarquiva automaticamente (ver `inbound.service.ts`) —
+  /// nunca fica presa arquivada com mensagem do cliente sem ninguem ver.
+  arquivada        Boolean   @default(false)
 
   /// Etiquetas de assunto, normalizadas por `lib/tags.ts` e compartilhando o
   /// vocabulario com contato e conta.
@@ -1564,6 +1570,10 @@ model ChannelConfig {
   ponteSegredo String? @map("ponte_segredo")
   /// Nome da sessao/instancia na ponte, quando ela hospeda mais de um numero.
   ponteSessao  String? @map("ponte_sessao")
+  /// Ultimo status de conexao que a ponte reportou para esta linha (CONECTADO/DESCONECTADO). Nulo fora do modo NAO_OFICIAL ou antes do primeiro aviso.
+  ponteStatus   String?   @map("ponte_status")
+  /// Quando `ponteStatus` mudou pela ultima vez.
+  ponteStatusEm DateTime? @map("ponte_status_em")
 
   /// Fila que recebe as conversas deste canal.
   filaId String? @map("fila_id")
@@ -1595,6 +1605,7 @@ model ChannelConfig {
   dono        User?          @relation(fields: [donoId], references: [id], onDelete: SetNull)
   organizacao Organizacao    @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
   conversas   Conversation[]
+  previasChat ChatPreview[]
 
   /**
    * Antes, um canal de cada tipo POR ORGANIZACAO (`@@unique([organizacaoId,
@@ -1618,8 +1629,64 @@ model ChannelConfig {
   @@unique([canal, phoneNumberId])
   @@unique([canal, pageId])
   @@unique([canal, igUserId])
+  /**
+   * `ponteSessao` e o mesmo tipo de identificador global que `phoneNumberId`
+   * acima, so que para o modo nao oficial (Fase 12.1) — nao por organizacao,
+   * pelo mesmo motivo: `apps/ponte/src/banco.ts` grava as credenciais Baileys
+   * cifradas numa tabela (`ponte_sessoes_auth`) COMPARTILHADA entre todas as
+   * organizacoes, chaveada so pelo nome da sessao (sem `organizacaoId`), com
+   * `ON CONFLICT (sessao) DO UPDATE`. Se duas organizacoes pudessem escolher
+   * o mesmo `ponteSessao`, a segunda a conectar sobrescreveria a sessao
+   * Baileys da primeira nessa tabela. `NULL` (linha sem sessao propria, ou
+   * canal que nao usa) nao entra nesta unicidade — indice unico do Postgres
+   * permite varios NULL.
+   */
+  @@unique([canal, ponteSessao])
   @@index([organizacaoId])
   @@map("canais_config")
+}
+
+/// Espelho do WhatsApp pessoal de um vendedor: um chat que existe no celular
+/// dele mas ainda nao virou `Conversation` formal na plataforma. So-leitura
+/// ate o vendedor (ou o cliente) mandar a primeira mensagem de verdade -- ai
+/// vira `Conversation` e esta linha e apagada (ver `promoverPrevia`).
+model ChatPreview {
+  id            String @id @default(uuid())
+  organizacaoId String @default("") @map("organizacao_id")
+  canalConfigId String @map("canal_config_id")
+  numero        String
+  nome          String
+
+  ultimaMensagem   String   @map("ultima_mensagem")
+  ultimaMensagemEm DateTime @map("ultima_mensagem_em")
+  naoLidas         Int      @default(0) @map("nao_lidas")
+
+  /// Cache das ultimas ~30 mensagens (texto/resumo, sem midia), mais novo por
+  /// ultimo -- formato `{ autor: 'CLIENTE'|'AGENTE', texto, criadoEm }[]`.
+  mensagens Json @default("[]")
+
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  canalConfig ChannelConfig @relation(fields: [canalConfigId], references: [id], onDelete: Cascade)
+
+  @@unique([canalConfigId, numero])
+  @@index([organizacaoId, canalConfigId, numero])
+  @@index([canalConfigId, ultimaMensagemEm])
+  @@map("previas_chat")
+}
+
+/// Credenciais de sessao do Baileys (WhatsApp Web nao oficial) da ponte,
+/// persistidas para sobreviver a reinicio/redeploy do processo — antes
+/// ficavam so em arquivo local e se perdiam a cada deploy.
+model PonteSessaoAuth {
+  /// Nome da sessao (mesmo valor de `ChannelConfig.ponteSessao`).
+  sessao       String   @id
+  /// JSON (creds + chaves do Baileys) cifrado em AES-256-GCM por apps/ponte/src/segredo.ts.
+  dados        String
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  @@map("ponte_sessoes_auth")
 }
 
 // ---------------------------------------------------------------------------

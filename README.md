@@ -246,6 +246,18 @@ Para simular um cliente, abra **http://localhost:5173/webchat** numa aba anônim
 preenche nome e e-mail, a conversa cai na primeira fila de Webchat ativa e aparece na hora no
 painel do agente vinculado a essa fila.
 
+Uma conversa de WhatsApp também pode nascer do lado da empresa, e não só de mensagem do cliente:
+na ficha de um Contato do CRM com telefone cadastrado, o botão **Iniciar conversa** cria a
+conversa (vazia, sem mensagem) e abre direto o Atendimento com ela em foco. O destino é decidido
+pela linha de quem CLICOU no botão (o solicitante), não pelo `responsavelId` cadastrado no
+contato: se o solicitante tiver linha pessoal de WhatsApp conectada, a conversa nasce atribuída a
+ele mesmo; senão cai na fila da linha compartilhada — igual ao WhatsApp Web, onde quem tem o
+número conectado fala com qualquer contato por ele, com ou sem vínculo prévio. Não existe hoje um
+"iniciar em nome de outra pessoa": um ADMIN sem linha própria que clique no botão de um contato
+com responsável definido não atribui a conversa a esse responsável — ela cai na fila da linha
+compartilhada, e nasce `EM_ESPERA` se essa fila não tiver agente definido. A ação é idempotente:
+clicar de novo no mesmo contato reabre a mesma conversa em vez de duplicar.
+
 ### Smoke test do tempo real
 
 ```bash

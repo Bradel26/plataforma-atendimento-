@@ -1,20 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Alerta, Input } from '../components/ui';
 import { ListaConversas } from '../features/atendimento/ListaConversas';
 import { PainelChat } from '../features/atendimento/PainelChat';
 import { PainelContato } from '../features/atendimento/PainelContato';
 import { useConversas } from '../features/atendimento/useConversas';
+import { upsertPrevia } from '../features/atendimento/previas';
+import { LABEL_VISAO_INBOX, VISOES_INBOX, type VisaoInbox } from '../features/atendimento/visao';
 import { useAuth } from '../features/auth/AuthProvider';
 import { FiltroEtiquetas } from './crm/Etiquetas';
-import { ApiError, api } from '../lib/api';
+import { ApiError, api, getAccessToken } from '../lib/api';
+import { EVENTOS, conectar } from '../lib/realtime';
 import { useFaixaDeLargura } from '../lib/useFaixaDeLargura';
-import {
-  ABAS_ATENDIMENTO,
-  LABEL_CONVERSA_STATUS,
-  type ConversaDetalhe,
-  type ConversaStatus,
-  type Usuario,
-} from '../lib/types';
+import type { ConversaDetalhe, Previa, Usuario } from '../lib/types';
 
 /**
  * Passo do fluxo em telas de uma coluna so (mobile): lista -> conversa ->
@@ -22,10 +20,25 @@ import {
  */
 type PassoMobile = 'lista' | 'chat' | 'ficha';
 
+type MinhaLinhaWhatsapp = { id: string; ponteSessao: string | null; modo: string | null; ativo: boolean };
+
+type QrDaPonte = {
+  /** PNG em data URL. Nulo quando nao ha nada para escanear agora. */
+  qr: string | null;
+  conectado: boolean;
+  motivo: string | null;
+};
+
 export function AtendimentoPage() {
-  const { temPerfil } = useAuth();
+  const { usuario, temPerfil } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { ref: containerRef, faixa } = useFaixaDeLargura<HTMLDivElement>();
-  const [aba, setAba] = useState<ConversaStatus>('EM_ESPERA');
+  /**
+   * Visao da Inbox (Fase 11.3) — Minhas / Nao atribuidas / Todas. Comeca em
+   * "Nao atribuidas": e a fila que precisa de alguem pegando, o mesmo motivo
+   * que fazia `EM_ESPERA` ser a aba padrao antes desta fase.
+   */
+  const [visao, setVisao] = useState<VisaoInbox>('NAO_ATRIBUIDAS');
   const [busca, setBusca] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   /**
@@ -48,7 +61,103 @@ export function AtendimentoPage() {
   const [aberta, setAberta] = useState<ConversaDetalhe | null>(null);
   const [erroAberta, setErroAberta] = useState<string | null>(null);
   const [agentes, setAgentes] = useState<Usuario[]>([]);
+  const [previas, setPrevias] = useState<Previa[]>([]);
   const abertaIdRef = useRef<string | null>(null);
+
+  /**
+   * Linha pessoal de WhatsApp do proprio usuario logado, e se ela ja esta
+   * conectada — self-service para o vendedor conectar o proprio numero sem
+   * precisar de um ADMIN em Configuracoes. `null` cobre tanto "ainda nao
+   * carregou" quanto "nao tem linha pessoal" (o placeholder de hoje serve
+   * igualmente para os dois casos).
+   */
+  const [minhaLinha, setMinhaLinha] = useState<MinhaLinhaWhatsapp | null>(null);
+  const [minhaLinhaConectada, setMinhaLinhaConectada] = useState(false);
+  const [mostrarConectar, setMostrarConectar] = useState(false);
+  const [qrConectar, setQrConectar] = useState<QrDaPonte | null>(null);
+
+  useEffect(() => {
+    void api
+      .get<{ numero: MinhaLinhaWhatsapp | null }>('/canais/numeros/meu')
+      .then(({ numero }) => setMinhaLinha(numero))
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    if (!minhaLinha || minhaLinha.modo !== 'NAO_OFICIAL') return;
+    void api
+      .get<{ estado: { situacao: string; detalhe: string | null } }>(
+        `/canais/numeros/${minhaLinha.id}/ponte/estado`,
+      )
+      .then(({ estado }) => setMinhaLinhaConectada(estado.situacao === 'CONECTADO'))
+      .catch(() => undefined);
+  }, [minhaLinha]);
+
+  /** Insere ou atualiza uma previa recebida por evento de socket — ver `upsertPrevia` (Fase 11.7). */
+  const aplicarPrevia = useCallback((p: Previa) => {
+    setPrevias((atual) => upsertPrevia(atual, p));
+  }, []);
+
+  // Aviso em tempo real de que a propria linha conectou/caiu, e de que uma
+  // previa dela foi criada/atualizada — mesmo socket, ja gated por
+  // `minhaLinha`: previa so existe para linha pessoal, a mesma condicao.
+  useEffect(() => {
+    if (!minhaLinha) return;
+    const token = getAccessToken();
+    if (!token) return;
+    const socket = conectar({ token });
+    socket.on(EVENTOS.canalStatus, (payload: { id: string; status: string }) => {
+      if (payload.id !== minhaLinha.id) return;
+      setMinhaLinhaConectada(payload.status === 'CONECTADO');
+    });
+    // O payload traz `canalConfigId` (usado pelo backend para escopar o
+    // destinatario), que `Previa` nao tem — descartado aqui, sem precisar
+    // estender o tipo compartilhado por um campo que a tela nunca usa.
+    socket.on(EVENTOS.previaAtualizada, ({ canalConfigId: _canalConfigId, ...previa }: Previa & { canalConfigId: string }) => {
+      aplicarPrevia(previa);
+    });
+    return () => {
+      socket.disconnect();
+    };
+  }, [minhaLinha, aplicarPrevia]);
+
+  // Enquanto o card "Conectar WhatsApp" esta aberto, busca o QR e faz
+  // polling a cada 5s ate a conexao acontecer — mesmo intervalo de CanaisTab.tsx.
+  useEffect(() => {
+    if (!mostrarConectar || !minhaLinha) return;
+    let vivo = true;
+
+    const buscar = async () => {
+      try {
+        const r = await api.get<QrDaPonte>(`/canais/numeros/${minhaLinha.id}/ponte/qr`);
+        if (!vivo) return;
+        setQrConectar(r);
+        if (r.conectado) {
+          setMinhaLinhaConectada(true);
+          setMostrarConectar(false);
+        }
+      } catch {
+        // Silencio proposital: a ponte cair nao pode apagar o QR ja exibido.
+      }
+    };
+
+    void buscar();
+    const timer = window.setInterval(() => {
+      void buscar();
+    }, 5_000);
+
+    return () => {
+      vivo = false;
+      window.clearInterval(timer);
+    };
+  }, [mostrarConectar, minhaLinha]);
+
+  // A conexao confirmada por evento fecha o card mesmo sem o polling ter rodado ainda.
+  useEffect(() => {
+    if (minhaLinhaConectada) setMostrarConectar(false);
+  }, [minhaLinhaConectada]);
+
+  const precisaConectarWhatsapp = Boolean(minhaLinha && minhaLinha.modo === 'NAO_OFICIAL' && !minhaLinhaConectada);
 
   const {
     conversas,
@@ -61,7 +170,22 @@ export function AtendimentoPage() {
     inscreverMensagens,
     focarConversa,
     recarregarContadores,
-  } = useConversas(aba, tags);
+  } = useConversas(visao, tags, usuario?.id ?? null);
+
+  /**
+   * Contador exibido em cada aba, so quando o backend fornece um numero exato
+   * para aquela visao — `GET /conversas/contadores` agrupa por `status`, sem
+   * separar "atribuida a mim" de "atribuida a outro agente". "Nao atribuidas"
+   * usa `contadores.EM_ESPERA` direto (a mesma contagem exata de antes desta
+   * fase); "Todas" soma os quatro status (tambem exato, ja escopado pela
+   * politica de visibilidade no backend). "Minhas" fica sem numero: inventar
+   * um contador que a API nao fornece pareceria dado, sem ser.
+   */
+  const contadorDaVisao = (v: VisaoInbox): number | null => {
+    if (v === 'NAO_ATRIBUIDAS') return contadores.EM_ESPERA;
+    if (v === 'TODAS') return Object.values(contadores).reduce((soma, n) => soma + n, 0);
+    return null;
+  };
 
   // A lista de destinos de transferencia so e visivel para admin e supervisor.
   useEffect(() => {
@@ -71,6 +195,13 @@ export function AtendimentoPage() {
       .then(({ usuarios }) => setAgentes(usuarios))
       .catch(() => undefined);
   }, [temPerfil]);
+
+  useEffect(() => {
+    void api
+      .get<{ previas: Previa[] }>('/conversas/previas')
+      .then(({ previas }) => setPrevias(previas))
+      .catch(() => undefined);
+  }, []);
 
   const abrir = useCallback(
     async (id: string) => {
@@ -95,6 +226,43 @@ export function AtendimentoPage() {
     },
     [aplicarEvento, focarConversa],
   );
+
+  /**
+   * Abre uma previa: reaproveita o Contact existente por telefone, ou cria um
+   * minimo -- a ficha completa o vendedor preenche depois, no CRM, se quiser;
+   * a prioridade aqui e nao bloquear a conversa por falta de cadastro.
+   */
+  const abrirPrevia = useCallback(
+    async (previa: Previa) => {
+      setErroAberta(null);
+      try {
+        const { contato } = await api.post<{ contato: { id: string } }>('/contatos/por-telefone', {
+          telefone: previa.numero,
+          nome: previa.nome,
+        });
+        const { conversa } = await api.post<{ conversa: { id: string } }>('/conversas', { contatoId: contato.id });
+        setPrevias((atual) => atual.filter((p) => p.id !== previa.id));
+        await abrir(conversa.id);
+      } catch (err) {
+        setErroAberta(err instanceof ApiError ? err.message : 'Nao foi possivel abrir a conversa');
+      }
+    },
+    [abrir],
+  );
+
+  /**
+   * Chega aqui vindo do botao "Iniciar conversa" da ficha do contato
+   * (`/atendimento?conversa=<id>`): abre a conversa direto, sem exigir clique
+   * na lista. Limpa o parametro logo depois — sem isso, um F5 reabriria a
+   * mesma conversa toda vez.
+   */
+  useEffect(() => {
+    const id = searchParams.get('conversa');
+    if (!id) return;
+    void abrir(id);
+    setSearchParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   // Mensagens novas entram direto na conversa aberta, sem recarregar.
   useEffect(
@@ -172,19 +340,19 @@ export function AtendimentoPage() {
           </div>
 
           <nav className="flex border-b border-slate-200 text-xs">
-            {ABAS_ATENDIMENTO.map((status) => (
+            {VISOES_INBOX.map((v) => (
               <button
-                key={status}
+                key={v}
                 type="button"
-                onClick={() => setAba(status)}
+                onClick={() => setVisao(v)}
                 className={`flex-1 border-b-2 px-1 py-2.5 transition ${
-                  aba === status
+                  visao === v
                     ? 'border-[var(--brand-primary)] font-semibold text-[var(--brand-primary)]'
                     : 'border-transparent text-slate-500 hover:text-slate-700'
                 }`}
               >
-                <span className="block truncate">{LABEL_CONVERSA_STATUS[status]}</span>
-                <span className="text-[11px] text-slate-500">{contadores[status]}</span>
+                <span className="block truncate">{LABEL_VISAO_INBOX[v]}</span>
+                <span className="text-[11px] text-slate-500">{contadorDaVisao(v) ?? ''}</span>
               </button>
             ))}
           </nav>
@@ -206,6 +374,8 @@ export function AtendimentoPage() {
             ) : (
               <ListaConversas
                 conversas={filtradas}
+                previas={previas}
+                onAbrirPrevia={(p) => void abrirPrevia(p)}
                 selecionadaId={aberta?.id ?? null}
                 onSelecionar={(id) => void abrir(id)}
                 carregando={carregando}
@@ -230,6 +400,40 @@ export function AtendimentoPage() {
               aoAlternarFicha={faixa === 'desktop' ? undefined : alternarFicha}
               fichaAberta={fichaVisivel}
             />
+          ) : precisaConectarWhatsapp ? (
+            <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+              <p className="text-sm font-medium text-slate-700">Conecte seu WhatsApp para comecar a atender</p>
+              <p className="mt-1 max-w-sm text-xs text-slate-500">
+                Sua linha pessoal de WhatsApp ainda nao esta pareada. Conecte para receber as conversas dos seus
+                clientes aqui.
+              </p>
+
+              {!mostrarConectar ? (
+                <button
+                  type="button"
+                  onClick={() => setMostrarConectar(true)}
+                  className="mt-4 rounded-md bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+                >
+                  Conectar
+                </button>
+              ) : (
+                <div className="mt-4 rounded-lg border border-slate-200 bg-white p-4">
+                  {qrConectar?.qr ? (
+                    <div className="flex flex-col items-center gap-3">
+                      <img src={qrConectar.qr} alt="QR Code do WhatsApp" className="h-48 w-48 rounded border border-slate-200" />
+                      <p className="max-w-xs text-xs text-slate-600">
+                        Abra o WhatsApp no seu celular, toque em <strong>Aparelhos conectados</strong> e depois em{' '}
+                        <strong>Conectar aparelho</strong> apontando a camera para este codigo.
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-500">
+                      {qrConectar?.motivo ?? 'Gerando o QR Code...'}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
           ) : (
             <div className="flex h-full flex-col items-center justify-center px-6 text-center">
               <p className="text-sm font-medium text-slate-700">Selecione uma conversa</p>

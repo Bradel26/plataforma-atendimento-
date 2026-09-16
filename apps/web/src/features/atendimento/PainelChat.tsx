@@ -238,6 +238,9 @@ export function PainelChat({
 
         <div className="flex flex-wrap items-center gap-2">
           <Badge tom={finalizada ? 'neutro' : 'sucesso'}>{LABEL_CONVERSA_STATUS[conversa.status]}</Badge>
+          {/* Arquivamento e ortogonal ao status (Fase 11.9-B): a conversa pode
+              estar arquivada em qualquer um dos badges acima. */}
+          {conversa.arquivada && <Badge tom="neutro">Arquivada</Badge>}
 
           {/* So existe fora do desktop: la a ficha e coluna fixa e sempre
               visivel, entao um botao pra abrir o que ja esta aberto so
@@ -309,6 +312,23 @@ export function PainelChat({
               </Button>
             </>
           )}
+
+          {/*
+            Fora do `!finalizada`, de proposito: arquivar e ortogonal ao
+            status (Fase 11.9-A/B) — uma conversa finalizada continua
+            podendo ser arquivada/desarquivada.
+          */}
+          <Button
+            variante="neutro"
+            disabled={ocupado}
+            onClick={() =>
+              void executar(() =>
+                api.post(`/conversas/${conversa.id}/${conversa.arquivada ? 'desarquivar' : 'arquivar'}`),
+              )
+            }
+          >
+            {conversa.arquivada ? 'Desarquivar' : 'Arquivar'}
+          </Button>
         </div>
       </header>
 

@@ -1,0 +1,336 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Prisma } from '@prisma/client';
+import { comOrganizacao } from '../../lib/tenant';
+import { dadosContatoImportado, gerarNomeSessao, herdarCredenciaisDaPonte } from './channels.service';
+
+/**
+ * Herdar credenciais da ponte compartilhada evita que o ADMIN redigite
+ * endereco/token/segredo em toda linha pessoal nova, quando todas apontam
+ * para a mesma ponte.
+ */
+describe('herdarCredenciaisDaPonte', () => {
+  it('herda os 3 campos da compartilhada quando o input nao trouxe nenhum', () => {
+    const compartilhada = { ponteUrl: 'http://ponte:3100', ponteToken: 'token-x', ponteSegredo: 'segredo-x' };
+    const resultado = herdarCredenciaisDaPonte(
+      { ponteUrl: null, ponteToken: null, ponteSegredo: null },
+      compartilhada,
+    );
+    expect(resultado).toEqual(compartilhada);
+  });
+
+  it('mantem os campos do input quando todos os 3 vieram preenchidos', () => {
+    const input = { ponteUrl: 'http://input:3100', ponteToken: 'token-input', ponteSegredo: 'segredo-input' };
+    const compartilhada = { ponteUrl: 'http://ponte:3100', ponteToken: 'token-x', ponteSegredo: 'segredo-x' };
+    expect(herdarCredenciaisDaPonte(input, compartilhada)).toEqual(input);
+  });
+
+  it('herda so o que faltou quando o input e parcial', () => {
+    const compartilhada = { ponteUrl: 'http://ponte:3100', ponteToken: 'token-x', ponteSegredo: 'segredo-x' };
+    const resultado = herdarCredenciaisDaPonte(
+      { ponteUrl: 'http://input:3100', ponteToken: null, ponteSegredo: null },
+      compartilhada,
+    );
+    expect(resultado).toEqual({
+      ponteUrl: 'http://input:3100',
+      ponteToken: 'token-x',
+      ponteSegredo: 'segredo-x',
+    });
+  });
+
+  it('sem compartilhada e sem input, todos ficam nulos', () => {
+    const resultado = herdarCredenciaisDaPonte({ ponteUrl: null, ponteToken: null, ponteSegredo: null }, null);
+    expect(resultado).toEqual({ ponteUrl: null, ponteToken: null, ponteSegredo: null });
+  });
+});
+
+describe('gerarNomeSessao', () => {
+  it('gera um nome no formato esperado', () => {
+    expect(gerarNomeSessao('abcdef12-3456-7890-abcd-ef1234567890')).toBe('vendedor-abcdef12');
+  });
+
+  it('e deterministico: mesma entrada gera sempre a mesma saida', () => {
+    const id = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+    expect(gerarNomeSessao(id)).toBe(gerarNomeSessao(id));
+  });
+
+  it('donoId diferentes geram nomes diferentes', () => {
+    const a = gerarNomeSessao('11111111-0000-0000-0000-000000000000');
+    const b = gerarNomeSessao('22222222-0000-0000-0000-000000000000');
+    expect(a).not.toBe(b);
+  });
+});
+
+/**
+ * `dadosContatoImportado` e a parte pura de `importarContatos`: monta os
+ * campos do `Contact` a criar a partir de um contato vindo da ponte, sem
+ * tocar em banco. O `findFirst`+`create` em loop nao tem teste de unidade —
+ * fica para o smoke test, como o `vitest.config.ts` documenta.
+ */
+describe('dadosContatoImportado', () => {
+  it('monta os dados do Contact com origem WHATSAPP e o responsavel informado', () => {
+    expect(
+      dadosContatoImportado(
+        { numero: '5511999998888', nome: 'Fulano da Silva' },
+        { organizacaoId: 'org-1', responsavelId: 'user-1' },
+      ),
+    ).toEqual({
+      organizacaoId: 'org-1',
+      nome: 'Fulano da Silva',
+      telefone: '5511999998888',
+      canalOrigem: 'WHATSAPP',
+      responsavelId: 'user-1',
+    });
+  });
+
+  it('sem responsavel (linha sem dono), o contato fica sem responsavel', () => {
+    expect(
+      dadosContatoImportado({ numero: '5511999998888', nome: 'Fulano' }, { organizacaoId: 'org-1', responsavelId: null }),
+    ).toMatchObject({ responsavelId: null });
+  });
+});
+
+/*
+ * Fase 12.1 — `ponteSessao` passou a ter `@@unique([canal, ponteSessao])`
+ * global no banco (nao por organizacao — ver a auditoria: `PonteSessaoAuth`,
+ * escrita por `apps/ponte`, e uma tabela compartilhada entre todas as
+ * organizacoes, chaveada so pelo nome da sessao). Estes testes mockam prisma
+ * inteiro (mesmo padrao das fases anteriores) para provar que uma violacao
+ * dessa constraint (`P2002`) vira um erro de dominio (409), nunca um 500
+ * generico, e que o resto do fluxo de criacao/edicao de numero continua
+ * intacto.
+ */
+const {
+  channelConfigFindFirst,
+  channelConfigFindMany,
+  channelConfigFindUnique,
+  channelConfigCreate,
+  channelConfigUpdate,
+  queueFindUnique,
+  userFindUnique,
+} = vi.hoisted(() => ({
+  channelConfigFindFirst: vi.fn(),
+  channelConfigFindMany: vi.fn(),
+  channelConfigFindUnique: vi.fn(),
+  channelConfigCreate: vi.fn(),
+  channelConfigUpdate: vi.fn(),
+  queueFindUnique: vi.fn(),
+  userFindUnique: vi.fn(),
+}));
+
+vi.mock('../../lib/prisma', () => ({
+  prisma: {
+    channelConfig: {
+      findFirst: channelConfigFindFirst,
+      findMany: channelConfigFindMany,
+      findUnique: channelConfigFindUnique,
+      create: channelConfigCreate,
+      update: channelConfigUpdate,
+    },
+    queue: { findUnique: queueFindUnique },
+    user: { findUnique: userFindUnique },
+  },
+  prismaSemIsolamento: {},
+}));
+
+/** Erro do Prisma para violacao da constraint `canais_config_canal_ponte_sessao_key` — mesma classe que uma colisao real produziria. */
+function erroDeColisaoDeSessao(alvo: string[] | string = ['canal', 'ponteSessao']) {
+  return new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+    code: 'P2002',
+    clientVersion: 'test',
+    meta: { target: alvo },
+  });
+}
+
+const CONFIG_BASE = { modo: 'NAO_OFICIAL' as const, ativo: true, ponteUrl: 'http://ponte:3100', ponteToken: 'token-ponte-123' };
+
+/** Linha crua que `listarCanais` (chamada no fim de criarNumero/salvarCanal/atualizarNumero) precisa encontrar para nao lançar "nao encontrado apos criacao". */
+function linhaCrua(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: 'cfg-1',
+    canal: 'WHATSAPP',
+    donoId: null,
+    dono: null,
+    ativo: true,
+    nome: null,
+    phoneNumberId: null,
+    pageId: null,
+    igUserId: null,
+    wabaId: null,
+    fila: null,
+    filaId: null,
+    atualizadoEm: new Date('2026-09-16T10:00:00.000Z'),
+    accessToken: null,
+    appSecret: null,
+    verifyToken: null,
+    iaSegredo: null,
+    modo: 'NAO_OFICIAL',
+    ponteUrl: 'http://ponte:3100',
+    ponteSessao: null,
+    ponteToken: 'token-ponte-123',
+    ponteSegredo: 'segredo-1234567890',
+    ponteStatus: null,
+    ponteStatusEm: null,
+    ...overrides,
+  };
+}
+
+describe('criarNumero / atualizarNumero / salvarCanal — colisao de ponteSessao (Fase 12.1)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('1/3. colisao entre organizacoes diferentes: o Prisma (constraint global) recusa a escrita mesmo sem a checagem previa ver nada', async () => {
+    // A checagem previa (`findFirst`, escopada pela organizacao no contexto)
+    // nao encontra nada — simula exatamente o caso em que a colisao e com
+    // uma linha de OUTRA organizacao, que o `findFirst` desta nunca veria.
+    channelConfigFindFirst.mockResolvedValue(null);
+    userFindUnique.mockResolvedValue({ id: 'user-1' });
+    channelConfigCreate.mockRejectedValue(erroDeColisaoDeSessao());
+
+    const { criarNumero } = await import('./channels.service');
+    await expect(
+      comOrganizacao(
+        'org-2',
+        () =>
+          criarNumero('WHATSAPP', {
+            ...CONFIG_BASE,
+            ponteSegredo: 'segredo-1234567890',
+            donoId: 'user-1',
+            ponteSessao: 'sessao-ja-usada',
+          }),
+        { id: 'admin-1', perfil: 'ADMIN' },
+      ),
+    ).rejects.toMatchObject({ status: 409 });
+
+    expect(channelConfigCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('4. o erro de colisao e um AppError de dominio (409), nunca um 500 generico', async () => {
+    userFindUnique.mockResolvedValue({ id: 'user-1' });
+    channelConfigFindFirst.mockResolvedValue(null);
+    channelConfigCreate.mockRejectedValue(erroDeColisaoDeSessao());
+
+    const { criarNumero } = await import('./channels.service');
+    try {
+      await comOrganizacao(
+        'org-1',
+        () =>
+          criarNumero('WHATSAPP', {
+            ...CONFIG_BASE,
+            ponteSegredo: 'segredo-1234567890',
+            donoId: 'user-1',
+            ponteSessao: 'colidiu',
+          }),
+        { id: 'admin-1', perfil: 'ADMIN' },
+      );
+      throw new Error('deveria ter lancado');
+    } catch (erro) {
+      expect(erro).toMatchObject({ status: 409, code: 'CONFLICT' });
+      expect((erro as Error).message).toContain('colidiu');
+    }
+  });
+
+  it('violacao de constraint SEM ser em ponteSessao continua subindo sem traducao (nao esconde outros erros do Prisma)', async () => {
+    userFindUnique.mockResolvedValue({ id: 'user-1' });
+    channelConfigFindFirst.mockResolvedValue(null);
+    channelConfigCreate.mockRejectedValue(erroDeColisaoDeSessao(['canal', 'phoneNumberId']));
+
+    const { criarNumero } = await import('./channels.service');
+    await expect(
+      comOrganizacao(
+        'org-1',
+        () =>
+          criarNumero('WHATSAPP', {
+            ...CONFIG_BASE,
+            ponteSegredo: 'segredo-1234567890',
+            donoId: 'user-1',
+            ponteSessao: 'sessao-normal',
+          }),
+        { id: 'admin-1', perfil: 'ADMIN' },
+      ),
+    ).rejects.toMatchObject({ code: 'P2002' });
+  });
+
+  it('5. geracao automatica de sessao pessoal continua funcionando quando o admin nao informa uma', async () => {
+    userFindUnique.mockResolvedValue({ id: 'user-9' });
+    channelConfigFindFirst.mockResolvedValue(null); // sem compartilhada, sem conflito
+    channelConfigCreate.mockResolvedValue({ id: 'cfg-novo' });
+    channelConfigFindMany.mockResolvedValue([
+      linhaCrua({ id: 'cfg-novo', donoId: 'user-9', dono: { id: 'user-9', nome: 'Vendedor 9' }, ponteSessao: 'vendedor-user-9' }),
+    ]);
+
+    const { criarNumero } = await import('./channels.service');
+    await comOrganizacao(
+      'org-1',
+      () => criarNumero('WHATSAPP', { ...CONFIG_BASE, ponteSegredo: 'segredo-1234567890', donoId: 'user-9' }),
+      { id: 'admin-1', perfil: 'ADMIN' },
+    );
+
+    const dados = channelConfigCreate.mock.calls[0]?.[0]?.data;
+    // `gerarNomeSessao('user-9')` = `vendedor-${'user-9'.slice(0,8)}` = 'vendedor-user-9' (string curta, slice devolve ela inteira).
+    expect(dados.ponteSessao).toBe('vendedor-user-9');
+  });
+
+  it('6. linha compartilhada (sem donoId) continua funcionando, sem exigir ponteSessao', async () => {
+    channelConfigFindFirst.mockResolvedValue(null);
+    channelConfigCreate.mockResolvedValue({ id: 'cfg-compartilhada' });
+    channelConfigFindMany.mockResolvedValue([linhaCrua({ id: 'cfg-compartilhada', donoId: null, dono: null })]);
+
+    const { salvarCanal } = await import('./channels.service');
+    await comOrganizacao(
+      'org-1',
+      () => salvarCanal('WHATSAPP', { ...CONFIG_BASE, ponteSegredo: 'segredo-1234567890' }),
+      { id: 'admin-1', perfil: 'ADMIN' },
+    );
+
+    expect(channelConfigCreate).toHaveBeenCalledTimes(1);
+    const dados = channelConfigCreate.mock.calls[0]?.[0]?.data;
+    expect(dados.ponteSessao).toBeUndefined();
+  });
+
+  it('7. ponteSessao NULL continua funcionando conforme a regra existente (linha compartilhada, sem sessao propria)', async () => {
+    channelConfigFindFirst.mockResolvedValue(null);
+    channelConfigUpdate.mockResolvedValue({ id: 'cfg-existente' });
+    channelConfigFindUnique.mockResolvedValue(linhaCrua({ id: 'cfg-existente', canal: 'WHATSAPP' }));
+    channelConfigFindMany.mockResolvedValue([linhaCrua({ id: 'cfg-existente', donoId: null, dono: null })]);
+
+    const { atualizarNumero } = await import('./channels.service');
+    await comOrganizacao('org-1', () => atualizarNumero('cfg-existente', { nome: 'Novo nome' }), {
+      id: 'admin-1',
+      perfil: 'ADMIN',
+    });
+
+    expect(channelConfigUpdate).toHaveBeenCalledTimes(1);
+    const dados = channelConfigUpdate.mock.calls[0]?.[0]?.data;
+    expect(dados.ponteSessao).toBeUndefined();
+  });
+
+  it('9. nenhuma credencial e reaproveitada entre organizacoes atraves do fluxo normal: a checagem previa e escopada por organizacao, e a constraint do banco cobre o resto', async () => {
+    // A checagem previa nunca inclui organizacaoId no `where` manualmente —
+    // depende so do contexto do tenant (extensao do Prisma). Confirma que
+    // `criarNumero` nao introduz nenhum filtro cruzado nem reaproveita
+    // config de outra organizacao.
+    userFindUnique.mockResolvedValue({ id: 'user-1' });
+    channelConfigFindFirst.mockResolvedValue(null);
+    channelConfigCreate.mockResolvedValue({ id: 'cfg-1' });
+    channelConfigFindMany.mockResolvedValue([
+      linhaCrua({ id: 'cfg-1', donoId: 'user-1', dono: { id: 'user-1', nome: 'Vendedor 1' }, ponteSessao: 'sessao-exclusiva-org-1' }),
+    ]);
+
+    const { criarNumero } = await import('./channels.service');
+    await comOrganizacao(
+      'org-1',
+      () =>
+        criarNumero('WHATSAPP', {
+          ...CONFIG_BASE,
+          ponteSegredo: 'segredo-1234567890',
+          donoId: 'user-1',
+          ponteSessao: 'sessao-exclusiva-org-1',
+        }),
+      { id: 'admin-1', perfil: 'ADMIN' },
+    );
+
+    const where = channelConfigFindFirst.mock.calls.map((c) => c[0]?.where);
+    for (const w of where) expect(JSON.stringify(w)).not.toContain('organizacaoId');
+  });
+});

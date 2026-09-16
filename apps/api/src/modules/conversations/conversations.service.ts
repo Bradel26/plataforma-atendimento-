@@ -1,13 +1,17 @@
 import type { AttachmentType, Prisma, Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
-import { filtroDe, politicaConversas } from '../../lib/politicas';
+import { filtroDe, politicaContatos, politicaConversas } from '../../lib/politicas';
 import { apenasVisivel } from '../../lib/visibilidade';
 import { salvar } from '../../lib/storage';
 import { apos, decodificarCursor, fatiar } from '../../lib/paginacao';
 import { normalizarTags } from '../../lib/tags';
-import { badRequest, forbidden, notFound } from '../../lib/errors';
-import { notificarConversaAtualizada, notificarMensagem } from '../../realtime/hub';
+import { AppError, badRequest, forbidden, notFound } from '../../lib/errors';
+import { notificarConversaAtualizada, notificarConversaNova, notificarMensagem } from '../../realtime/hub';
 import { enviarArquivoParaCanal, enviarParaCanal, exigeEnvioExterno } from '../channels/outbound.service';
+import { obterConfig } from '../channels/channels.service';
+import { decidirDestino, filaPadraoDoCanal } from '../channels/inbound.service';
+import { impedimentoDeEnvio } from '../channels/whatsapp.modo';
+import { promoverPrevia } from '../channels/chat-previews.service';
 import { entregarParaIa } from '../bots/ia.service';
 import { TIPO_CONVITE_PESQUISA, criarPesquisa, entregarPesquisa } from '../surveys/surveys.service';
 import { enfileirar } from '../../lib/fila';
@@ -40,6 +44,10 @@ export async function listarConversas(solicitante: Solicitante, query: ListarCon
 
   if (query.status) filtros.push({ status: query.status });
   if (query.minhas === 'true') filtros.push({ agenteId: solicitante.sub });
+  // Padrao: so as nao arquivadas — arquivar so faz sentido se a conversa sai
+  // da experiencia do dia a dia. `arquivadas=true` inverte para a lista de
+  // arquivadas; nunca as duas junto (Fase 11.9-A, item 5).
+  filtros.push({ arquivada: query.arquivadas === 'true' });
   if (query.busca) {
     filtros.push({
       OR: [
@@ -97,17 +105,150 @@ export async function listarMensagens(
   return { mensagens: itens.reverse().map(toMensagem), proximoCursor };
 }
 
-/** Contadores por aba do painel. */
+/**
+ * Contadores por aba do painel.
+ *
+ * So conta as nao arquivadas — os mesmos numeros que `listarConversas` sem
+ * `arquivadas=true` devolveria, senao o contador da aba mostraria um numero
+ * que a lista embaixo dele nunca bate (Fase 11.9-A, item 8).
+ */
 export async function contarPorStatus(solicitante: Solicitante) {
   const grupos = await prisma.conversation.groupBy({
     by: ['status'],
-    where: await escopoVisivel(),
+    where: { AND: [await escopoVisivel(), { arquivada: false }] },
     _count: { _all: true },
   });
 
   const base = { EM_ESPERA: 0, ATRIBUIDO: 0, EM_ATENDIMENTO: 0, FINALIZADO: 0 };
   for (const g of grupos) base[g.status] = g._count._all;
   return base;
+}
+
+/**
+ * Previas de chat da linha PESSOAL do proprio solicitante -- nunca lista
+ * previa de outro vendedor, e nao passa pela politica de visibilidade de
+ * `Conversation` (previa e o celular do dono, nao um recurso compartilhado).
+ */
+export async function listarPrevias(solicitante: Solicitante) {
+  const config = await prisma.channelConfig.findFirst({
+    where: { canal: 'WHATSAPP', donoId: solicitante.sub },
+    select: { id: true },
+  });
+  if (!config) return { previas: [] };
+
+  const previas = await prisma.chatPreview.findMany({
+    where: { canalConfigId: config.id },
+    orderBy: { ultimaMensagemEm: 'desc' },
+  });
+
+  return {
+    previas: previas.map((p) => ({
+      id: p.id,
+      numero: p.numero,
+      nome: p.nome,
+      ultimaMensagem: p.ultimaMensagem,
+      ultimaMensagemEm: p.ultimaMensagemEm,
+      naoLidas: p.naoLidas,
+    })),
+  };
+}
+
+/** Motivo pelo qual um contato sem telefone nao pode receber conversa de WhatsApp, ou nulo se pode. Pura, sem banco. */
+export function motivoSemTelefone(contato: { telefone: string | null }): string | null {
+  if (!contato.telefone) return 'Contato sem telefone cadastrado — nao e possivel iniciar conversa por WhatsApp';
+  return null;
+}
+
+/**
+ * Config de WhatsApp que atenderia uma conversa iniciada por este usuario: a
+ * linha PESSOAL dele, se tiver uma conectada; senao a config compartilhada do
+ * canal (mesma regra de `obterConfig`).
+ *
+ * E a linha de QUEM CLICOU em "Iniciar conversa", nao a do responsavel
+ * cadastrado no contato — o mesmo comportamento do WhatsApp Web: conectando o
+ * proprio numero, a pessoa fala com qualquer contato por ele, nao so com os
+ * que ja tinha vinculo previo. Um contato importado do celular do vendedor,
+ * por exemplo, nao tem "responsavel" formal nenhum ate alguem definir um na
+ * ficha — mas o vendedor que importou continua podendo falar com ele.
+ *
+ * Diferente de `configDoDestino` (channels.service): aquela resolve pelo
+ * identificador que a MENSAGEM trouxe (phoneNumberId, sessao da ponte); aqui
+ * nao existe mensagem nenhuma ainda.
+ */
+async function configWhatsappDoSolicitante(solicitante: Solicitante) {
+  const pessoal = await prisma.channelConfig.findFirst({ where: { canal: 'WHATSAPP', donoId: solicitante.sub } });
+  if (pessoal) return pessoal;
+  return obterConfig('WHATSAPP');
+}
+
+/**
+ * Abre uma conversa de WhatsApp com um Contato do CRM que ainda nao escreveu
+ * — botao "Iniciar conversa" na ficha do contato.
+ *
+ * Idempotente: se ja existe uma conversa ABERTA (nao finalizada) com este
+ * contato no WhatsApp, devolve ela em vez de criar outra — reabrir a ficha e
+ * clicar de novo nao pode duplicar o atendimento.
+ */
+export async function iniciarConversa(solicitante: Solicitante, contatoId: string): Promise<{ id: string }> {
+  const contato = await prisma.contact.findFirst({
+    where: apenasVisivel(contatoId, await filtroDe(politicaContatos)),
+  });
+  if (!contato) throw notFound('Contato nao encontrado');
+
+  const motivo = motivoSemTelefone(contato);
+  if (motivo) throw badRequest(motivo);
+
+  const existente = await prisma.conversation.findFirst({
+    where: { contatoId, canal: 'WHATSAPP', status: { not: 'FINALIZADO' } },
+    orderBy: { criadoEm: 'desc' },
+  });
+  if (existente) {
+    // Reabrir pela ficha uma conversa que estava arquivada tem que tira-la do
+    // arquivo — senao "Iniciar conversa" devolveria um id que a lista de
+    // ninguem mostra (Fase 11.9-A, item 6).
+    if (existente.arquivada) {
+      await prisma.conversation.update({ where: { id: existente.id }, data: { arquivada: false } });
+      await publicar(existente.id, { filaAnteriorId: existente.filaId });
+    }
+    return { id: existente.id };
+  }
+
+  const config = await configWhatsappDoSolicitante(solicitante);
+  const impedimento = config
+    ? impedimentoDeEnvio(config.modo, {
+        ativo: config.ativo,
+        accessToken: config.accessToken,
+        phoneNumberId: config.phoneNumberId,
+        ponteUrl: config.ponteUrl,
+        ponteToken: config.ponteToken,
+      })
+    : 'Canal WhatsApp nao configurado';
+  if (impedimento) throw new AppError(503, 'CANAL_INDISPONIVEL', impedimento);
+
+  const decidido = decidirDestino(config);
+  const destino = decidido.filaId || decidido.agenteId
+    ? decidido
+    : { ...decidido, filaId: await filaPadraoDoCanal('WHATSAPP') };
+  const conversa = await prisma.conversation.create({
+    data: {
+      canal: 'WHATSAPP',
+      status: destino.agenteId ? 'ATRIBUIDO' : 'EM_ESPERA',
+      contatoId: contato.id,
+      filaId: destino.filaId,
+      agenteId: destino.agenteId,
+      atribuidoEm: destino.agenteId ? new Date() : null,
+      canalConfigId: destino.canalConfigId,
+      enderecoExterno: contato.telefone,
+    },
+  });
+
+  if (destino.canalConfigId) {
+    await promoverPrevia(conversa.id, destino.canalConfigId, contato.telefone!);
+  }
+
+  await publicarNova(conversa.id);
+
+  return { id: conversa.id };
 }
 
 /**
@@ -169,6 +310,31 @@ export async function definirTags(solicitante: Solicitante, id: string, tags: re
   await prisma.conversation.update({ where: { id }, data: { tags: novas } });
   return publicar(id, { filaAnteriorId: conversa.filaId });
 }
+
+/**
+ * Arquiva/desarquiva — sai (ou volta) das listas padrao (Minhas/Nao
+ * atribuidas/Todas) e dos contadores, sem tocar status, agente, fila ou
+ * historico (Fase 11.9-B).
+ *
+ * Mesmas duas decisoes de `definirTags`, e pelo mesmo motivo: arquivar e
+ * organizacao de tela, nao mudanca de responsavel — **nao exige ser o dono**
+ * (qualquer perfil que ve a conversa pode arquivar/desarquivar) e **nao grava
+ * evento no historico** (nao e algo que aconteceu NO atendimento, e algo que
+ * aconteceu na lista de quem administra).
+ *
+ * Funciona em qualquer status, inclusive `FINALIZADO` — arquivamento e
+ * ortogonal ao ciclo de vida do atendimento, nunca um status a mais.
+ */
+async function definirArquivada(id: string, arquivada: boolean) {
+  const conversa = await carregarOuFalhar(id);
+  if (conversa.arquivada === arquivada) return toConversaDetalhe(conversa);
+
+  await prisma.conversation.update({ where: { id }, data: { arquivada } });
+  return publicar(id, { filaAnteriorId: conversa.filaId });
+}
+
+export const arquivarConversa = (solicitante: Solicitante, id: string) => definirArquivada(id, true);
+export const desarquivarConversa = (solicitante: Solicitante, id: string) => definirArquivada(id, false);
 
 /** Registra evento do sistema no historico (atribuicao, transferencia, encerramento). */
 async function registrarEventoSistema(conversaId: string, texto: string) {
@@ -361,6 +527,28 @@ export async function marcarComoLida(solicitante: Solicitante, id: string) {
 
   await prisma.conversation.update({ where: { id }, data: { naoLidas: 0 } });
   return publicar(id, { filaAnteriorId: conversa.filaId });
+}
+
+/**
+ * Avisa quem deveria ver uma conversa RECEM-CRIADA — mesmos destinatarios de
+ * `publicar` (fila, agente, quem tem a conversa aberta, supervisao), mas pelo
+ * evento `conversa:nova`. Sem "anterior": conversa nova nao tira ninguem de
+ * lugar nenhum, so entra numa lista.
+ *
+ * Espelha o que `inbound.service.ts` ja faz para conversa criada por mensagem
+ * de cliente (`if (nova) notificarConversaNova(...)`) — `iniciarConversa` e o
+ * outro lugar que cria `Conversation` e, ate aqui, nao avisava ninguem.
+ */
+async function publicarNova(id: string) {
+  const detalhe = toConversaDetalhe(await carregarOuFalhar(id));
+
+  notificarConversaNova(detalhe, {
+    conversaId: id,
+    filaId: detalhe.fila?.id,
+    agenteId: detalhe.agente?.id,
+  });
+
+  return detalhe;
 }
 
 /**

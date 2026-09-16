@@ -2,9 +2,16 @@ import type { Channel } from '@prisma/client';
 import { AppError, badRequest } from '../../lib/errors';
 import { obterConfig, obterConfigPorId } from './channels.service';
 import { impedimentoDeEnvio, modoEfetivo } from './whatsapp.modo';
-import { enviarArquivoPelaPonte, enviarTextoPelaPonte } from './whatsapp.ponte';
+import { BaileysProvider } from './providers/baileys.provider';
 
 const GRAPH = 'https://graph.facebook.com/v21.0';
+
+/**
+ * O modo nao oficial passa pelo `WhatsAppProvider` em vez de falar direto com
+ * `whatsapp.ponte.ts` — mesma migracao ja feita em `channels.routes.ts` para
+ * QR/estado/desconexao (ver whatsapp.provider.ts).
+ */
+const whatsAppProvider = new BaileysProvider();
 
 /** Canais que exigem envio pela Graph API. WEBCHAT e entregue por WebSocket. */
 const EXTERNOS: Channel[] = ['WHATSAPP', 'INSTAGRAM', 'FACEBOOK'];
@@ -67,7 +74,7 @@ export async function enviarParaCanal(
       ponteToken: config?.ponteToken ?? null,
     });
     if (impedimento) throw new AppError(503, 'CANAL_INDISPONIVEL', impedimento);
-    return enviarTextoPelaPonte(config!, enderecoExterno, texto);
+    return whatsAppProvider.sendText(config!, enderecoExterno, texto);
   }
 
   if (!config?.ativo || !config.accessToken) {
@@ -174,7 +181,7 @@ export async function enviarArquivoParaCanal(
       ponteToken: config?.ponteToken ?? null,
     });
     if (impedimento) throw new AppError(503, 'CANAL_INDISPONIVEL', impedimento);
-    return enviarArquivoPelaPonte(config!, enderecoExterno, arquivo);
+    return whatsAppProvider.sendMedia(config!, enderecoExterno, arquivo);
   }
 
   if (!config?.ativo || !config.accessToken) {

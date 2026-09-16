@@ -82,6 +82,27 @@ export const notificarChamada = (
   destinos: { agenteId?: string | null; filaId?: string | null },
 ) => emitir(EVENTOS.chamadaAtualizada, chamada, destinos);
 
+/** Status de conexao da ponte (WhatsApp pessoal): interessa ao dono da linha e a gestao. */
+export const notificarStatusCanal = (payload: unknown, destinos: { agenteId?: string | null }) =>
+  emitir(EVENTOS.canalStatus, payload, destinos);
+
+/**
+ * ChatPreview criada ou atualizada: interessa SO ao dono da linha pessoal.
+ *
+ * Nao usa `emitir()` de proposito: aquela funcao sempre inclui
+ * `salas.supervisao(org)`, correto para `Conversation` (recurso da
+ * organizacao) mas errado aqui — uma previa e o espelho do celular pessoal do
+ * vendedor, e `listarPrevias` (REST) ja restringe a leitura so ao dono
+ * (`donoId = solicitante.sub`, sem excecao para ADMIN/SUPERVISOR). Mandar
+ * para supervisao pelo socket vazaria em tempo real o que o REST nunca expos.
+ */
+export const notificarPreviaAtualizada = (previa: unknown, destinos: { agenteId: string }) => {
+  if (!io) return;
+  const org = organizacaoDoContexto();
+  if (!org) return;
+  io.to(salas.usuario(org, destinos.agenteId)).emit(EVENTOS.previaAtualizada, previa);
+};
+
 export const notificarStatusAgente = (payload: unknown) => {
   const org = organizacaoDoContexto();
   if (!org) return;

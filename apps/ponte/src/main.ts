@@ -1,8 +1,19 @@
 import type { WAMessage } from '@whiskeysockets/baileys';
 import { config } from './config.js';
+import { GerenciadorDeChats } from './chats.js';
+import { GerenciadorDeContatos } from './contatos.js';
+import { avisarStatus, entregarChats, entregarContatos } from './plataforma.js';
 import { receber } from './recebida.js';
 import { criarServidor } from './servidor.js';
-import { garantirNoAr, quandoReceber, type Sessao } from './sessao.js';
+import {
+  garantirNoAr,
+  quandoMudarStatus,
+  quandoReceber,
+  quandoReceberChats,
+  quandoReceberContatos,
+  type ChatBruto,
+  type Sessao,
+} from './sessao.js';
 
 /**
  * Sobe a ponte.
@@ -14,6 +25,45 @@ import { garantirNoAr, quandoReceber, type Sessao } from './sessao.js';
 
 quandoReceber((sessao, msg) => {
   void receber(sessao as Sessao, msg as WAMessage);
+});
+
+quandoMudarStatus((sessao) => {
+  void avisarStatus(sessao.nome, sessao.situacao === 'CONECTADO' ? 'CONECTADO' : 'DESCONECTADO', sessao.detalhe);
+});
+
+/*
+ * Um gerenciador de debounce POR SESSAO: contato de um vendedor nunca pode
+ * entrar acumulado junto com o de outro, senao a entrega marcaria a sessao
+ * errada no corpo do POST.
+ */
+const gerenciadoresDeContatos = new Map<string, GerenciadorDeContatos>();
+
+quandoReceberContatos((sessao, contatos) => {
+  let gerenciador = gerenciadoresDeContatos.get(sessao.nome);
+  if (!gerenciador) {
+    gerenciador = new GerenciadorDeContatos((acumulados) => {
+      void entregarContatos(sessao.nome, acumulados);
+    });
+    gerenciadoresDeContatos.set(sessao.nome, gerenciador);
+  }
+  gerenciador.adicionar(contatos);
+});
+
+/*
+ * Mesma logica dos contatos acima: um gerenciador de debounce POR SESSAO, para
+ * o chat de um vendedor nunca entrar acumulado junto com o de outro.
+ */
+const gerenciadoresDeChats = new Map<string, GerenciadorDeChats>();
+
+quandoReceberChats((sessao, chats: ChatBruto[]) => {
+  let gerenciador = gerenciadoresDeChats.get(sessao.nome);
+  if (!gerenciador) {
+    gerenciador = new GerenciadorDeChats((acumulados) => {
+      void entregarChats(sessao.nome, acumulados);
+    });
+    gerenciadoresDeChats.set(sessao.nome, gerenciador);
+  }
+  gerenciador.adicionar(chats);
 });
 
 const app = criarServidor();

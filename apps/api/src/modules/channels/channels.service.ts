@@ -1,8 +1,8 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import type { Channel } from '@prisma/client';
+import { Prisma, type Channel } from '@prisma/client';
 import { prisma, prismaSemIsolamento } from '../../lib/prisma';
 import { semOrganizacao } from '../../lib/tenant';
-import { badRequest, notFound } from '../../lib/errors';
+import { badRequest, conflict, notFound } from '../../lib/errors';
 import { cifrar, decifrar } from '../../lib/crypto-box';
 
 export const CANAIS_EXTERNOS = ['WHATSAPP', 'INSTAGRAM', 'FACEBOOK'] as const;
@@ -94,6 +94,11 @@ export async function listarCanais() {
     ponteSessao: c.ponteSessao,
     ponteTokenMascarado: mascarar(c.ponteToken),
     ponteSegredoMascarado: mascarar(c.ponteSegredo),
+    /// Ultimo status que a ponte avisou para esta linha (ver ponte.routes.ts:/status).
+    /// Nulo fora do modo nao oficial ou antes do primeiro aviso — a tela so
+    /// mostra o badge quando ha algo para mostrar.
+    ponteStatus: c.ponteStatus,
+    ponteStatusEm: c.ponteStatusEm,
     /*
      * Pronto para operar, por modo.
      *
@@ -129,6 +134,35 @@ type SalvarCanalInput = {
 /** Campos aceitos so nas linhas pessoais — a de sempre nao tem dono nem rotulo. */
 type SalvarNumeroInput = SalvarCanalInput & { nome?: string | null; donoId?: string | null };
 
+type CredenciaisPonte = { ponteUrl: string | null; ponteToken: string | null; ponteSegredo: string | null };
+
+/**
+ * Pra cada campo da ponte, usa o que veio no input; sem isso, cai para o da
+ * config compartilhada. Existe para a linha pessoal de um vendedor nao
+ * precisar repetir endereco/token/segredo que ja estao na linha compartilhada
+ * do mesmo canal — o admin so digita de novo quando quer uma ponte diferente.
+ */
+export function herdarCredenciaisDaPonte(
+  input: CredenciaisPonte,
+  compartilhada: CredenciaisPonte | null,
+): CredenciaisPonte {
+  const campo = (valor: string | null, herdado: string | null) => (valor && valor.length > 0 ? valor : herdado ?? null);
+  return {
+    ponteUrl: campo(input.ponteUrl, compartilhada?.ponteUrl ?? null),
+    ponteToken: campo(input.ponteToken, compartilhada?.ponteToken ?? null),
+    ponteSegredo: campo(input.ponteSegredo, compartilhada?.ponteSegredo ?? null),
+  };
+}
+
+/**
+ * Nome de sessao automatico para linha pessoal quando o admin nao informou
+ * um. Determinístico (mesmo donoId sempre gera o mesmo nome) para nao gerar
+ * duas sessoes diferentes para o mesmo vendedor em duas edicoes.
+ */
+export function gerarNomeSessao(donoId: string): string {
+  return `vendedor-${donoId.slice(0, 8)}`;
+}
+
 /**
  * Valida o que `salvarCanal`/`criarNumero`/`atualizarNumero` tem em comum:
  * fila existe, dono existe (e e da mesma organizacao — `findUnique` de outra
@@ -151,6 +185,40 @@ async function prepararGravacao(
   }
 
   const futuro = { ...atual, ...input };
+
+  /*
+   * Linha pessoal de WhatsApp em modo ponte: herda da config compartilhada o
+   * que o admin nao preencheu, e gera o nome de sessao quando faltar — sem
+   * isso o admin teria de redigitar a mesma ponte em toda linha pessoal nova.
+   * Precisa acontecer ANTES da checagem de conflito de sessao logo abaixo,
+   * senao o nome gerado aqui nunca seria validado contra colisao.
+   */
+  if (canal === 'WHATSAPP' && futuro.modo === 'NAO_OFICIAL' && futuro.donoId) {
+    const compartilhadaRegistro = await prisma.channelConfig.findFirst({ where: { canal, donoId: null } });
+    const compartilhada = compartilhadaRegistro ? aberto(compartilhadaRegistro) : null;
+    const herdado = herdarCredenciaisDaPonte(
+      {
+        ponteUrl: futuro.ponteUrl ?? null,
+        ponteToken: futuro.ponteToken ?? null,
+        ponteSegredo: futuro.ponteSegredo ?? null,
+      },
+      compartilhada
+        ? { ponteUrl: compartilhada.ponteUrl, ponteToken: compartilhada.ponteToken, ponteSegredo: compartilhada.ponteSegredo }
+        : null,
+    );
+    futuro.ponteUrl = herdado.ponteUrl;
+    futuro.ponteToken = herdado.ponteToken;
+    futuro.ponteSegredo = herdado.ponteSegredo;
+    input.ponteUrl = herdado.ponteUrl;
+    input.ponteToken = herdado.ponteToken;
+    input.ponteSegredo = herdado.ponteSegredo;
+
+    if (!futuro.ponteSessao) {
+      const nomeGerado = gerarNomeSessao(futuro.donoId);
+      futuro.ponteSessao = nomeGerado;
+      input.ponteSessao = nomeGerado;
+    }
+  }
 
   /*
    * Duas linhas do mesmo canal com a mesma sessao fariam `configDoDestino`
@@ -213,6 +281,41 @@ async function prepararGravacao(
 }
 
 /**
+ * A checagem previa de `prepararGravacao` roda dentro da organizacao atual
+ * (a extensao do Prisma escopa o `findFirst`), entao ela nunca enxerga uma
+ * sessao ja usada por OUTRA organizacao — so a constraint `@@unique([canal,
+ * ponteSessao])` (Fase 12.1) pega esse caso, e tambem fecha a corrida entre
+ * a checagem e a escrita (duas requisicoes concorrentes podem passar as duas
+ * pelo `findFirst` antes de qualquer commit).
+ *
+ * Traduz a violacao dessa constraint especifica num erro de dominio (409,
+ * a mesma classe de "ja existe" que a checagem previa usa) em vez de deixar
+ * subir como erro do Prisma nao tratado (500 generico). Nunca apaga nem
+ * altera a linha que ja tinha a sessao — so recusa a escrita nova.
+ */
+async function comColisaoDeSessaoTratada<T>(sessao: string | null | undefined, escrever: () => Promise<T>): Promise<T> {
+  try {
+    return await escrever();
+  } catch (erro) {
+    const alvo = erro instanceof Prisma.PrismaClientKnownRequestError ? erro.meta?.target : undefined;
+    // O formato de `meta.target` varia (nome da constraint como string, ou
+    // array de colunas/campos) conforme driver/versao do Prisma — checa as
+    // variantes plausiveis em vez de assumir uma so.
+    const textoDoAlvo = typeof alvo === 'string' ? alvo : Array.isArray(alvo) ? alvo.join(',') : '';
+    const colidiuNaSessao =
+      erro instanceof Prisma.PrismaClientKnownRequestError &&
+      erro.code === 'P2002' &&
+      (textoDoAlvo.includes('ponte_sessao') || textoDoAlvo.includes('ponteSessao'));
+    if (colidiuNaSessao) {
+      throw conflict(
+        `Ja existe uma linha usando a sessao "${sessao}" — pode ser de outra organizacao. Escolha outro nome de sessao.`,
+      );
+    }
+    throw erro;
+  }
+}
+
+/**
  * Numero compartilhado do canal — o que existia antes de linha pessoal ser
  * possivel, e continua sendo: `donoId` nulo, um so por organizacao.
  *
@@ -225,11 +328,11 @@ export async function salvarCanal(canal: CanalExterno, input: SalvarCanalInput) 
   const atual = gravado ? aberto(gravado) : null;
   const paraGravar = await prepararGravacao(canal, atual, input);
 
-  if (gravado) {
-    await prisma.channelConfig.update({ where: { id: gravado.id }, data: paraGravar });
-  } else {
-    await prisma.channelConfig.create({ data: { canal, ...paraGravar } });
-  }
+  await comColisaoDeSessaoTratada(paraGravar.ponteSessao, () =>
+    gravado
+      ? prisma.channelConfig.update({ where: { id: gravado.id }, data: paraGravar })
+      : prisma.channelConfig.create({ data: { canal, ...paraGravar } }),
+  );
 
   const canais = await listarCanais();
   return canais.find((c) => c.canal === canal && !c.dono)!;
@@ -242,7 +345,9 @@ export async function salvarCanal(canal: CanalExterno, input: SalvarCanalInput) 
  */
 export async function criarNumero(canal: CanalExterno, input: SalvarNumeroInput) {
   const paraGravar = await prepararGravacao(canal, null, input);
-  await prisma.channelConfig.create({ data: { canal, ...paraGravar } });
+  await comColisaoDeSessaoTratada(paraGravar.ponteSessao, () =>
+    prisma.channelConfig.create({ data: { canal, ...paraGravar } }),
+  );
 
   const canais = await listarCanais();
   const criado = canais.find((c) => c.canal === canal && c.dono?.id === input.donoId);
@@ -259,7 +364,9 @@ async function carregarNumeroOuFalhar(id: string) {
 export async function atualizarNumero(id: string, input: SalvarNumeroInput) {
   const gravado = await carregarNumeroOuFalhar(id);
   const paraGravar = await prepararGravacao(gravado.canal as CanalExterno, aberto(gravado), input, gravado.id);
-  await prisma.channelConfig.update({ where: { id }, data: paraGravar });
+  await comColisaoDeSessaoTratada(paraGravar.ponteSessao, () =>
+    prisma.channelConfig.update({ where: { id }, data: paraGravar }),
+  );
 
   const canais = await listarCanais();
   return canais.find((c) => c.id === id)!;
@@ -286,6 +393,17 @@ export async function obterConfig(canal: Channel) {
 export async function obterConfigPorId(id: string) {
   const config = await prisma.channelConfig.findUnique({ where: { id } });
   return config ? aberto(config) : null;
+}
+
+/**
+ * A propria linha pessoal de WhatsApp do usuario logado — usada pela tela de
+ * Atendimento para oferecer "Conectar WhatsApp" sem passar por Configuracoes.
+ * Devolve so o essencial para chamar as rotas de ponte por id; nunca segredo.
+ */
+export async function minhaLinhaWhatsapp(usuarioId: string) {
+  const config = await prisma.channelConfig.findFirst({ where: { canal: 'WHATSAPP', donoId: usuarioId } });
+  if (!config) return null;
+  return { id: config.id, ponteSessao: config.ponteSessao, modo: config.modo, ativo: config.ativo };
 }
 
 /**
@@ -318,6 +436,52 @@ export async function configDoDestino(canal: Channel, identificador: string | nu
     if (porId) return aberto(porId);
   }
   return obterConfig(canal);
+}
+
+/**
+ * Monta os campos do `Contact` a criar a partir de um contato importado da
+ * ponte. Pura — nenhuma chamada ao banco — para dar para testar sem Prisma;
+ * `importarContatos`, logo abaixo, decide se ja existe (findFirst) e chama o
+ * `create` com o que isto devolve.
+ */
+export function dadosContatoImportado(
+  contato: { numero: string; nome: string },
+  destino: { organizacaoId: string; responsavelId: string | null },
+) {
+  return {
+    organizacaoId: destino.organizacaoId,
+    nome: contato.nome,
+    telefone: contato.numero,
+    canalOrigem: 'WHATSAPP' as const,
+    responsavelId: destino.responsavelId,
+  };
+}
+
+/**
+ * Importa contatos do celular do vendedor (evento `contacts.upsert` da ponte)
+ * como cadastro de `Contact` no CRM.
+ *
+ * So CRIA o que falta: nunca sobrescreve um contato ja cadastrado com aquele
+ * telefone, o que torna a importacao segura de repetir a cada reconexao. Nao
+ * abre conversa nem mensagem — so o cadastro.
+ */
+export async function importarContatos(
+  organizacaoId: string,
+  responsavelId: string | null,
+  contatos: { numero: string; nome: string }[],
+): Promise<number> {
+  let criados = 0;
+  for (const contato of contatos) {
+    const existente = await prisma.contact.findFirst({
+      where: { organizacaoId, telefone: contato.numero },
+      select: { id: true },
+    });
+    if (existente) continue;
+
+    await prisma.contact.create({ data: dadosContatoImportado(contato, { organizacaoId, responsavelId }) });
+    criados += 1;
+  }
+  return criados;
 }
 
 /**

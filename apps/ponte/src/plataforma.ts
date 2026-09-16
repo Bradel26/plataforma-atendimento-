@@ -1,5 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { config } from './config.js';
+import type { ChatBruto } from './sessao.js';
 
 /**
  * O caminho de volta: a ponte entrega na plataforma o que o cliente mandou.
@@ -24,7 +25,7 @@ export type MensagemRecebida = {
   anexoNome?: string | null;
 };
 
-const ENDERECO = `${config.plataformaUrl}/api/webhooks/ponte/whatsapp/${config.organizacaoId}`;
+const BASE = `${config.plataformaUrl}/api/webhooks/ponte`;
 
 /** Espera entre as tentativas. Cresce para nao martelar plataforma reiniciando. */
 const ESPERAS = [1_000, 5_000, 15_000];
@@ -33,10 +34,13 @@ function assinar(corpo: string) {
   return `sha256=${createHmac('sha256', config.segredo).update(corpo).digest('hex')}`;
 }
 
-async function tentar(corpo: string): Promise<{ ok: true } | { ok: false; motivo: string; definitivo: boolean }> {
+async function tentar(
+  endereco: string,
+  corpo: string,
+): Promise<{ ok: true } | { ok: false; motivo: string; definitivo: boolean }> {
   let resposta: Response;
   try {
-    resposta = await fetch(ENDERECO, {
+    resposta = await fetch(endereco, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Ponte-Assinatura': assinar(corpo) },
       body: corpo,
@@ -63,28 +67,113 @@ async function tentar(corpo: string): Promise<{ ok: true } | { ok: false; motivo
 }
 
 /**
+ * POST assinado com reentrega, reaproveitado por `entregar` e `avisarStatus`.
+ * Nunca lanca: quem chama decide o que fazer com `false` — para mensagem
+ * recebida isso e so log (a ponte nao pode cair por causa disso); para aviso de
+ * status e a mesma logica, o numero nao pode desconectar so porque a plataforma
+ * estava fora do ar no instante do aviso.
+ */
+async function postComRetentativa(endereco: string, corpo: string, rotulo: string): Promise<boolean> {
+  for (let tentativa = 0; ; tentativa += 1) {
+    const r = await tentar(endereco, corpo);
+    if (r.ok) return true;
+
+    if (r.definitivo) {
+      console.error(`[ponte] plataforma recusou ${rotulo}: ${r.motivo}`);
+      return false;
+    }
+
+    if (tentativa >= ESPERAS.length) {
+      console.error(`[ponte] desisti de ${rotulo} apos ${tentativa} tentativas: ${r.motivo}`);
+      return false;
+    }
+
+    console.warn(`[ponte] falha ao entregar ${rotulo} (${r.motivo}); tento de novo`);
+    await new Promise((ok) => setTimeout(ok, ESPERAS[tentativa]));
+  }
+}
+
+/**
  * Entrega com reentrega. Nunca lanca: mensagem perdida vira log, e nao queda da
  * ponte — derrubar a sessao inteira porque UMA mensagem nao entrou desconectaria
  * o numero da empresa.
  */
 export async function entregar(mensagem: MensagemRecebida): Promise<boolean> {
-  const corpo = JSON.stringify(mensagem);
+  const endereco = `${BASE}/whatsapp/${config.organizacaoId}`;
+  return postComRetentativa(endereco, JSON.stringify(mensagem), `a mensagem ${mensagem.idExterno}`);
+}
 
-  for (let tentativa = 0; ; tentativa += 1) {
-    const r = await tentar(corpo);
-    if (r.ok) return true;
+/** Contatos vao em lotes de no maximo isto por requisicao. */
+const TAMANHO_DO_LOTE = 200;
 
-    if (r.definitivo) {
-      console.error(`[ponte] plataforma recusou a mensagem ${mensagem.idExterno}: ${r.motivo}`);
-      return false;
-    }
+/**
+ * Entrega os contatos importados do celular do vendedor. So cria cadastro no
+ * CRM (a API decide o que ja existe); nunca lanca, mesma logica de `entregar`.
+ *
+ * Mais de `TAMANHO_DO_LOTE` contatos vao em varias chamadas EM SEQUENCIA (nao
+ * em paralelo), para uma agenda grande nao martelar a plataforma em rajada.
+ */
+export async function entregarContatos(
+  sessao: string,
+  contatos: { numero: string; nome: string }[],
+): Promise<boolean> {
+  const endereco = `${BASE}/contatos/${config.organizacaoId}`;
 
-    if (tentativa >= ESPERAS.length) {
-      console.error(`[ponte] desisti da mensagem ${mensagem.idExterno} apos ${tentativa} tentativas: ${r.motivo}`);
-      return false;
-    }
-
-    console.warn(`[ponte] falha ao entregar ${mensagem.idExterno} (${r.motivo}); tento de novo`);
-    await new Promise((ok) => setTimeout(ok, ESPERAS[tentativa]));
+  let tudoOk = true;
+  for (let i = 0; i < contatos.length; i += TAMANHO_DO_LOTE) {
+    const lote = contatos.slice(i, i + TAMANHO_DO_LOTE);
+    const corpo = JSON.stringify({ sessao, contatos: lote });
+    const ok = await postComRetentativa(endereco, corpo, `${lote.length} contato(s) da sessao "${sessao}"`);
+    tudoOk = tudoOk && ok;
   }
+  return tudoOk;
+}
+
+/** Chats vao em lotes de no maximo isto por requisicao, mesmo limite de `chatsSchema` na API. */
+const TAMANHO_DO_LOTE_CHATS = 200;
+
+/**
+ * Entrega o espelho de chats sincronizado do celular do vendedor. Nunca
+ * lanca, mesma logica de `entregar`/`entregarContatos`.
+ *
+ * O corpo carrega os timestamps como ISO (contrato de `chatsSchema` na API),
+ * mas `ChatBruto` guarda epoch ms internamente (mesma unidade que o Baileys
+ * usa) — a conversao acontece so aqui, na borda de rede.
+ */
+export async function entregarChats(sessao: string, chats: ChatBruto[]): Promise<boolean> {
+  const endereco = `${BASE}/chats/${config.organizacaoId}`;
+
+  let tudoOk = true;
+  for (let i = 0; i < chats.length; i += TAMANHO_DO_LOTE_CHATS) {
+    const lote = chats.slice(i, i + TAMANHO_DO_LOTE_CHATS);
+    const corpo = JSON.stringify({
+      sessao,
+      chats: lote.map((c) => ({
+        numero: c.numero,
+        nome: c.nome,
+        ultimaMensagem: c.mensagens[c.mensagens.length - 1]?.texto ?? '',
+        ultimaMensagemEm: new Date(c.ultimaMensagemEm).toISOString(),
+        naoLidas: c.naoLidas,
+        mensagens: c.mensagens.map((m) => ({ ...m, criadoEm: new Date(m.criadoEm).toISOString() })),
+      })),
+    });
+    const ok = await postComRetentativa(endereco, corpo, `${lote.length} chat(s) da sessao "${sessao}"`);
+    tudoOk = tudoOk && ok;
+  }
+  return tudoOk;
+}
+
+/**
+ * Avisa a plataforma que uma sessao conectou ou caiu, para o painel de Canais
+ * mostrar isso em tempo real — hoje ninguem sabia que o WhatsApp de um vendedor
+ * tinha desconectado ate ele reclamar que parou de receber mensagem.
+ */
+export async function avisarStatus(
+  sessao: string,
+  status: 'CONECTADO' | 'DESCONECTADO',
+  detalhe: string | null,
+): Promise<boolean> {
+  const endereco = `${BASE}/status/${config.organizacaoId}`;
+  const corpo = JSON.stringify({ sessao, status, detalhe });
+  return postComRetentativa(endereco, corpo, `o status (${status}) da sessao "${sessao}"`);
 }

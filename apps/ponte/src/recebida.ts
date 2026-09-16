@@ -1,7 +1,7 @@
 import { downloadMediaMessage, type WAMessage } from '@whiskeysockets/baileys';
 import { config } from './config.js';
 import { guardar } from './midia.js';
-import { numeroDoJid, type Sessao } from './sessao.js';
+import { lembrarJid, numeroDoJid, type Sessao } from './sessao.js';
 import { entregar, type MensagemRecebida } from './plataforma.js';
 
 /**
@@ -15,7 +15,7 @@ import { entregar, type MensagemRecebida } from './plataforma.js';
 
 type Tipo = NonNullable<MensagemRecebida['tipoAnexo']>;
 
-type Extraido = {
+export type Extraido = {
   texto: string;
   tipo: Tipo;
   /** Presente quando ha binario a baixar. */
@@ -31,7 +31,7 @@ const RESUMO: Record<Tipo, string> = {
   ARQUIVO: '[arquivo recebido]',
 };
 
-function extrair(msg: WAMessage): Extraido | null {
+export function extrair(msg: WAMessage): Extraido | null {
   const m = msg.message;
   if (!m) return null;
 
@@ -150,6 +150,10 @@ export async function receber(sessao: Sessao, msg: WAMessage) {
 
     const numero = numeroDoJid(remetente);
     if (!numero) return;
+
+    // Guarda o jid exato de onde isto chegou (pode ser "@lid", nao so
+    // "@s.whatsapp.net") para a resposta sair pelo mesmo endereco.
+    lembrarJid(numero, remetente);
 
     const idExterno = msg.key?.id;
     if (!idExterno) return;

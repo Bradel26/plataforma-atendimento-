@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Alerta, Badge, Button, Card, EmptyState, Select } from '../../../components/ui';
 import { ApiError, api } from '../../../lib/api';
 import {
@@ -39,8 +40,10 @@ type FichaProps = {
 };
 
 export function FichaContato({ contatoId, aoMudarEtiquetas }: FichaProps) {
+  const navigate = useNavigate();
   const [ficha, setFicha] = useState<Ficha | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [iniciando, setIniciando] = useState(false);
   // Contador de recargas: mudar este numero e o sinal para a linha do tempo
   // buscar de novo. Guardar a lista aqui para repassar seria duplicar o estado
   // dela — e a paginacao por cursor mora la dentro.
@@ -111,6 +114,19 @@ export function FichaContato({ contatoId, aoMudarEtiquetas }: FichaProps) {
     }
   };
 
+  /** Botao "Iniciar conversa": abre uma conversa de WhatsApp vazia e leva direto para o Atendimento. */
+  const iniciarConversa = async () => {
+    setIniciando(true);
+    setErro(null);
+    try {
+      const { conversa } = await api.post<{ conversa: { id: string } }>('/conversas', { contatoId });
+      navigate(`/atendimento?conversa=${conversa.id}`);
+    } catch (e) {
+      setErro(e instanceof ApiError ? e.message : 'Nao foi possivel iniciar a conversa');
+      setIniciando(false);
+    }
+  };
+
   const concluir = async (atividade: Atividade) => {
     try {
       await api.post(`/atividades/${atividade.id}/concluir`, {});
@@ -140,7 +156,7 @@ export function FichaContato({ contatoId, aoMudarEtiquetas }: FichaProps) {
   if (erro && !ficha) return <Alerta>{erro}</Alerta>;
   if (!ficha) return <Card titulo="Ficha do contato"><p className="text-sm text-slate-500">Carregando ficha...</p></Card>;
 
-  const { contato, indicadores: i, atividadesAbertas } = ficha;
+  const { contato, indicadores: i, atividadesAbertas, temPreviaWhatsapp } = ficha;
   const agora = Date.now();
 
   return (
@@ -149,34 +165,43 @@ export function FichaContato({ contatoId, aoMudarEtiquetas }: FichaProps) {
         titulo={contato.nome}
         descricao={contato.conta ? `Empresa: ${contato.conta.nome}` : 'Sem empresa vinculada'}
         acao={
-          /* Vincular fica no cabecalho porque e onde a falta aparece: sem
-             empresa, metade dos numeros abaixo e sempre zero — proposta e
-             oportunidade vivem na conta, nao na pessoa. */
-          contato.conta ? (
-            <Button variante="neutro" onClick={() => void desvincular(contato.conta!.id)}>
-              Desvincular empresa
-            </Button>
-          ) : vinculando ? (
-            <Select
-              autoFocus
-              defaultValue=""
-              onChange={(e) => void vincular(e.target.value)}
-              onBlur={() => setVinculando(false)}
-              className="max-w-[260px]"
-              aria-label="Empresa"
-            >
-              <option value="">{contas ? 'Escolha a empresa...' : 'Carregando...'}</option>
-              {(contas ?? []).map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nome}
-                </option>
-              ))}
-            </Select>
-          ) : (
-            <Button variante="neutro" onClick={() => void abrirSeletor()}>
-              Vincular empresa
-            </Button>
-          )
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Sem telefone nao ha como abrir conversa de WhatsApp — o botao nem aparece. */}
+            {contato.telefone && (
+              <Button variante="primario" onClick={() => void iniciarConversa()} disabled={iniciando}>
+                {iniciando ? 'Iniciando...' : 'Iniciar conversa'}
+              </Button>
+            )}
+            {temPreviaWhatsapp && <Badge tom="marca">Já tem conversa no WhatsApp</Badge>}
+            {/* Vincular fica no cabecalho porque e onde a falta aparece: sem
+               empresa, metade dos numeros abaixo e sempre zero — proposta e
+               oportunidade vivem na conta, nao na pessoa. */}
+            {contato.conta ? (
+              <Button variante="neutro" onClick={() => void desvincular(contato.conta!.id)}>
+                Desvincular empresa
+              </Button>
+            ) : vinculando ? (
+              <Select
+                autoFocus
+                defaultValue=""
+                onChange={(e) => void vincular(e.target.value)}
+                onBlur={() => setVinculando(false)}
+                className="max-w-[260px]"
+                aria-label="Empresa"
+              >
+                <option value="">{contas ? 'Escolha a empresa...' : 'Carregando...'}</option>
+                {(contas ?? []).map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nome}
+                  </option>
+                ))}
+              </Select>
+            ) : (
+              <Button variante="neutro" onClick={() => void abrirSeletor()}>
+                Vincular empresa
+              </Button>
+            )}
+          </div>
         }
       >
         <dl className="grid gap-3 text-sm sm:grid-cols-4">
