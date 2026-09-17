@@ -422,6 +422,16 @@ export async function minhaLinhaWhatsapp(usuarioId: string) {
  * mensagem tem de apontar para o ADMIN em vez de estourar o erro tecnico que
  * `prepararGravacao` daria (falar de "token da ponte" para o vendedor).
  *
+ * A checagem cobre nao so o `modo`, mas tambem a presenca de
+ * ponteUrl/ponteToken/ponteSegredo na compartilhada: um admin pode ligar o
+ * modo nao oficial numa gravacao e so preencher as credenciais da ponte numa
+ * seguinte (o PUT de canal aceita campos parciais), e nesse intervalo a
+ * compartilhada fica com `modo: NAO_OFICIAL` mas sem o que herdar. Sem esta
+ * checagem extra, o self-service passava para `criarNumero`, que herdava
+ * `null` de tudo e falhava dentro de `prepararGravacao` com a mensagem
+ * pensada para quem preenche o formulario de Canais — foi exatamente o que
+ * aconteceu em producao (Fase 13.5, incidente do dia seguinte ao deploy).
+ *
  * Duas chamadas concorrentes deste self-service para o MESMO usuario (dois
  * cliques, duas abas) podem ambas ver `existente` nulo e ambas chegar em
  * `criarNumero` — como o nome de sessao e deterministico
@@ -440,7 +450,16 @@ export async function conectarMinhaLinhaWhatsapp(usuarioId: string) {
   if (existente) return existente;
 
   const compartilhada = await prisma.channelConfig.findFirst({ where: { canal: 'WHATSAPP', donoId: null } });
-  if (!compartilhada || modoEfetivo(compartilhada.modo) !== 'NAO_OFICIAL') {
+  // So verifica presenca (nao decifra) — string cifrada nao-vazia ja basta
+  // para saber que o campo foi preenchido, e decifrar aqui seria trabalho a
+  // mais so para jogar fora o valor.
+  const compartilhadaPronta =
+    compartilhada &&
+    modoEfetivo(compartilhada.modo) === 'NAO_OFICIAL' &&
+    Boolean(compartilhada.ponteUrl) &&
+    Boolean(compartilhada.ponteToken) &&
+    Boolean(compartilhada.ponteSegredo);
+  if (!compartilhadaPronta) {
     throw badRequest(
       'A conexao direta do WhatsApp ainda nao foi habilitada pelo administrador da sua organizacao. Peca para um administrador configurar o WhatsApp da empresa antes de conectar sua linha pessoal.',
     );
