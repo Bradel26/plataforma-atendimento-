@@ -408,6 +408,47 @@ describe('conectarMinhaLinhaWhatsapp — self-service da linha pessoal', () => {
     ).rejects.toMatchObject({ status: 400 });
   });
 
+  it('linha compartilhada em NAO_OFICIAL mas sem ponteUrl/ponteToken/ponteSegredo preenchidos: erro amigavel, nunca a mensagem tecnica de prepararGravacao', async () => {
+    // Reproduz o incidente de producao: admin ligou o modo nao oficial mas
+    // ainda nao salvou endereco/token/segredo da ponte (PUT de canal aceita
+    // campos parciais). O guard tem de barrar aqui, sem deixar cair em
+    // criarNumero/prepararGravacao, que lancaria a mensagem pensada para
+    // quem preenche o formulario de Canais, nao para o self-service.
+    channelConfigFindFirst
+      .mockResolvedValueOnce(null) // minhaLinhaWhatsapp: nao existe
+      .mockResolvedValueOnce(
+        linhaCrua({ id: 'compartilhada', donoId: null, dono: null, modo: 'NAO_OFICIAL', ponteUrl: null, ponteToken: null, ponteSegredo: null }),
+      );
+
+    const { conectarMinhaLinhaWhatsapp } = await import('./channels.service');
+    await expect(
+      comOrganizacao('org-1', () => conectarMinhaLinhaWhatsapp('user-1'), { id: 'user-1', perfil: 'COMERCIAL' }),
+    ).rejects.toMatchObject({ status: 400 });
+
+    expect(channelConfigCreate).not.toHaveBeenCalled();
+    try {
+      await comOrganizacao('org-1', () => conectarMinhaLinhaWhatsapp('user-1'), { id: 'user-1', perfil: 'COMERCIAL' });
+      throw new Error('deveria ter lancado');
+    } catch (erro) {
+      expect((erro as Error).message).not.toContain('token da ponte');
+      expect((erro as Error).message).toContain('administrador');
+    }
+  });
+
+  it('linha compartilhada em NAO_OFICIAL com ponteUrl/ponteToken mas sem ponteSegredo: mesmo erro amigavel (nao so URL/token importam)', async () => {
+    channelConfigFindFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(
+        linhaCrua({ id: 'compartilhada', donoId: null, dono: null, modo: 'NAO_OFICIAL', ponteSegredo: null }),
+      );
+
+    const { conectarMinhaLinhaWhatsapp } = await import('./channels.service');
+    await expect(
+      comOrganizacao('org-1', () => conectarMinhaLinhaWhatsapp('user-1'), { id: 'user-1', perfil: 'COMERCIAL' }),
+    ).rejects.toMatchObject({ status: 400 });
+    expect(channelConfigCreate).not.toHaveBeenCalled();
+  });
+
   it('corrida entre dois cliques: colisao na propria sessao deterministica devolve a linha ja criada pela vencedora, sem erro tecnico', async () => {
     channelConfigFindFirst
       .mockResolvedValueOnce(null) // minhaLinhaWhatsapp: ainda nao existe (perdedora da corrida tambem viu isto)
