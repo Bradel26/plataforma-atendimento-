@@ -407,4 +407,26 @@ describe('conectarMinhaLinhaWhatsapp — self-service da linha pessoal', () => {
       comOrganizacao('org-1', () => conectarMinhaLinhaWhatsapp('user-1'), { id: 'user-1', perfil: 'COMERCIAL' }),
     ).rejects.toMatchObject({ status: 400 });
   });
+
+  it('corrida entre dois cliques: colisao na propria sessao deterministica devolve a linha ja criada pela vencedora, sem erro tecnico', async () => {
+    channelConfigFindFirst
+      .mockResolvedValueOnce(null) // minhaLinhaWhatsapp: ainda nao existe (perdedora da corrida tambem viu isto)
+      .mockResolvedValueOnce(linhaCrua({ id: 'compartilhada', donoId: null, dono: null, modo: 'NAO_OFICIAL' })) // linha compartilhada em conectarMinhaLinhaWhatsapp
+      .mockResolvedValueOnce(linhaCrua({ id: 'compartilhada', donoId: null, dono: null, modo: 'NAO_OFICIAL' })) // heranca de credenciais dentro de prepararGravacao
+      .mockResolvedValueOnce(null) // checagem previa de colisao dentro de prepararGravacao: nao ve nada, a vencedora ja passou por aqui
+      .mockResolvedValueOnce(
+        linhaCrua({ id: 'linha-da-vencedora', donoId: 'user-9', dono: { id: 'user-9', nome: 'Vendedor 9' }, ponteSessao: 'vendedor-user-9' }),
+      ); // minhaLinhaWhatsapp no catch: a vencedora ja criou a linha
+    userFindUnique.mockResolvedValue({ id: 'user-9' });
+    channelConfigCreate.mockRejectedValue(erroDeColisaoDeSessao());
+
+    const { conectarMinhaLinhaWhatsapp } = await import('./channels.service');
+    const resultado = await comOrganizacao('org-1', () => conectarMinhaLinhaWhatsapp('user-9'), {
+      id: 'user-9',
+      perfil: 'COMERCIAL',
+    });
+
+    expect(resultado).toMatchObject({ id: 'linha-da-vencedora' });
+    expect(channelConfigCreate).toHaveBeenCalledTimes(1);
+  });
 });
