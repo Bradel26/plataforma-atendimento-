@@ -4,6 +4,7 @@ import { prisma, prismaSemIsolamento } from '../../lib/prisma';
 import { semOrganizacao } from '../../lib/tenant';
 import { badRequest, conflict, notFound } from '../../lib/errors';
 import { cifrar, decifrar } from '../../lib/crypto-box';
+import { modoEfetivo } from './whatsapp.modo';
 
 export const CANAIS_EXTERNOS = ['WHATSAPP', 'INSTAGRAM', 'FACEBOOK'] as const;
 export type CanalExterno = (typeof CANAIS_EXTERNOS)[number];
@@ -404,6 +405,58 @@ export async function minhaLinhaWhatsapp(usuarioId: string) {
   const config = await prisma.channelConfig.findFirst({ where: { canal: 'WHATSAPP', donoId: usuarioId } });
   if (!config) return null;
   return { id: config.id, ponteSessao: config.ponteSessao, modo: config.modo, ativo: config.ativo };
+}
+
+/**
+ * Self-service: cria a linha pessoal de WhatsApp do usuario logado na hora em
+ * que ele pede para conectar — sem exigir que um ADMIN cadastre a linha antes
+ * pela tela de Canais. Reconexao (linha ja existente) devolve a mesma linha
+ * em vez de criar outra, para nao violar `@@unique([canal, ponteSessao])`.
+ *
+ * A criacao em si passa por `criarNumero`, que ja faz tudo que uma linha
+ * pessoal de WhatsApp precisa sem o usuario informar nada: herda
+ * endereco/token/segredo da linha compartilhada (`herdarCredenciaisDaPonte`)
+ * e gera o nome de sessao (`gerarNomeSessao`). O unico caso que este self-
+ * service recusa antes de chamar `criarNumero` e quando nao ha o que herdar —
+ * a organizacao nunca configurou (ou nao ativou) o modo nao oficial, e ai a
+ * mensagem tem de apontar para o ADMIN em vez de estourar o erro tecnico que
+ * `prepararGravacao` daria (falar de "token da ponte" para o vendedor).
+ *
+ * Duas chamadas concorrentes deste self-service para o MESMO usuario (dois
+ * cliques, duas abas) podem ambas ver `existente` nulo e ambas chegar em
+ * `criarNumero` — como o nome de sessao e deterministico
+ * (`gerarNomeSessao(usuarioId)` dentro de `prepararGravacao`), as duas miram
+ * a mesma `ponteSessao`, e a constraint `@@unique([canal, ponteSessao])` (via
+ * `comColisaoDeSessaoTratada`) recusa a segunda escrita com 409. Esse 409 tem
+ * a mensagem pensada para o ADMIN da tela de Canais escolhendo outro nome de
+ * sessao — nao faz sentido aqui, onde o usuario so clicou duas vezes e nao
+ * tem campo nenhum de sessao para mudar. Por isso o catch abaixo: se a linha
+ * ja existe apos o erro (a vencedora da corrida a criou), devolve ela em vez
+ * do erro tecnico; so nao existindo (motivo diferente de auto-colisao) e que
+ * o erro original sobe.
+ */
+export async function conectarMinhaLinhaWhatsapp(usuarioId: string) {
+  const existente = await minhaLinhaWhatsapp(usuarioId);
+  if (existente) return existente;
+
+  const compartilhada = await prisma.channelConfig.findFirst({ where: { canal: 'WHATSAPP', donoId: null } });
+  if (!compartilhada || modoEfetivo(compartilhada.modo) !== 'NAO_OFICIAL') {
+    throw badRequest(
+      'A conexao direta do WhatsApp ainda nao foi habilitada pelo administrador da sua organizacao. Peca para um administrador configurar o WhatsApp da empresa antes de conectar sua linha pessoal.',
+    );
+  }
+
+  try {
+    await criarNumero('WHATSAPP', { donoId: usuarioId, modo: 'NAO_OFICIAL', ativo: true });
+  } catch (erro) {
+    const jaExiste = await minhaLinhaWhatsapp(usuarioId);
+    if (jaExiste) return jaExiste;
+    throw erro;
+  }
+
+  const criada = await minhaLinhaWhatsapp(usuarioId);
+  if (!criada) throw notFound('Linha pessoal nao encontrada logo apos a criacao');
+  return criada;
 }
 
 /**
