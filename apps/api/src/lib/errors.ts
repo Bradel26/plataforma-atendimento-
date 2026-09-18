@@ -16,3 +16,4 @@ export const unauthorized = (msg = 'Nao autenticado') => new AppError(401, 'UNAU
 export const forbidden = (msg = 'Acesso negado para este perfil') => new AppError(403, 'FORBIDDEN', msg);
 export const notFound = (msg = 'Recurso nao encontrado') => new AppError(404, 'NOT_FOUND', msg);
 export const conflict = (msg: string) => new AppError(409, 'CONFLICT', msg);
+export const serviceUnavailable = (msg: string) => new AppError(503, 'CANAL_INDISPONIVEL', msg);

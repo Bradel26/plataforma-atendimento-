@@ -60,6 +60,13 @@ const ORDEM = [
   'SEED_ADMIN_EMAIL',
   'SEED_ADMIN_PASSWORD',
   'LGPD_EXPURGO_AUTOMATICO',
+  // Infraestrutura global da Ponte (self-service de WhatsApp pessoal sem linha
+  // compartilhada previa). Opcionais: ausentes no .env.production, o filtro
+  // abaixo (`final[k] !== undefined && final[k] !== ''`) so as omite do
+  // arquivo gerado, sem quebrar quem ainda depende so da linha compartilhada.
+  'PONTE_URL',
+  'PONTE_TOKEN',
+  'PONTE_SEGREDO',
 ];
 
 const final = { ...lido, ...ajustes };
