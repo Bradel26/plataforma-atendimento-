@@ -2,9 +2,10 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { Prisma, type Channel } from '@prisma/client';
 import { prisma, prismaSemIsolamento } from '../../lib/prisma';
 import { semOrganizacao } from '../../lib/tenant';
-import { badRequest, conflict, notFound } from '../../lib/errors';
+import { badRequest, conflict, notFound, serviceUnavailable } from '../../lib/errors';
 import { cifrar, decifrar } from '../../lib/crypto-box';
 import { modoEfetivo } from './whatsapp.modo';
+import { obterConfigGlobalPonte } from '../../config/ponte.config';
 
 export const CANAIS_EXTERNOS = ['WHATSAPP', 'INSTAGRAM', 'FACEBOOK'] as const;
 export type CanalExterno = (typeof CANAIS_EXTERNOS)[number];
@@ -197,7 +198,7 @@ async function prepararGravacao(
   if (canal === 'WHATSAPP' && futuro.modo === 'NAO_OFICIAL' && futuro.donoId) {
     const compartilhadaRegistro = await prisma.channelConfig.findFirst({ where: { canal, donoId: null } });
     const compartilhada = compartilhadaRegistro ? aberto(compartilhadaRegistro) : null;
-    const herdado = herdarCredenciaisDaPonte(
+    const herdadoDaCompartilhada = herdarCredenciaisDaPonte(
       {
         ponteUrl: futuro.ponteUrl ?? null,
         ponteToken: futuro.ponteToken ?? null,
@@ -207,6 +208,11 @@ async function prepararGravacao(
         ? { ponteUrl: compartilhada.ponteUrl, ponteToken: compartilhada.ponteToken, ponteSegredo: compartilhada.ponteSegredo }
         : null,
     );
+    // Terceiro nivel: o que nem a linha nem a compartilhada preencheram cai
+    // para a config global (infraestrutura da propria API) — e o que deixa a
+    // linha pessoal nascer sem nenhuma ChannelConfig compartilhada previa.
+    const configGlobal = obterConfigGlobalPonte();
+    const herdado = herdarCredenciaisDaPonte(herdadoDaCompartilhada, configGlobal);
     futuro.ponteUrl = herdado.ponteUrl;
     futuro.ponteToken = herdado.ponteToken;
     futuro.ponteSegredo = herdado.ponteSegredo;
@@ -408,29 +414,46 @@ export async function minhaLinhaWhatsapp(usuarioId: string) {
 }
 
 /**
+ * Infraestrutura da ponte disponivel para a organizacao atual, sem exigir
+ * nenhuma acao administrativa previa: a config global (`PONTE_URL`/
+ * `PONTE_TOKEN`/`PONTE_SEGREDO`, infraestrutura da propria API) resolve
+ * sozinha o caso comum. A linha compartilhada legada e olhada so como
+ * fallback, para instalacoes antigas que configuraram a ponte por ali antes
+ * desta config global existir continuarem funcionando sem mudar nada.
+ */
+async function infraDaPonteDisponivel(): Promise<boolean> {
+  if (obterConfigGlobalPonte()) return true;
+
+  const compartilhada = await prisma.channelConfig.findFirst({ where: { canal: 'WHATSAPP', donoId: null } });
+  // So verifica presenca (nao decifra) — string cifrada nao-vazia ja basta
+  // para saber que o campo foi preenchido, e decifrar aqui seria trabalho a
+  // mais so para jogar fora o valor.
+  return Boolean(
+    compartilhada &&
+      modoEfetivo(compartilhada.modo) === 'NAO_OFICIAL' &&
+      compartilhada.ponteUrl &&
+      compartilhada.ponteToken &&
+      compartilhada.ponteSegredo,
+  );
+}
+
+/**
  * Self-service: cria a linha pessoal de WhatsApp do usuario logado na hora em
- * que ele pede para conectar — sem exigir que um ADMIN cadastre a linha antes
- * pela tela de Canais. Reconexao (linha ja existente) devolve a mesma linha
- * em vez de criar outra, para nao violar `@@unique([canal, ponteSessao])`.
+ * que ele pede para conectar — sem exigir que um ADMIN cadastre nenhuma linha
+ * compartilhada antes pela tela de Canais. Reconexao (linha ja existente)
+ * devolve a mesma linha em vez de criar outra, para nao violar
+ * `@@unique([canal, ponteSessao])`.
  *
  * A criacao em si passa por `criarNumero`, que ja faz tudo que uma linha
- * pessoal de WhatsApp precisa sem o usuario informar nada: herda
- * endereco/token/segredo da linha compartilhada (`herdarCredenciaisDaPonte`)
- * e gera o nome de sessao (`gerarNomeSessao`). O unico caso que este self-
- * service recusa antes de chamar `criarNumero` e quando nao ha o que herdar —
- * a organizacao nunca configurou (ou nao ativou) o modo nao oficial, e ai a
- * mensagem tem de apontar para o ADMIN em vez de estourar o erro tecnico que
- * `prepararGravacao` daria (falar de "token da ponte" para o vendedor).
- *
- * A checagem cobre nao so o `modo`, mas tambem a presenca de
- * ponteUrl/ponteToken/ponteSegredo na compartilhada: um admin pode ligar o
- * modo nao oficial numa gravacao e so preencher as credenciais da ponte numa
- * seguinte (o PUT de canal aceita campos parciais), e nesse intervalo a
- * compartilhada fica com `modo: NAO_OFICIAL` mas sem o que herdar. Sem esta
- * checagem extra, o self-service passava para `criarNumero`, que herdava
- * `null` de tudo e falhava dentro de `prepararGravacao` com a mensagem
- * pensada para quem preenche o formulario de Canais — foi exatamente o que
- * aconteceu em producao (Fase 13.5, incidente do dia seguinte ao deploy).
+ * pessoal de WhatsApp precisa sem o usuario informar nada: resolve
+ * endereco/token/segredo (linha pessoal > linha compartilhada legada > config
+ * global da ponte, ver `herdarCredenciaisDaPonte`/`obterConfigGlobalPonte`) e
+ * gera o nome de sessao (`gerarNomeSessao`). O unico caso que este
+ * self-service recusa antes de chamar `criarNumero` e quando a PONTE em si
+ * nao esta configurada em lugar nenhum (`infraDaPonteDisponivel`) — nesse
+ * caso a mensagem fala de indisponibilidade de infraestrutura (503), nunca
+ * pede para o vendedor procurar um administrador: a Ponte e infraestrutura da
+ * aplicacao, nao configuracao de negocio que um admin preenche por linha.
  *
  * Duas chamadas concorrentes deste self-service para o MESMO usuario (dois
  * cliques, duas abas) podem ambas ver `existente` nulo e ambas chegar em
@@ -449,19 +472,9 @@ export async function conectarMinhaLinhaWhatsapp(usuarioId: string) {
   const existente = await minhaLinhaWhatsapp(usuarioId);
   if (existente) return existente;
 
-  const compartilhada = await prisma.channelConfig.findFirst({ where: { canal: 'WHATSAPP', donoId: null } });
-  // So verifica presenca (nao decifra) — string cifrada nao-vazia ja basta
-  // para saber que o campo foi preenchido, e decifrar aqui seria trabalho a
-  // mais so para jogar fora o valor.
-  const compartilhadaPronta =
-    compartilhada &&
-    modoEfetivo(compartilhada.modo) === 'NAO_OFICIAL' &&
-    Boolean(compartilhada.ponteUrl) &&
-    Boolean(compartilhada.ponteToken) &&
-    Boolean(compartilhada.ponteSegredo);
-  if (!compartilhadaPronta) {
-    throw badRequest(
-      'A conexao direta do WhatsApp ainda nao foi habilitada pelo administrador da sua organizacao. Peca para um administrador configurar o WhatsApp da empresa antes de conectar sua linha pessoal.',
+  if (!(await infraDaPonteDisponivel())) {
+    throw serviceUnavailable(
+      'A conexao com o WhatsApp esta temporariamente indisponivel. Tente novamente em alguns minutos.',
     );
   }
 

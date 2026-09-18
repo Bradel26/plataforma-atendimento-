@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Prisma } from '@prisma/client';
 import { comOrganizacao } from '../../lib/tenant';
 import { dadosContatoImportado, gerarNomeSessao, herdarCredenciaisDaPonte } from './channels.service';
+import { decifrar } from '../../lib/crypto-box';
 
 /**
  * Herdar credenciais da ponte compartilhada evita que o ADMIN redigite
@@ -131,6 +132,14 @@ vi.mock('../../lib/prisma', () => ({
   },
   prismaSemIsolamento: {},
 }));
+
+const { obterConfigGlobalPonteMock } = vi.hoisted(() => ({ obterConfigGlobalPonteMock: vi.fn() }));
+vi.mock('../../config/ponte.config', () => ({ obterConfigGlobalPonte: obterConfigGlobalPonteMock }));
+
+// Por padrao nenhuma instalacao de teste tem config global — quem precisa dela liga explicitamente.
+beforeEach(() => {
+  obterConfigGlobalPonteMock.mockReturnValue(null);
+});
 
 /** Erro do Prisma para violacao da constraint `canais_config_canal_ponte_sessao_key` — mesma classe que uma colisao real produziria. */
 function erroDeColisaoDeSessao(alvo: string[] | string = ['canal', 'ponteSessao']) {
@@ -355,10 +364,14 @@ describe('conectarMinhaLinhaWhatsapp — self-service da linha pessoal', () => {
     expect(channelConfigCreate).not.toHaveBeenCalled();
   });
 
-  it('sem linha pessoal e com a linha compartilhada em modo NAO_OFICIAL: cria automaticamente', async () => {
+  it('D) legado: sem config global, mas linha compartilhada existente e configurada — comportamento legado continua funcionando', async () => {
+    // obterConfigGlobalPonteMock ja devolve null pelo beforeEach do topo do
+    // arquivo — este e o caso de uma instalacao que nunca configurou
+    // PONTE_URL/PONTE_TOKEN/PONTE_SEGREDO e continua so com a linha
+    // compartilhada, exatamente como antes desta mudanca.
     channelConfigFindFirst
       .mockResolvedValueOnce(null) // minhaLinhaWhatsapp: nao existe ainda
-      .mockResolvedValueOnce(linhaCrua({ id: 'compartilhada', donoId: null, dono: null, modo: 'NAO_OFICIAL' })) // linha compartilhada em conectarMinhaLinhaWhatsapp
+      .mockResolvedValueOnce(linhaCrua({ id: 'compartilhada', donoId: null, dono: null, modo: 'NAO_OFICIAL' })) // fallback legado: disponibilidade da ponte via linha compartilhada
       .mockResolvedValueOnce(linhaCrua({ id: 'compartilhada', donoId: null, dono: null, modo: 'NAO_OFICIAL' })) // heranca de credenciais dentro de prepararGravacao
       .mockResolvedValueOnce(null) // checagem de colisao de sessao dentro de prepararGravacao
       .mockResolvedValueOnce(
@@ -384,76 +397,102 @@ describe('conectarMinhaLinhaWhatsapp — self-service da linha pessoal', () => {
     expect(resultado.id).toBe('nova-linha');
   });
 
-  it('sem linha compartilhada configurada: erro amigavel, sem termos tecnicos', async () => {
+  it('A) sem linha pessoal, sem linha compartilhada, config global da ponte definida: cria a linha pessoal sem depender de nenhum admin', async () => {
+    obterConfigGlobalPonteMock.mockReturnValue({
+      ponteUrl: 'http://ponte-global:3100',
+      ponteToken: 'token-global',
+      ponteSegredo: 'segredo-global',
+    });
     channelConfigFindFirst
-      .mockResolvedValueOnce(null) // minhaLinhaWhatsapp: nao existe
-      .mockResolvedValueOnce(null); // sem linha compartilhada nenhuma
+      .mockResolvedValueOnce(null) // minhaLinhaWhatsapp: nao existe ainda
+      .mockResolvedValueOnce(null) // compartilhada dentro de prepararGravacao: nao existe nenhuma — e nao faz diferenca
+      .mockResolvedValueOnce(null); // checagem de colisao de sessao dentro de prepararGravacao
+    userFindUnique.mockResolvedValue({ id: 'user-9' });
+    channelConfigCreate.mockResolvedValue({ id: 'nova-linha' });
+    channelConfigFindMany.mockResolvedValue([
+      linhaCrua({ id: 'nova-linha', donoId: 'user-9', dono: { id: 'user-9', nome: 'Vendedor 9' }, ponteSessao: 'vendedor-user-9' }),
+    ]);
+    channelConfigFindFirst.mockResolvedValueOnce(
+      linhaCrua({ id: 'nova-linha', donoId: 'user-9', ponteSessao: 'vendedor-user-9' }),
+    ); // minhaLinhaWhatsapp apos criar
 
     const { conectarMinhaLinhaWhatsapp } = await import('./channels.service');
-    await expect(
-      comOrganizacao('org-1', () => conectarMinhaLinhaWhatsapp('user-1'), { id: 'user-1', perfil: 'COMERCIAL' }),
-    ).rejects.toMatchObject({ status: 400 });
+    const resultado = await comOrganizacao('org-1', () => conectarMinhaLinhaWhatsapp('user-9'), {
+      id: 'user-9',
+      perfil: 'COMERCIAL',
+    });
 
-    expect(channelConfigCreate).not.toHaveBeenCalled();
+    expect(channelConfigCreate).toHaveBeenCalledTimes(1);
+    const dados = channelConfigCreate.mock.calls[0]?.[0]?.data;
+    expect(dados.donoId).toBe('user-9');
+    expect(dados.ponteUrl).toBe('http://ponte-global:3100');
+    expect(decifrar(dados.ponteToken)).toBe('token-global');
+    expect(decifrar(dados.ponteSegredo)).toBe('segredo-global');
+    expect(resultado.id).toBe('nova-linha');
   });
 
-  it('linha compartilhada existe mas esta em modo OFICIAL: mesmo erro amigavel', async () => {
+  it('B) sem linha pessoal e sem NENHUMA linha compartilhada cadastrada: nao pede configuracao de administrador (self-service nao depende mais dela)', async () => {
+    // O self-service de hoje nunca busca a linha compartilhada — quem confirma
+    // isso e o numero de chamadas ao findFirst: 3 (minhaLinhaWhatsapp, a
+    // compartilhada DENTRO de prepararGravacao/herdarCredenciaisDaPonte, e a
+    // checagem de colisao), nunca a checagem antiga que existia so dentro de
+    // conectarMinhaLinhaWhatsapp.
+    obterConfigGlobalPonteMock.mockReturnValue({
+      ponteUrl: 'http://ponte-global:3100',
+      ponteToken: 'token-global',
+      ponteSegredo: 'segredo-global',
+    });
     channelConfigFindFirst
       .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(linhaCrua({ id: 'compartilhada', donoId: null, dono: null, modo: 'OFICIAL' }));
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(linhaCrua({ id: 'nova-linha', donoId: 'user-1', ponteSessao: 'vendedor-user-1' }));
+    userFindUnique.mockResolvedValue({ id: 'user-1' });
+    channelConfigCreate.mockResolvedValue({ id: 'nova-linha' });
+    channelConfigFindMany.mockResolvedValue([
+      linhaCrua({ id: 'nova-linha', donoId: 'user-1', dono: { id: 'user-1', nome: 'Vendedor 1' }, ponteSessao: 'vendedor-user-1' }),
+    ]);
 
     const { conectarMinhaLinhaWhatsapp } = await import('./channels.service');
-    await expect(
-      comOrganizacao('org-1', () => conectarMinhaLinhaWhatsapp('user-1'), { id: 'user-1', perfil: 'COMERCIAL' }),
-    ).rejects.toMatchObject({ status: 400 });
+    const resultado = await comOrganizacao('org-1', () => conectarMinhaLinhaWhatsapp('user-1'), {
+      id: 'user-1',
+      perfil: 'COMERCIAL',
+    });
+
+    expect(channelConfigCreate).toHaveBeenCalledTimes(1);
+    expect(resultado.id).toBe('nova-linha');
   });
 
-  it('linha compartilhada em NAO_OFICIAL mas sem ponteUrl/ponteToken/ponteSegredo preenchidos: erro amigavel, nunca a mensagem tecnica de prepararGravacao', async () => {
-    // Reproduz o incidente de producao: admin ligou o modo nao oficial mas
-    // ainda nao salvou endereco/token/segredo da ponte (PUT de canal aceita
-    // campos parciais). O guard tem de barrar aqui, sem deixar cair em
-    // criarNumero/prepararGravacao, que lancaria a mensagem pensada para
-    // quem preenche o formulario de Canais, nao para o self-service.
+  it('C) sem linha pessoal, sem config global e sem linha compartilhada utilizavel: erro 503 amigavel de infraestrutura indisponivel, sem termos tecnicos', async () => {
+    obterConfigGlobalPonteMock.mockReturnValue(null);
     channelConfigFindFirst
       .mockResolvedValueOnce(null) // minhaLinhaWhatsapp: nao existe
-      .mockResolvedValueOnce(
-        linhaCrua({ id: 'compartilhada', donoId: null, dono: null, modo: 'NAO_OFICIAL', ponteUrl: null, ponteToken: null, ponteSegredo: null }),
-      );
+      .mockResolvedValueOnce(null); // fallback legado: nenhuma linha compartilhada utilizavel tambem
 
     const { conectarMinhaLinhaWhatsapp } = await import('./channels.service');
     await expect(
       comOrganizacao('org-1', () => conectarMinhaLinhaWhatsapp('user-1'), { id: 'user-1', perfil: 'COMERCIAL' }),
-    ).rejects.toMatchObject({ status: 400 });
+    ).rejects.toMatchObject({ status: 503, code: 'CANAL_INDISPONIVEL' });
 
     expect(channelConfigCreate).not.toHaveBeenCalled();
     try {
       await comOrganizacao('org-1', () => conectarMinhaLinhaWhatsapp('user-1'), { id: 'user-1', perfil: 'COMERCIAL' });
       throw new Error('deveria ter lancado');
     } catch (erro) {
-      expect((erro as Error).message).not.toContain('token da ponte');
-      expect((erro as Error).message).toContain('administrador');
+      expect((erro as Error).message).not.toContain('token');
+      expect((erro as Error).message).not.toContain('administrador');
     }
   });
 
-  it('linha compartilhada em NAO_OFICIAL com ponteUrl/ponteToken mas sem ponteSegredo: mesmo erro amigavel (nao so URL/token importam)', async () => {
-    channelConfigFindFirst
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(
-        linhaCrua({ id: 'compartilhada', donoId: null, dono: null, modo: 'NAO_OFICIAL', ponteSegredo: null }),
-      );
-
-    const { conectarMinhaLinhaWhatsapp } = await import('./channels.service');
-    await expect(
-      comOrganizacao('org-1', () => conectarMinhaLinhaWhatsapp('user-1'), { id: 'user-1', perfil: 'COMERCIAL' }),
-    ).rejects.toMatchObject({ status: 400 });
-    expect(channelConfigCreate).not.toHaveBeenCalled();
-  });
-
-  it('corrida entre dois cliques: colisao na propria sessao deterministica devolve a linha ja criada pela vencedora, sem erro tecnico', async () => {
+  it('F) corrida entre dois cliques: colisao na propria sessao deterministica devolve a linha ja criada pela vencedora, sem erro tecnico', async () => {
+    obterConfigGlobalPonteMock.mockReturnValue({
+      ponteUrl: 'http://ponte-global:3100',
+      ponteToken: 'token-global',
+      ponteSegredo: 'segredo-global',
+    });
     channelConfigFindFirst
       .mockResolvedValueOnce(null) // minhaLinhaWhatsapp: ainda nao existe (perdedora da corrida tambem viu isto)
-      .mockResolvedValueOnce(linhaCrua({ id: 'compartilhada', donoId: null, dono: null, modo: 'NAO_OFICIAL' })) // linha compartilhada em conectarMinhaLinhaWhatsapp
-      .mockResolvedValueOnce(linhaCrua({ id: 'compartilhada', donoId: null, dono: null, modo: 'NAO_OFICIAL' })) // heranca de credenciais dentro de prepararGravacao
+      .mockResolvedValueOnce(null) // compartilhada dentro de prepararGravacao: nao existe (config vem toda da global)
       .mockResolvedValueOnce(null) // checagem previa de colisao dentro de prepararGravacao: nao ve nada, a vencedora ja passou por aqui
       .mockResolvedValueOnce(
         linhaCrua({ id: 'linha-da-vencedora', donoId: 'user-9', dono: { id: 'user-9', nome: 'Vendedor 9' }, ponteSessao: 'vendedor-user-9' }),
