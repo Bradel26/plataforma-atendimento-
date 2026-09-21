@@ -34,6 +34,32 @@ function assinar(corpo: string) {
   return `sha256=${createHmac('sha256', config.segredo).update(corpo).digest('hex')}`;
 }
 
+/**
+ * Codigos de erro estruturados (`{ error: { code, message } }`, o mesmo
+ * formato de `lib/errors.ts` do lado da API) que representam uma
+ * incompatibilidade de CONFIGURACAO, nao uma falha passageira — reentregar o
+ * mesmo POST nunca vai fazer o resultado mudar, porque nada na reentrega
+ * altera o modo do canal na organizacao.
+ *
+ * Hoje so `CANAL_INDISPONIVEL` (a organizacao nao esta no modo nao oficial —
+ * `ponte.routes.ts`), que a API devolve como 503. Sem isto, `tentar()` via
+ * so o STATUS (5xx = "vale insistir") e reentregava 3 vezes um erro que
+ * nenhuma reentrega resolve — e como isto acontece de novo a cada ciclo de
+ * reconexao da sessao, o log enchia com o mesmo "falha/falha/falha/desisti"
+ * dezenas de vezes seguidas.
+ */
+const CODIGOS_DE_CONFIGURACAO_PERMANENTE = new Set(['CANAL_INDISPONIVEL']);
+
+/** Le `error.code` de um corpo de resposta no formato `{ error: { code, message } }`, se houver. */
+function codigoDeErro(corpoBruto: string): string | null {
+  try {
+    const corpo = JSON.parse(corpoBruto) as { error?: { code?: unknown } };
+    return typeof corpo.error?.code === 'string' ? corpo.error.code : null;
+  } catch {
+    return null;
+  }
+}
+
 async function tentar(
   endereco: string,
   corpo: string,
@@ -60,9 +86,14 @@ async function tentar(
    * inexistente): reentregar nao conserta, so enche o log. Para de tentar e
    * registra alto, porque isso precisa de gente.
    *
-   * 5xx e a plataforma passando mal: vale insistir.
+   * 5xx e a plataforma passando mal: vale insistir — EXCETO quando o corpo
+   * traz um dos `CODIGOS_DE_CONFIGURACAO_PERMANENTE`: aquele 503 especifico
+   * nao e a plataforma passando mal, e uma configuracao que so um humano
+   * muda (ligar o modo nao oficial na tela de Canais).
    */
-  const definitivo = resposta.status >= 400 && resposta.status < 500;
+  const definitivo =
+    (resposta.status >= 400 && resposta.status < 500) ||
+    CODIGOS_DE_CONFIGURACAO_PERMANENTE.has(codigoDeErro(detalhe) ?? '');
   return { ok: false, motivo: `${resposta.status} ${detalhe.slice(0, 300)}`, definitivo };
 }
 
