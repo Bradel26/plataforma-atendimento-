@@ -44,6 +44,15 @@ export type Sessao = {
   numero: string | null;
   /** Evita duas partidas simultaneas quando duas chamadas chegam juntas. */
   iniciando: Promise<void> | null;
+  /**
+   * Preenchido do momento em que a conexao cai (nao-loggedOut) ate a proxima
+   * tentativa comecar — cobre o backoff INTEIRO, nao so o `conectar()` em si
+   * (isso e o que `iniciando` ja cobre). Enquanto isto nao for nulo,
+   * `garantirNoAr` nao pode abrir um socket por conta propria: so espera esta
+   * promise, porque quem decide a hora certa de reconectar e o backoff do
+   * WhatsApp, nao o polling HTTP que bateu primeiro. Ver `agendarReconexao`.
+   */
+  reconectando: Promise<void> | null;
 };
 
 const sessoes = new Map<string, Sessao>();
@@ -271,11 +280,11 @@ async function conectar(sessao: Sessao) {
          * partida comeca do zero, pedindo QR.
          */
         console.warn('[ponte] sessao "' + sessao.nome + '" deslogada pelo aparelho');
-        void limparCredenciais(sessao.nome).then(() => reiniciar(sessao, 2_000));
+        agendarReconexao(sessao, 2_000, () => limparCredenciais(sessao.nome));
         return;
       }
 
-      reiniciar(sessao, 3_000);
+      agendarReconexao(sessao, 3_000);
     }
   });
 
@@ -342,13 +351,43 @@ async function conectar(sessao: Sessao) {
   });
 }
 
-function reiniciar(sessao: Sessao, espera: number) {
-  setTimeout(() => {
-    sessao.iniciando = null;
-    void garantirNoAr(sessao.nome).catch((err) => {
-      console.error('[ponte] falhei ao reconectar "' + sessao.nome + '":', err);
-    });
-  }, espera).unref();
+function aguardar(ms: number): Promise<void> {
+  return new Promise((resolver) => {
+    setTimeout(resolver, ms).unref();
+  });
+}
+
+/**
+ * Agenda a reconexao automatica apos uma queda: espera `espera` ms (o backoff
+ * do WhatsApp), e SO ENTAO deixa `garantirNoAr` tentar de novo.
+ *
+ * `sessao.reconectando` fica preenchido do inicio ao fim dessa espera — e o
+ * que impede `garantirNoAr` de abrir um socket por conta propria quando o
+ * polling HTTP (`GET /qr/:sessao`, `GET /estado/:sessao`) cai bem nesse
+ * intervalo (ver o comentario em `garantirNoAr`). E zerado ANTES de chamar
+ * `garantirNoAr` de novo, e nao depois: essa proxima chamada e a propria
+ * tentativa, protegida por `iniciando`, e esperar por `reconectando` ali
+ * seria esperar por si mesma.
+ *
+ * `antes`, quando informado, roda ANTES do backoff (ex.: apagar credenciais
+ * invalidadas no caso de logout) — e o erro dele tambem so libera
+ * `reconectando` no fim, para nao deixar a sessao presa nesta guarda para
+ * sempre se `antes` falhar.
+ */
+function agendarReconexao(sessao: Sessao, espera: number, antes?: () => Promise<void>): void {
+  const tentativa = (async () => {
+    try {
+      if (antes) await antes();
+      await aguardar(espera);
+    } finally {
+      sessao.reconectando = null;
+    }
+    await garantirNoAr(sessao.nome);
+  })().catch((err) => {
+    console.error('[ponte] falhei ao reconectar "' + sessao.nome + '":', err);
+  });
+
+  sessao.reconectando = tentativa;
 }
 
 /** Devolve a sessao, subindo o socket se ainda nao houver um. */
@@ -357,7 +396,16 @@ export async function garantirNoAr(nome: string): Promise<Sessao> {
 
   let sessao = sessoes.get(nome);
   if (!sessao) {
-    sessao = { nome, sock: null, situacao: 'CONECTANDO', detalhe: null, qr: null, numero: null, iniciando: null };
+    sessao = {
+      nome,
+      sock: null,
+      situacao: 'CONECTANDO',
+      detalhe: null,
+      qr: null,
+      numero: null,
+      iniciando: null,
+      reconectando: null,
+    };
     sessoes.set(nome, sessao);
   }
 
@@ -368,18 +416,34 @@ export async function garantirNoAr(nome: string): Promise<Sessao> {
    * numero: o segundo derruba o primeiro, e a sessao fica piscando entre
    * conectado e caido sem nunca estabilizar.
    */
-  if (!sessao.iniciando) {
-    const alvo = sessao;
-    alvo.situacao = 'CONECTANDO';
-    alvo.iniciando = conectar(alvo).catch((err) => {
-      alvo.iniciando = null;
-      alvo.situacao = 'DESCONECTADO';
-      alvo.detalhe = err instanceof Error ? err.message : 'falha ao iniciar a sessao';
-      throw err;
-    });
+  if (sessao.iniciando) {
+    await sessao.iniciando;
+    return sessao;
   }
 
-  await sessao.iniciando;
+  /*
+   * Uma reconexao automatica ja esta agendada (aguardando o backoff do
+   * WhatsApp) ou ja rodando — nao abre socket nenhum por conta propria, so
+   * espera essa reconexao. Sem isto, o polling HTTP (QR/estado, a cada 5s)
+   * reiniciava a sessao ANTES do backoff terminar, fazendo dois sockets
+   * disputarem a mesma sessao e o WhatsApp fechar os dois de novo — o ciclo
+   * que nunca deixava "vendedor-05f89eae" estabilizar em CONECTADO.
+   */
+  if (sessao.reconectando) {
+    await sessao.reconectando;
+    return sessao;
+  }
+
+  const alvo = sessao;
+  alvo.situacao = 'CONECTANDO';
+  alvo.iniciando = conectar(alvo).catch((err) => {
+    alvo.iniciando = null;
+    alvo.situacao = 'DESCONECTADO';
+    alvo.detalhe = err instanceof Error ? err.message : 'falha ao iniciar a sessao';
+    throw err;
+  });
+
+  await alvo.iniciando;
   return sessao;
 }
 
