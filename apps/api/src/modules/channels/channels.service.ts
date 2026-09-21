@@ -409,6 +409,12 @@ export async function obterConfigPorId(id: string) {
  */
 export async function minhaLinhaWhatsapp(usuarioId: string) {
   const config = await prisma.channelConfig.findFirst({ where: { canal: 'WHATSAPP', donoId: usuarioId } });
+  // TEMP-DEBUG (auditoria WhatsApp — remover apos investigacao): confirma que
+  // donoId->canalConfigId->ponteSessao e resolvido dinamicamente a partir do
+  // usuario autenticado, nunca de um valor fixo. Nao loga segredo nenhum.
+  console.log(
+    `[crm] minhaLinhaWhatsapp donoId=${usuarioId} canalConfigId=${config?.id ?? 'nenhum'} ponteSessao=${config?.ponteSessao ?? 'nenhum'}`,
+  );
   if (!config) return null;
   return { id: config.id, ponteSessao: config.ponteSessao, modo: config.modo, ativo: config.ativo };
 }
@@ -469,6 +475,8 @@ async function infraDaPonteDisponivel(): Promise<boolean> {
  * o erro original sobe.
  */
 export async function conectarMinhaLinhaWhatsapp(usuarioId: string) {
+  // TEMP-DEBUG (auditoria WhatsApp — remover apos investigacao)
+  console.log(`[crm] conectarMinhaLinhaWhatsapp usuario autenticado donoId=${usuarioId}`);
   const existente = await minhaLinhaWhatsapp(usuarioId);
   if (existente) return existente;
 

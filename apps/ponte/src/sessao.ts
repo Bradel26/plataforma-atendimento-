@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   Browsers,
   DisconnectReason,
@@ -63,6 +64,16 @@ const logger = pino({ level: process.env.PONTE_LOG ?? 'warn' });
 /** Vira nome de pasta: barra ou ".." sairiam do diretorio de dados. */
 function nomeValido(nome: string) {
   return /^[a-zA-Z0-9_-]{1,60}$/.test(nome);
+}
+
+/**
+ * TEMP-DEBUG (auditoria WhatsApp — remover apos investigacao): identificador
+ * curto e nao reversivel de um QR, so para o log conseguir dizer "e o mesmo
+ * QR de antes" ou "mudou" sem nunca imprimir o conteudo do QR (que carrega o
+ * segredo de pareamento).
+ */
+function hashCurto(valor: string): string {
+  return createHash('sha256').update(valor).digest('hex').slice(0, 10);
 }
 
 /**
@@ -212,11 +223,17 @@ async function conectar(sessao: Sessao) {
    * ainda sirva, e nao subir a sessao seria pior que tentar.
    */
   let versao: [number, number, number] | undefined;
+  let origemVersao: 'latest' | 'fallback' = 'latest';
   try {
     versao = (await fetchLatestBaileysVersion()).version;
   } catch (err) {
+    origemVersao = 'fallback';
     console.warn('[ponte] nao consegui descobrir a versao do WhatsApp Web; uso a embutida:', err);
   }
+  // TEMP-DEBUG (auditoria WhatsApp — remover apos investigacao)
+  console.log(
+    `[ponte] whatsapp-web-version sessao="${sessao.nome}" version="${versao ? versao.join('.') : 'embutida-do-baileys'}" source="${origemVersao}"`,
+  );
 
   const sock = makeWASocket({
     version: versao,
@@ -234,12 +251,34 @@ async function conectar(sessao: Sessao) {
 
   sessao.sock = sock;
 
-  sock.ev.on('creds.update', saveCreds);
+  // TEMP-DEBUG (auditoria WhatsApp — remover apos investigacao)
+  console.log(`[ponte] socket.criado sessao="${sessao.nome}" timestamp="${new Date().toISOString()}"`);
+
+  sock.ev.on('creds.update', () => {
+    // TEMP-DEBUG (auditoria WhatsApp — remover apos investigacao): confirma
+    // se o celular chegou a entregar credenciais para ESTE socket, sem
+    // logar nenhum conteudo delas.
+    console.log(`[ponte] creds.update sessao="${sessao.nome}" timestamp="${new Date().toISOString()}"`);
+    return saveCreds();
+  });
 
   sock.ev.on('connection.update', (u) => {
+    // TEMP-DEBUG (auditoria WhatsApp — remover apos investigacao): todo
+    // disparo do evento, mesmo quando `u.connection` e undefined (Baileys
+    // tambem emite atualizacoes parciais so com `qr` ou so com `receivedPendingNotifications`).
+    console.log(
+      `[ponte] connection.update sessao="${sessao.nome}" connection="${u.connection ?? 'undefined'}" timestamp="${new Date().toISOString()}"`,
+    );
+
     if (u.qr) {
       sessao.situacao = 'QRCODE';
       sessao.detalhe = 'aguardando leitura do QR Code';
+      // TEMP-DEBUG (auditoria WhatsApp — remover apos investigacao): conta
+      // quantas vezes o QR foi (re)emitido e se mudou de uma vez para outra
+      // — sem nunca logar o QR em si (ele carrega o segredo de pareamento).
+      console.log(
+        `[ponte] qr.emitido sessao="${sessao.nome}" timestamp="${new Date().toISOString()}" qrId="${hashCurto(u.qr)}"`,
+      );
       // Falha ao desenhar nao derruba nada: a tela continua dizendo "gerando".
       toDataURL(u.qr, { margin: 1, width: 320 })
         .then((png) => {
@@ -264,6 +303,14 @@ async function conectar(sessao: Sessao) {
       const erro = u.lastDisconnect?.error as { output?: { statusCode?: number } } | undefined;
       const motivo = erro?.output?.statusCode;
       const deslogado = motivo === DisconnectReason.loggedOut;
+
+      // TEMP-DEBUG (auditoria WhatsApp — remover apos investigacao): antes
+      // desta linha, um close nao-loggedOut nao deixava rastro nenhum no log
+      // local da Ponte (so via aviso HTTP para a API, que pode falhar em
+      // silencio). Isto cobre TODO close, qualquer que seja o motivo.
+      console.log(
+        `[ponte] connection.close sessao="${sessao.nome}" statusCode="${motivo ?? 'sem codigo'}" motivo="${erro?.output?.statusCode ?? 'desconhecido'}" loggedOut=${deslogado} timestamp="${new Date().toISOString()}"`,
+      );
 
       sessao.sock = null;
       sessao.iniciando = null;
@@ -396,6 +443,11 @@ export async function garantirNoAr(nome: string): Promise<Sessao> {
 
   let sessao = sessoes.get(nome);
   if (!sessao) {
+    // TEMP-DEBUG (auditoria WhatsApp — remover apos investigacao): so
+    // dispara na PRIMEIRA vez que este nome de sessao aparece neste
+    // processo — confirma se o processo perdeu o estado em memoria
+    // (restart) no meio de um teste, ja que `sessoes` e um Map em RAM.
+    console.log(`[ponte] sessao.criada sessao="${nome}" timestamp="${new Date().toISOString()}"`);
     sessao = {
       nome,
       sock: null,
