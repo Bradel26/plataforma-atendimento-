@@ -2,6 +2,8 @@ import { AppError } from '../../lib/errors';
 import { aguardarVaga, registrarHandler } from '../../lib/fila';
 import { prisma } from '../../lib/prisma';
 import { enviarParaCanal } from '../channels/outbound.service';
+import { obterConfig } from '../channels/channels.service';
+import { motivoParaRecusarCampanha } from './campanha.guarda';
 import { TIPO_ITEM_CAMPANHA, renderizar } from './campaigns.service';
 
 /** Envios por segundo, por canal. Abaixo do limite da Cloud API, com folga. */
@@ -31,6 +33,18 @@ registrarHandler<{ itemId: string }>(TIPO_ITEM_CAMPANHA, async ({ itemId }, ctx)
     });
     await concluirSeVazia(item.campanhaId);
     return;
+  }
+
+  // O modo pode ter mudado para nao oficial depois do enfileiramento: a checagem
+  // do disparo nao basta, porque itens ja na fila sairiam mesmo assim.
+  if (item.campanha.canal === 'WHATSAPP') {
+    const config = await obterConfig('WHATSAPP');
+    const motivo = motivoParaRecusarCampanha(item.campanha.canal, config?.modo);
+    if (motivo) {
+      await prisma.campaignItem.update({ where: { id: item.id }, data: { status: 'IGNORADO', erro: motivo } });
+      await concluirSeVazia(item.campanhaId);
+      return;
+    }
   }
 
   await aguardarVaga(item.campanha.canal, POR_SEGUNDO);

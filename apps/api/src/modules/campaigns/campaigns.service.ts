@@ -2,6 +2,8 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { badRequest, notFound } from '../../lib/errors';
 import { exigeEnvioExterno } from '../channels/outbound.service';
+import { obterConfig } from '../channels/channels.service';
+import { motivoParaRecusarCampanha } from './campanha.guarda';
 import { enfileirar } from '../../lib/fila';
 
 const inclusao = {
@@ -156,6 +158,12 @@ export async function dispararCampanha(id: string, limite = 500) {
     throw badRequest(
       `Canal ${campanha.canal} nao suporta contato ativo — o cliente precisa iniciar a conversa`,
     );
+  }
+
+  if (campanha.canal === 'WHATSAPP') {
+    const config = await obterConfig('WHATSAPP');
+    const motivo = motivoParaRecusarCampanha(campanha.canal, config?.modo);
+    if (motivo) throw badRequest(motivo);
   }
 
   const pendentes = await prisma.campaignItem.findMany({
