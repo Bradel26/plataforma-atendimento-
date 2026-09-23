@@ -16,6 +16,7 @@ import { integracoesRoutes } from './modules/integrations/tokens.routes';
 import { campanhasRoutes } from './modules/campaigns/campaigns.routes';
 import { channelsRoutes } from './modules/channels/channels.routes';
 import { ponteRoutes } from './modules/channels/ponte.routes';
+import { wppconnectWebhookRoutes } from './modules/channels/wppconnect.webhook.routes';
 import { webhooksRoutes } from './modules/channels/webhooks.routes';
 import { vozRoutes, vozWebhookRoutes } from './modules/voice/voice.routes';
 import { conversationsRoutes } from './modules/conversations/conversations.routes';
@@ -77,6 +78,12 @@ export function createApp() {
    * vez da rota certa.
    */
   app.use('/api/webhooks/ponte', ponteRoutes);
+  // Mesmo motivo do comentario acima sobre `ponteRoutes`: precisa vir antes de
+  // `webhooksRoutes`, que casa `/:canal` e trataria "wppconnect" como nome de
+  // canal da Meta. Body parseado localmente pelo proprio router (nao precisa
+  // do corpo bruto: a autenticacao aqui e por segredo em query string, nao
+  // HMAC sobre os bytes).
+  app.use('/api/webhooks/wppconnect', wppconnectWebhookRoutes);
   app.use('/api/webhooks', webhooksRoutes);
   // A assinatura do provedor de voz e sobre os parametros do formulario, nao
   // sobre o corpo bruto — mas a rota fica aqui junto dos outros webhooks para o

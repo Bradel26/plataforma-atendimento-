@@ -1,7 +1,9 @@
+import { createHash } from 'node:crypto';
 import {
   Browsers,
   DisconnectReason,
   fetchLatestBaileysVersion,
+  getCodeFromWSError,
   makeWASocket,
   type AnyMessageContent,
   type WASocket,
@@ -44,6 +46,15 @@ export type Sessao = {
   numero: string | null;
   /** Evita duas partidas simultaneas quando duas chamadas chegam juntas. */
   iniciando: Promise<void> | null;
+  /**
+   * Preenchido do momento em que a conexao cai (nao-loggedOut) ate a proxima
+   * tentativa comecar — cobre o backoff INTEIRO, nao so o `conectar()` em si
+   * (isso e o que `iniciando` ja cobre). Enquanto isto nao for nulo,
+   * `garantirNoAr` nao pode abrir um socket por conta propria: so espera esta
+   * promise, porque quem decide a hora certa de reconectar e o backoff do
+   * WhatsApp, nao o polling HTTP que bateu primeiro. Ver `agendarReconexao`.
+   */
+  reconectando: Promise<void> | null;
 };
 
 const sessoes = new Map<string, Sessao>();
@@ -54,6 +65,102 @@ const logger = pino({ level: process.env.PONTE_LOG ?? 'warn' });
 /** Vira nome de pasta: barra ou ".." sairiam do diretorio de dados. */
 function nomeValido(nome: string) {
   return /^[a-zA-Z0-9_-]{1,60}$/.test(nome);
+}
+
+/**
+ * TEMP-DEBUG (auditoria WhatsApp — remover apos investigacao): identificador
+ * curto e nao reversivel de um QR, so para o log conseguir dizer "e o mesmo
+ * QR de antes" ou "mudou" sem nunca imprimir o conteudo do QR (que carrega o
+ * segredo de pareamento).
+ */
+function hashCurto(valor: string): string {
+  return createHash('sha256').update(valor).digest('hex').slice(0, 10);
+}
+
+/**
+ * TEMP-DEBUG (auditoria WhatsApp — remover apos investigacao): palavras que,
+ * se aparecerem no stack de um erro, fazem `stackSeguro` omiti-lo por
+ * inteiro. Um stack trace normal do Baileys nunca carrega credencial —
+ * mas alguma biblioteca de terceiro (ex.: erro de rede com a URL completa
+ * interpolada) poderia, e o custo de checar antes de logar e minimo.
+ */
+const PADRAO_SENSIVEL = /token|secret|segredo|senha|password|authoriz|bearer|cookie|credential/i;
+
+/**
+ * TEMP-DEBUG (auditoria WhatsApp — remover apos investigacao): stack de um
+ * erro, resumido a poucas linhas e nunca logado se contiver qualquer palavra
+ * de `PADRAO_SENSIVEL`. Devolve nulo quando o valor nem e um `Error` (ex.:
+ * Baileys as vezes fecha a conexao com uma string solta, nao um objeto).
+ */
+export function stackSeguro(erro: unknown): string | null {
+  if (!(erro instanceof Error) || !erro.stack) return null;
+  if (PADRAO_SENSIVEL.test(erro.stack)) return 'stack_omitido_por_seguranca';
+  // Uma linha so no log: junta as primeiras frames com um separador visivel
+  // em vez das quebras de linha normais do stack.
+  return erro.stack.split('\n').slice(0, 4).join(' <- ');
+}
+
+/**
+ * TEMP-DEBUG (auditoria WhatsApp — remover apos investigacao): diagnostico
+ * seguro de `lastDisconnect.error` — o teste real da sessao pessoal
+ * "vendedor-a06db3d6" fechou com `statusCode="sem codigo" motivo="desconhecido"`,
+ * e o log anterior nao guardava mais nada do erro para investigar o motivo.
+ *
+ * O Baileys SEMPRE fecha via `new Boom(mensagem, { statusCode })`
+ * (`node_modules/@whiskeysockets/baileys/lib/Socket/socket.js`), entao
+ * `.output.statusCode` deveria vir preenchido — inclusive no caso de erro de
+ * rede baixo nivel, via `mapWebSocketError`, que usa a MESMA funcao
+ * `getCodeFromWSError` reaproveitada aqui como `statusCodeDerivado`: serve de
+ * pista quando `.output.statusCode` vier vazio (ex.: `lastDisconnect.error`
+ * inteiro ausente, ou um erro que nao passou pelo caminho normal do Boom).
+ *
+ * Nunca devolve token, segredo, QR, cookie ou conteudo de mensagem — so
+ * metadados sobre o ERRO em si (nome da classe, mensagem, codigos, stack
+ * filtrado por `stackSeguro`).
+ */
+export function descreverErroDeDesconexao(erroBruto: unknown): {
+  presente: boolean;
+  nome?: string;
+  mensagem?: string;
+  outputStatusCode?: number | null;
+  dataStatusCode?: number | null;
+  statusCodeDerivado?: number | null;
+  causa?: string | null;
+  stack?: string | null;
+} {
+  if (erroBruto === undefined || erroBruto === null) {
+    return { presente: false };
+  }
+
+  const erro = erroBruto as Error & {
+    output?: { statusCode?: number };
+    data?: unknown;
+    cause?: unknown;
+  };
+
+  const nome = erro?.constructor?.name ?? (erro instanceof Error ? 'Error' : typeof erro);
+  const mensagem = erro instanceof Error ? erro.message : typeof erro === 'string' ? erro : undefined;
+  const outputStatusCode = typeof erro?.output?.statusCode === 'number' ? erro.output.statusCode : null;
+  const dataStatusCode =
+    erro?.data && typeof erro.data === 'object' && 'statusCode' in (erro.data as object)
+      ? ((erro.data as { statusCode?: unknown }).statusCode as number | undefined) ?? null
+      : null;
+  // So chama a heuristica do Baileys quando ha um Error de verdade (e o tipo
+  // que a propria funcao exige) — sem isso o fallback fica nulo, nao 500 por
+  // acidente.
+  const statusCodeDerivado =
+    outputStatusCode ?? (erro instanceof Error ? getCodeFromWSError(erro) : null);
+
+  return {
+    presente: true,
+    nome,
+    mensagem,
+    outputStatusCode,
+    dataStatusCode,
+    statusCodeDerivado,
+    causa: erro?.cause !== undefined ? String(erro.cause) : null,
+    stack: stackSeguro(erro),
+  };
 }
 
 /**
@@ -203,11 +310,17 @@ async function conectar(sessao: Sessao) {
    * ainda sirva, e nao subir a sessao seria pior que tentar.
    */
   let versao: [number, number, number] | undefined;
+  let origemVersao: 'latest' | 'fallback' = 'latest';
   try {
     versao = (await fetchLatestBaileysVersion()).version;
   } catch (err) {
+    origemVersao = 'fallback';
     console.warn('[ponte] nao consegui descobrir a versao do WhatsApp Web; uso a embutida:', err);
   }
+  // TEMP-DEBUG (auditoria WhatsApp — remover apos investigacao)
+  console.log(
+    `[ponte] whatsapp-web-version sessao="${sessao.nome}" version="${versao ? versao.join('.') : 'embutida-do-baileys'}" source="${origemVersao}"`,
+  );
 
   const sock = makeWASocket({
     version: versao,
@@ -225,12 +338,34 @@ async function conectar(sessao: Sessao) {
 
   sessao.sock = sock;
 
-  sock.ev.on('creds.update', saveCreds);
+  // TEMP-DEBUG (auditoria WhatsApp — remover apos investigacao)
+  console.log(`[ponte] socket.criado sessao="${sessao.nome}" timestamp="${new Date().toISOString()}"`);
+
+  sock.ev.on('creds.update', () => {
+    // TEMP-DEBUG (auditoria WhatsApp — remover apos investigacao): confirma
+    // se o celular chegou a entregar credenciais para ESTE socket, sem
+    // logar nenhum conteudo delas.
+    console.log(`[ponte] creds.update sessao="${sessao.nome}" timestamp="${new Date().toISOString()}"`);
+    return saveCreds();
+  });
 
   sock.ev.on('connection.update', (u) => {
+    // TEMP-DEBUG (auditoria WhatsApp — remover apos investigacao): todo
+    // disparo do evento, mesmo quando `u.connection` e undefined (Baileys
+    // tambem emite atualizacoes parciais so com `qr` ou so com `receivedPendingNotifications`).
+    console.log(
+      `[ponte] connection.update sessao="${sessao.nome}" connection="${u.connection ?? 'undefined'}" timestamp="${new Date().toISOString()}"`,
+    );
+
     if (u.qr) {
       sessao.situacao = 'QRCODE';
       sessao.detalhe = 'aguardando leitura do QR Code';
+      // TEMP-DEBUG (auditoria WhatsApp — remover apos investigacao): conta
+      // quantas vezes o QR foi (re)emitido e se mudou de uma vez para outra
+      // — sem nunca logar o QR em si (ele carrega o segredo de pareamento).
+      console.log(
+        `[ponte] qr.emitido sessao="${sessao.nome}" timestamp="${new Date().toISOString()}" qrId="${hashCurto(u.qr)}"`,
+      );
       // Falha ao desenhar nao derruba nada: a tela continua dizendo "gerando".
       toDataURL(u.qr, { margin: 1, width: 320 })
         .then((png) => {
@@ -256,6 +391,21 @@ async function conectar(sessao: Sessao) {
       const motivo = erro?.output?.statusCode;
       const deslogado = motivo === DisconnectReason.loggedOut;
 
+      // TEMP-DEBUG (auditoria WhatsApp — remover apos investigacao): antes
+      // desta linha, um close nao-loggedOut nao deixava rastro nenhum no log
+      // local da Ponte (so via aviso HTTP para a API, que pode falhar em
+      // silencio). Isto cobre TODO close, qualquer que seja o motivo.
+      //
+      // `diagnostico` usa `u.lastDisconnect?.error` BRUTO (nao o `erro`
+      // acima, que ja foi estreitado para `{ output }`) — e o que permite
+      // investigar o caso real de "vendedor-a06db3d6"
+      // (`statusCode="sem codigo" motivo="desconhecido"`), em que
+      // `.output.statusCode` veio vazio e nao havia mais nenhuma pista no log
+      // sobre o que de fato aconteceu com o socket.
+      console.log(
+        `[ponte] connection.close sessao="${sessao.nome}" statusCode="${motivo ?? 'sem codigo'}" loggedOut=${deslogado} timestamp="${new Date().toISOString()}" diagnostico=${JSON.stringify(descreverErroDeDesconexao(u.lastDisconnect?.error))}`,
+      );
+
       sessao.sock = null;
       sessao.iniciando = null;
       sessao.situacao = 'DESCONECTADO';
@@ -271,11 +421,11 @@ async function conectar(sessao: Sessao) {
          * partida comeca do zero, pedindo QR.
          */
         console.warn('[ponte] sessao "' + sessao.nome + '" deslogada pelo aparelho');
-        void limparCredenciais(sessao.nome).then(() => reiniciar(sessao, 2_000));
+        agendarReconexao(sessao, 2_000, () => limparCredenciais(sessao.nome));
         return;
       }
 
-      reiniciar(sessao, 3_000);
+      agendarReconexao(sessao, 3_000);
     }
   });
 
@@ -342,13 +492,43 @@ async function conectar(sessao: Sessao) {
   });
 }
 
-function reiniciar(sessao: Sessao, espera: number) {
-  setTimeout(() => {
-    sessao.iniciando = null;
-    void garantirNoAr(sessao.nome).catch((err) => {
-      console.error('[ponte] falhei ao reconectar "' + sessao.nome + '":', err);
-    });
-  }, espera).unref();
+function aguardar(ms: number): Promise<void> {
+  return new Promise((resolver) => {
+    setTimeout(resolver, ms).unref();
+  });
+}
+
+/**
+ * Agenda a reconexao automatica apos uma queda: espera `espera` ms (o backoff
+ * do WhatsApp), e SO ENTAO deixa `garantirNoAr` tentar de novo.
+ *
+ * `sessao.reconectando` fica preenchido do inicio ao fim dessa espera — e o
+ * que impede `garantirNoAr` de abrir um socket por conta propria quando o
+ * polling HTTP (`GET /qr/:sessao`, `GET /estado/:sessao`) cai bem nesse
+ * intervalo (ver o comentario em `garantirNoAr`). E zerado ANTES de chamar
+ * `garantirNoAr` de novo, e nao depois: essa proxima chamada e a propria
+ * tentativa, protegida por `iniciando`, e esperar por `reconectando` ali
+ * seria esperar por si mesma.
+ *
+ * `antes`, quando informado, roda ANTES do backoff (ex.: apagar credenciais
+ * invalidadas no caso de logout) — e o erro dele tambem so libera
+ * `reconectando` no fim, para nao deixar a sessao presa nesta guarda para
+ * sempre se `antes` falhar.
+ */
+function agendarReconexao(sessao: Sessao, espera: number, antes?: () => Promise<void>): void {
+  const tentativa = (async () => {
+    try {
+      if (antes) await antes();
+      await aguardar(espera);
+    } finally {
+      sessao.reconectando = null;
+    }
+    await garantirNoAr(sessao.nome);
+  })().catch((err) => {
+    console.error('[ponte] falhei ao reconectar "' + sessao.nome + '":', err);
+  });
+
+  sessao.reconectando = tentativa;
 }
 
 /** Devolve a sessao, subindo o socket se ainda nao houver um. */
@@ -357,7 +537,21 @@ export async function garantirNoAr(nome: string): Promise<Sessao> {
 
   let sessao = sessoes.get(nome);
   if (!sessao) {
-    sessao = { nome, sock: null, situacao: 'CONECTANDO', detalhe: null, qr: null, numero: null, iniciando: null };
+    // TEMP-DEBUG (auditoria WhatsApp — remover apos investigacao): so
+    // dispara na PRIMEIRA vez que este nome de sessao aparece neste
+    // processo — confirma se o processo perdeu o estado em memoria
+    // (restart) no meio de um teste, ja que `sessoes` e um Map em RAM.
+    console.log(`[ponte] sessao.criada sessao="${nome}" timestamp="${new Date().toISOString()}"`);
+    sessao = {
+      nome,
+      sock: null,
+      situacao: 'CONECTANDO',
+      detalhe: null,
+      qr: null,
+      numero: null,
+      iniciando: null,
+      reconectando: null,
+    };
     sessoes.set(nome, sessao);
   }
 
@@ -368,18 +562,34 @@ export async function garantirNoAr(nome: string): Promise<Sessao> {
    * numero: o segundo derruba o primeiro, e a sessao fica piscando entre
    * conectado e caido sem nunca estabilizar.
    */
-  if (!sessao.iniciando) {
-    const alvo = sessao;
-    alvo.situacao = 'CONECTANDO';
-    alvo.iniciando = conectar(alvo).catch((err) => {
-      alvo.iniciando = null;
-      alvo.situacao = 'DESCONECTADO';
-      alvo.detalhe = err instanceof Error ? err.message : 'falha ao iniciar a sessao';
-      throw err;
-    });
+  if (sessao.iniciando) {
+    await sessao.iniciando;
+    return sessao;
   }
 
-  await sessao.iniciando;
+  /*
+   * Uma reconexao automatica ja esta agendada (aguardando o backoff do
+   * WhatsApp) ou ja rodando — nao abre socket nenhum por conta propria, so
+   * espera essa reconexao. Sem isto, o polling HTTP (QR/estado, a cada 5s)
+   * reiniciava a sessao ANTES do backoff terminar, fazendo dois sockets
+   * disputarem a mesma sessao e o WhatsApp fechar os dois de novo — o ciclo
+   * que nunca deixava "vendedor-05f89eae" estabilizar em CONECTADO.
+   */
+  if (sessao.reconectando) {
+    await sessao.reconectando;
+    return sessao;
+  }
+
+  const alvo = sessao;
+  alvo.situacao = 'CONECTANDO';
+  alvo.iniciando = conectar(alvo).catch((err) => {
+    alvo.iniciando = null;
+    alvo.situacao = 'DESCONECTADO';
+    alvo.detalhe = err instanceof Error ? err.message : 'falha ao iniciar a sessao';
+    throw err;
+  });
+
+  await alvo.iniciando;
   return sessao;
 }
 

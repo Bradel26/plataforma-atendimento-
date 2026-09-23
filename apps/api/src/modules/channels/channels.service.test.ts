@@ -59,6 +59,21 @@ describe('gerarNomeSessao', () => {
     const b = gerarNomeSessao('22222222-0000-0000-0000-000000000000');
     expect(a).not.toBe(b);
   });
+
+  /**
+   * Isolamento entre a sessao pessoal de cada usuario e a sessao tecnica
+   * "padrao" (subida automaticamente pela Ponte no boot, `apps/ponte/src/main.ts`).
+   * `gerarNomeSessao` nunca deve devolver "padrao" nem fazer duas linhas
+   * pessoais colidirem entre si — nenhuma delas depende ou se confunde com ela.
+   */
+  it('sessao pessoal de usuarios diferentes nunca colide com "padrao" nem entre si', () => {
+    const usuarioA = gerarNomeSessao('aaaaaaaa-0000-0000-0000-000000000000');
+    const usuarioB = gerarNomeSessao('bbbbbbbb-0000-0000-0000-000000000000');
+
+    expect(usuarioA).not.toBe('padrao');
+    expect(usuarioB).not.toBe('padrao');
+    expect(usuarioA).not.toBe(usuarioB);
+  });
 });
 
 /**
