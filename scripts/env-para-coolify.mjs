@@ -67,6 +67,13 @@ const ORDEM = [
   'PONTE_URL',
   'PONTE_TOKEN',
   'PONTE_SEGREDO',
+  // WhatsApp nao oficial via WPPConnect Server (ver WPPCONNECT.md). Mesmo
+  // raciocinio das de cima: ausentes no .env.production, ficam fora do arquivo.
+  'WHATSAPP_PROVIDER',
+  'WPP_CONNECT_URL',
+  'WPP_CONNECT_SECRET_KEY',
+  'WPP_CONNECT_TOKEN',
+  'WPP_CONNECT_WEBHOOK_SECRET',
 ];
 
 const final = { ...lido, ...ajustes };
