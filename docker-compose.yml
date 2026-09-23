@@ -49,7 +49,7 @@ services:
       PONTE_PORTA: 3100
       PONTE_TOKEN: ${PONTE_TOKEN:?defina PONTE_TOKEN}
       PONTE_SEGREDO: ${PONTE_SEGREDO:?defina PONTE_SEGREDO}
-      PONTE_PLATAFORMA_URL: ${PONTE_PLATAFORMA_URL:-http://host.docker.internal:3000}
+      PONTE_PLATAFORMA_URL: ${PONTE_PLATAFORMA_URL:-http://host.docker.internal:3333}
       PONTE_ORGANIZACAO_ID: ${PONTE_ORGANIZACAO_ID:?defina PONTE_ORGANIZACAO_ID}
       # Como a API alcanca a ponte para baixar a midia recebida.
       PONTE_URL_PUBLICA: ${PONTE_URL_PUBLICA:-http://plataforma-ponte:3100}

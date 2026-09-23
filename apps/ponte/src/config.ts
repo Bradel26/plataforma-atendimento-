@@ -32,7 +32,7 @@ export const config = {
   /** Segredo com que a ponte ASSINA o que envia para a plataforma (`ponteSegredo`). */
   segredo: obrigatorio('PONTE_SEGREDO'),
 
-  /** Onde a plataforma responde. Ex.: http://localhost:3000 */
+  /** Onde a plataforma responde. Ex.: http://localhost:3333 */
   plataformaUrl: obrigatorio('PONTE_PLATAFORMA_URL').replace(/\/+$/, ''),
 
   /** Para quem entregar a mensagem recebida. Vem da tela de Canais. */
