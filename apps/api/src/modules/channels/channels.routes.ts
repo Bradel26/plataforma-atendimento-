@@ -23,7 +23,7 @@ import {
   type CanalExterno,
 } from './channels.service';
 import { AVISO_NAO_OFICIAL, modoEfetivo } from './whatsapp.modo';
-import { BaileysProvider } from './providers/baileys.provider';
+import { getWhatsAppProvider } from './whatsapp-provider.factory';
 import { estadoDaIa, estadoDaIaDoNumero, salvarIa, salvarIaDoNumero } from '../bots/ia.service';
 
 export const channelsRoutes = Router();
@@ -33,8 +33,11 @@ export const channelsRoutes = Router();
  * com `whatsapp.ponte.ts` — o primeiro passo para esta rota parar de saber que
  * o modo nao oficial e "a ponte" (ver whatsapp.provider.ts). O envio de
  * mensagens ainda nao foi migrado (fica para uma proxima fase).
+ *
+ * Qual implementacao (Baileys ou WPPConnect) e decidido em
+ * `whatsapp-provider.factory.ts` — nao aqui.
  */
-const whatsAppProvider = new BaileysProvider();
+const whatsAppProvider = getWhatsAppProvider();
 
 channelsRoutes.use(requireAuth);
 

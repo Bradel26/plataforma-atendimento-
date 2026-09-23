@@ -2,7 +2,7 @@ import type { Channel } from '@prisma/client';
 import { AppError, badRequest } from '../../lib/errors';
 import { obterConfig, obterConfigPorId } from './channels.service';
 import { impedimentoDeEnvio, modoEfetivo } from './whatsapp.modo';
-import { BaileysProvider } from './providers/baileys.provider';
+import { getWhatsAppProvider } from './whatsapp-provider.factory';
 
 const GRAPH = 'https://graph.facebook.com/v21.0';
 
@@ -10,8 +10,11 @@ const GRAPH = 'https://graph.facebook.com/v21.0';
  * O modo nao oficial passa pelo `WhatsAppProvider` em vez de falar direto com
  * `whatsapp.ponte.ts` — mesma migracao ja feita em `channels.routes.ts` para
  * QR/estado/desconexao (ver whatsapp.provider.ts).
+ *
+ * Qual implementacao (Baileys ou WPPConnect) e decidido em
+ * `whatsapp-provider.factory.ts` — nao aqui.
  */
-const whatsAppProvider = new BaileysProvider();
+const whatsAppProvider = getWhatsAppProvider();
 
 /** Canais que exigem envio pela Graph API. WEBCHAT e entregue por WebSocket. */
 const EXTERNOS: Channel[] = ['WHATSAPP', 'INSTAGRAM', 'FACEBOOK'];
@@ -74,6 +77,11 @@ export async function enviarParaCanal(
       ponteToken: config?.ponteToken ?? null,
     });
     if (impedimento) throw new AppError(503, 'CANAL_INDISPONIVEL', impedimento);
+    // Diagnostico do modo nao oficial (ETAPA 3): qual provider e sessao levaram
+    // o envio, sem nunca imprimir credencial — so nome de classe e identificadores.
+    console.log(
+      `[crm] enviarParaCanal WHATSAPP provider=${whatsAppProvider.constructor.name} canalConfigId=${config!.id} ponteSessao=${config!.ponteSessao ?? 'nenhum'}`,
+    );
     return whatsAppProvider.sendText(config!, enderecoExterno, texto);
   }
 

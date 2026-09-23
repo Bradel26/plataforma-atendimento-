@@ -3,6 +3,7 @@ import {
   Browsers,
   DisconnectReason,
   fetchLatestBaileysVersion,
+  getCodeFromWSError,
   makeWASocket,
   type AnyMessageContent,
   type WASocket,
@@ -74,6 +75,92 @@ function nomeValido(nome: string) {
  */
 function hashCurto(valor: string): string {
   return createHash('sha256').update(valor).digest('hex').slice(0, 10);
+}
+
+/**
+ * TEMP-DEBUG (auditoria WhatsApp — remover apos investigacao): palavras que,
+ * se aparecerem no stack de um erro, fazem `stackSeguro` omiti-lo por
+ * inteiro. Um stack trace normal do Baileys nunca carrega credencial —
+ * mas alguma biblioteca de terceiro (ex.: erro de rede com a URL completa
+ * interpolada) poderia, e o custo de checar antes de logar e minimo.
+ */
+const PADRAO_SENSIVEL = /token|secret|segredo|senha|password|authoriz|bearer|cookie|credential/i;
+
+/**
+ * TEMP-DEBUG (auditoria WhatsApp — remover apos investigacao): stack de um
+ * erro, resumido a poucas linhas e nunca logado se contiver qualquer palavra
+ * de `PADRAO_SENSIVEL`. Devolve nulo quando o valor nem e um `Error` (ex.:
+ * Baileys as vezes fecha a conexao com uma string solta, nao um objeto).
+ */
+export function stackSeguro(erro: unknown): string | null {
+  if (!(erro instanceof Error) || !erro.stack) return null;
+  if (PADRAO_SENSIVEL.test(erro.stack)) return 'stack_omitido_por_seguranca';
+  // Uma linha so no log: junta as primeiras frames com um separador visivel
+  // em vez das quebras de linha normais do stack.
+  return erro.stack.split('\n').slice(0, 4).join(' <- ');
+}
+
+/**
+ * TEMP-DEBUG (auditoria WhatsApp — remover apos investigacao): diagnostico
+ * seguro de `lastDisconnect.error` — o teste real da sessao pessoal
+ * "vendedor-a06db3d6" fechou com `statusCode="sem codigo" motivo="desconhecido"`,
+ * e o log anterior nao guardava mais nada do erro para investigar o motivo.
+ *
+ * O Baileys SEMPRE fecha via `new Boom(mensagem, { statusCode })`
+ * (`node_modules/@whiskeysockets/baileys/lib/Socket/socket.js`), entao
+ * `.output.statusCode` deveria vir preenchido — inclusive no caso de erro de
+ * rede baixo nivel, via `mapWebSocketError`, que usa a MESMA funcao
+ * `getCodeFromWSError` reaproveitada aqui como `statusCodeDerivado`: serve de
+ * pista quando `.output.statusCode` vier vazio (ex.: `lastDisconnect.error`
+ * inteiro ausente, ou um erro que nao passou pelo caminho normal do Boom).
+ *
+ * Nunca devolve token, segredo, QR, cookie ou conteudo de mensagem — so
+ * metadados sobre o ERRO em si (nome da classe, mensagem, codigos, stack
+ * filtrado por `stackSeguro`).
+ */
+export function descreverErroDeDesconexao(erroBruto: unknown): {
+  presente: boolean;
+  nome?: string;
+  mensagem?: string;
+  outputStatusCode?: number | null;
+  dataStatusCode?: number | null;
+  statusCodeDerivado?: number | null;
+  causa?: string | null;
+  stack?: string | null;
+} {
+  if (erroBruto === undefined || erroBruto === null) {
+    return { presente: false };
+  }
+
+  const erro = erroBruto as Error & {
+    output?: { statusCode?: number };
+    data?: unknown;
+    cause?: unknown;
+  };
+
+  const nome = erro?.constructor?.name ?? (erro instanceof Error ? 'Error' : typeof erro);
+  const mensagem = erro instanceof Error ? erro.message : typeof erro === 'string' ? erro : undefined;
+  const outputStatusCode = typeof erro?.output?.statusCode === 'number' ? erro.output.statusCode : null;
+  const dataStatusCode =
+    erro?.data && typeof erro.data === 'object' && 'statusCode' in (erro.data as object)
+      ? ((erro.data as { statusCode?: unknown }).statusCode as number | undefined) ?? null
+      : null;
+  // So chama a heuristica do Baileys quando ha um Error de verdade (e o tipo
+  // que a propria funcao exige) — sem isso o fallback fica nulo, nao 500 por
+  // acidente.
+  const statusCodeDerivado =
+    outputStatusCode ?? (erro instanceof Error ? getCodeFromWSError(erro) : null);
+
+  return {
+    presente: true,
+    nome,
+    mensagem,
+    outputStatusCode,
+    dataStatusCode,
+    statusCodeDerivado,
+    causa: erro?.cause !== undefined ? String(erro.cause) : null,
+    stack: stackSeguro(erro),
+  };
 }
 
 /**
@@ -308,8 +395,15 @@ async function conectar(sessao: Sessao) {
       // desta linha, um close nao-loggedOut nao deixava rastro nenhum no log
       // local da Ponte (so via aviso HTTP para a API, que pode falhar em
       // silencio). Isto cobre TODO close, qualquer que seja o motivo.
+      //
+      // `diagnostico` usa `u.lastDisconnect?.error` BRUTO (nao o `erro`
+      // acima, que ja foi estreitado para `{ output }`) — e o que permite
+      // investigar o caso real de "vendedor-a06db3d6"
+      // (`statusCode="sem codigo" motivo="desconhecido"`), em que
+      // `.output.statusCode` veio vazio e nao havia mais nenhuma pista no log
+      // sobre o que de fato aconteceu com o socket.
       console.log(
-        `[ponte] connection.close sessao="${sessao.nome}" statusCode="${motivo ?? 'sem codigo'}" motivo="${erro?.output?.statusCode ?? 'desconhecido'}" loggedOut=${deslogado} timestamp="${new Date().toISOString()}"`,
+        `[ponte] connection.close sessao="${sessao.nome}" statusCode="${motivo ?? 'sem codigo'}" loggedOut=${deslogado} timestamp="${new Date().toISOString()}" diagnostico=${JSON.stringify(descreverErroDeDesconexao(u.lastDisconnect?.error))}`,
       );
 
       sessao.sock = null;
