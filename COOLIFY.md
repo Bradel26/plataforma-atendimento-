@@ -110,6 +110,10 @@ cole o arquivo inteiro.
 
 O arquivo gerado **não vai para o git** — o `.gitignore` cobre `.env*`.
 
+> WhatsApp por QR Code com WPPConnect: o servidor dele é um segundo recurso nesta mesma VPS, e as
+> variáveis `WHATSAPP_PROVIDER` e `WPP_CONNECT_*` entram aqui. Passo a passo em
+> [WPPCONNECT.md](WPPCONNECT.md).
+
 ## 4. Volume para os anexos
 
 Sem isto, todo arquivo enviado por atendente ou cliente **desaparece no próximo deploy** — container

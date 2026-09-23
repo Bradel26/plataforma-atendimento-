@@ -69,13 +69,18 @@ export async function enviarParaCanal(
    * mensagem sairia pelo caminho errado exatamente no canal mais usado.
    */
   if (canal === 'WHATSAPP' && modoEfetivo(config?.modo) === 'NAO_OFICIAL') {
-    const impedimento = impedimentoDeEnvio(config?.modo, {
-      ativo: config?.ativo ?? false,
-      accessToken: config?.accessToken ?? null,
-      phoneNumberId: config?.phoneNumberId ?? null,
-      ponteUrl: config?.ponteUrl ?? null,
-      ponteToken: config?.ponteToken ?? null,
-    });
+    const impedimento = impedimentoDeEnvio(
+      config?.modo,
+      {
+        ativo: config?.ativo ?? false,
+        accessToken: config?.accessToken ?? null,
+        phoneNumberId: config?.phoneNumberId ?? null,
+        ponteUrl: config?.ponteUrl ?? null,
+        ponteToken: config?.ponteToken ?? null,
+        ponteSessao: config?.ponteSessao ?? null,
+      },
+      { credenciaisPorLinha: whatsAppProvider.credenciaisPorLinha },
+    );
     if (impedimento) throw new AppError(503, 'CANAL_INDISPONIVEL', impedimento);
     // Diagnostico do modo nao oficial (ETAPA 3): qual provider e sessao levaram
     // o envio, sem nunca imprimir credencial — so nome de classe e identificadores.
@@ -181,13 +186,18 @@ export async function enviarArquivoParaCanal(
   // da Cloud API e sem a exigencia de URL publica do Instagram — e por isso este
   // modo funciona em instalacao sem dominio, que e onde ele costuma estar.
   if (canal === 'WHATSAPP' && modoEfetivo(config?.modo) === 'NAO_OFICIAL') {
-    const impedimento = impedimentoDeEnvio(config?.modo, {
-      ativo: config?.ativo ?? false,
-      accessToken: config?.accessToken ?? null,
-      phoneNumberId: config?.phoneNumberId ?? null,
-      ponteUrl: config?.ponteUrl ?? null,
-      ponteToken: config?.ponteToken ?? null,
-    });
+    const impedimento = impedimentoDeEnvio(
+      config?.modo,
+      {
+        ativo: config?.ativo ?? false,
+        accessToken: config?.accessToken ?? null,
+        phoneNumberId: config?.phoneNumberId ?? null,
+        ponteUrl: config?.ponteUrl ?? null,
+        ponteToken: config?.ponteToken ?? null,
+        ponteSessao: config?.ponteSessao ?? null,
+      },
+      { credenciaisPorLinha: whatsAppProvider.credenciaisPorLinha },
+    );
     if (impedimento) throw new AppError(503, 'CANAL_INDISPONIVEL', impedimento);
     return whatsAppProvider.sendMedia(config!, enderecoExterno, arquivo);
   }

@@ -1,5 +1,9 @@
 import { AppError } from '../../lib/errors';
-import { obterConfigWppConnect, type ConfigWppConnect } from '../../config/wppconnect.config';
+import {
+  obterConfigWppConnect,
+  obterUrlWebhookWppConnect,
+  type ConfigWppConnect,
+} from '../../config/wppconnect.config';
 import { numeroNormalizado, type EstadoDaPonte } from './whatsapp.modo';
 import type { ConfigDaPonte, QrDaPonte } from './whatsapp.ponte';
 
@@ -15,10 +19,13 @@ import type { ConfigDaPonte, QrDaPonte } from './whatsapp.ponte';
  * Referencia da API usada (WPPConnect Server 2.10.27):
  * - `POST /api/{session}/{secretKey}/generate-token` -> `{ status, token, session, full }`
  * - `GET  /api/{session}/status-session`              -> `{ status, qrcode, urlcode, version }`
+ * - `POST /api/{session}/start-session`  `{ webhook, waitQrCode }` -> `{ status: 'qrcode', qrcode, urlcode }`
+ *   (sessao ja existente: o mesmo corpo do `status-session`; o webhook so e gravado se ela estava fechada)
  * - `POST /api/{session}/send-message`                -> `{ status: 'success', response }`
  * - `POST /api/{session}/send-file-base64`             -> `{ status: 'success', response }`
  * - `POST /api/{session}/logout-session`
- * Sessao inexistente/desconectada responde 404 com `{ status: 'Disconnected', ... }`
+ * Sessao nunca iniciada: `status-session` responde 200 `{ status: 'CLOSED', qrcode: null }`.
+ * Nas rotas de envio/logout, sessao desconectada responde 404 `{ status: 'Disconnected', ... }`
  * (middleware `statusConnection` do WPPConnect Server).
  */
 
@@ -311,13 +318,100 @@ export async function enviarArquivoWpp(
 }
 
 /**
- * Busca o QR Code de pareamento no WPPConnect Server.
+ * O QR em data URL, venha de onde vier: `status-session` ja devolve
+ * `data:image/png;base64,...`, mas o `start-session` com `waitQrCode`
+ * devolve o base64 puro (`exportQR` no WPPConnect Server 2.10.27).
+ */
+function qrComoDataUrl(valor: unknown): string | null {
+  if (typeof valor !== 'string' || !valor.trim()) return null;
+  if (valor.startsWith('data:image/')) return valor;
+  return `data:image/png;base64,${valor.trim()}`;
+}
+
+/**
+ * Sessao que ainda nao existe no WPPConnect Server — nunca iniciada, ou
+ * derrubada (QR nao escaneado a tempo, celular desconectou). O servidor 2.x
+ * responde 200 `{ status: 'CLOSED', qrcode: null }` no `status-session`; o 404
+ * `Disconnected` vem do middleware das rotas de envio, mas e tratado igual por
+ * garantia — os dois significam "nao ha sessao de pe".
+ */
+function sessaoPrecisaIniciar(resposta: Response, dados: CorpoWpp): boolean {
+  if (resposta.status === 404 && ehSessaoDesconectada(dados)) return true;
+  return resposta.ok && typeof dados.status === 'string' && dados.status.trim().toUpperCase() === 'CLOSED';
+}
+
+/**
+ * Inicio em andamento por sessao. A tela pede QR a cada poucos segundos, e o
+ * Chromium do WPPConnect demora mais que isso para subir: sem isto, cada
+ * pedido que chegasse durante a subida mandaria outro `start-session`. O
+ * proprio servidor ignora o segundo (ele marca INITIALIZING na hora), mas
+ * cada chamada ainda seguraria uma conexao aberta ate o QR sair.
+ */
+const iniciando = new Map<string, Promise<CorpoWpp | null>>();
+
+/**
+ * `POST /api/{session}/start-session` com o webhook desta API.
+ *
+ * `waitQrCode: true` faz o servidor responder so quando o QR sai (`{ status:
+ * 'qrcode', qrcode, urlcode }`). Se a sessao restaurar pelo token salvo, sem
+ * QR, ele pode nao responder nada ate o nosso timeout — por isso a falha aqui
+ * e engolida (devolve `null`) e quem chama consulta o `status-session` de novo.
+ */
+function iniciarSessao(cfg: ConfigWppConnect, sessao: string, webhook: string): Promise<CorpoWpp | null> {
+  const emAndamento = iniciando.get(sessao);
+  if (emAndamento) return emAndamento;
+
+  const promessa = (async () => {
+    try {
+      console.log(`[crm] wppconnect.client start-session sessao=${sessao}`);
+      const resposta = await chamarAutenticado(cfg, sessao, `/api/${encodeURIComponent(sessao)}/start-session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ webhook, waitQrCode: true }),
+      });
+      return resposta.ok ? await lerCorpo(resposta) : null;
+    } catch {
+      return null;
+    } finally {
+      iniciando.delete(sessao);
+    }
+  })();
+
+  iniciando.set(sessao, promessa);
+  return promessa;
+}
+
+async function statusDaSessao(cfg: ConfigWppConnect, sessao: string) {
+  const resposta = await chamarAutenticado(cfg, sessao, `/api/${encodeURIComponent(sessao)}/status-session`, {
+    method: 'GET',
+  });
+  return { resposta, dados: await lerCorpo(resposta) };
+}
+
+function qrDeStatus(dados: CorpoWpp): QrDaPonte {
+  const conectado = situacaoDeStatus(dados.status) === 'CONECTADO';
+  const qr = conectado ? null : qrComoDataUrl(dados.qrcode);
+  return {
+    qr,
+    conectado,
+    motivo: qr || conectado ? null : `a sessao esta ${typeof dados.status === 'string' ? dados.status : 'sem QR no momento'}`,
+  };
+}
+
+/**
+ * Busca o QR Code de pareamento no WPPConnect Server — e, se a sessao ainda
+ * nao existir la, inicia (vale igual para linha pessoal e compartilhada: so
+ * `ponteSessao` muda).
  *
  * Nunca lanca (mesmo motivo do gemeo em `whatsapp.ponte.ts`): e a tela que
  * existe para consertar a conexao. Usa `status-session`, que ja devolve o QR
  * como data URL (`qrcode`) quando ha um pendente — `qrcode-session` devolve a
  * imagem crua (PNG), sem JSON, e exigiria decodificar o binario aqui por
  * nenhum ganho.
+ *
+ * So `qrWpp` inicia sessao; `estadoWpp` nao. O estado e consultado pela tela
+ * de Canais so para exibir, e subir um Chromium para quem so abriu a tela
+ * seria efeito colateral de uma leitura.
  */
 export async function qrWpp(config: ConfigDaPonte): Promise<QrDaPonte> {
   const sessao = config.ponteSessao?.trim();
@@ -327,24 +421,35 @@ export async function qrWpp(config: ConfigDaPonte): Promise<QrDaPonte> {
   if (!cfg) return { qr: null, conectado: false, motivo: 'o WPPConnect ainda nao foi configurado' };
 
   try {
-    const resposta = await chamarAutenticado(cfg, sessao, `/api/${encodeURIComponent(sessao)}/status-session`, {
-      method: 'GET',
-    });
-    const dados = await lerCorpo(resposta);
+    const { resposta, dados } = await statusDaSessao(cfg, sessao);
+
+    if (sessaoPrecisaIniciar(resposta, dados)) {
+      const webhook = obterUrlWebhookWppConnect();
+      if (!webhook) {
+        return {
+          qr: null,
+          conectado: false,
+          motivo:
+            'falta WPP_CONNECT_WEBHOOK_SECRET (ou PUBLIC_URL/WEB_ORIGIN) na API: sem webhook a sessao nao receberia mensagens',
+        };
+      }
+
+      const iniciada = await iniciarSessao(cfg, sessao, webhook);
+      const qrDoInicio = qrComoDataUrl(iniciada?.qrcode);
+      if (qrDoInicio) return { qr: qrDoInicio, conectado: false, motivo: null };
+
+      const depois = await statusDaSessao(cfg, sessao);
+      if (!depois.resposta.ok) {
+        return { qr: null, conectado: false, motivo: `o WPPConnect respondeu ${depois.resposta.status}` };
+      }
+      return qrDeStatus(depois.dados);
+    }
 
     if (!resposta.ok) {
       return { qr: null, conectado: false, motivo: `o WPPConnect respondeu ${resposta.status}` };
     }
 
-    const situacao = situacaoDeStatus(dados.status);
-    const conectado = situacao === 'CONECTADO';
-    const qr = typeof dados.qrcode === 'string' && dados.qrcode.startsWith('data:image/') ? dados.qrcode : null;
-
-    return {
-      qr,
-      conectado,
-      motivo: qr || conectado ? null : `a sessao esta ${typeof dados.status === 'string' ? dados.status : 'sem QR no momento'}`,
-    };
+    return qrDeStatus(dados);
   } catch (err) {
     return {
       qr: null,

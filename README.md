@@ -341,6 +341,30 @@ modo, escolhido em **Configurações → Canais**:
 Para o resto do sistema os dois modos são indistinguíveis: a conversa, o histórico, a fila, o
 chatbot e os relatórios são os mesmos. Trocar de modo não apaga as credenciais do outro.
 
+### Dois providers, dois fluxos
+
+Quem mantém a sessão do WhatsApp Web é escolhido por `WHATSAPP_PROVIDER`, para a instalação
+inteira:
+
+| `WHATSAPP_PROVIDER` | Servidor | Conexão |
+|---|---|---|
+| `baileys` (padrão, ou ausente) | a ponte deste repositório (`apps/ponte`) | endereço/token/segredo da ponte por linha, ou globais em `PONTE_URL`/`PONTE_TOKEN`/`PONTE_SEGREDO` |
+| `wppconnect` | [WPPConnect Server](https://github.com/wppconnect-team/wppconnect-server) | global, em `WPP_CONNECT_URL` + `WPP_CONNECT_SECRET_KEY`, com o retorno em `WPP_CONNECT_WEBHOOK_SECRET` |
+
+Com qualquer um dos dois, o número é pareado por QR Code em dois fluxos:
+
+- **A — linha pessoal:** qualquer usuário logado clica em **Conectar WhatsApp** em Atendimento e
+  escaneia com o próprio celular. As conversas desse número vão para ele. Só o dono ou um ADMIN
+  veem o QR e desconectam a linha.
+- **B — linha compartilhada:** o ADMIN conecta o número da empresa em **Configurações → Canais →
+  WhatsApp**, modo *Sem API oficial*. As conversas entram na fila escolhida no canal.
+
+Com `wppconnect` a linha não precisa de endereço, token nem segredo de ponte — a plataforma gera o
+nome da sessão e inicia a sessão no servidor no primeiro pedido de QR. Passo a passo de produção
+(Coolify, volumes, variáveis e checklists de teste dos dois fluxos): **[WPPCONNECT.md](WPPCONNECT.md)**.
+
+O resto desta seção descreve o provider `baileys`.
+
 ### Por que a ponte é um processo separado
 
 A sessão do WhatsApp Web vive de socket aberto, reconexão e credencial em disco. Dentro da API, ela
@@ -380,8 +404,9 @@ O contrato é HTTP e está em `whatsapp.modo.ts`: `POST /mensagens`, `POST /arqu
 `POST /api/webhooks/ponte/whatsapp/<organizacaoId>`, assinadas com HMAC-SHA256 no cabeçalho
 `X-Ponte-Assinatura`.
 
-Quem preferir uma ponte de terceiro (Evolution API, WPPConnect) aponta o **endereço da ponte** para
-um proxy fino que traduza esses cinco caminhos. As que não expõem `/qr` continuam funcionando: a
+O WPPConnect Server não precisa desse proxy: tem provider próprio (`WHATSAPP_PROVIDER=wppconnect`,
+ver [WPPCONNECT.md](WPPCONNECT.md)). Quem preferir outra ponte de terceiro (Evolution API) aponta o
+**endereço da ponte** para um proxy fino que traduza esses cinco caminhos. As que não expõem `/qr` continuam funcionando: a
 tela diz que o pareamento é pelo painel delas, em vez de mostrar erro.
 
 ## Gestão e relatórios (Fase 3)

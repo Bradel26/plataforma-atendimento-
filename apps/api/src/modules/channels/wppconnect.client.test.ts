@@ -1,7 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ConfigDaPonte } from './whatsapp.ponte';
 
-const ENV_VARS = ['WPP_CONNECT_URL', 'WPP_CONNECT_SECRET_KEY', 'WPP_CONNECT_TOKEN'] as const;
+const ENV_VARS = [
+  'WPP_CONNECT_URL',
+  'WPP_CONNECT_SECRET_KEY',
+  'WPP_CONNECT_TOKEN',
+  'WPP_CONNECT_WEBHOOK_SECRET',
+  'PUBLIC_URL',
+  'WEB_ORIGIN',
+] as const;
 const originais: Record<string, string | undefined> = {};
 
 function json(status: number, corpo: unknown) {
@@ -359,6 +366,178 @@ describe('wppconnect.client', () => {
 
       const { qrWpp } = await import('./wppconnect.client');
       await expect(qrWpp(CONFIG)).resolves.toEqual({ qr: null, conectado: true, motivo: null });
+    });
+  });
+
+  describe('getQRCode — inicia a sessao que ainda nao existe no servidor', () => {
+    const LINHA_PESSOAL: ConfigDaPonte = { ponteUrl: null, ponteToken: null, ponteSessao: 'vendedor-3f2a9c1b' };
+    const LINHA_COMPARTILHADA: ConfigDaPonte = { ponteUrl: null, ponteToken: null, ponteSessao: 'empresa-0b7e44d2' };
+
+    function configurarAmbiente() {
+      process.env.WPP_CONNECT_URL = 'http://wppconnect:21465';
+      process.env.WPP_CONNECT_TOKEN = 'token-fixo';
+      process.env.WPP_CONNECT_WEBHOOK_SECRET = 'segredo-webhook';
+      process.env.PUBLIC_URL = 'https://atendimento.exemplo.com.br/';
+    }
+
+    const chamadasDeInicio = (fetchMock: ReturnType<typeof vi.fn>) =>
+      fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/start-session'));
+
+    it.each([
+      ['linha pessoal', LINHA_PESSOAL],
+      ['linha compartilhada', LINHA_COMPARTILHADA],
+    ])('%s: status CLOSED chama start-session com o webhook e devolve o QR do inicio', async (_nome, config) => {
+      configurarAmbiente();
+      const sessao = config.ponteSessao!;
+      fetchMock
+        .mockResolvedValueOnce(json(200, { status: 'CLOSED', qrcode: null }))
+        .mockResolvedValueOnce(json(200, { status: 'qrcode', qrcode: 'iVBORw0KGgo', urlcode: '2@abc', session: sessao }));
+
+      const { qrWpp } = await import('./wppconnect.client');
+      await expect(qrWpp(config)).resolves.toEqual({
+        qr: 'data:image/png;base64,iVBORw0KGgo',
+        conectado: false,
+        motivo: null,
+      });
+
+      const [urlStatus] = chamada(fetchMock, 0);
+      expect(urlStatus).toBe(`http://wppconnect:21465/api/${sessao}/status-session`);
+
+      const [urlInicio, initInicio] = chamada(fetchMock, 1);
+      expect(urlInicio).toBe(`http://wppconnect:21465/api/${sessao}/start-session`);
+      expect(initInicio.method).toBe('POST');
+      expect(initInicio.headers.Authorization).toBe('Bearer token-fixo');
+      expect(JSON.parse(initInicio.body as string)).toEqual({
+        webhook: 'https://atendimento.exemplo.com.br/api/webhooks/wppconnect?secret=segredo-webhook',
+        waitQrCode: true,
+      });
+    });
+
+    it('sem PUBLIC_URL usa WEB_ORIGIN no endereco do webhook', async () => {
+      configurarAmbiente();
+      delete process.env.PUBLIC_URL;
+      process.env.WEB_ORIGIN = 'http://187.0.0.1.sslip.io';
+      fetchMock
+        .mockResolvedValueOnce(json(200, { status: 'CLOSED', qrcode: null }))
+        .mockResolvedValueOnce(json(200, { status: 'qrcode', qrcode: 'abc' }));
+
+      const { qrWpp } = await import('./wppconnect.client');
+      await qrWpp(LINHA_PESSOAL);
+
+      const [, init] = chamada(fetchMock, 1);
+      expect(JSON.parse(init.body as string).webhook).toBe(
+        'http://187.0.0.1.sslip.io/api/webhooks/wppconnect?secret=segredo-webhook',
+      );
+    });
+
+    it('404 Disconnected tambem conta como sessao a iniciar', async () => {
+      configurarAmbiente();
+      fetchMock
+        .mockResolvedValueOnce(json(404, { response: null, status: 'Disconnected', message: 'A sessao nao esta ativa.' }))
+        .mockResolvedValueOnce(json(200, { status: 'qrcode', qrcode: 'abc' }));
+
+      const { qrWpp } = await import('./wppconnect.client');
+      await expect(qrWpp(LINHA_COMPARTILHADA)).resolves.toMatchObject({ qr: 'data:image/png;base64,abc' });
+      expect(chamada(fetchMock, 1)[0]).toBe('http://wppconnect:21465/api/empresa-0b7e44d2/start-session');
+    });
+
+    it('start-session sem QR na resposta (restaurou pelo token salvo): consulta o status de novo', async () => {
+      configurarAmbiente();
+      fetchMock
+        .mockResolvedValueOnce(json(200, { status: 'CLOSED', qrcode: null }))
+        .mockResolvedValueOnce(json(200, { status: 'INITIALIZING', qrcode: null }))
+        .mockResolvedValueOnce(json(200, { status: 'CONNECTED', qrcode: null, urlcode: null }));
+
+      const { qrWpp } = await import('./wppconnect.client');
+      await expect(qrWpp(LINHA_PESSOAL)).resolves.toEqual({ qr: null, conectado: true, motivo: null });
+      expect(chamada(fetchMock, 2)[0]).toBe('http://wppconnect:21465/api/vendedor-3f2a9c1b/status-session');
+    });
+
+    it('start-session que estoura o tempo nao quebra a tela: consulta o status e mostra o motivo', async () => {
+      configurarAmbiente();
+      fetchMock
+        .mockResolvedValueOnce(json(200, { status: 'CLOSED', qrcode: null }))
+        .mockRejectedValueOnce(new Error('The operation was aborted due to timeout'))
+        .mockResolvedValueOnce(json(200, { status: 'INITIALIZING', qrcode: null }));
+
+      const { qrWpp } = await import('./wppconnect.client');
+      await expect(qrWpp(LINHA_PESSOAL)).resolves.toEqual({
+        qr: null,
+        conectado: false,
+        motivo: 'a sessao esta INITIALIZING',
+      });
+    });
+
+    it('dois pedidos de QR ao mesmo tempo mandam um unico start-session', async () => {
+      configurarAmbiente();
+      let liberarInicio: (r: Response) => void = () => {};
+      fetchMock.mockImplementation((url: string) => {
+        if (url.endsWith('/start-session')) return new Promise<Response>((r) => (liberarInicio = r));
+        return Promise.resolve(json(200, { status: 'CLOSED', qrcode: null }));
+      });
+
+      const { qrWpp } = await import('./wppconnect.client');
+      const primeiro = qrWpp(LINHA_PESSOAL);
+      const segundo = qrWpp(LINHA_PESSOAL);
+      await vi.waitFor(() => expect(chamadasDeInicio(fetchMock)).toHaveLength(1));
+      // Da tempo ao segundo pedido de chegar na mesma espera antes de liberar.
+      await vi.waitFor(() =>
+        expect(fetchMock.mock.calls.filter(([u]) => String(u).endsWith('/status-session'))).toHaveLength(2),
+      );
+      liberarInicio(json(200, { status: 'qrcode', qrcode: 'abc' }));
+
+      const resultados = await Promise.all([primeiro, segundo]);
+      for (const r of resultados) expect(r.qr).toBe('data:image/png;base64,abc');
+      expect(chamadasDeInicio(fetchMock)).toHaveLength(1);
+    });
+
+    it('linhas diferentes iniciam em paralelo, cada uma na propria sessao', async () => {
+      configurarAmbiente();
+      fetchMock.mockImplementation((url: string) =>
+        Promise.resolve(
+          url.endsWith('/start-session')
+            ? json(200, { status: 'qrcode', qrcode: url.includes('vendedor') ? 'qr-pessoal' : 'qr-empresa' })
+            : json(200, { status: 'CLOSED', qrcode: null }),
+        ),
+      );
+
+      const { qrWpp } = await import('./wppconnect.client');
+      const [pessoal, compartilhada] = await Promise.all([qrWpp(LINHA_PESSOAL), qrWpp(LINHA_COMPARTILHADA)]);
+
+      expect(pessoal.qr).toBe('data:image/png;base64,qr-pessoal');
+      expect(compartilhada.qr).toBe('data:image/png;base64,qr-empresa');
+      expect(chamadasDeInicio(fetchMock)).toHaveLength(2);
+    });
+
+    it('sem WPP_CONNECT_WEBHOOK_SECRET nao inicia a sessao (ela ficaria gravada sem webhook) e explica o motivo', async () => {
+      configurarAmbiente();
+      delete process.env.WPP_CONNECT_WEBHOOK_SECRET;
+      fetchMock.mockResolvedValueOnce(json(200, { status: 'CLOSED', qrcode: null }));
+
+      const { qrWpp } = await import('./wppconnect.client');
+      const resultado = await qrWpp(LINHA_PESSOAL);
+
+      expect(resultado.qr).toBeNull();
+      expect(resultado.motivo).toContain('WPP_CONNECT_WEBHOOK_SECRET');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('sessao ja em QRCODE nao chama start-session de novo', async () => {
+      configurarAmbiente();
+      fetchMock.mockResolvedValueOnce(json(200, { status: 'QRCODE', qrcode: 'data:image/png;base64,xyz' }));
+
+      const { qrWpp } = await import('./wppconnect.client');
+      await expect(qrWpp(LINHA_COMPARTILHADA)).resolves.toMatchObject({ qr: 'data:image/png;base64,xyz' });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('getStatus nunca inicia sessao, mesmo com CLOSED', async () => {
+      configurarAmbiente();
+      fetchMock.mockResolvedValueOnce(json(200, { status: 'CLOSED', qrcode: null }));
+
+      const { estadoWpp } = await import('./wppconnect.client');
+      await expect(estadoWpp(LINHA_PESSOAL)).resolves.toEqual({ situacao: 'DESCONECTADO', detalhe: 'CLOSED' });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
     });
   });
 

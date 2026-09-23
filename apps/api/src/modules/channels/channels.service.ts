@@ -1,11 +1,12 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { Prisma, type Channel } from '@prisma/client';
 import { prisma, prismaSemIsolamento } from '../../lib/prisma';
-import { semOrganizacao } from '../../lib/tenant';
+import { organizacaoAtual, semOrganizacao } from '../../lib/tenant';
 import { badRequest, conflict, notFound, serviceUnavailable } from '../../lib/errors';
 import { cifrar, decifrar } from '../../lib/crypto-box';
 import { modoEfetivo } from './whatsapp.modo';
 import { obterConfigGlobalPonte } from '../../config/ponte.config';
+import { getWhatsAppProvider } from './whatsapp-provider.factory';
 
 export const CANAIS_EXTERNOS = ['WHATSAPP', 'INSTAGRAM', 'FACEBOOK'] as const;
 export type CanalExterno = (typeof CANAIS_EXTERNOS)[number];
@@ -166,6 +167,20 @@ export function gerarNomeSessao(donoId: string): string {
 }
 
 /**
+ * Nome de sessao da linha COMPARTILHADA, gerado so quando o provider nao tem
+ * credenciais por linha (WPPConnect). La a sessao e o unico elo entre o
+ * numero e a organizacao — o webhook (`wppconnect.webhook.routes.ts`) acha a
+ * empresa pela `ponteSessao` — e em branco o QR nem chega a ser pedido.
+ * Na Ponte Baileys o branco continua valendo "sessao unica" da ponte.
+ *
+ * Pelo id da organizacao porque o WPPConnect Server e um so para a
+ * instalacao inteira, e `@@unique([canal, ponteSessao])` e global.
+ */
+export function gerarNomeSessaoCompartilhada(organizacaoId: string): string {
+  return `empresa-${organizacaoId.slice(0, 8)}`;
+}
+
+/**
  * Valida o que `salvarCanal`/`criarNumero`/`atualizarNumero` tem em comum:
  * fila existe, dono existe (e e da mesma organizacao — `findUnique` de outra
  * empresa nao acha nada, a extensao do Prisma cuida disso), credencial bate com
@@ -227,6 +242,20 @@ async function prepararGravacao(
     }
   }
 
+  const credenciaisPorLinha = getWhatsAppProvider().credenciaisPorLinha;
+
+  if (
+    canal === 'WHATSAPP' &&
+    futuro.modo === 'NAO_OFICIAL' &&
+    !futuro.donoId &&
+    !credenciaisPorLinha &&
+    !futuro.ponteSessao
+  ) {
+    const nomeGerado = gerarNomeSessaoCompartilhada(organizacaoAtual());
+    futuro.ponteSessao = nomeGerado;
+    input.ponteSessao = nomeGerado;
+  }
+
   /*
    * Duas linhas do mesmo canal com a mesma sessao fariam `configDoDestino`
    * escolher uma arbitrariamente por `findFirst` — a mesma classe de bug ja
@@ -250,7 +279,13 @@ async function prepararGravacao(
    * pedir um token que aquela operacao nunca vai ter — e foi por isso que a
    * mensagem de erro deixou de ser uma frase so.
    */
-  if (canal === 'WHATSAPP' && futuro.modo === 'NAO_OFICIAL') {
+  if (canal === 'WHATSAPP' && futuro.modo === 'NAO_OFICIAL' && !credenciaisPorLinha) {
+    // WPPConnect: endereco e credenciais sao da API (`wppconnect.config.ts`),
+    // nao da linha. So a sessao e da linha — e ela foi garantida logo acima.
+    if (futuro.ativo && !futuro.ponteSessao) {
+      throw badRequest('Informe o nome da sessao desta linha');
+    }
+  } else if (canal === 'WHATSAPP' && futuro.modo === 'NAO_OFICIAL') {
     if (futuro.ativo && !(futuro.ponteUrl && futuro.ponteToken)) {
       throw badRequest('Para ativar o modo nao oficial informe o endereco e o token da ponte');
     }
@@ -428,7 +463,11 @@ export async function minhaLinhaWhatsapp(usuarioId: string) {
  * desta config global existir continuarem funcionando sem mudar nada.
  */
 async function infraDaPonteDisponivel(): Promise<boolean> {
-  if (obterConfigGlobalPonte()) return true;
+  const provider = getWhatsAppProvider();
+  // WPPConnect: a conexao e so global — nao ha linha compartilhada legada que
+  // possa suprir endereco/token, entao a resposta e a da config da API.
+  if (!provider.credenciaisPorLinha) return provider.infraestruturaGlobalPronta();
+  if (provider.infraestruturaGlobalPronta()) return true;
 
   const compartilhada = await prisma.channelConfig.findFirst({ where: { canal: 'WHATSAPP', donoId: null } });
   // So verifica presenca (nao decifra) — string cifrada nao-vazia ja basta

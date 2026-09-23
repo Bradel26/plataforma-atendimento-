@@ -73,6 +73,17 @@ describe('impedimentoDeEnvio', () => {
     expect(impedimentoDeEnvio(null, PRONTO_OFICIAL)).toBeNull();
     expect(impedimentoDeEnvio(null, PRONTO_PONTE)).not.toBeNull();
   });
+
+  it('WPPConnect (credenciais globais): libera sem endereco/token da ponte, cobra so a sessao', () => {
+    const semPonte = { ativo: true, accessToken: null, phoneNumberId: null, ponteUrl: null, ponteToken: null };
+    const opcoes = { credenciaisPorLinha: false };
+
+    expect(impedimentoDeEnvio('NAO_OFICIAL', { ...semPonte, ponteSessao: 'vendedor-abc' }, opcoes)).toBeNull();
+    expect(impedimentoDeEnvio('NAO_OFICIAL', { ...semPonte, ponteSessao: null }, opcoes)).toContain('sessao');
+    expect(impedimentoDeEnvio('NAO_OFICIAL', { ...semPonte, ativo: false, ponteSessao: 'x' }, opcoes)).toContain(
+      'inativo',
+    );
+  });
 });
 
 describe('numeroNormalizado', () => {

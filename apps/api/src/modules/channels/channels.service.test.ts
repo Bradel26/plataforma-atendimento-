@@ -151,9 +151,22 @@ vi.mock('../../lib/prisma', () => ({
 const { obterConfigGlobalPonteMock } = vi.hoisted(() => ({ obterConfigGlobalPonteMock: vi.fn() }));
 vi.mock('../../config/ponte.config', () => ({ obterConfigGlobalPonte: obterConfigGlobalPonteMock }));
 
+/*
+ * O provider e fixado aqui, e nao lido do ambiente: o `.env` local pode ter
+ * WHATSAPP_PROVIDER=wppconnect, e o resultado destes testes nao pode depender
+ * da maquina. O padrao imita o BaileysProvider (credenciais por linha, infra
+ * global = config global da ponte); quem testa WPPConnect troca os dois campos.
+ */
+const { providerFake } = vi.hoisted(() => ({
+  providerFake: { credenciaisPorLinha: true, infraestruturaGlobalPronta: (): boolean => false },
+}));
+vi.mock('./whatsapp-provider.factory', () => ({ getWhatsAppProvider: () => providerFake }));
+
 // Por padrao nenhuma instalacao de teste tem config global — quem precisa dela liga explicitamente.
 beforeEach(() => {
   obterConfigGlobalPonteMock.mockReturnValue(null);
+  providerFake.credenciaisPorLinha = true;
+  providerFake.infraestruturaGlobalPronta = () => obterConfigGlobalPonteMock() !== null;
 });
 
 /** Erro do Prisma para violacao da constraint `canais_config_canal_ponte_sessao_key` — mesma classe que uma colisao real produziria. */
@@ -523,5 +536,105 @@ describe('conectarMinhaLinhaWhatsapp — self-service da linha pessoal', () => {
 
     expect(resultado).toMatchObject({ id: 'linha-da-vencedora' });
     expect(channelConfigCreate).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * WPPConnect: endereco e credenciais do servidor sao da API
+ * (`wppconnect.config.ts`), nao da linha. Os dois fluxos — linha pessoal pelo
+ * self-service e linha compartilhada pelo ADMIN — tem de ativar sem
+ * ponteUrl/ponteToken/ponteSegredo, que este provider nunca le.
+ */
+describe('WPPConnect — linha sem credenciais proprias de ponte', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    providerFake.credenciaisPorLinha = false;
+    providerFake.infraestruturaGlobalPronta = () => true;
+  });
+
+  it('fluxo B: ADMIN ativa a linha compartilhada sem endereco/token/segredo e ganha sessao propria da organizacao', async () => {
+    channelConfigFindFirst.mockResolvedValue(null);
+    channelConfigCreate.mockResolvedValue({ id: 'cfg-compartilhada' });
+    channelConfigFindMany.mockResolvedValue([
+      linhaCrua({ id: 'cfg-compartilhada', ponteUrl: null, ponteToken: null, ponteSegredo: null, ponteSessao: 'empresa-org-1' }),
+    ]);
+
+    const { salvarCanal } = await import('./channels.service');
+    await comOrganizacao('org-1', () => salvarCanal('WHATSAPP', { modo: 'NAO_OFICIAL', ativo: true }), {
+      id: 'admin-1',
+      perfil: 'ADMIN',
+    });
+
+    const dados = channelConfigCreate.mock.calls[0]?.[0]?.data;
+    expect(dados.ativo).toBe(true);
+    expect(dados.ponteSessao).toBe('empresa-org-1');
+    expect(dados.ponteUrl ?? null).toBeNull();
+  });
+
+  it('fluxo B: sessao informada pelo ADMIN e respeitada, nao sobrescrita pela gerada', async () => {
+    channelConfigFindFirst.mockResolvedValue(null);
+    channelConfigCreate.mockResolvedValue({ id: 'cfg-compartilhada' });
+    channelConfigFindMany.mockResolvedValue([linhaCrua({ id: 'cfg-compartilhada', ponteSessao: 'comercial-matriz' })]);
+
+    const { salvarCanal } = await import('./channels.service');
+    await comOrganizacao(
+      'org-1',
+      () => salvarCanal('WHATSAPP', { modo: 'NAO_OFICIAL', ativo: true, ponteSessao: 'comercial-matriz' }),
+      { id: 'admin-1', perfil: 'ADMIN' },
+    );
+
+    expect(channelConfigCreate.mock.calls[0]?.[0]?.data.ponteSessao).toBe('comercial-matriz');
+  });
+
+  it('fluxo A: usuario comum conecta a propria linha so com o WPPConnect configurado (sem PONTE_* nem linha compartilhada)', async () => {
+    channelConfigFindFirst
+      .mockResolvedValueOnce(null) // minhaLinhaWhatsapp: nao existe ainda
+      .mockResolvedValueOnce(null) // compartilhada dentro de prepararGravacao
+      .mockResolvedValueOnce(null) // checagem de colisao de sessao
+      .mockResolvedValueOnce(linhaCrua({ id: 'nova-linha', donoId: 'user-9', ponteSessao: 'vendedor-user-9' }));
+    userFindUnique.mockResolvedValue({ id: 'user-9' });
+    channelConfigCreate.mockResolvedValue({ id: 'nova-linha' });
+    channelConfigFindMany.mockResolvedValue([
+      linhaCrua({ id: 'nova-linha', donoId: 'user-9', dono: { id: 'user-9', nome: 'Agente 9' }, ponteSessao: 'vendedor-user-9' }),
+    ]);
+
+    const { conectarMinhaLinhaWhatsapp } = await import('./channels.service');
+    const resultado = await comOrganizacao('org-1', () => conectarMinhaLinhaWhatsapp('user-9'), {
+      id: 'user-9',
+      perfil: 'AGENTE',
+    });
+
+    const dados = channelConfigCreate.mock.calls[0]?.[0]?.data;
+    expect(dados.ativo).toBe(true);
+    expect(dados.donoId).toBe('user-9');
+    expect(dados.ponteSessao).toBe('vendedor-user-9');
+    expect(resultado.id).toBe('nova-linha');
+  });
+
+  it('fluxo A: sem o WPPConnect configurado na API, 503 de infraestrutura (e nao olha linha compartilhada legada)', async () => {
+    providerFake.infraestruturaGlobalPronta = () => false;
+    channelConfigFindFirst.mockResolvedValueOnce(null); // minhaLinhaWhatsapp
+
+    const { conectarMinhaLinhaWhatsapp } = await import('./channels.service');
+    await expect(
+      comOrganizacao('org-1', () => conectarMinhaLinhaWhatsapp('user-1'), { id: 'user-1', perfil: 'AGENTE' }),
+    ).rejects.toMatchObject({ status: 503, code: 'CANAL_INDISPONIVEL' });
+
+    expect(channelConfigFindFirst).toHaveBeenCalledTimes(1);
+    expect(channelConfigCreate).not.toHaveBeenCalled();
+  });
+
+  it('Baileys continua exigindo endereco e token da ponte para ativar (sem regressao)', async () => {
+    providerFake.credenciaisPorLinha = true;
+    channelConfigFindFirst.mockResolvedValue(null);
+
+    const { salvarCanal } = await import('./channels.service');
+    await expect(
+      comOrganizacao('org-1', () => salvarCanal('WHATSAPP', { modo: 'NAO_OFICIAL', ativo: true }), {
+        id: 'admin-1',
+        perfil: 'ADMIN',
+      }),
+    ).rejects.toMatchObject({ status: 400 });
+    expect(channelConfigCreate).not.toHaveBeenCalled();
   });
 });

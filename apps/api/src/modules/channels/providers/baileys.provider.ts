@@ -5,6 +5,7 @@ import {
   estadoDaPonte,
   qrDaPonte,
 } from '../whatsapp.ponte';
+import { obterConfigGlobalPonte } from '../../../config/ponte.config';
 import type { WhatsAppProvider } from '../whatsapp.provider';
 
 /**
@@ -27,4 +28,8 @@ export class BaileysProvider implements WhatsAppProvider {
   getStatus: WhatsAppProvider['getStatus'] = (config) => estadoDaPonte(config);
 
   disconnect: WhatsAppProvider['disconnect'] = (config) => desconectarPonte(config);
+
+  readonly credenciaisPorLinha = true;
+
+  infraestruturaGlobalPronta: WhatsAppProvider['infraestruturaGlobalPronta'] = () => obterConfigGlobalPonte() !== null;
 }
