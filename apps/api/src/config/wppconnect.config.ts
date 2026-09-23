@@ -56,3 +56,24 @@ export function obterConfigWppConnect(): ConfigWppConnect | null {
 export function obterSegredoWebhookWppConnect(): string | null {
   return lida('WPP_CONNECT_WEBHOOK_SECRET');
 }
+
+/**
+ * URL que o WPPConnect Server chama a cada evento de uma sessao — cadastrada
+ * no `start-session` e gravada por ele junto do token da sessao.
+ *
+ * Endereco publico da API (`PUBLIC_URL`, senao `WEB_ORIGIN`, a mesma regra de
+ * `env.ts`) + a rota de `wppconnect.webhook.routes.ts` + o segredo. Le
+ * `process.env` direto, como o resto deste arquivo, para o client nao
+ * depender da validacao completa de `env.ts` (banco, JWT) so para montar uma
+ * URL.
+ *
+ * `null` quando falta o segredo ou o endereco: iniciar a sessao assim a
+ * deixaria gravada sem webhook — ela enviaria, mas nunca receberia nada, e o
+ * WPPConnect so aceita outro webhook depois de a sessao fechar.
+ */
+export function obterUrlWebhookWppConnect(): string | null {
+  const segredo = obterSegredoWebhookWppConnect();
+  const base = lida('PUBLIC_URL') ?? lida('WEB_ORIGIN');
+  if (!segredo || !base) return null;
+  return `${base.replace(/\/+$/, '')}/api/webhooks/wppconnect?secret=${encodeURIComponent(segredo)}`;
+}
