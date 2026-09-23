@@ -26,4 +26,24 @@ export interface WhatsAppProvider {
   getStatus(config: ConfigDaPonte): Promise<EstadoDaPonte>;
 
   disconnect(config: ConfigDaPonte): Promise<void>;
+
+  /**
+   * De onde vem a conexao com o servidor do WhatsApp nao oficial.
+   *
+   * `true` (Baileys): cada linha carrega endereco/token/segredo da ponte na
+   * propria `ChannelConfig` — sem eles a linha nao envia nem ativa.
+   * `false` (WPPConnect): a conexao e infraestrutura global da API
+   * (`wppconnect.config.ts`) e a linha so precisa da sessao
+   * (`ponteSessao`). Cobrar `ponteUrl`/`ponteToken` aqui travaria a linha por
+   * um campo que este provider nunca le.
+   */
+  readonly credenciaisPorLinha: boolean;
+
+  /**
+   * A infraestrutura global basta para uma linha nova conectar sem ninguem
+   * preencher nada — e o que o "Conectar WhatsApp" do self-service consulta.
+   * Lanca quando a configuracao esta pela metade (erro de configuracao, nao
+   * estado valido).
+   */
+  infraestruturaGlobalPronta(): boolean;
 }

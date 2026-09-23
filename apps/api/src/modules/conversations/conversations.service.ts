@@ -11,6 +11,7 @@ import { enviarArquivoParaCanal, enviarParaCanal, exigeEnvioExterno } from '../c
 import { obterConfig } from '../channels/channels.service';
 import { decidirDestino, filaPadraoDoCanal } from '../channels/inbound.service';
 import { impedimentoDeEnvio } from '../channels/whatsapp.modo';
+import { getWhatsAppProvider } from '../channels/whatsapp-provider.factory';
 import { promoverPrevia } from '../channels/chat-previews.service';
 import { entregarParaIa } from '../bots/ia.service';
 import { TIPO_CONVITE_PESQUISA, criarPesquisa, entregarPesquisa } from '../surveys/surveys.service';
@@ -215,13 +216,18 @@ export async function iniciarConversa(solicitante: Solicitante, contatoId: strin
 
   const config = await configWhatsappDoSolicitante(solicitante);
   const impedimento = config
-    ? impedimentoDeEnvio(config.modo, {
-        ativo: config.ativo,
-        accessToken: config.accessToken,
-        phoneNumberId: config.phoneNumberId,
-        ponteUrl: config.ponteUrl,
-        ponteToken: config.ponteToken,
-      })
+    ? impedimentoDeEnvio(
+        config.modo,
+        {
+          ativo: config.ativo,
+          accessToken: config.accessToken,
+          phoneNumberId: config.phoneNumberId,
+          ponteUrl: config.ponteUrl,
+          ponteToken: config.ponteToken,
+          ponteSessao: config.ponteSessao,
+        },
+        { credenciaisPorLinha: getWhatsAppProvider().credenciaisPorLinha },
+      )
     : 'Canal WhatsApp nao configurado';
   if (impedimento) throw new AppError(503, 'CANAL_INDISPONIVEL', impedimento);
 

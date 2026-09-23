@@ -5,6 +5,7 @@ import {
   estadoWpp,
   qrWpp,
 } from '../wppconnect.client';
+import { obterConfigWppConnect } from '../../../config/wppconnect.config';
 import type { WhatsAppProvider } from '../whatsapp.provider';
 
 /**
@@ -23,4 +24,8 @@ export class WPPConnectProvider implements WhatsAppProvider {
   getStatus: WhatsAppProvider['getStatus'] = (config) => estadoWpp(config);
 
   disconnect: WhatsAppProvider['disconnect'] = (config) => desconectarWpp(config);
+
+  readonly credenciaisPorLinha = false;
+
+  infraestruturaGlobalPronta: WhatsAppProvider['infraestruturaGlobalPronta'] = () => obterConfigWppConnect() !== null;
 }

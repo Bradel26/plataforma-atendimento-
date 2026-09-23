@@ -52,12 +52,23 @@ export type CredenciaisDoCanal = {
 export function impedimentoDeEnvio(
   modo: ModoWhatsApp | null | undefined,
   c: CredenciaisDoCanal,
+  /**
+   * `WhatsAppProvider.credenciaisPorLinha`. Sem ele vale o da Ponte Baileys
+   * (`true`): a linha precisa de endereco e token proprios. Com `false`
+   * (WPPConnect), a conexao e global e a linha so precisa da sessao.
+   */
+  opcoes: { credenciaisPorLinha?: boolean } = {},
 ): string | null {
   if (!c.ativo) return 'O canal WhatsApp esta inativo';
 
   if (modoEfetivo(modo) === 'OFICIAL') {
     if (!c.accessToken) return 'Falta o token de acesso da Cloud API';
     if (!c.phoneNumberId) return 'Falta o phone number id da Cloud API';
+    return null;
+  }
+
+  if (opcoes.credenciaisPorLinha === false) {
+    if (!c.ponteSessao) return 'Falta a sessao do WhatsApp desta linha';
     return null;
   }
 
