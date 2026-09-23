@@ -139,3 +139,45 @@ describe('normalizarEventoWpp', () => {
     expect(resultado?.identificadorDestino).toBeNull();
   });
 });
+
+describe('normalizarEventoWpp — telefone a partir do jid @c.us', () => {
+  const PAYLOAD_CUS_CONTATO_SALVO = {
+    ...PAYLOAD_REAL_ONMESSAGE,
+    id: 'false_5562992885001@c.us_3EB0A238AC2DE5AE1C5D05',
+    from: '5562992885001@c.us',
+    chatId: '5562992885001@c.us',
+    sender: {
+      id: '5562992885001@c.us',
+      pushname: 'Kauã',
+      // Contato salvo na agenda do vendedor: o WhatsApp devolve o nome salvo.
+      formattedName: 'Cliente João (obra centro)',
+      isMyContact: true,
+    },
+  };
+
+  it('extrai o telefone do chatId @c.us mesmo quando formattedName e o nome salvo', () => {
+    const resultado = normalizarEventoWpp(PAYLOAD_CUS_CONTATO_SALVO);
+    expect(resultado?.enderecoExterno).toBe('5562992885001@c.us');
+    expect(resultado?.telefone).toBe('5562992885001');
+  });
+
+  it('o jid @c.us tem precedencia sobre um formattedName que tambem parece telefone', () => {
+    const resultado = normalizarEventoWpp({
+      ...PAYLOAD_CUS_CONTATO_SALVO,
+      sender: { ...PAYLOAD_CUS_CONTATO_SALVO.sender, formattedName: '+55 11 3333-4444' },
+    });
+    expect(resultado?.telefone).toBe('5562992885001');
+  });
+
+  it('@lid continua dependendo do formattedName (nao ha numero no jid)', () => {
+    expect(normalizarEventoWpp(PAYLOAD_REAL_ONMESSAGE)?.telefone).toBe('556292885001');
+  });
+
+  it('@lid com contato salvo segue sem telefone (limitacao conhecida, nao inventa numero)', () => {
+    const resultado = normalizarEventoWpp({
+      ...PAYLOAD_REAL_ONMESSAGE,
+      sender: { ...PAYLOAD_REAL_ONMESSAGE.sender, formattedName: 'Cliente João', isMyContact: true },
+    });
+    expect(resultado?.telefone).toBeNull();
+  });
+});

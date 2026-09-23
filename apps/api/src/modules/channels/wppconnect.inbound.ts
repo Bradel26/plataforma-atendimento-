@@ -62,7 +62,8 @@ export function normalizarEventoWpp(bruto: unknown): MensagemNormalizada | null 
    * nunca este campo.
    */
   const telefone =
-    typeof sender.formattedName === 'string' ? numeroNormalizado(sender.formattedName) : null;
+    telefoneDoJid(enderecoExterno) ??
+    (typeof sender.formattedName === 'string' ? numeroNormalizado(sender.formattedName) : null);
 
   const sessao = typeof evento.session === 'string' && evento.session.trim() ? evento.session.trim() : null;
 
@@ -81,4 +82,25 @@ export function normalizarEventoWpp(bruto: unknown): MensagemNormalizada | null 
     anexoNome: null,
     identificadorDestino: sessao,
   };
+}
+
+/**
+ * Telefone embutido num jid `<digitos>@c.us` — a forma com que o WPPConnect
+ * endereca quem NAO esta atras de LID. Ali o numero e o proprio endereco, e
+ * nao depende de como o vendedor salvou o contato no celular.
+ *
+ * Isso importa justamente no fluxo de vendas: o vendedor inicia a conversa
+ * pela ficha (`iniciarConversa`, que grava o telefone do CRM como endereco) e
+ * o cliente responde. Se o cliente estiver salvo na agenda do vendedor,
+ * `sender.formattedName` traz o NOME salvo, nao o numero — e sem telefone a
+ * resposta nao acha o contato, cria um "Contato 1234" novo e abre uma segunda
+ * conversa, fora da ficha que o vendedor estava usando.
+ *
+ * `@lid` devolve null: e identidade opaca, sem numero por tras (ver
+ * `destinoParaWpp` em `wppconnect.client.ts`).
+ */
+function telefoneDoJid(jid: string): string | null {
+  const [usuario, dominio] = jid.split('@');
+  if (dominio?.toLowerCase() !== 'c.us' || !usuario) return null;
+  return numeroNormalizado(usuario);
 }
