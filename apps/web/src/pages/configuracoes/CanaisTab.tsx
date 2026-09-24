@@ -3,6 +3,7 @@ import { Alerta, Badge, Button, Card, EmptyState, Field, Input, Select } from '.
 import { useConfirm } from '../../components/ui/ConfirmDialog';
 import { ApiError, api, getAccessToken } from '../../lib/api';
 import { EVENTOS, conectar } from '../../lib/realtime';
+import { telefoneLegivel } from '../../lib/telefone';
 import type { Canal, Fila, Usuario } from '../../lib/types';
 
 type CanalConfig = {
@@ -66,7 +67,10 @@ type QrDaPonte = {
 type EstadoDaPonte = {
   situacao: 'CONECTADO' | 'DESCONECTADO' | 'DESCONHECIDO';
   detalhe: string | null;
+  /** Numero conectado (so digitos, com pais), quando o servidor informa. */
+  telefone?: string | null;
 };
+
 
 const SUPORTADOS = ['WHATSAPP', 'INSTAGRAM', 'FACEBOOK'] as const;
 type CanalSuportado = (typeof SUPORTADOS)[number];
@@ -129,6 +133,12 @@ export function CanaisTab() {
   const [trocandoNumero, setTrocandoNumero] = useState(false);
   /** Caminho que a ponte deve chamar. Vem da API porque leva o id da organizacao. */
   const [caminhoPonte, setCaminhoPonte] = useState<string | null>(null);
+  /**
+   * A conexao do WhatsApp nao oficial e infraestrutura da instalacao (so o QR
+   * e da linha): esconde endereco/token/segredo da ponte. Falso ate a API
+   * responder, que e o comportamento anterior.
+   */
+  const [conexaoGlobal, setConexaoGlobal] = useState(false);
 
   // ----- Numeros pessoais (vendedor com WhatsApp proprio) -----
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
@@ -145,11 +155,12 @@ export function CanaisTab() {
   const carregar = async () => {
     try {
       const [c, f, u] = await Promise.all([
-        api.get<{ canais: CanalConfig[] }>('/canais'),
+        api.get<{ canais: CanalConfig[]; whatsappConexaoGlobal?: boolean }>('/canais'),
         api.get<{ filas: Fila[] }>('/filas'),
         api.get<{ usuarios: Usuario[] }>('/usuarios'),
       ]);
       setCanais(c.canais);
+      setConexaoGlobal(c.whatsappConexaoGlobal === true);
       setFilas(f.filas);
       // So quem pode atuar em conversa entra na lista de donos: dar numero
       // proprio a um GESTOR ou ADMIN nao tem para onde a conversa ir depois.
@@ -579,12 +590,12 @@ export function CanaisTab() {
                     />
                     <span className="text-sm">
                       <span className="font-medium text-slate-800">
-                        {opcao === 'OFICIAL' ? 'API oficial (Meta Cloud API)' : 'Sem API oficial (ponte externa)'}
+                        {opcao === 'OFICIAL' ? 'API oficial (Meta Cloud API)' : 'Sem API oficial (QR Code)'}
                       </span>
                       <span className="block text-xs text-slate-500">
                         {opcao === 'OFICIAL'
                           ? 'Numero em uma WABA verificada. Custo por conversa, template para iniciar contato, e continuidade garantida pela Meta.'
-                          : 'Sessao de WhatsApp Web mantida por uma ponte externa (Baileys, WPPConnect). Funciona com qualquer numero e sem custo por mensagem.'}
+                          : 'Conecta como WhatsApp Web, lendo um QR Code com o celular. Funciona com qualquer numero e sem custo por mensagem.'}
                       </span>
                     </span>
                   </label>
@@ -600,16 +611,18 @@ export function CanaisTab() {
                     {aviso ??
                       'O modo nao oficial se conecta como WhatsApp Web e viola os termos de uso do WhatsApp: o numero pode ser bloqueado sem aviso. Use um numero que a operacao possa perder.'}
                   </p>
-                  <p className="mt-1">
-                    A plataforma nao hospeda a ponte: ela conversa por HTTP com um servico separado, que
-                    mantem a sessao do QR Code. Trocar de modo depois nao apaga as credenciais do outro.
-                  </p>
+                  {!conexaoGlobal && (
+                    <p className="mt-1">
+                      A plataforma nao hospeda a ponte: ela conversa por HTTP com um servico separado, que
+                      mantem a sessao do QR Code. Trocar de modo depois nao apaga as credenciais do outro.
+                    </p>
+                  )}
                 </div>
               )}
 
               {estadoPonte && (
                 <p className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-                  <span className="text-slate-500">Sessao da ponte:</span>
+                  <span className="text-slate-500">Conexao:</span>
                   <Badge
                     tom={
                       estadoPonte.situacao === 'CONECTADO'
@@ -625,8 +638,12 @@ export function CanaisTab() {
                         ? 'desconectada'
                         : 'nao confirmada'}
                   </Badge>
-                  {/* Desconhecido nao e desconectado: a frase diz qual dos dois. */}
-                  {estadoPonte.detalhe && <span className="text-slate-500">{estadoPonte.detalhe}</span>}
+                  {estadoPonte.situacao === 'CONECTADO' && estadoPonte.telefone ? (
+                    <span className="text-slate-700">{telefoneLegivel(estadoPonte.telefone)}</span>
+                  ) : (
+                    /* Desconhecido nao e desconectado: a frase diz qual dos dois. */
+                    estadoPonte.detalhe && <span className="text-slate-500">{estadoPonte.detalhe}</span>
+                  )}
                 </p>
               )}
 
@@ -688,7 +705,10 @@ export function CanaisTab() {
             </div>
           )}
 
-          {editando === 'WHATSAPP' && modo === 'NAO_OFICIAL' ? (
+          {editando === 'WHATSAPP' && modo === 'NAO_OFICIAL' && conexaoGlobal ? (
+            // Conexao de infraestrutura: nada a preencher, o QR acima e a conexao.
+            <p className="text-xs text-slate-500">A conexao e feita pelo QR Code acima. Nao ha nada a preencher aqui.</p>
+          ) : editando === 'WHATSAPP' && modo === 'NAO_OFICIAL' ? (
             <>
               <Field label="Endereco da ponte" hint="Ex.: http://wpp:3000/api — a plataforma chama /mensagens, /arquivos e /estado">
                 <Input
@@ -865,6 +885,9 @@ export function CanaisTab() {
                                         ? 'desconectada'
                                         : 'nao confirmada'}
                                   </Badge>
+                                  {estadoLinha.situacao === 'CONECTADO' && estadoLinha.telefone && (
+                                    <span className="text-slate-700">{telefoneLegivel(estadoLinha.telefone)}</span>
+                                  )}
                                 </p>
                               )}
                               {qrLinha?.conectado ? (

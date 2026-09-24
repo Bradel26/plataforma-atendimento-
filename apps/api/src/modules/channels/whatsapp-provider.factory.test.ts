@@ -33,6 +33,17 @@ describe('getWhatsAppProvider', () => {
     expect(getWhatsAppProvider()).toBeInstanceOf(WPPConnectProvider);
   });
 
+  it('WHATSAPP_PROVIDER=waha serve o WahaProvider pelo contrato legado, sem credencial por linha', async () => {
+    process.env.WHATSAPP_PROVIDER = 'waha';
+    const { getWhatsAppProvider } = await import('./whatsapp-provider.factory');
+    const { WhatsAppProviderLegado } = await import('./providers/legado');
+
+    const provider = getWhatsAppProvider();
+    expect(provider).toBeInstanceOf(WhatsAppProviderLegado);
+    // Linha no WAHA so precisa da sessao: `impedimentoDeEnvio` nao pode cobrar ponteUrl/ponteToken.
+    expect(provider.credenciaisPorLinha).toBe(false);
+  });
+
   it('aceita o valor com espacos e caixa alta (ex.: " WPPCONNECT ")', async () => {
     process.env.WHATSAPP_PROVIDER = ' WPPCONNECT ';
     const { getWhatsAppProvider } = await import('./whatsapp-provider.factory');

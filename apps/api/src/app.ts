@@ -17,6 +17,7 @@ import { campanhasRoutes } from './modules/campaigns/campaigns.routes';
 import { channelsRoutes } from './modules/channels/channels.routes';
 import { ponteRoutes } from './modules/channels/ponte.routes';
 import { wppconnectWebhookRoutes } from './modules/channels/wppconnect.webhook.routes';
+import { providerWebhooksRoutes } from './modules/channels/webhooks/webhooks.routes';
 import { webhooksRoutes } from './modules/channels/webhooks.routes';
 import { vozRoutes, vozWebhookRoutes } from './modules/voice/voice.routes';
 import { conversationsRoutes } from './modules/conversations/conversations.routes';
@@ -84,6 +85,9 @@ export function createApp() {
   // do corpo bruto: a autenticacao aqui e por segredo em query string, nao
   // HMAC sobre os bytes).
   app.use('/api/webhooks/wppconnect', wppconnectWebhookRoutes);
+  // Entrada generica dos `ChannelProvider` (WAHA hoje). Antes de `webhooksRoutes`
+  // pelo mesmo motivo das duas acima; corpo cru parseado pelo proprio router.
+  app.use('/api/webhooks/providers', providerWebhooksRoutes);
   app.use('/api/webhooks', webhooksRoutes);
   // A assinatura do provedor de voz e sobre os parametros do formulario, nao
   // sobre o corpo bruto — mas a rota fica aqui junto dos outros webhooks para o

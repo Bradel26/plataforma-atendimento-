@@ -262,7 +262,14 @@ channelsRoutes.get(
   '/',
   requireRole('ADMIN', 'SUPERVISOR'),
   asyncHandler(async (_req, res) => {
-    res.json({ canais: await listarCanais(), suportados: CANAIS_EXTERNOS });
+    res.json({
+      canais: await listarCanais(),
+      suportados: CANAIS_EXTERNOS,
+      // WhatsApp nao oficial com conexao de infraestrutura (WAHA, WPPConnect):
+      // a linha so precisa do QR, e a tela esconde endereco/token/segredo da
+      // ponte — detalhe de instalacao que ninguem ali deveria preencher.
+      whatsappConexaoGlobal: !whatsAppProvider.credenciaisPorLinha,
+    });
   }),
 );
 

@@ -74,6 +74,11 @@ const ORDEM = [
   'WPP_CONNECT_SECRET_KEY',
   'WPP_CONNECT_TOKEN',
   'WPP_CONNECT_WEBHOOK_SECRET',
+  // WhatsApp nao oficial via WAHA (ver WAHA.md). Mesmo raciocinio.
+  'WAHA_BASE_URL',
+  'WAHA_API_KEY',
+  'WAHA_WEBHOOK_SECRET',
+  'WAHA_WEBHOOK_BASE_URL',
 ];
 
 const final = { ...lido, ...ajustes };

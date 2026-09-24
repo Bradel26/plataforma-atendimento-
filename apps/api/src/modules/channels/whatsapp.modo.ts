@@ -110,6 +110,8 @@ export type EstadoDaPonte = {
   situacao: 'CONECTADO' | 'DESCONECTADO' | 'DESCONHECIDO';
   /** O que a ponte disse, para a tela mostrar sem traduzir errado. */
   detalhe: string | null;
+  /** Numero conectado (so digitos, com pais), quando o provider sabe informar. */
+  telefone?: string | null;
 };
 
 /**

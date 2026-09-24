@@ -11,6 +11,7 @@ import { useAuth } from '../features/auth/AuthProvider';
 import { FiltroEtiquetas } from './crm/Etiquetas';
 import { ApiError, api, getAccessToken } from '../lib/api';
 import { EVENTOS, conectar } from '../lib/realtime';
+import { telefoneLegivel } from '../lib/telefone';
 import { useFaixaDeLargura } from '../lib/useFaixaDeLargura';
 import type { ConversaDetalhe, Previa, Usuario } from '../lib/types';
 
@@ -73,6 +74,8 @@ export function AtendimentoPage() {
    */
   const [minhaLinha, setMinhaLinha] = useState<MinhaLinhaWhatsapp | null>(null);
   const [minhaLinhaConectada, setMinhaLinhaConectada] = useState(false);
+  /** Numero conectado na linha pessoal (so digitos), quando o servidor informa. */
+  const [numeroConectado, setNumeroConectado] = useState<string | null>(null);
   const [mostrarConectar, setMostrarConectar] = useState(false);
   const [qrConectar, setQrConectar] = useState<QrDaPonte | null>(null);
 
@@ -95,15 +98,20 @@ export function AtendimentoPage() {
       .finally(() => setCarregandoMinhaLinha(false));
   }, []);
 
+  // Roda de novo quando a conexao acontece, para trazer o numero que acabou de parear.
   useEffect(() => {
     if (!minhaLinha || minhaLinha.modo !== 'NAO_OFICIAL') return;
     void api
-      .get<{ estado: { situacao: string; detalhe: string | null } }>(
+      .get<{ estado: { situacao: string; detalhe: string | null; telefone?: string | null } }>(
         `/canais/numeros/${minhaLinha.id}/ponte/estado`,
       )
-      .then(({ estado }) => setMinhaLinhaConectada(estado.situacao === 'CONECTADO'))
+      .then(({ estado }) => {
+        const conectado = estado.situacao === 'CONECTADO';
+        setMinhaLinhaConectada(conectado);
+        setNumeroConectado(conectado ? (estado.telefone ?? null) : null);
+      })
       .catch(() => undefined);
-  }, [minhaLinha]);
+  }, [minhaLinha, minhaLinhaConectada]);
 
   /** Insere ou atualiza uma previa recebida por evento de socket — ver `upsertPrevia` (Fase 11.7). */
   const aplicarPrevia = useCallback((p: Previa) => {
@@ -554,6 +562,11 @@ export function AtendimentoPage() {
                     mostrarSucessoConexao && <Alerta tipo="sucesso">WhatsApp conectado</Alerta>
                   )}
                   <Badge tom="sucesso">🟢 WhatsApp conectado</Badge>
+                  {numeroConectado && (
+                    <p className="text-sm text-slate-600">
+                      Numero: <span className="font-medium text-slate-800">{telefoneLegivel(numeroConectado)}</span>
+                    </p>
+                  )}
                   <Button
                     type="button"
                     variante="neutro"

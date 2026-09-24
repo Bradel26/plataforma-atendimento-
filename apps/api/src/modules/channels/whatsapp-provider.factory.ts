@@ -1,5 +1,7 @@
 import { BaileysProvider } from './providers/baileys.provider';
 import { WPPConnectProvider } from './providers/wppconnect.provider';
+import { WhatsAppProviderLegado } from './providers/legado';
+import { obterProvider } from './providers/registro';
 import type { WhatsAppProvider } from './whatsapp.provider';
 
 /**
@@ -17,6 +19,8 @@ import type { WhatsAppProvider } from './whatsapp.provider';
 const FABRICAS: Record<string, () => WhatsAppProvider> = {
   baileys: () => new BaileysProvider(),
   wppconnect: () => new WPPConnectProvider(),
+  // Contrato novo (`ChannelProvider`), servido as rotas atuais pelo adaptador legado.
+  waha: () => new WhatsAppProviderLegado(obterProvider('waha')!),
 };
 
 /**
