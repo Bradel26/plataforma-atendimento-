@@ -71,15 +71,16 @@ que a plataforma já usa (`vendedor-xxxxxxxx`, `empresa-xxxxxxxx`) — nada muda
 | Reconectar (sem despareamento) | `GET /app/reconnect` | `reconectar()` |
 | Enviar texto | `POST /send/message` `{phone, message, mentions?, reply_message_id?}` | `enviarTexto()` |
 | Enviar imagem/vídeo/áudio/arquivo | `POST /send/{image,video,audio,file}` multipart | `enviarMidia()` |
-| Marcar como lida | `POST /message/{id}/read` `{phone}` | `marcarLida()` |
-| Apagar para todos | `POST /message/{id}/revoke` `{phone}` | `apagar()` |
-| Editar texto enviado | `POST /message/{id}/update` `{phone, message}` | `editarTexto()` |
-| Verificar número no WhatsApp | `GET /user/check?phone=` | `verificarNumero()` |
-| Foto de perfil | `GET /user/avatar?phone=&is_preview=` | `obterAvatar()` |
 
-`phone` sempre limpo (`+`, espaço, `-` removidos) e, para individuais, com o sufixo
-`@s.whatsapp.net` só nas rotas por-mensagem (`/message/{id}/*`); `/send/*` aceita o número cru. JIDs
-de grupo (`@g.us`) passam intactos — mesma regra do `_format_target`/`_message_jid` de referência.
+`phone` sempre limpo (`+`, espaço, `-` removidos); grupos (`@g.us`) passam intactos — mesma regra do
+`_format_target` de referência.
+
+**Fora deste mapeamento, de propósito:** `mark_as_read`, `revoke_message`, `update_message`,
+`check_phone` e `get_avatar` existem no `gowa/client.py` de referência, mas a interface
+`ChannelProvider` que já roda em produção (a que o `WahaProvider` implementa) **não tem gancho para
+nenhuma dessas ações** — nem o próprio `WahaClient` as implementa hoje. Portar essas cinco rotas sem
+ninguém para chamá-las seria código morto. Ampliar `ChannelProvider` para cobri-las é a mesma mudança
+maior já registrada em "Fora de escopo" (grupo, reação, presença) — mesma resposta, mesmo motivo.
 
 ## Estado da sessão — tradução para o vocabulário do CRM
 
