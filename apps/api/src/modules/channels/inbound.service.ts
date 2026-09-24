@@ -50,20 +50,33 @@ export async function filaPadraoDoCanal(canal: Channel): Promise<string | null> 
 }
 
 /**
- * Destino de uma conversa nova: a linha que recebeu a mensagem decide.
+ * Destino de uma conversa nova, a partir de uma config JA resolvida.
  *
  * Linha pessoal (`donoId` preenchido — o vendedor com WhatsApp proprio): a
  * conversa nasce ja atribuida a ele, sem fila — o cliente que fala com o
  * numero dele nao devia esperar em espera compartilhada por algo que ja tem
  * dono. Linha comum: cai na fila configurada, ou na primeira fila ativa do
  * canal, como sempre foi.
+ *
+ * Extraida de `destinoDaMensagem` para `registrarMensagemEntrante` poder
+ * reaproveitar a MESMA config que ja buscou para filtrar a conversa aberta
+ * por `canalConfigId` (ver comentario la) — chamar `configDoDestino` de novo
+ * aqui duplicaria a consulta.
  */
-export async function destinoDaMensagem(canal: Channel, identificadorDestino: string | null): Promise<DestinoConversa> {
-  const config = await configDoDestino(canal, identificadorDestino);
+async function destinoParaConfig(
+  canal: Channel,
+  config: { id: string; donoId: string | null; filaId: string | null } | null,
+): Promise<DestinoConversa> {
   const decidido = decidirDestino(config);
   if (decidido.filaId || decidido.agenteId) return decidido;
 
   return { ...decidido, filaId: await filaPadraoDoCanal(canal) };
+}
+
+/** Destino de uma conversa nova: a linha que recebeu a mensagem decide (ver `destinoParaConfig`). */
+export async function destinoDaMensagem(canal: Channel, identificadorDestino: string | null): Promise<DestinoConversa> {
+  const config = await configDoDestino(canal, identificadorDestino);
+  return destinoParaConfig(canal, config);
 }
 
 /**
@@ -80,10 +93,23 @@ export async function registrarMensagemEntrante(dados: MensagemNormalizada) {
 
   const contato = await encontrarOuCriarContato(dados);
 
+  /*
+   * A linha que recebeu esta mensagem tem de ser resolvida ANTES de procurar
+   * uma conversa aberta, e entrar no filtro da busca. Sem isso, um contato
+   * com conversa aberta na linha PESSOAL de um vendedor que escreve para a
+   * linha COMPARTILHADA da empresa (ou vice-versa, ou para a linha pessoal de
+   * outro vendedor) reaproveitaria a conversa da linha errada: a mensagem
+   * cairia no atendimento de quem nao deveria ve-la, e a resposta sairia pelo
+   * numero errado (auditoria de 23/09/2026, achado critico #1).
+   */
+  const config = await configDoDestino(dados.canal, dados.identificadorDestino);
+  const canalConfigId = config?.id ?? null;
+
   const emAberto = await prisma.conversation.findFirst({
     where: {
       contatoId: contato.id,
       canal: dados.canal,
+      canalConfigId,
       status: { not: 'FINALIZADO' },
     },
     orderBy: { ultimaMensagemEm: 'desc' },
@@ -92,7 +118,7 @@ export async function registrarMensagemEntrante(dados: MensagemNormalizada) {
   const nova = !emAberto;
   const destino = emAberto
     ? { canalConfigId: emAberto.canalConfigId, filaId: emAberto.filaId, agenteId: null }
-    : await destinoDaMensagem(dados.canal, dados.identificadorDestino);
+    : await destinoParaConfig(dados.canal, config);
 
   const conversa =
     emAberto ??

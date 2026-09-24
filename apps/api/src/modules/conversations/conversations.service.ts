@@ -199,8 +199,22 @@ export async function iniciarConversa(solicitante: Solicitante, contatoId: strin
   const motivo = motivoSemTelefone(contato);
   if (motivo) throw badRequest(motivo);
 
+  /*
+   * A linha do SOLICITANTE (quem clicou) tem de ser resolvida ANTES de
+   * procurar conversa aberta, e entrar no filtro da busca. Sem isso, um
+   * contato com conversa aberta na linha pessoal de OUTRO vendedor faria
+   * este vendedor "reabrir" o id dessa conversa — que a politica de
+   * visibilidade nem deixa ele ver (404), ou, pior, o levaria a responder
+   * pelo numero de outra pessoa (mesmo defeito corrigido em
+   * `registrarMensagemEntrante`, inbound.service.ts; auditoria de
+   * 23/09/2026, achado critico #1). Duas linhas diferentes falando com o
+   * mesmo contato SAO duas conversas diferentes, uma por numero.
+   */
+  const config = await configWhatsappDoSolicitante(solicitante);
+  const canalConfigId = config?.id ?? null;
+
   const existente = await prisma.conversation.findFirst({
-    where: { contatoId, canal: 'WHATSAPP', status: { not: 'FINALIZADO' } },
+    where: { contatoId, canal: 'WHATSAPP', canalConfigId, status: { not: 'FINALIZADO' } },
     orderBy: { criadoEm: 'desc' },
   });
   if (existente) {
@@ -214,7 +228,6 @@ export async function iniciarConversa(solicitante: Solicitante, contatoId: strin
     return { id: existente.id };
   }
 
-  const config = await configWhatsappDoSolicitante(solicitante);
   const impedimento = config
     ? impedimentoDeEnvio(
         config.modo,
