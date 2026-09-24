@@ -57,7 +57,23 @@ Docker, variáveis, volume para a sessão sobreviver a um redeploy, e o teste de
 **Ao contrário do WAHA (uma instância = a instalação inteira), o GOWA de referência usa multi-device
 num único processo**: cada linha (`ChannelConfig.ponteSessao`) vira um *device* dentro do mesmo
 processo GOWA, identificado pelo header `X-Device-Id`. Isso mapeia direto para a convenção de nomes
-que a plataforma já usa (`vendedor-xxxxxxxx`, `empresa-xxxxxxxx`) — nada muda aí.
+que a plataforma já usa (`vendedor-xxxxxxxx`, `empresa-xxxxxxxx`) — nada muda aí, **para o envio**.
+
+### Limite conhecido da v1: uma linha por instância de GOWA
+
+O `X-Device-Id` só é usado nas chamadas que a API FAZ ao GOWA (enviar, status, QR). Ele **não volta**
+no corpo do webhook — investigando o `whatsbot-pro-main` (o único dos 3 zips que resolve isso),
+achei que ele só sabe de qual linha veio um evento porque cada linha com **processo dedicado**
+(proxy) ganha uma **URL de webhook própria** (`/api/webhook/gowa/<channel_id>`); linhas que dividem
+um processo **compartilhado** de GOWA — o caso comum, sem proxy — caem todas na mesma URL, e não
+achei, em nenhum dos 3 zips, o campo do payload que diria de qual delas veio a mensagem.
+
+**Decisão, confirmada com o usuário:** a v1 atende **uma linha por instância de GOWA** (um recurso
+Docker = uma linha). A sessão dessa linha (`ChannelConfig.ponteSessao`) fica fixada numa variável de
+ambiente da instalação, `GOWA_SESSAO` — o webhook não precisa descobrir de qual linha veio o evento
+porque só existe uma. Multi-linha no mesmo GOWA (múltiplos devices recebendo por um webhook só) fica
+fora de escopo até dar para testar contra uma instância real e confirmar como/se o payload identifica
+o device — está registrado em "Fora de escopo" abaixo.
 
 ## Mapeamento de rotas (fidelidade ao `gowa/client.py`)
 
@@ -107,12 +123,16 @@ confere o dele). `gowa.mapper.ts` traduz o corpo cru em `EventoDeCanal` (mensage
 mudança de estado), puro — sem banco, sem rede, testável com payload capturado (mesmo padrão de
 `waha.mapper.test.ts`).
 
+O corpo do webhook não traz a sessão de origem (ver "Limite conhecido da v1" acima) — `sessaoExterna`
+em todo `EventoDeCanal` gerado vem de `GOWA_SESSAO` (a única linha desta instalação), não do payload.
+
 ## Variáveis de ambiente
 
 | Variável | Uso |
 |---|---|
 | `GOWA_BASE_URL` | endereço interno do GOWA (`http://<container>:3000`), sem `/` no fim |
 | `GOWA_WEBHOOK_SECRET` | segredo do `?secret=` — sem ele a instalação recusa iniciar sessão, mesmo padrão do `WPP_CONNECT_WEBHOOK_SECRET` |
+| `GOWA_SESSAO` | a `ponteSessao` da única linha desta instalação (ex.: `vendedor-1a2b3c4d`) — sem ela, mensagens recebidas não têm como achar a organização e são descartadas como sessão desconhecida |
 | `WHATSAPP_PROVIDER=gowa` | ativa este provider na instalação inteira (troca global, não por linha) |
 
 Sem `GOWA_BASE_URL`: `configurado()` devolve `false`, mesmo padrão do `obterConfigWaha()`.
@@ -136,6 +156,10 @@ para tudo o mais.
 
 ## Fora de escopo (registrado para não ser esquecido, não para fazer agora)
 
+- **Múltiplas linhas num único GOWA** — ver "Limite conhecido da v1" acima. Exige confirmar, contra
+  uma instância real, se o payload do webhook carrega algum campo que identifique o device (não achei
+  nos 3 zips); sem isso confirmado, várias linhas no mesmo GOWA vão atribuir mensagem recebida à
+  linha errada, silenciosamente. Enquanto isso, cada linha extra pede outro recurso Docker.
 - `whatsapp_cloud` (API oficial da Meta) e `whatsbot-mcp` (servidor MCP) — não fazem QR, ficam de fora.
 - Multi-device dedicado por proxy (o `gowa_dedicated_port`/processo isolado do `whatsbot-pro-main`,
   plano 52 de lá) — o `whatsbot-pro-main` usa isso para IP fixo por número; a plataforma atual não
