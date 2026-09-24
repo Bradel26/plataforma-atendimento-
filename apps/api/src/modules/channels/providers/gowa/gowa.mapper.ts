@@ -1,6 +1,7 @@
 import { numeroNormalizado } from '../../whatsapp.modo';
 import type { MensagemNormalizada } from '../../meta.types';
 import type { EstadoSessao, EventoDeCanal, SituacaoSessao, StatusDeEntrega } from '../channel-provider';
+import type { StatusResultadoGowa } from './gowa.client';
 import type { AckGowa, EventoGowa, EnvioGowa, MensagemGowa } from './gowa.types';
 
 /**
@@ -13,23 +14,27 @@ const texto = (v: unknown): string | null => (typeof v === 'string' && v.trim() 
 
 /**
  * GOWA separa "conectado" (socket vivo) de "logado" (sessao pareada) — ao
- * contrario do WAHA, que tem um unico enum. `status: null` (GOWA fora do ar,
- * ou device que nunca respondeu) e sempre DESCONHECIDO: falha de diagnostico
- * nao prova desconexao.
+ * contrario do WAHA, que tem um unico enum. `'inexistente'` (device nunca
+ * criado, HTTP 404) vira DESCONECTADO; `'falha'` (rede caiu, timeout, GOWA
+ * fora do ar, qualquer outro HTTP de erro) e sempre DESCONHECIDO: falha de
+ * diagnostico nao prova desconexao.
  */
-export function situacaoDaSessaoGowa(
-  status: { conectado: boolean; logado: boolean } | null,
-  numeroProprio: string | null,
-): SituacaoSessao {
+export function situacaoDaSessaoGowa(status: StatusResultadoGowa, numeroProprio: string | null): SituacaoSessao {
+  if (status.tipo === 'falha') {
+    return { estado: 'DESCONHECIDO', detalhe: null, telefone: null };
+  }
+  if (status.tipo === 'inexistente') {
+    return { estado: 'DESCONECTADO', detalhe: 'device ainda nao criado', telefone: null };
+  }
+
   let estado: EstadoSessao;
-  if (!status) estado = 'DESCONHECIDO';
-  else if (!status.logado) estado = 'AGUARDANDO_QR';
+  if (!status.logado) estado = 'AGUARDANDO_QR';
   else if (!status.conectado) estado = 'CONECTANDO'; // pareada, socket caiu: reconecta, nao pede QR novo
   else estado = 'CONECTADO';
 
   return {
     estado,
-    detalhe: status ? `conectado=${status.conectado} logado=${status.logado}` : null,
+    detalhe: `conectado=${status.conectado} logado=${status.logado}`,
     telefone: estado === 'CONECTADO' ? numeroProprio : null,
   };
 }
@@ -90,8 +95,9 @@ const STATUS_DO_RECIBO: Record<string, StatusDeEntrega> = {
  * Evento de webhook do GOWA -> eventos do CRM. So `message` e `message.ack`
  * sao assinados (o resto — reacao, edicao, chamada, presenca — nao vira
  * conversa; ver "Fora de escopo" no spec). `deviceId` e a sessao: o GOWA nao
- * manda a sessao no corpo do webhook, so no `X-Device-Id` da URL que a
- * chamou — resolvido fora, pela rota generica de webhook.
+ * manda a sessao no corpo do webhook, entao quem chama (`gowa.provider.ts`)
+ * passa aqui o valor fixo de `GOWA_SESSAO` — a unica linha desta instalacao
+ * (ver spec, "Limite conhecido da v1"), nunca algo lido do payload ou da URL.
  */
 export function interpretarEventoGowa(corpo: unknown, deviceId: string): EventoDeCanal[] {
   if (!corpo || typeof corpo !== 'object') return [{ tipo: 'ignorado', motivo: 'corpo nao e objeto' }];

@@ -10,7 +10,7 @@ import type {
   SessaoResolvida,
   SituacaoSessao,
 } from '../channel-provider';
-import { GowaClient, GowaErro } from './gowa.client';
+import { GowaClient, GowaErro, type StatusResultadoGowa } from './gowa.client';
 import { idDaMensagemEnviada, interpretarEventoGowa, numeroDoDestino, situacaoDaSessaoGowa } from './gowa.mapper';
 import type { EndpointDeMidiaGowa } from './gowa.types';
 import { webhookGowaAutentico } from './gowa.webhook';
@@ -22,10 +22,16 @@ const PROVIDER = 'gowa';
  * portado do plugin `gowa` do `whatsbot-pro-main` com fidelidade tecnica ao
  * `gowa/client.py` de referencia (so nas rotas que este contrato usa).
  *
- * Uma unica instancia do GOWA para a instalacao inteira, uma linha por
- * *device* (`X-Device-Id` = `ChannelConfig.ponteSessao`) — multi-device num
- * processo so, diferente do WAHA (uma instancia = a instalacao inteira, mas
- * SEM multi-device por header).
+ * **v1: uma instalacao inteira atende UMA UNICA linha** (ver spec, "Limite
+ * conhecido da v1") — `GOWA_SESSAO` fixa qual, e e a mesma sessao que o
+ * webhook usa (nao ha como o corpo do webhook dizer de qual device veio um
+ * evento). Nao e "uma instancia do GOWA por linha, adicione outro container
+ * para a proxima": e uma instalacao inteira da API por linha, porque
+ * `GOWA_BASE_URL`/`GOWA_SESSAO`/`WHATSAPP_PROVIDER` sao globais ao processo.
+ * `sessaoPermitida()` e o guarda que impede qualquer outra sessao de criar
+ * device ou mandar mensagem por aqui — sem ele, o autoatendimento de
+ * "Conectar WhatsApp" pariria uma segunda linha cujas mensagens o webhook
+ * atribuiria, silenciosamente, a organizacao dona de `GOWA_SESSAO`.
  */
 export class GowaProvider implements ChannelProvider {
   readonly nome = PROVIDER;
@@ -34,8 +40,9 @@ export class GowaProvider implements ChannelProvider {
   /** Devices ja garantidos neste processo — evita recriar a cada poll do QR. */
   private readonly garantidos = new Set<string>();
 
+  /** Sem `GOWA_SESSAO` esta instalacao nao sabe qual e a sua unica linha permitida — nao pode operar. */
   configurado(): boolean {
-    return obterConfigGowa() !== null;
+    return obterConfigGowa() !== null && obterSessaoFixaGowa() !== null;
   }
 
   private cliente(): GowaClient {
@@ -53,6 +60,25 @@ export class GowaProvider implements ChannelProvider {
   }
 
   /**
+   * So a linha fixada em `GOWA_SESSAO` pode usar esta instalacao (ver doc da
+   * classe). Toda acao que cria device ou move mensagem checa isto primeiro.
+   */
+  private static sessaoPermitida(sessao: SessaoResolvida): boolean {
+    const fixa = obterSessaoFixaGowa();
+    return !!fixa && !!sessao.sessaoExterna && sessao.sessaoExterna === fixa;
+  }
+
+  private static motivoSessaoNaoPermitida(sessao: SessaoResolvida): string {
+    const fixa = obterSessaoFixaGowa();
+    if (!fixa) return 'esta instalacao do GOWA nao tem GOWA_SESSAO configurada';
+    return `esta instalacao do GOWA so atende a linha "${fixa}"; a linha pedida ("${sessao.sessaoExterna ?? 'sem sessao'}") precisa de outra instalacao`;
+  }
+
+  private static erroSessaoNaoPermitida(sessao: SessaoResolvida): AppError {
+    return new AppError(503, 'CANAL_INDISPONIVEL', GowaProvider.motivoSessaoNaoPermitida(sessao));
+  }
+
+  /**
    * GOWA/GowaErro -> erro do CRM, com a frase que o atendente le.
    *
    * Ordem importa: o sinal de "reachout timelock" (bloqueio anti-spam do
@@ -66,7 +92,11 @@ export class GowaProvider implements ChannelProvider {
     if (err instanceof GowaErro) {
       if (err.tipo !== 'http') return new AppError(502, 'CANAL_INACESSIVEL', err.message);
       const pista = `${err.status ?? ''} ${err.corpoErro ?? ''}`.toLowerCase();
-      if (err.status === 429 || pista.includes('reachout') || pista.includes('timelock') || pista.includes('463')) {
+      // `\b463\b`, nao `includes('463')`: o corpo de erro do GOWA costuma trazer o
+      // proprio numero de telefone, e um numero como 5511946312345 contem "463" sem
+      // ser o bloqueio anti-spam — a fronteira de palavra evita casar dentro de uma
+      // sequencia maior de digitos.
+      if (err.status === 429 || pista.includes('reachout') || pista.includes('timelock') || /\b463\b/.test(pista)) {
         return new AppError(502, 'ENVIO_RECUSADO', 'O WhatsApp recusou iniciar esta conversa agora (limite anti-spam). Tente novamente mais tarde.');
       }
       // 404: device nao existe no GOWA; 422: device existe mas nao esta conectado
@@ -86,6 +116,7 @@ export class GowaProvider implements ChannelProvider {
   // ---------------------------------------------------------------- mensagens
 
   async enviarTexto(sessao: SessaoResolvida, destino: string, texto: string): Promise<ResultadoEnvio> {
+    if (!GowaProvider.sessaoPermitida(sessao)) throw GowaProvider.erroSessaoNaoPermitida(sessao);
     const deviceId = GowaProvider.deviceId(sessao);
     const phone = numeroDoDestino(destino);
     if (!phone) throw new AppError(400, 'DESTINO_INVALIDO', 'O contato nao tem um numero de WhatsApp valido');
@@ -104,6 +135,7 @@ export class GowaProvider implements ChannelProvider {
   }
 
   async enviarMidia(sessao: SessaoResolvida, destino: string, midia: InputMidia): Promise<ResultadoEnvio> {
+    if (!GowaProvider.sessaoPermitida(sessao)) throw GowaProvider.erroSessaoNaoPermitida(sessao);
     const deviceId = GowaProvider.deviceId(sessao);
     const phone = numeroDoDestino(destino);
     if (!phone) throw new AppError(400, 'DESTINO_INVALIDO', 'O contato nao tem um numero de WhatsApp valido');
@@ -145,11 +177,32 @@ export class GowaProvider implements ChannelProvider {
     return deviceId;
   }
 
+  /**
+   * O device pode sumir do GOWA sem a API saber (redeploy sem o volume
+   * documentado, reset do SQLite interno — ver `GOWA.md`). Quando o status
+   * vem `'inexistente'` para um device que a gente achava garantido, tira do
+   * cache: o proximo `garantirDevice` recria em vez de ficar preso achando
+   * que o device ainda existe.
+   */
+  private esquecerSeSumiu(deviceId: string, status: StatusResultadoGowa): void {
+    if (status.tipo === 'inexistente' && this.garantidos.has(deviceId)) {
+      this.garantidos.delete(deviceId);
+      log.warn('sessao', 'device sumiu do GOWA, sera recriado no proximo pedido', { provider: PROVIDER, sessaoExterna: deviceId });
+    }
+  }
+
   sessao = {
     iniciar: async (sessao: SessaoResolvida): Promise<SituacaoSessao> => {
+      if (!GowaProvider.sessaoPermitida(sessao)) {
+        return { estado: 'DESCONHECIDO', detalhe: GowaProvider.motivoSessaoNaoPermitida(sessao), telefone: null };
+      }
+      if (!obterSegredoWebhookGowa()) {
+        return { estado: 'DESCONHECIDO', detalhe: 'falta GOWA_WEBHOOK_SECRET nesta instalacao: a sessao nao receberia mensagens', telefone: null };
+      }
       const cliente = this.cliente();
       const deviceId = await this.garantirDevice(sessao, cliente);
       const status = await cliente.obterStatus(deviceId);
+      this.esquecerSeSumiu(deviceId, status);
       return situacaoDaSessaoGowa(status, null);
     },
 
@@ -157,10 +210,17 @@ export class GowaProvider implements ChannelProvider {
       if (!sessao.sessaoExterna?.trim()) {
         return { qr: null, conectado: false, motivo: 'a sessao do WhatsApp desta linha ainda nao foi configurada' };
       }
+      if (!GowaProvider.sessaoPermitida(sessao)) {
+        return { qr: null, conectado: false, motivo: GowaProvider.motivoSessaoNaoPermitida(sessao) };
+      }
+      if (!obterSegredoWebhookGowa()) {
+        return { qr: null, conectado: false, motivo: 'falta GOWA_WEBHOOK_SECRET nesta instalacao: a sessao nao receberia mensagens' };
+      }
       try {
         const cliente = this.cliente();
         const deviceId = await this.garantirDevice(sessao, cliente);
         const status = await cliente.obterStatus(deviceId);
+        this.esquecerSeSumiu(deviceId, status);
         const situacao = situacaoDaSessaoGowa(status, null);
 
         switch (situacao.estado) {
@@ -174,6 +234,9 @@ export class GowaProvider implements ChannelProvider {
             const qr = await cliente.obterQrCode(deviceId);
             return { qr, conectado: false, motivo: qr ? null : 'o QR ainda nao foi gerado' };
           }
+          case 'DESCONECTADO':
+            // O device sumiu do GOWA (ja tirado do cache acima) — o proximo pedido recria.
+            return { qr: null, conectado: false, motivo: 'o dispositivo do WhatsApp sumiu do servidor; tentando recriar' };
           default:
             return { qr: null, conectado: false, motivo: 'nao foi possivel falar com o WhatsApp' };
         }
@@ -190,7 +253,7 @@ export class GowaProvider implements ChannelProvider {
       if (!deviceId) return { estado: 'DESCONHECIDO', detalhe: 'sessao nao informada', telefone: null };
       try {
         const status = await this.cliente().obterStatus(deviceId);
-        if (!status) return { estado: 'DESCONECTADO', detalhe: 'device ainda nao criado ou GOWA fora do ar', telefone: null };
+        this.esquecerSeSumiu(deviceId, status);
         return situacaoDaSessaoGowa(status, null);
       } catch (err) {
         return { estado: 'DESCONHECIDO', detalhe: err instanceof Error ? err.message : 'erro desconhecido', telefone: null };
@@ -198,6 +261,7 @@ export class GowaProvider implements ChannelProvider {
     },
 
     desconectar: async (sessao: SessaoResolvida): Promise<void> => {
+      if (!GowaProvider.sessaoPermitida(sessao)) throw GowaProvider.erroSessaoNaoPermitida(sessao);
       const deviceId = GowaProvider.deviceId(sessao);
       try {
         await this.cliente().logout(deviceId);
@@ -209,6 +273,7 @@ export class GowaProvider implements ChannelProvider {
     },
 
     reiniciar: async (sessao: SessaoResolvida): Promise<void> => {
+      if (!GowaProvider.sessaoPermitida(sessao)) throw GowaProvider.erroSessaoNaoPermitida(sessao);
       const deviceId = GowaProvider.deviceId(sessao);
       try {
         await this.cliente().reconectar(deviceId);

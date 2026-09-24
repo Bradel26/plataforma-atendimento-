@@ -17,10 +17,14 @@ navegador ──► API (atendimento.bradel.com.br)
                API ─► registrarMensagemEntrante (o mesmo pipeline do WAHA e do WPPConnect)
 ```
 
-- **Uma instância do GOWA por LINHA (v1) — não por instalação.** Diferente do WAHA, o webhook do
-  GOWA não diz de qual device veio um evento quando várias linhas dividem o mesmo processo (ver
-  spec, "Limite conhecido da v1"). Até isso ser resolvido contra uma instância real, cada linha
-  extra pede um recurso Docker próprio, com sua própria `GOWA_SESSAO`.
+- **Uma instalação da API inteira atende UMA ÚNICA linha (v1) — não "um GOWA por linha".**
+  `GOWA_BASE_URL`, `GOWA_SESSAO` e `WHATSAPP_PROVIDER` são variáveis da instalação da API, não da
+  linha: subir um segundo recurso Docker do GOWA sozinho não conecta uma segunda linha, porque a
+  mesma API continua enxergando só uma `GOWA_SESSAO`. O webhook do GOWA também não diz de qual
+  device veio um evento quando várias linhas dividem o mesmo processo (ver spec, "Limite conhecido
+  da v1"). Até isso mudar, uma linha extra pede uma **instalação inteira nova da API** (seu próprio
+  banco, seu próprio recurso Coolify) com o seu próprio recurso GOWA — não apenas outro container
+  de GOWA apontando para a API existente.
 - **O device nasce no primeiro pedido de QR.** A API cria o device no GOWA (`POST /devices`) na
   hora, se ainda não existir. Mesmo assim usa o header `X-Device-Id` (mesmo nome de sessão que
   WAHA/WPPConnect já usam: `vendedor-xxxxxxxx`/`empresa-xxxxxxxx`) — é o que a API manda; o webhook

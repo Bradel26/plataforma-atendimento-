@@ -54,6 +54,16 @@ function resultados(corpo: unknown): unknown {
 
 const campoTexto = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null);
 
+/**
+ * Resultado de consultar o status de um device. Distingue "device ainda nao
+ * existe" (`'inexistente'`, HTTP 404 — normal antes do primeiro pareamento)
+ * de "nao deu pra saber" (`'falha'` — rede caiu, timeout, GOWA fora do ar,
+ * qualquer outro HTTP de erro): o spec exige que so o primeiro vire
+ * DESCONECTADO e o segundo DESCONHECIDO, porque falha de diagnostico nao
+ * prova desconexao.
+ */
+export type StatusResultadoGowa = { tipo: 'ok'; conectado: boolean; logado: boolean } | { tipo: 'inexistente' } | { tipo: 'falha' };
+
 export class GowaClient {
   constructor(
     private readonly baseUrl: string,
@@ -112,16 +122,16 @@ export class GowaClient {
     if (!resposta.ok) throw new GowaErro('criar o dispositivo', 'http', resposta.status, await GowaClient.corpoDeErro(resposta));
   }
 
-  /** `null` quando o GOWA nao respondeu nada aproveitavel (fora do ar, device sumiu) — nunca lanca. */
-  async obterStatus(deviceId: string): Promise<{ conectado: boolean; logado: boolean } | null> {
+  /** Nunca lanca — ver `StatusResultadoGowa` para o que cada resultado significa. */
+  async obterStatus(deviceId: string): Promise<StatusResultadoGowa> {
     try {
       const resposta = await this.chamar('consultar o status', '/app/status', { deviceId });
-      if (!resposta.ok) return null;
+      if (!resposta.ok) return resposta.status === 404 ? { tipo: 'inexistente' } : { tipo: 'falha' };
       const r = resultados(await GowaClient.json(resposta)) as StatusGowa | null;
-      if (!r || typeof r !== 'object') return null;
-      return { conectado: Boolean(r.is_connected), logado: Boolean(r.is_logged_in) };
+      if (!r || typeof r !== 'object') return { tipo: 'falha' };
+      return { tipo: 'ok', conectado: Boolean(r.is_connected), logado: Boolean(r.is_logged_in) };
     } catch {
-      return null;
+      return { tipo: 'falha' };
     }
   }
 

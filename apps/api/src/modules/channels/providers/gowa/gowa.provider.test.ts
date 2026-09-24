@@ -18,6 +18,8 @@ type DeviceFalso = { id: string; conectado: boolean; logado: boolean; numero: st
 
 function gowaFalso() {
   const devices = new Map<string, DeviceFalso>();
+  /** Quando true, `/app/status` devolve 500 (falha de rede/HTTP) em vez do normal — simula GOWA fora do ar. */
+  let statusFalha = false;
   const json = (status: number, corpo: unknown) =>
     new Response(JSON.stringify(corpo), { status, headers: { 'Content-Type': 'application/json' } });
 
@@ -35,6 +37,7 @@ function gowaFalso() {
       return json(201, { results: { id: corpo.device_id } });
     }
     if (metodo === 'GET' && caminho === '/app/status') {
+      if (statusFalha) return json(500, { message: 'internal error' });
       const d = deviceId ? devices.get(deviceId) : undefined;
       if (!d) return json(404, { message: 'device not found' });
       return json(200, { results: { is_connected: d.conectado, is_logged_in: d.logado } });
@@ -51,6 +54,8 @@ function gowaFalso() {
       return json(200, {});
     }
     if (metodo === 'POST' && caminho === '/send/message') {
+      // Numero com "463" no meio de uma sequencia maior de digitos, nao o bloqueio anti-spam de verdade.
+      if (corpo.phone === '5511946312345') return json(400, { message: `numero invalido: ${corpo.phone}` });
       const d = deviceId ? devices.get(deviceId) : undefined;
       if (!d || !d.conectado) return json(422, { message: 'not connected' });
       return json(200, { results: { message_id: `GOWA_${corpo.phone}_1` } });
@@ -58,10 +63,17 @@ function gowaFalso() {
     return json(404, {});
   });
 
-  return { devices, fetch };
+  return {
+    devices,
+    fetch,
+    setStatusFalha: (v: boolean) => {
+      statusFalha = v;
+    },
+  };
 }
 
 const LINHA: SessaoResolvida = { canalConfigId: 'linha-1', sessaoExterna: 'vendedor-1a2b3c4d' };
+const LINHA_ERRADA: SessaoResolvida = { canalConfigId: 'linha-2', sessaoExterna: 'vendedor-outra-linha' };
 
 describe('GowaProvider', () => {
   let gowa: ReturnType<typeof gowaFalso>;
@@ -89,6 +101,12 @@ describe('GowaProvider', () => {
 
   it('configurado() e false sem GOWA_BASE_URL', async () => {
     delete process.env.GOWA_BASE_URL;
+    const { GowaProvider } = await import('./gowa.provider');
+    expect(new GowaProvider().configurado()).toBe(false);
+  });
+
+  it('configurado() e false sem GOWA_SESSAO, mesmo com GOWA_BASE_URL definida (instalacao nao pode operar sem sua unica linha fixada)', async () => {
+    delete process.env.GOWA_SESSAO;
     const { GowaProvider } = await import('./gowa.provider');
     expect(new GowaProvider().configurado()).toBe(false);
   });
@@ -178,5 +196,131 @@ describe('GowaProvider', () => {
     const { GowaProvider } = await import('./gowa.provider');
     const eventos = new GowaProvider().webhook.interpretar({ event: 'message', payload: { id: 'M1', chat_id: '5511999990000@s.whatsapp.net', body: 'oi' } });
     expect(eventos).toEqual([expect.objectContaining({ tipo: 'ignorado' })]);
+  });
+
+  // ---------------------------------------------------------- achado 1: uma linha por instalacao
+
+  it('sessao.qr para uma sessao diferente de GOWA_SESSAO nunca cria device (motivo, nunca lanca)', async () => {
+    const { GowaProvider } = await import('./gowa.provider');
+    const resultado = await new GowaProvider().sessao.qr(LINHA_ERRADA);
+
+    expect(resultado.qr).toBeNull();
+    expect(resultado.conectado).toBe(false);
+    expect(resultado.motivo).toMatch(/vendedor-outra-linha|so atende/);
+    expect(gowa.devices.size).toBe(0);
+  });
+
+  it('sessao.iniciar para uma sessao diferente de GOWA_SESSAO nunca cria device (nunca lanca)', async () => {
+    const { GowaProvider } = await import('./gowa.provider');
+    const situacao = await new GowaProvider().sessao.iniciar(LINHA_ERRADA);
+
+    expect(situacao.estado).toBe('DESCONHECIDO');
+    expect(gowa.devices.size).toBe(0);
+  });
+
+  it('enviarTexto para uma sessao diferente de GOWA_SESSAO recusa com AppError 503, sem chamar /send/message', async () => {
+    const { GowaProvider } = await import('./gowa.provider');
+
+    await expect(new GowaProvider().enviarTexto(LINHA_ERRADA, '5511999990000', 'oi')).rejects.toMatchObject({ status: 503 });
+
+    expect(gowa.fetch).not.toHaveBeenCalledWith(expect.stringContaining('/send/message'), expect.anything());
+  });
+
+  it('enviarMidia para uma sessao diferente de GOWA_SESSAO recusa com AppError 503, sem chamar o GOWA', async () => {
+    const { GowaProvider } = await import('./gowa.provider');
+
+    await expect(
+      new GowaProvider().enviarMidia(LINHA_ERRADA, '5511999990000', { buffer: Buffer.from('x'), nome: 'a.png', tipo: 'image/png' }),
+    ).rejects.toMatchObject({ status: 503 });
+
+    expect(gowa.fetch).not.toHaveBeenCalled();
+  });
+
+  it('sessao.desconectar para uma sessao diferente de GOWA_SESSAO recusa com AppError 503', async () => {
+    const { GowaProvider } = await import('./gowa.provider');
+    await expect(new GowaProvider().sessao.desconectar(LINHA_ERRADA)).rejects.toMatchObject({ status: 503 });
+  });
+
+  it('sessao.reiniciar para uma sessao diferente de GOWA_SESSAO recusa com AppError 503', async () => {
+    const { GowaProvider } = await import('./gowa.provider');
+    await expect(new GowaProvider().sessao.reiniciar(LINHA_ERRADA)).rejects.toMatchObject({ status: 503 });
+  });
+
+  // -------------------------------------------------- achado 2: exige GOWA_WEBHOOK_SECRET p/ parear
+
+  it('sessao.qr sem GOWA_WEBHOOK_SECRET devolve motivo e nunca cria device', async () => {
+    delete process.env.GOWA_WEBHOOK_SECRET;
+    const { GowaProvider } = await import('./gowa.provider');
+
+    const resultado = await new GowaProvider().sessao.qr(LINHA);
+
+    expect(resultado.qr).toBeNull();
+    expect(resultado.motivo).toMatch(/GOWA_WEBHOOK_SECRET/);
+    expect(gowa.devices.size).toBe(0);
+  });
+
+  it('sessao.iniciar sem GOWA_WEBHOOK_SECRET devolve DESCONHECIDO e nunca cria device', async () => {
+    delete process.env.GOWA_WEBHOOK_SECRET;
+    const { GowaProvider } = await import('./gowa.provider');
+
+    const situacao = await new GowaProvider().sessao.iniciar(LINHA);
+
+    expect(situacao.estado).toBe('DESCONHECIDO');
+    expect(situacao.detalhe).toMatch(/GOWA_WEBHOOK_SECRET/);
+    expect(gowa.devices.size).toBe(0);
+  });
+
+  // --------------------------------------------- achado 3: falha de rede vira DESCONHECIDO, nao DESCONECTADO
+
+  it('sessao.estado: erro HTTP generico (GOWA fora do ar) vira DESCONHECIDO, nao DESCONECTADO', async () => {
+    gowa.setStatusFalha(true);
+    const { GowaProvider } = await import('./gowa.provider');
+
+    const situacao = await new GowaProvider().sessao.estado(LINHA);
+
+    expect(situacao.estado).toBe('DESCONHECIDO');
+  });
+
+  it('sessao.estado: 404 limpo (device nunca criado) continua DESCONECTADO', async () => {
+    const { GowaProvider } = await import('./gowa.provider');
+    const situacao = await new GowaProvider().sessao.estado(LINHA);
+    expect(situacao.estado).toBe('DESCONECTADO');
+  });
+
+  // ------------------------------------------------------- achado 4: cache de device nao evita reset
+
+  it('sessao.qr: device que sumiu do GOWA (redeploy sem volume) e recriado na proxima chamada', async () => {
+    const { GowaProvider } = await import('./gowa.provider');
+    const provider = new GowaProvider();
+
+    // Primeira chamada cria e cacheia o device.
+    await provider.sessao.qr(LINHA);
+    expect(gowa.devices.has('vendedor-1a2b3c4d')).toBe(true);
+
+    // GOWA "reiniciou": o device sumiu do processo (SQLite resetou / sem volume).
+    gowa.devices.clear();
+
+    // Ainda cacheado como garantido: sem o fix, isso ficaria preso sem nunca recriar.
+    const primeiraAposSumico = await provider.sessao.qr(LINHA);
+    expect(primeiraAposSumico.motivo).toBeTruthy();
+    expect(gowa.devices.has('vendedor-1a2b3c4d')).toBe(false);
+
+    // Proxima chamada: cache foi limpo, o device e recriado.
+    const segundaAposSumico = await provider.sessao.qr(LINHA);
+    expect(gowa.devices.has('vendedor-1a2b3c4d')).toBe(true);
+    expect(segundaAposSumico.qr).toMatch(/^data:image\/png;base64,/);
+  });
+
+  // -------------------------------------------------------------- achado 6: falso-positivo do "463"
+
+  it('enviarTexto: numero de telefone contendo "463" nao e confundido com o bloqueio anti-spam (erro 463)', async () => {
+    gowa.devices.set('vendedor-1a2b3c4d', { id: 'vendedor-1a2b3c4d', conectado: true, logado: true, numero: '5511999990000' });
+    const { GowaProvider } = await import('./gowa.provider');
+
+    const erro = await new GowaProvider().enviarTexto(LINHA, '5511946312345', 'oi').catch((e: unknown) => e);
+
+    expect(erro).toMatchObject({ status: 502 });
+    expect((erro as Error).message).not.toMatch(/anti-spam/);
+    expect((erro as Error).message).toMatch(/numero invalido/);
   });
 });

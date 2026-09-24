@@ -54,15 +54,20 @@ describe('GowaClient', () => {
 
     const status = await cliente.obterStatus('vendedor-1');
 
-    expect(status).toEqual({ conectado: false, logado: true });
+    expect(status).toEqual({ tipo: 'ok', conectado: false, logado: true });
     const { url, init } = chamada();
     expect(url).toBe('http://gowa:3000/app/status');
     expect(init.headers?.['X-Device-Id']).toBe('vendedor-1');
   });
 
-  it('status: null quando o GOWA responde erro HTTP (nao lanca)', async () => {
+  it('status: "inexistente" no 404 (device nao existe ainda, nao lanca)', async () => {
+    fetchMock.mockResolvedValue(json(404, { message: 'device not found' }));
+    await expect(cliente.obterStatus('vendedor-1')).resolves.toEqual({ tipo: 'inexistente' });
+  });
+
+  it('status: "falha" em qualquer outro HTTP de erro (nao lanca, e nao e "inexistente")', async () => {
     fetchMock.mockResolvedValue(json(500, { message: 'boom' }));
-    await expect(cliente.obterStatus('vendedor-1')).resolves.toBeNull();
+    await expect(cliente.obterStatus('vendedor-1')).resolves.toEqual({ tipo: 'falha' });
   });
 
   it('QR: baixa o qr_link e devolve data URL', async () => {
@@ -124,7 +129,7 @@ describe('GowaClient', () => {
 
   it('timeout vira GowaErro do tipo tempo', async () => {
     fetchMock.mockRejectedValue(Object.assign(new Error('aborted'), { name: 'TimeoutError' }));
-    await expect(cliente.obterStatus('vendedor-1')).resolves.toBeNull();
+    await expect(cliente.obterStatus('vendedor-1')).resolves.toEqual({ tipo: 'falha' });
     await expect(cliente.enviarTexto('vendedor-1', '5511999990000', 'oi')).rejects.toMatchObject({ tipo: 'tempo' });
   });
 

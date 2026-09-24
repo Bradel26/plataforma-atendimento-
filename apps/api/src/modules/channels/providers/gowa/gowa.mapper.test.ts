@@ -3,21 +3,25 @@ import { idDaMensagemEnviada, interpretarEventoGowa, numeroDoDestino, situacaoDa
 
 describe('situacaoDaSessaoGowa', () => {
   it('nao logado -> AGUARDANDO_QR', () => {
-    expect(situacaoDaSessaoGowa({ conectado: false, logado: false }, null).estado).toBe('AGUARDANDO_QR');
+    expect(situacaoDaSessaoGowa({ tipo: 'ok', conectado: false, logado: false }, null).estado).toBe('AGUARDANDO_QR');
   });
 
   it('logado mas socket caido -> CONECTANDO (nao AGUARDANDO_QR de novo)', () => {
-    expect(situacaoDaSessaoGowa({ conectado: false, logado: true }, null).estado).toBe('CONECTANDO');
+    expect(situacaoDaSessaoGowa({ tipo: 'ok', conectado: false, logado: true }, null).estado).toBe('CONECTANDO');
   });
 
   it('conectado e logado -> CONECTADO, com o telefone', () => {
-    const situacao = situacaoDaSessaoGowa({ conectado: true, logado: true }, '5511999990000');
+    const situacao = situacaoDaSessaoGowa({ tipo: 'ok', conectado: true, logado: true }, '5511999990000');
     expect(situacao.estado).toBe('CONECTADO');
     expect(situacao.telefone).toBe('5511999990000');
   });
 
-  it('status nulo (GOWA fora do ar) -> DESCONHECIDO', () => {
-    expect(situacaoDaSessaoGowa(null, null).estado).toBe('DESCONHECIDO');
+  it('device inexistente (404, nunca criado) -> DESCONECTADO', () => {
+    expect(situacaoDaSessaoGowa({ tipo: 'inexistente' }, null).estado).toBe('DESCONECTADO');
+  });
+
+  it('falha (rede/timeout/GOWA fora do ar) -> DESCONHECIDO', () => {
+    expect(situacaoDaSessaoGowa({ tipo: 'falha' }, null).estado).toBe('DESCONHECIDO');
   });
 });
 
