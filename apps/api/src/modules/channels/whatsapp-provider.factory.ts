@@ -21,6 +21,7 @@ const FABRICAS: Record<string, () => WhatsAppProvider> = {
   wppconnect: () => new WPPConnectProvider(),
   // Contrato novo (`ChannelProvider`), servido as rotas atuais pelo adaptador legado.
   waha: () => new WhatsAppProviderLegado(obterProvider('waha')!),
+  gowa: () => new WhatsAppProviderLegado(obterProvider('gowa')!),
 };
 
 /**

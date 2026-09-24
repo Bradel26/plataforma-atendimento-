@@ -44,6 +44,16 @@ describe('getWhatsAppProvider', () => {
     expect(provider.credenciaisPorLinha).toBe(false);
   });
 
+  it('WHATSAPP_PROVIDER=gowa serve o GowaProvider pelo contrato legado, sem credencial por linha', async () => {
+    process.env.WHATSAPP_PROVIDER = 'gowa';
+    const { getWhatsAppProvider } = await import('./whatsapp-provider.factory');
+    const { WhatsAppProviderLegado } = await import('./providers/legado');
+
+    const provider = getWhatsAppProvider();
+    expect(provider).toBeInstanceOf(WhatsAppProviderLegado);
+    expect(provider.credenciaisPorLinha).toBe(false);
+  });
+
   it('aceita o valor com espacos e caixa alta (ex.: " WPPCONNECT ")', async () => {
     process.env.WHATSAPP_PROVIDER = ' WPPCONNECT ';
     const { getWhatsAppProvider } = await import('./whatsapp-provider.factory');
