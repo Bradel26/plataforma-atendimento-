@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Alerta, Badge, Button, Card, EmptyState, Select } from '../../../components/ui';
+import { useConfirm } from '../../../components/ui/ConfirmDialog';
 import { ApiError, api } from '../../../lib/api';
+import { useAuth } from '../../../features/auth/AuthProvider';
 import {
   LABEL_TIPO_ATIVIDADE,
   type Atividade,
@@ -37,12 +39,20 @@ type FichaProps = {
    * recarregar a pagina.
    */
   aoMudarEtiquetas?: () => void;
+  /**
+   * Avisa quem hospeda que o contato foi excluido — a ficha nao sabe fechar a
+   * si mesma nem recarregar a lista da esquerda, quem hospeda decide.
+   */
+  aoExcluir?: () => void;
 };
 
-export function FichaContato({ contatoId, aoMudarEtiquetas }: FichaProps) {
+export function FichaContato({ contatoId, aoMudarEtiquetas, aoExcluir }: FichaProps) {
   const navigate = useNavigate();
+  const confirmar = useConfirm();
+  const { temPerfil } = useAuth();
   const [ficha, setFicha] = useState<Ficha | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [excluindo, setExcluindo] = useState(false);
   const [iniciando, setIniciando] = useState(false);
   // Contador de recargas: mudar este numero e o sinal para a linha do tempo
   // buscar de novo. Guardar a lista aqui para repassar seria duplicar o estado
@@ -112,6 +122,32 @@ export function FichaContato({ contatoId, aoMudarEtiquetas }: FichaProps) {
     } catch (e) {
       setErro(e instanceof ApiError ? e.message : 'Falha ao desvincular');
     }
+  };
+
+  /**
+   * Botao "Excluir contato": apaga o registro e tudo que so pertence a ele
+   * (conversas, mensagens, candidaturas de campanha). Restrito a ADMIN, mesma
+   * regra do backend (`DELETE /contatos/:id`) — o botao nem aparece para quem
+   * nao tem perfil pra usa-lo.
+   */
+  const excluir = (nome: string) => {
+    confirmar({
+      titulo: `Excluir ${nome}?`,
+      descricao: 'Nao pode ser desfeito. Conversas e mensagens deste contato tambem sao apagadas.',
+      variante: 'perigo',
+      rotuloConfirmar: 'Excluir',
+      aoConfirmar: async () => {
+        setExcluindo(true);
+        try {
+          await api.del(`/contatos/${contatoId}`);
+          aoExcluir?.();
+        } catch (e) {
+          setErro(e instanceof ApiError ? e.message : 'Falha ao excluir o contato');
+        } finally {
+          setExcluindo(false);
+        }
+      },
+    });
   };
 
   /** Botao "Iniciar conversa": abre uma conversa de WhatsApp vazia e leva direto para o Atendimento. */
@@ -199,6 +235,11 @@ export function FichaContato({ contatoId, aoMudarEtiquetas }: FichaProps) {
             ) : (
               <Button variante="neutro" onClick={() => void abrirSeletor()}>
                 Vincular empresa
+              </Button>
+            )}
+            {temPerfil('ADMIN') && (
+              <Button variante="perigo" onClick={() => excluir(contato.nome)} disabled={excluindo}>
+                {excluindo ? 'Excluindo...' : 'Excluir contato'}
               </Button>
             )}
           </div>

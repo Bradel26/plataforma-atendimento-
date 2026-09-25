@@ -479,6 +479,10 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
             setVersaoTags((v) => v + 1);
             void carregar();
           }}
+          aoExcluir={() => {
+            aoFechar();
+            void carregar();
+          }}
         />
       ) : (
         <FichaVazia />

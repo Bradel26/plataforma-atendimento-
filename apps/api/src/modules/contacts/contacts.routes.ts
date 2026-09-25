@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../../http/async-handler';
-import { requireAuth } from '../../http/middleware/auth';
+import { requireAuth, requireRole } from '../../http/middleware/auth';
 import { param } from '../../http/params';
 import { validateBody, validateQuery } from '../../http/middleware/validate';
 import { notFound } from '../../lib/errors';
@@ -312,5 +312,28 @@ contactsRoutes.patch(
     const dados = corpo.tags === undefined ? corpo : { ...corpo, tags: normalizarTags(corpo.tags) };
 
     res.json({ contato: await prisma.contact.update({ where: { id }, data: dados }) });
+  }),
+);
+
+/**
+ * Apaga o contato e tudo que pertence so a ele (conversas, mensagens,
+ * candidaturas de campanha, credenciamentos — todos `onDelete: Cascade` no
+ * schema). O que pertence a outra entidade so perde o vinculo (protocolo,
+ * chamada, atividade viram `onDelete: SetNull`), nunca some junto.
+ *
+ * Mesmo padrao de `accountsRoutes.delete('/:id', ...)`: restrito a ADMIN.
+ */
+contactsRoutes.delete(
+  '/:id',
+  requireRole('ADMIN'),
+  asyncHandler(async (req, res) => {
+    const id = param(req, 'id');
+    const existe = await prisma.contact.findFirst({
+      where: apenasVisivel(id, await filtroDe(politicaContatos)),
+      select: { id: true },
+    });
+    if (!existe) throw notFound('Contato nao encontrado');
+    await prisma.contact.delete({ where: { id } });
+    res.status(204).end();
   }),
 );
