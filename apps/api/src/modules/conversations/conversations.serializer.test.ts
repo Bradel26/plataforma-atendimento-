@@ -37,5 +37,8 @@ describe('toConversaResumo — iaAtiva', () => {
 
     const semCanal = toConversaResumo(criarConversaResumoMock({ canalConfig: null }));
     expect(semCanal.iaAtiva).toBeNull();
+
+    const semIA = toConversaResumo(criarConversaResumoMock({ canalConfig: { iaAtiva: false } }));
+    expect(semIA.iaAtiva).toBe(false);
   });
 });
