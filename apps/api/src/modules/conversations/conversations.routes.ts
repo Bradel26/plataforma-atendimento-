@@ -111,7 +111,7 @@ conversationsRoutes.post(
   '/:id/mensagens',
   validateBody(enviarMensagemSchema),
   asyncHandler(async (req, res) => {
-    const resultado = await enviarMensagem(quem(req), param(req, 'id'), req.body.conteudo);
+    const resultado = await enviarMensagem(quem(req), param(req, 'id'), req.body.conteudo, req.body.interno);
     res.status(201).json(resultado);
   }),
 );
@@ -123,11 +123,14 @@ conversationsRoutes.post(
   asyncHandler(async (req, res) => {
     if (!req.file) throw badRequest('Envie o arquivo no campo "arquivo"');
     const legenda = typeof req.body?.legenda === 'string' ? req.body.legenda : undefined;
+    // multipart/form-data: todo campo chega como string, nao como boolean.
+    const interno = req.body?.interno === 'true';
     const resultado = await enviarArquivo(
       quem(req),
       param(req, 'id'),
       { buffer: req.file.buffer, nome: req.file.originalname, tipo: req.file.mimetype },
       legenda,
+      interno,
     );
     res.status(201).json(resultado);
   }),

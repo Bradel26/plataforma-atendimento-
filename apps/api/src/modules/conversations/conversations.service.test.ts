@@ -5,6 +5,7 @@ import {
   arquivarConversa,
   contarPorStatus,
   desarquivarConversa,
+  enviarMensagem,
   finalizarConversa,
   iniciarConversa,
   listarConversas,
@@ -120,6 +121,19 @@ vi.mock('../channels/channels.service', () => ({ obterConfig }));
 
 const { promoverPrevia } = vi.hoisted(() => ({ promoverPrevia: vi.fn() }));
 vi.mock('../channels/chat-previews.service', () => ({ promoverPrevia }));
+
+// `enviarMensagem` fala com o canal externo por aqui — mockado para os testes
+// de nota interna nao dependerem da Graph API/ponte real (mesmo padrao dos
+// mocks acima).
+const { enviarParaCanal, enviarArquivoParaCanal, exigeEnvioExterno } = vi.hoisted(() => ({
+  enviarParaCanal: vi.fn(),
+  enviarArquivoParaCanal: vi.fn(),
+  exigeEnvioExterno: vi.fn(),
+}));
+vi.mock('../channels/outbound.service', () => ({ enviarParaCanal, enviarArquivoParaCanal, exigeEnvioExterno }));
+
+const { entregarParaIa } = vi.hoisted(() => ({ entregarParaIa: vi.fn() }));
+vi.mock('../bots/ia.service', () => ({ entregarParaIa }));
 
 const { notificarConversaNova, notificarConversaAtualizada, notificarMensagem } = vi.hoisted(() => ({
   notificarConversaNova: vi.fn(),
@@ -434,5 +448,83 @@ describe('finalizarConversa — permanece alheio a arquivamento (Fase 11.9-B)', 
 
     const dados = conversationUpdate.mock.calls[0]?.[0]?.data;
     expect(dados).not.toHaveProperty('arquivada');
+  });
+});
+
+/*
+ * Nota interna (redesign estilo WhatsBot-Pro) — `enviarMensagem` com
+ * `interno=true` grava a anotacao no historico mas nunca sai pelo canal
+ * externo nem alimenta o motor de IA: e comunicacao entre a equipe, nao parte
+ * da conversa com o cliente.
+ */
+describe('enviarMensagem — nota interna', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function criarConversaMock(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'conv-1',
+      canal: 'WHATSAPP' as const,
+      status: 'EM_ATENDIMENTO' as const,
+      enderecoExterno: '5511999998888',
+      canalConfigId: 'cfg-1',
+      filaId: null,
+      agenteId: 'user-1',
+      ...overrides,
+    };
+  }
+
+  function criarMensagemMock(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'msg-1',
+      conversaId: 'conv-1',
+      autor: 'AGENTE' as const,
+      autorId: 'user-1',
+      conteudo: '',
+      idExterno: null,
+      interno: false,
+      criadoEm: new Date(),
+      ...overrides,
+    };
+  }
+
+  it('nota interna nao chama o canal nem a IA, e grava interno=true', async () => {
+    const conversa = criarConversaMock();
+    conversationFindFirst.mockResolvedValue(conversa);
+    exigeEnvioExterno.mockReturnValue(true);
+    messageCreate.mockResolvedValue(criarMensagemMock({ conteudo: 'nota interna de teste', interno: true }));
+
+    await comOrganizacao(
+      'org-1',
+      () => enviarMensagem(SOLICITANTE, conversa.id, 'nota interna de teste', true),
+      { id: 'user-1', perfil: 'ADMIN' },
+    );
+
+    expect(enviarParaCanal).not.toHaveBeenCalled();
+    expect(entregarParaIa).not.toHaveBeenCalled();
+    expect(messageCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ interno: true, idExterno: null }),
+      }),
+    );
+  });
+
+  it('sem o parametro interno, continua enviando pelo canal normalmente (regressao)', async () => {
+    const conversa = criarConversaMock();
+    conversationFindFirst.mockResolvedValue(conversa);
+    exigeEnvioExterno.mockReturnValue(true);
+    enviarParaCanal.mockResolvedValue({ idExterno: 'ext-1' });
+    messageCreate.mockResolvedValue(criarMensagemMock({ conteudo: 'oi', interno: false }));
+
+    await comOrganizacao('org-1', () => enviarMensagem(SOLICITANTE, conversa.id, 'oi'), {
+      id: 'user-1',
+      perfil: 'ADMIN',
+    });
+
+    expect(enviarParaCanal).toHaveBeenCalled();
+    expect(messageCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ interno: false }) }),
+    );
   });
 });

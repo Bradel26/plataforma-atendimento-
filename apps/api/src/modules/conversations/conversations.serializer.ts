@@ -34,6 +34,7 @@ export function toMensagem(m: MensagemDb) {
     conteudo: m.conteudo,
     tipoAnexo: m.tipoAnexo,
     anexoUrl: m.anexoUrl ? urlAssinada(m.anexoUrl) : null,
+    interno: m.interno,
     criadoEm: m.criadoEm,
   };
 }

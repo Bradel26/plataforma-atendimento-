@@ -363,18 +363,24 @@ export async function assumirConversa(solicitante: Solicitante, id: string) {
   return publicar(id, { agenteAnteriorId: conversa.agenteId, filaAnteriorId: conversa.filaId });
 }
 
-export async function enviarMensagem(solicitante: Solicitante, id: string, conteudo: string) {
+export async function enviarMensagem(
+  solicitante: Solicitante,
+  id: string,
+  conteudo: string,
+  interno = false,
+) {
   const conversa = await carregarOuFalhar(id);
   if (conversa.status === 'FINALIZADO') throw badRequest('Conversa finalizada — nao aceita novas mensagens');
 
   // Responder sem ter assumido atribui a conversa ao agente automaticamente.
   const assumir = conversa.agenteId ? {} : { agenteId: solicitante.sub, atribuidoEm: new Date() };
 
-  // Canal externo: envia ANTES de gravar. Se a Meta recusar, a mensagem nao
-  // entra no historico — nao existe "enviada" que o cliente nunca recebeu.
-  const envio = exigeEnvioExterno(conversa.canal)
-    ? await enviarParaCanal(conversa.canal, conversa.enderecoExterno, conteudo, conversa.canalConfigId)
-    : { idExterno: null };
+  // Nota interna nunca sai pelo canal externo nem alimenta o motor de IA —
+  // e uma anotacao entre a equipe, nao parte da conversa com o cliente.
+  const envio =
+    !interno && exigeEnvioExterno(conversa.canal)
+      ? await enviarParaCanal(conversa.canal, conversa.enderecoExterno, conteudo, conversa.canalConfigId)
+      : { idExterno: null };
 
   const mensagem = await prisma.message.create({
     data: {
@@ -383,6 +389,7 @@ export async function enviarMensagem(solicitante: Solicitante, id: string, conte
       autorId: solicitante.sub,
       conteudo,
       idExterno: envio.idExterno,
+      interno,
     },
   });
 
@@ -397,11 +404,11 @@ export async function enviarMensagem(solicitante: Solicitante, id: string, conte
     { conversaId: id, filaId: atualizada.fila?.id, agenteId: atualizada.agente?.id },
   );
 
-  // Contexto para o motor de IA, quando o canal tem um: sem o que o humano
-  // respondeu, o agente repete a pergunta que a pessoa acabou de responder.
-  // Nao aciona a IA (o corpo vai com acionarIa: false) e nao e aguardado — o
-  // atendente nao espera por um webhook de terceiro para ver a mensagem sair.
-  void entregarParaIa(mensagem, { ...conversa, agenteId: conversa.agenteId ?? solicitante.sub });
+  // Nota interna nao entra em contexto de IA (ver acima) — so agenda quando
+  // a mensagem realmente saiu pro cliente.
+  if (!interno) {
+    void entregarParaIa(mensagem, { ...conversa, agenteId: conversa.agenteId ?? solicitante.sub });
+  }
 
   return { mensagem: toMensagem(mensagem), conversa: atualizada };
 }
@@ -417,13 +424,15 @@ export async function enviarArquivo(
   id: string,
   arquivo: { buffer: Buffer; nome: string; tipo: string },
   legenda?: string,
+  interno = false,
 ) {
   const conversa = await carregarOuFalhar(id);
   if (conversa.status === 'FINALIZADO') throw badRequest('Conversa finalizada — nao aceita novas mensagens');
 
-  const envio = exigeEnvioExterno(conversa.canal)
-    ? await enviarArquivoParaCanal(conversa.canal, conversa.enderecoExterno, { ...arquivo, legenda }, conversa.canalConfigId)
-    : { idExterno: null };
+  const envio =
+    !interno && exigeEnvioExterno(conversa.canal)
+      ? await enviarArquivoParaCanal(conversa.canal, conversa.enderecoExterno, { ...arquivo, legenda }, conversa.canalConfigId)
+      : { idExterno: null };
 
   const salvo = await salvar(arquivo);
   const assumir = conversa.agenteId ? {} : { agenteId: solicitante.sub, atribuidoEm: new Date() };
@@ -437,6 +446,7 @@ export async function enviarArquivo(
       tipoAnexo: tipoAnexoDe(salvo.tipo),
       anexoUrl: salvo.url,
       idExterno: envio.idExterno,
+      interno,
     },
   });
 
