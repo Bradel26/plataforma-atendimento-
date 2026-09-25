@@ -10,7 +10,7 @@ import { notificarConversaAtualizada, notificarConversaNova, notificarMensagem }
 import { enviarArquivoParaCanal, enviarParaCanal, exigeEnvioExterno } from '../channels/outbound.service';
 import { obterConfig } from '../channels/channels.service';
 import { decidirDestino, filaPadraoDoCanal } from '../channels/inbound.service';
-import { impedimentoDeEnvio } from '../channels/whatsapp.modo';
+import { impedimentoDeEnvio, numeroNormalizado } from '../channels/whatsapp.modo';
 import { getWhatsAppProvider } from '../channels/whatsapp-provider.factory';
 import { promoverPrevia } from '../channels/chat-previews.service';
 import { entregarParaIa } from '../bots/ia.service';
@@ -236,6 +236,11 @@ export async function iniciarConversa(solicitante: Solicitante, contatoId: strin
   const destino = decidido.filaId || decidido.agenteId
     ? decidido
     : { ...decidido, filaId: await filaPadraoDoCanal('WHATSAPP') };
+  // Mesma normalizacao que o webhook de entrada usa (ponte.routes.ts) — sem
+  // isto, uma conversa iniciada pela plataforma com o telefone do Contato
+  // formatado ("+55 62 9812-5316") nunca bate com a resposta que chega pelo
+  // WhatsApp de verdade (que sempre vem so em digitos), e vira contato duplicado.
+  const enderecoExterno = numeroNormalizado(contato.telefone) ?? contato.telefone;
   const conversa = await prisma.conversation.create({
     data: {
       canal: 'WHATSAPP',
@@ -245,12 +250,12 @@ export async function iniciarConversa(solicitante: Solicitante, contatoId: strin
       agenteId: destino.agenteId,
       atribuidoEm: destino.agenteId ? new Date() : null,
       canalConfigId: destino.canalConfigId,
-      enderecoExterno: contato.telefone,
+      enderecoExterno,
     },
   });
 
   if (destino.canalConfigId) {
-    await promoverPrevia(conversa.id, destino.canalConfigId, contato.telefone!);
+    await promoverPrevia(conversa.id, destino.canalConfigId, enderecoExterno!);
   }
 
   await publicarNova(conversa.id);

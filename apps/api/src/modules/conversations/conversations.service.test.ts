@@ -247,6 +247,26 @@ describe('iniciarConversa — publicacao em tempo real (Fase 11.2)', () => {
     expect(notificarConversaNova).not.toHaveBeenCalled();
   });
 
+  it('normaliza o telefone do Contato em enderecoExterno — mesmo formato que o webhook de entrada usa', async () => {
+    contactFindFirst.mockResolvedValue({ id: 'contato-7', telefone: '+55 62 9812-5316' });
+    conversationFindFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'conv-7', fila: null, agente: { id: 'user-1' } });
+    channelConfigFindFirst.mockResolvedValue({ id: 'cfg-pessoal', donoId: 'user-1', filaId: null, ...CONFIG_OFICIAL_BASE });
+    conversationCreate.mockResolvedValue({ id: 'conv-7' });
+
+    await comOrganizacao('org-1', () => iniciarConversa(SOLICITANTE, 'contato-7'), {
+      id: 'user-1',
+      perfil: 'ADMIN',
+    });
+
+    const dados = conversationCreate.mock.calls[0]?.[0]?.data;
+    // Mesmo formato que ponte.routes.ts grava no webhook de entrada — sem
+    // isto, a resposta que chega pelo WhatsApp de verdade nunca bate com esta
+    // conversa e vira um Contato/Conversation duplicado.
+    expect(dados).toMatchObject({ enderecoExterno: '556298125316' });
+  });
+
   it('reaproveita conversa ARQUIVADA: desarquiva e publica conversa:atualizada (Fase 11.9-B)', async () => {
     contactFindFirst.mockResolvedValue({ id: 'contato-5', telefone: '5511955554444' });
     conversationFindFirst
