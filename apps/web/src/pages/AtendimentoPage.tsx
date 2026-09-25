@@ -544,13 +544,6 @@ export function AtendimentoPage() {
           ) : (
             <div className="flex h-full flex-col items-center justify-center px-6 text-center">
               <p className="text-sm font-medium text-slate-700">Selecione uma conversa</p>
-              <p className="mt-1 max-w-sm text-xs text-slate-500">
-                As conversas chegam em tempo real pelo Webchat. Abra o widget em{' '}
-                <a href="/webchat" target="_blank" rel="noreferrer" className="text-[var(--brand-primary)] underline">
-                  /webchat
-                </a>{' '}
-                para simular um cliente.
-              </p>
 
               {minhaLinha && minhaLinhaConectada && (
                 <div className="mt-4 flex flex-col items-center gap-2">
