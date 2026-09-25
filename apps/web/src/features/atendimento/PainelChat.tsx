@@ -46,6 +46,19 @@ function Bolha({ mensagem }: { mensagem: Mensagem }) {
     );
   }
 
+  if (mensagem.interno) {
+    return (
+      <li className="flex justify-end">
+        <div className="max-w-[75%] rounded-2xl border border-amber-200 bg-amber-50 px-3.5 py-2 text-sm text-slate-800">
+          <p className="mb-1 text-xs font-semibold text-amber-700">Nota interna</p>
+          <Anexo mensagem={mensagem} />
+          <p className="whitespace-pre-wrap break-words">{mensagem.conteudo}</p>
+          <p className="mt-1 text-right text-[10px] text-amber-700/70">{hora(mensagem.criadoEm)}</p>
+        </div>
+      </li>
+    );
+  }
+
   const doAgente = mensagem.autor === 'AGENTE';
   return (
     <li className={`flex ${doAgente ? 'justify-end' : 'justify-start'}`}>
@@ -83,6 +96,8 @@ export function PainelChat({
   fichaAberta?: boolean;
 }) {
   const [texto, setTexto] = useState('');
+  const [abaRodape, setAbaRodape] = useState<'responder' | 'privada'>('responder');
+  const [textoPrivado, setTextoPrivado] = useState('');
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [anteriores, setAnteriores] = useState<Mensagem[]>([]);
@@ -308,7 +323,7 @@ export function PainelChat({
                 disabled={ocupado}
                 onClick={() => void executar(() => api.post(`/conversas/${conversa.id}/finalizar`))}
               >
-                Finalizar
+                Resolver
               </Button>
             </>
           )}
@@ -392,40 +407,110 @@ export function PainelChat({
             Atendimento finalizado em {new Date(conversa.finalizadoEm!).toLocaleString('pt-BR')}.
           </p>
         ) : (
-          <form onSubmit={enviar} className="flex items-end gap-2">
-            <textarea
-              value={texto}
-              onChange={(e) => setTexto(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
+          <>
+            <div role="tablist" className="mb-2 flex gap-1 border-b border-slate-200">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={abaRodape === 'responder'}
+                onClick={() => setAbaRodape('responder')}
+                className={`px-3 py-1.5 text-sm font-medium ${
+                  abaRodape === 'responder'
+                    ? 'border-b-2 border-[var(--brand-primary)] text-[var(--brand-primary)]'
+                    : 'text-slate-500'
+                }`}
+              >
+                Responder
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={abaRodape === 'privada'}
+                onClick={() => setAbaRodape('privada')}
+                className={`px-3 py-1.5 text-sm font-medium ${
+                  abaRodape === 'privada' ? 'border-b-2 border-amber-500 text-amber-700' : 'text-slate-500'
+                }`}
+              >
+                Mensagem Privada
+              </button>
+            </div>
+
+            {abaRodape === 'responder' ? (
+              <form onSubmit={enviar} className="flex items-end gap-2">
+                <textarea
+                  value={texto}
+                  onChange={(e) => setTexto(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      void enviar(e);
+                    }
+                  }}
+                  rows={2}
+                  placeholder="Escreva sua resposta... (Enter envia, Shift+Enter quebra linha)"
+                  className="max-h-32 min-h-[44px] flex-1 resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[var(--brand-primary)]"
+                />
+                <label
+                  title="Anexar arquivo"
+                  className="flex h-[44px] cursor-pointer items-center rounded-lg border border-slate-300 px-3 text-sm text-slate-600 hover:bg-slate-50"
+                >
+                  Anexar
+                  <input
+                    type="file"
+                    className="hidden"
+                    disabled={ocupado}
+                    onChange={(e) => {
+                      const arquivo = e.target.files?.[0];
+                      e.target.value = '';
+                      if (arquivo) void anexar(arquivo);
+                    }}
+                  />
+                </label>
+                <Button type="submit" disabled={ocupado || !texto.trim()}>
+                  Enviar
+                </Button>
+              </form>
+            ) : (
+              <form
+                onSubmit={async (e) => {
                   e.preventDefault();
-                  void enviar(e);
-                }
-              }}
-              rows={2}
-              placeholder="Escreva sua resposta... (Enter envia, Shift+Enter quebra linha)"
-              className="max-h-32 min-h-[44px] flex-1 resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[var(--brand-primary)]"
-            />
-            <label
-              title="Anexar arquivo"
-              className="flex h-[44px] cursor-pointer items-center rounded-lg border border-slate-300 px-3 text-sm text-slate-600 hover:bg-slate-50"
-            >
-              Anexar
-              <input
-                type="file"
-                className="hidden"
-                disabled={ocupado}
-                onChange={(e) => {
-                  const arquivo = e.target.files?.[0];
-                  e.target.value = '';
-                  if (arquivo) void anexar(arquivo);
+                  if (!textoPrivado.trim() || ocupado) return;
+                  setOcupado(true);
+                  setErro(null);
+                  try {
+                    const { conversa: nova } = await api.post<{ conversa: ConversaDetalhe }>(
+                      `/conversas/${conversa.id}/mensagens`,
+                      { conteudo: textoPrivado, interno: true },
+                    );
+                    onMudou(nova);
+                    setTextoPrivado('');
+                  } catch (err) {
+                    setErro(err instanceof ApiError ? err.message : 'Falha ao enviar a nota interna');
+                  } finally {
+                    setOcupado(false);
+                  }
                 }}
-              />
-            </label>
-            <Button type="submit" disabled={ocupado || !texto.trim()}>
-              Enviar
-            </Button>
-          </form>
+                className="flex items-end gap-2"
+              >
+                <textarea
+                  value={textoPrivado}
+                  onChange={(e) => setTextoPrivado(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      (e.target as HTMLTextAreaElement).form?.requestSubmit();
+                    }
+                  }}
+                  rows={2}
+                  placeholder="Escreva uma nota interna... so a equipe ve (Enter envia, Shift+Enter quebra linha)"
+                  className="max-h-32 min-h-[44px] flex-1 resize-y rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm outline-none focus:border-amber-500"
+                />
+                <Button type="submit" disabled={ocupado || !textoPrivado.trim()}>
+                  Enviar
+                </Button>
+              </form>
+            )}
+          </>
         )}
         </div>
       </footer>
