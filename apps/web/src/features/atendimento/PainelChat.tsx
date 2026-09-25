@@ -64,14 +64,25 @@ function Bolha({ mensagem }: { mensagem: Mensagem }) {
     <li className={`flex ${doAgente ? 'justify-end' : 'justify-start'}`}>
       <div
         className={`max-w-[75%] rounded-2xl px-3.5 py-2 text-sm ${
-          doAgente ? 'text-white' : 'border border-slate-200 bg-white text-slate-800'
+          doAgente ? 'text-slate-800' : 'border border-slate-200 bg-white text-slate-800'
         }`}
-        style={doAgente ? { backgroundColor: 'var(--brand-primary)' } : undefined}
+        style={doAgente ? { backgroundColor: '#d9fdd3' } : undefined}
       >
         <Anexo mensagem={mensagem} />
         <p className="whitespace-pre-wrap break-words">{mensagem.conteudo}</p>
-        <p className={`mt-1 text-right text-[10px] ${doAgente ? 'text-white/70' : 'text-slate-500'}`}>
+        <p className="mt-1 flex items-center justify-end gap-1 text-right text-[10px] text-slate-500">
           {hora(mensagem.criadoEm)}
+          {doAgente && (
+            <svg width="14" height="10" viewBox="0 0 16 11" fill="none" aria-label="Enviada">
+              <path
+                d="M1 5.5L4.5 9L11 1.5M5.5 5.5L9 9L15.5 1.5"
+                stroke="#53bdeb"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          )}
         </p>
       </div>
     </li>
@@ -377,7 +388,14 @@ export function PainelChat({
         texto para de crescer alem do confortavel pra ler — 75% de uma coluna
         de 1800px+ vira uma bolha do tamanho da tela inteira sem isto.
       */}
-      <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50 px-5 py-4">
+      <div
+        className="min-h-0 flex-1 overflow-y-auto px-5 py-4"
+        style={{
+          backgroundColor: '#efeae2',
+          backgroundImage:
+            "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cg fill='none' stroke='%23d9d2c7' stroke-width='1'%3E%3Ccircle cx='20' cy='20' r='6'/%3E%3Ccircle cx='60' cy='60' r='6'/%3E%3Cpath d='M40 10 L46 20 L40 30 L34 20 Z'/%3E%3Cpath d='M10 50 L16 60 L10 70 L4 60 Z'/%3E%3C/g%3E%3C/svg%3E\")",
+        }}
+      >
         <div className="mx-auto max-w-3xl">
           {(conversa.temHistoricoAnterior ?? false) && !fimDoHistorico && (
             <button
