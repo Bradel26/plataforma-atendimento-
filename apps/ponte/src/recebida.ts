@@ -148,7 +148,21 @@ export async function receber(sessao: Sessao, msg: WAMessage) {
       return;
     }
 
-    const numero = numeroDoJid(remetente);
+    /*
+     * "@lid" e um endereco opaco (o WhatsApp passou a usar isto por privacidade
+     * para contatos recem-adicionados/nao sincronizados) — os digitos dele NAO
+     * sao um numero de telefone, so parecem um por serem so digitos. Resolve
+     * pelo mapeamento LID->PN que o Baileys aprende sozinho (USync, sincronia de
+     * contatos, grupos); se ainda nao aprendeu este em particular, `numero` fica
+     * nulo e a mensagem e descartada — pior perder esta mensagem agora (o
+     * WhatsApp tende a resolver o mapeamento sozinho pouco depois) do que criar
+     * um Contato no CRM com o LID em vez do telefone.
+     */
+    let numero = numeroDoJid(remetente);
+    if (remetente.endsWith('@lid')) {
+      const pn = await sessao.sock?.signalRepository.lidMapping.getPNForLID(remetente).catch(() => null);
+      numero = pn ? numeroDoJid(pn) : null;
+    }
     if (!numero) return;
 
     // Guarda o jid exato de onde isto chegou (pode ser "@lid", nao so

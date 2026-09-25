@@ -12,7 +12,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "6.17.16",
+    "@whiskeysockets/baileys": "7.0.0-rc14",
     "express": "^4.21.2",
     "multer": "^2.2.0",
     "pg": "^8.23.0",
