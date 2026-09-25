@@ -4,6 +4,7 @@ import { BarraDeSelecao } from '../../components/ui/BarraDeSelecao';
 import { SkeletonBloco } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
 import { ApiError, api } from '../../lib/api';
+import { mascararTelefoneBr } from '../../lib/telefone';
 import {
   AJUDA_CICLO_DE_VIDA,
   LABEL_CICLO_DE_VIDA,
@@ -254,7 +255,8 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
             <Field label="Telefone" hint="Com DDD. E o que liga o contato ao WhatsApp.">
               <Input
                 value={novo.telefone}
-                onChange={(e) => setNovo({ ...novo, telefone: e.target.value })}
+                onChange={(e) => setNovo({ ...novo, telefone: mascararTelefoneBr(e.target.value) })}
+                placeholder="+55 62 99288-5001"
                 maxLength={20}
               />
             </Field>

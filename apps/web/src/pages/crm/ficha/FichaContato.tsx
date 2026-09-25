@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Alerta, Badge, Button, Card, EmptyState, Select } from '../../../components/ui';
+import { Alerta, Badge, Button, Card, EmptyState, Field, Input, Select, Textarea } from '../../../components/ui';
 import { useConfirm } from '../../../components/ui/ConfirmDialog';
 import { ApiError, api } from '../../../lib/api';
 import { useAuth } from '../../../features/auth/AuthProvider';
+import { mascararTelefoneBr } from '../../../lib/telefone';
 import {
   LABEL_TIPO_ATIVIDADE,
   type Atividade,
@@ -54,6 +55,9 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoExcluir }: FichaPr
   const [erro, setErro] = useState<string | null>(null);
   const [excluindo, setExcluindo] = useState(false);
   const [iniciando, setIniciando] = useState(false);
+  const [editando, setEditando] = useState(false);
+  const [salvandoEdicao, setSalvandoEdicao] = useState(false);
+  const [edicao, setEdicao] = useState({ nome: '', email: '', telefone: '', observacoes: '' });
   // Contador de recargas: mudar este numero e o sinal para a linha do tempo
   // buscar de novo. Guardar a lista aqui para repassar seria duplicar o estado
   // dela — e a paginacao por cursor mora la dentro.
@@ -150,6 +154,43 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoExcluir }: FichaPr
     });
   };
 
+  /** Abre o formulario de edicao com os dados atuais do contato. */
+  const abrirEdicao = (c: Ficha['contato']) => {
+    setEdicao({
+      nome: c.nome,
+      email: c.email ?? '',
+      telefone: c.telefone ? mascararTelefoneBr(c.telefone) : '',
+      observacoes: c.observacoes ?? '',
+    });
+    setEditando(true);
+  };
+
+  /**
+   * Salva a edicao via `PATCH /contatos/:id` — mesmo endpoint que o editor de
+   * etiquetas ja usa, so que com os campos basicos (nome, email, telefone,
+   * observacoes). Ausente e diferente de vazio no backend: manda `null`
+   * explicito para limpar e-mail/telefone/observacoes, nunca `undefined` (que
+   * o PATCH trata como "nao mexer neste campo").
+   */
+  const salvarEdicao = async () => {
+    setSalvandoEdicao(true);
+    setErro(null);
+    try {
+      await api.patch(`/contatos/${contatoId}`, {
+        nome: edicao.nome.trim(),
+        email: edicao.email.trim() || null,
+        telefone: edicao.telefone.replace(/\D/g, '').length >= 10 ? edicao.telefone.replace(/\D/g, '') : null,
+        observacoes: edicao.observacoes.trim() || null,
+      });
+      setEditando(false);
+      atualizar();
+    } catch (e) {
+      setErro(e instanceof ApiError ? e.message : 'Falha ao salvar o contato');
+    } finally {
+      setSalvandoEdicao(false);
+    }
+  };
+
   /** Botao "Iniciar conversa": abre uma conversa de WhatsApp vazia e leva direto para o Atendimento. */
   const iniciarConversa = async () => {
     setIniciando(true);
@@ -237,6 +278,11 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoExcluir }: FichaPr
                 Vincular empresa
               </Button>
             )}
+            {!editando && (
+              <Button variante="neutro" onClick={() => abrirEdicao(contato)}>
+                Editar contato
+              </Button>
+            )}
             {temPerfil('ADMIN') && (
               <Button variante="perigo" onClick={() => excluir(contato.nome)} disabled={excluindo}>
                 {excluindo ? 'Excluindo...' : 'Excluir contato'}
@@ -245,6 +291,53 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoExcluir }: FichaPr
           </div>
         }
       >
+        {editando ? (
+          <div className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Nome">
+                <Input
+                  autoFocus
+                  value={edicao.nome}
+                  onChange={(e) => setEdicao({ ...edicao, nome: e.target.value })}
+                  maxLength={120}
+                  required
+                />
+              </Field>
+              <Field label="Telefone" hint="Com DDD. E o que liga o contato ao WhatsApp.">
+                <Input
+                  value={edicao.telefone}
+                  onChange={(e) => setEdicao({ ...edicao, telefone: mascararTelefoneBr(e.target.value) })}
+                  placeholder="+55 62 99288-5001"
+                  maxLength={20}
+                />
+              </Field>
+              <Field label="E-mail">
+                <Input
+                  type="email"
+                  value={edicao.email}
+                  onChange={(e) => setEdicao({ ...edicao, email: e.target.value })}
+                  maxLength={160}
+                />
+              </Field>
+            </div>
+            <Field label="Observacoes">
+              <Textarea
+                value={edicao.observacoes}
+                onChange={(e) => setEdicao({ ...edicao, observacoes: e.target.value })}
+                rows={3}
+                maxLength={2000}
+              />
+            </Field>
+            <div className="flex gap-2">
+              <Button onClick={() => void salvarEdicao()} disabled={salvandoEdicao || !edicao.nome.trim()}>
+                {salvandoEdicao ? 'Salvando...' : 'Salvar'}
+              </Button>
+              <Button variante="neutro" onClick={() => setEditando(false)} disabled={salvandoEdicao}>
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        ) : (
         <dl className="grid gap-3 text-sm sm:grid-cols-4">
           <div>
             <dt className="text-xs text-slate-500">E-mail</dt>
@@ -265,6 +358,7 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoExcluir }: FichaPr
             </dd>
           </div>
         </dl>
+        )}
 
         <div className="mt-4">
           <dt className="mb-1.5 text-xs text-slate-500">Etiquetas</dt>
