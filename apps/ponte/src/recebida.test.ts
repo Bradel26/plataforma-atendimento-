@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { WAMessage } from '@whiskeysockets/baileys';
 import type { Sessao } from './sessao.js';
+import type { MensagemRecebida } from './plataforma.js';
 
-const entregarMock = vi.fn(async () => {});
-vi.mock('./plataforma.js', () => ({ entregar: (...args: unknown[]) => entregarMock(...args) }));
+const entregarMock = vi.fn(async (_m: MensagemRecebida) => {});
+vi.mock('./plataforma.js', () => ({ entregar: (m: MensagemRecebida) => entregarMock(m) }));
 
 const { receber } = await import('./recebida.js');
 
@@ -41,7 +42,7 @@ describe('receber — contato enderecado por @lid', () => {
     await receber(sessaoComSock(sock), msgTexto('79233992933473@lid', 'oi'));
 
     expect(entregarMock).toHaveBeenCalledTimes(1);
-    const chamada = entregarMock.mock.calls[0]![0] as { numero: string };
+    const chamada = entregarMock.mock.calls[0]![0];
     expect(chamada.numero).toBe('5562996714844');
   });
 
@@ -69,7 +70,7 @@ describe('receber — contato enderecado por @lid', () => {
 
     expect(getPNForLID).not.toHaveBeenCalled();
     expect(entregarMock).toHaveBeenCalledTimes(1);
-    const chamada = entregarMock.mock.calls[0]![0] as { numero: string };
+    const chamada = entregarMock.mock.calls[0]![0];
     expect(chamada.numero).toBe('5511999998888');
   });
 });
