@@ -6,6 +6,7 @@ export const inclusaoResumo = {
   contato: true,
   fila: { select: { id: true, nome: true } },
   agente: { select: { id: true, nome: true } },
+  canalConfig: { select: { iaAtiva: true } },
   mensagens: { orderBy: { criadoEm: 'desc' }, take: 1 },
 } satisfies Prisma.ConversationInclude;
 
@@ -59,6 +60,9 @@ export function toConversaResumo(c: ConversaResumo) {
     contato: { id: c.contato.id, nome: c.contato.nome, email: c.contato.email, telefone: c.contato.telefone },
     fila: c.fila,
     agente: c.agente,
+    // null = conversa sem canal configurado (ex. Webchat) — nao confundir
+    // com false ("IA desligada"), que so se aplica quando ha canal.
+    iaAtiva: c.canalConfig?.iaAtiva ?? null,
     ultimaMensagem: ultima ? toMensagem(ultima) : null,
   };
 }
