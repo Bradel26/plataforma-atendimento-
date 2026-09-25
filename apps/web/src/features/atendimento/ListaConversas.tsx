@@ -151,6 +151,9 @@ export function ListaConversas({
                 <p className="mt-0.5 truncate text-xs text-slate-500">{previa(c)}</p>
                 <div className="mt-1.5 flex items-center gap-1.5">
                   <Badge tom="neutro">{c.canal}</Badge>
+                  {c.iaAtiva !== null && (
+                    <Badge tom={c.iaAtiva ? 'sucesso' : 'neutro'}>{c.iaAtiva ? 'IA ON' : 'IA OFF'}</Badge>
+                  )}
                   {c.fila && <Badge tom="neutro">{c.fila.nome}</Badge>}
                   {c.agente && <Badge tom="marca">{c.agente.nome}</Badge>}
                   {c.naoLidas > 0 && (

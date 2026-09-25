@@ -128,6 +128,7 @@ export type Mensagem = {
   conteudo: string;
   tipoAnexo: 'TEXTO' | 'IMAGEM' | 'AUDIO' | 'VIDEO' | 'ARQUIVO';
   anexoUrl: string | null;
+  interno: boolean;
   criadoEm: string;
 };
 
@@ -176,6 +177,8 @@ type ConversaBase = {
   contato: Contato;
   fila: { id: string; nome: string } | null;
   agente: { id: string; nome: string } | null;
+  /** Estado de IA do canal desta conversa. Null = conversa sem canal (ex. Webchat). */
+  iaAtiva: boolean | null;
 };
 
 export type ConversaResumo = ConversaBase & { ultimaMensagem: Mensagem | null };

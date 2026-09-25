@@ -29,6 +29,7 @@ const CONVERSA: ConversaResumo = {
   fila: null,
   agente: { id: 'user-1', nome: 'Fulano' },
   ultimaMensagem: null,
+  iaAtiva: null,
 };
 
 const PREVIA: Previa = {
@@ -106,5 +107,25 @@ describe('ListaConversas — realtime de previa (Fase 11.7)', () => {
     expect(html.split(PREVIA.nome).length - 1).toBe(1);
     expect(html.split('Prévia').length - 1).toBe(1);
     expect(html).toContain('mensagem nova');
+  });
+});
+
+/**
+ * Task 4 — badge de IA ON/OFF na lista de conversas. `iaAtiva` vem do canal
+ * da conversa (Task 3); nulo significa "conversa sem canal" (ex. Webchat) e
+ * nao deve renderizar badge nenhum, nem "IA ON" nem "IA OFF".
+ */
+describe('ListaConversas — badge de IA (Task 4)', () => {
+  it('mostra badge IA ON quando iaAtiva=true, IA OFF quando false, e nenhum quando null', () => {
+    const conversas: ConversaResumo[] = [
+      { ...CONVERSA, id: 'c1', iaAtiva: true },
+      { ...CONVERSA, id: 'c2', iaAtiva: false },
+      { ...CONVERSA, id: 'c3', iaAtiva: null },
+    ];
+
+    const html = renderizar({ conversas });
+
+    expect(html.split('IA ON').length - 1).toBe(1);
+    expect(html.split('IA OFF').length - 1).toBe(1);
   });
 });
