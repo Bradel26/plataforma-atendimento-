@@ -5,7 +5,7 @@ import { signWebchatToken } from '../../lib/tokens';
 import { notificarConversaAtualizada, notificarConversaNova, notificarMensagem } from '../../realtime/hub';
 import { responderAutomaticamente } from '../bots/bots.service';
 import { entregarParaIa } from '../bots/ia.service';
-import { inclusaoDetalhe, toConversaDetalhe, toMensagem } from '../conversations/conversations.serializer';
+import { inclusaoDetalhe, semNotasInternas, toConversaDetalhe, toMensagem } from '../conversations/conversations.serializer';
 
 type IniciarInput = {
   nome: string;
@@ -92,7 +92,7 @@ export async function iniciarSessao(input: IniciarInput) {
       // seguinte dele reabra o contexto certo sem consultar o banco.
       org: organizacaoAtual(),
     }),
-    conversa: detalhe,
+    conversa: semNotasInternas(detalhe),
   };
 }
 
@@ -102,7 +102,7 @@ export async function historico(conversaId: string) {
     include: inclusaoDetalhe,
   });
   if (!conversa) throw notFound('Conversa nao encontrada');
-  return toConversaDetalhe(conversa);
+  return semNotasInternas(toConversaDetalhe(conversa));
 }
 
 /** Mensagem enviada pelo visitante: incrementa nao lidas para o agente. */
@@ -125,7 +125,9 @@ export async function mensagemDoCliente(conversaId: string, conteudo: string) {
   const destinos = { conversaId, filaId: atualizada.filaId, agenteId: atualizada.agenteId };
   notificarMensagem({ conversaId, mensagem: toMensagem(mensagem) }, destinos);
   // A conversa sobe na lista e o contador de nao lidas muda para quem estiver vendo.
-  notificarConversaAtualizada(detalhe, destinos);
+  // A sala da conversa e a mesma que o visitante do Webchat escuta — o
+  // payload nunca leva notas internas.
+  notificarConversaAtualizada(semNotasInternas(detalhe), destinos);
 
   // Chatbot: o motor de IA externo primeiro; sem ele, o bot de arvore local.
   // Nos dois casos so responde enquanto ninguem assumiu a conversa.

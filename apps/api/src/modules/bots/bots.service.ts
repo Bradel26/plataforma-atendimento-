@@ -3,7 +3,7 @@ import { prisma } from '../../lib/prisma';
 import { notFound } from '../../lib/errors';
 import { notificarConversaAtualizada, notificarMensagem } from '../../realtime/hub';
 import { enviarParaCanal, exigeEnvioExterno } from '../channels/outbound.service';
-import { inclusaoDetalhe, toConversaDetalhe, toMensagem } from '../conversations/conversations.serializer';
+import { inclusaoDetalhe, semNotasInternas, toConversaDetalhe, toMensagem } from '../conversations/conversations.serializer';
 
 /** Compara sem acento e sem caixa: "duvida" casa com "Dúvida". */
 const normalizar = (texto: string) =>
@@ -154,7 +154,9 @@ export async function responderAutomaticamente(conversaId: string, textoCliente:
   for (const mensagem of criadas) {
     notificarMensagem({ conversaId, mensagem: toMensagem(mensagem) }, destinos);
   }
-  notificarConversaAtualizada(detalhe, destinos);
+  // A sala da conversa e a mesma que o visitante do Webchat escuta (bot tambem
+  // roda em conversas de Webchat) — o payload nunca leva notas internas.
+  notificarConversaAtualizada(semNotasInternas(detalhe), destinos);
 
   return { respondeu: true, acao, mensagens: criadas.map(toMensagem) };
 }

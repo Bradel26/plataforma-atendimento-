@@ -149,6 +149,11 @@ vi.mock('./conversations.serializer', () => ({
   toConversaDetalhe: (c: unknown) => c,
   toConversaResumo: (c: unknown) => c,
   toMensagem: (m: unknown) => m,
+  // Identidade tambem: o que os testes abaixo (Achado 1b) observam e se a
+  // sala da conversa foi excluida dos destinos quando a mensagem e interna,
+  // nao a filtragem de mensagens em si (isso ja e coberto em
+  // conversations.serializer.test.ts).
+  semNotasInternas: (c: unknown) => c,
   inclusaoDetalhe: {},
   inclusaoResumo: {},
 }));
@@ -508,6 +513,12 @@ describe('enviarMensagem — nota interna', () => {
         data: expect.objectContaining({ interno: true, idExterno: null }),
       }),
     );
+
+    // Achado 1(b) da revisao final: nota interna nunca pode ir para a sala da
+    // conversa (a mesma que o visitante do Webchat escuta).
+    expect(notificarMensagem).toHaveBeenCalledTimes(1);
+    const destinos = notificarMensagem.mock.calls[0]?.[1];
+    expect(destinos).toMatchObject({ incluirSalaDaConversa: false });
   });
 
   it('sem o parametro interno, continua enviando pelo canal normalmente (regressao)', async () => {
@@ -526,5 +537,9 @@ describe('enviarMensagem — nota interna', () => {
     expect(messageCreate).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ interno: false }) }),
     );
+
+    // Mensagem normal continua indo para a sala da conversa, como sempre.
+    const destinos = notificarMensagem.mock.calls[0]?.[1];
+    expect(destinos).toMatchObject({ incluirSalaDaConversa: true });
   });
 });

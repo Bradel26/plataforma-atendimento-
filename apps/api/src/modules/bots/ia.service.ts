@@ -9,7 +9,7 @@ import { notificarConversaAtualizada, notificarMensagem } from '../../realtime/h
 import { obterConfig, obterConfigPorId } from '../channels/channels.service';
 import { registrarConsumo } from '../ia/consumo.service';
 import { enviarArquivoParaCanal, enviarParaCanal, exigeEnvioExterno } from '../channels/outbound.service';
-import { inclusaoDetalhe, toConversaDetalhe, toMensagem } from '../conversations/conversations.serializer';
+import { inclusaoDetalhe, semNotasInternas, toConversaDetalhe, toMensagem } from '../conversations/conversations.serializer';
 
 /**
  * Ponte com o motor de IA externo (plugin `plataforma` do whatsbot-pro).
@@ -300,7 +300,10 @@ async function gravar(
 
   const destinos = { conversaId: conversa.id, filaId: atualizada.filaId, agenteId: atualizada.agenteId };
   notificarMensagem({ conversaId: conversa.id, mensagem: toMensagem(mensagem) }, destinos);
-  notificarConversaAtualizada(toConversaDetalhe(atualizada), destinos);
+  // A sala da conversa e a mesma que o visitante do Webchat escuta (IA
+  // tambem responde em conversas de Webchat) — o payload nunca leva notas
+  // internas.
+  notificarConversaAtualizada(semNotasInternas(toConversaDetalhe(atualizada)), destinos);
 
   // `respondendoA` nao vira coluna: o modelo de mensagem nao tem thread, e
   // inventar uma para guardar um id que ninguem le seria migracao sem leitor.

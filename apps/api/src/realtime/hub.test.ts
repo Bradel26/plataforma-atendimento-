@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Server } from 'socket.io';
 import { comOrganizacao } from '../lib/tenant';
-import { notificarConversaNova, notificarPreviaAtualizada, registrarIo } from './hub';
+import { notificarConversaNova, notificarMensagem, notificarPreviaAtualizada, registrarIo } from './hub';
 import { EVENTOS, salas } from './events';
 
 /**
@@ -89,6 +89,60 @@ describe('hub — notificarConversaNova', () => {
       }),
     ).not.toThrow();
     expect(to).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Achado 1(b) da revisao final: uma nota interna (`interno: true`) nunca pode
+ * chegar na sala da conversa (`salas.conversa`) — e a mesma sala que o
+ * visitante do Webchat escuta (ver `server.ts`, `socket.join` no handshake do
+ * visitante). Quem chama `notificarMensagem` sinaliza isso com
+ * `incluirSalaDaConversa: false` nos destinos (ver `enviarMensagem` /
+ * `enviarArquivo` em `conversations.service.ts`).
+ */
+describe('hub — notificarMensagem / incluirSalaDaConversa', () => {
+  const to = vi.fn();
+  const emit = vi.fn();
+  const io = { to: to.mockReturnValue({ emit }) } as unknown as Server;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    to.mockReturnValue({ emit });
+    registrarIo(io);
+  });
+
+  it('mensagem normal (sem o parametro): a sala da conversa continua nos alvos, como sempre', () => {
+    comOrganizacao('org-A', () => {
+      notificarMensagem(
+        { conversaId: 'conv-1', mensagem: { id: 'm1' } },
+        { conversaId: 'conv-1', filaId: 'fila-1', agenteId: 'agente-1' },
+      );
+    });
+
+    const alvos = (to.mock.calls[0]?.[0] as string[] | undefined) ?? [];
+    expect(new Set(alvos)).toEqual(
+      new Set([
+        salas.supervisao('org-A'),
+        salas.fila('org-A', 'fila-1'),
+        salas.usuario('org-A', 'agente-1'),
+        salas.conversa('org-A', 'conv-1'),
+      ]),
+    );
+  });
+
+  it('nota interna (incluirSalaDaConversa: false): a sala da conversa NAO entra nos alvos — so fila/agente/supervisao', () => {
+    comOrganizacao('org-A', () => {
+      notificarMensagem(
+        { conversaId: 'conv-1', mensagem: { id: 'm2', interno: true } },
+        { conversaId: 'conv-1', filaId: 'fila-1', agenteId: 'agente-1', incluirSalaDaConversa: false },
+      );
+    });
+
+    const alvos = (to.mock.calls[0]?.[0] as string[] | undefined) ?? [];
+    expect(alvos).not.toContain(salas.conversa('org-A', 'conv-1'));
+    expect(new Set(alvos)).toEqual(
+      new Set([salas.supervisao('org-A'), salas.fila('org-A', 'fila-1'), salas.usuario('org-A', 'agente-1')]),
+    );
   });
 });
 

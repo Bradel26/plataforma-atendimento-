@@ -19,6 +19,13 @@ type Destinos = {
   conversaId?: string | null;
   /** Agente que deixou de ser responsavel (transferencia) — precisa remover da lista dele. */
   agenteAnteriorId?: string | null;
+  /**
+   * Por padrao a sala da conversa (`salas.conversa`) entra nos alvos — e ela que o
+   * visitante do Webchat escuta. Uma nota interna (`interno: true`) nao pode chegar
+   * la: quem chama passa `false` para excluir essa sala e falar so com a equipe
+   * (fila/agente/supervisao).
+   */
+  incluirSalaDaConversa?: boolean;
 };
 
 /**
@@ -38,7 +45,9 @@ function emitir(evento: string, payload: unknown, destinos: Destinos) {
   if (destinos.filaId) alvos.add(salas.fila(org, destinos.filaId));
   if (destinos.agenteId) alvos.add(salas.usuario(org, destinos.agenteId));
   if (destinos.agenteAnteriorId) alvos.add(salas.usuario(org, destinos.agenteAnteriorId));
-  if (destinos.conversaId) alvos.add(salas.conversa(org, destinos.conversaId));
+  if (destinos.conversaId && destinos.incluirSalaDaConversa !== false) {
+    alvos.add(salas.conversa(org, destinos.conversaId));
+  }
 
   io.to([...alvos]).emit(evento, payload);
 }

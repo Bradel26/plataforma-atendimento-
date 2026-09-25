@@ -19,6 +19,7 @@ import { enfileirar } from '../../lib/fila';
 import {
   inclusaoDetalhe,
   inclusaoResumo,
+  semNotasInternas,
   toConversaDetalhe,
   toConversaResumo,
   toMensagem,
@@ -401,7 +402,14 @@ export async function enviarMensagem(
   const atualizada = await publicar(id, { filaAnteriorId: conversa.filaId });
   notificarMensagem(
     { conversaId: id, mensagem: toMensagem(mensagem) },
-    { conversaId: id, filaId: atualizada.fila?.id, agenteId: atualizada.agente?.id },
+    {
+      conversaId: id,
+      filaId: atualizada.fila?.id,
+      agenteId: atualizada.agente?.id,
+      // Nota interna nao pode chegar na sala da conversa: e la que o visitante
+      // do Webchat escuta.
+      incluirSalaDaConversa: !interno,
+    },
   );
 
   // Nota interna nao entra em contexto de IA (ver acima) — so agenda quando
@@ -458,7 +466,12 @@ export async function enviarArquivo(
   const atualizada = await publicar(id, { filaAnteriorId: conversa.filaId });
   notificarMensagem(
     { conversaId: id, mensagem: toMensagem(mensagem) },
-    { conversaId: id, filaId: atualizada.fila?.id, agenteId: atualizada.agente?.id },
+    {
+      conversaId: id,
+      filaId: atualizada.fila?.id,
+      agenteId: atualizada.agente?.id,
+      incluirSalaDaConversa: !interno,
+    },
   );
 
   return { mensagem: toMensagem(mensagem), conversa: atualizada };
@@ -558,7 +571,11 @@ export async function marcarComoLida(solicitante: Solicitante, id: string) {
 async function publicarNova(id: string) {
   const detalhe = toConversaDetalhe(await carregarOuFalhar(id));
 
-  notificarConversaNova(detalhe, {
+  // A sala da conversa (`conversaId` nos destinos) e a mesma que o visitante
+  // do Webchat escuta — o payload nunca leva notas internas para ela nem para
+  // ninguem mais: quem precisa da mensagem em si ja recebe pelo evento
+  // `mensagem:nova` (`notificarMensagem`), que tem essa mesma garantia.
+  notificarConversaNova(semNotasInternas(detalhe), {
     conversaId: id,
     filaId: detalhe.fila?.id,
     agenteId: detalhe.agente?.id,
@@ -577,14 +594,17 @@ async function publicar(
 ) {
   const detalhe = toConversaDetalhe(await carregarOuFalhar(id));
 
-  notificarConversaAtualizada(detalhe, {
+  // Mesmo cuidado de `publicarNova`: a sala da conversa e compartilhada com o
+  // visitante do Webchat, entao o payload nunca leva notas internas.
+  const semNotas = semNotasInternas(detalhe);
+  notificarConversaAtualizada(semNotas, {
     conversaId: id,
     filaId: detalhe.fila?.id,
     agenteId: detalhe.agente?.id,
     agenteAnteriorId: anterior.agenteAnteriorId,
   });
   if (anterior.filaAnteriorId && anterior.filaAnteriorId !== detalhe.fila?.id) {
-    notificarConversaAtualizada(detalhe, { filaId: anterior.filaAnteriorId });
+    notificarConversaAtualizada(semNotas, { filaId: anterior.filaAnteriorId });
   }
 
   return detalhe;

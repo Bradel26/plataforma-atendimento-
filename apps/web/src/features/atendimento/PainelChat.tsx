@@ -115,7 +115,7 @@ export function PainelChat({
   const [cursorHistorico, setCursorHistorico] = useState<string | null>(null);
   const [fimDoHistorico, setFimDoHistorico] = useState(false);
   const fim = useRef<HTMLDivElement>(null);
-  const rascunhos = useRef<Map<string, string>>(new Map());
+  const rascunhos = useRef<Map<string, { texto: string; textoPrivado: string }>>(new Map());
   const conversaIdAnterior = useRef(conversa.id);
 
   useEffect(() => {
@@ -132,7 +132,11 @@ export function PainelChat({
 
   /*
    * O rascunho nao enviado troca junto com a conversa, em vez de vazar de uma
-   * pra outra ou se perder.
+   * pra outra ou se perder. Cobre tanto a resposta normal (`texto`) quanto a
+   * nota interna (`textoPrivado`) — achado da revisao final: antes so `texto`
+   * passava por aqui, entao um rascunho de nota interna pro cliente A
+   * continuava na caixa ao abrir a conversa do cliente B, com risco real de
+   * ir parar no destinatario errado.
    *
    * Sem isto, o campo de texto e um unico `useState` que sobrevive a troca de
    * conversa (o componente nao desmonta): quem comecava a escrever pra um
@@ -140,12 +144,19 @@ export function PainelChat({
    * aparecer na caixa do segundo — ou pior, mandava sem perceber. Guardar por
    * `conversa.id` deixa cada conversa com o proprio rascunho, do jeito que
    * WhatsApp Web e qualquer mensageiro profissional ja fazem.
+   *
+   * A aba do rodape tambem volta para "Responder" ao trocar de conversa: e o
+   * comportamento mais seguro (nunca abre sozinho numa aba que manda pro
+   * cliente errado) e o mais previsivel (aba padrao de conversa nova).
    */
   useEffect(() => {
     const idAnterior = conversaIdAnterior.current;
     if (idAnterior === conversa.id) return;
-    rascunhos.current.set(idAnterior, texto);
-    setTexto(rascunhos.current.get(conversa.id) ?? '');
+    rascunhos.current.set(idAnterior, { texto, textoPrivado });
+    const salvo = rascunhos.current.get(conversa.id);
+    setTexto(salvo?.texto ?? '');
+    setTextoPrivado(salvo?.textoPrivado ?? '');
+    setAbaRodape('responder');
     conversaIdAnterior.current = conversa.id;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversa.id]);
@@ -167,6 +178,10 @@ export function PainelChat({
 
   const enviar = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Guarda tambem contra o Enter do textarea, que chama `enviar` direto sem
+    // passar pelo `disabled` do botao — sem isto da pra disparar um envio
+    // duplicado/concorrente pelo teclado com um envio ja em voo.
+    if (ocupado) return;
     const conteudo = texto.trim();
     if (!conteudo) return;
     setErro(null);
@@ -210,18 +225,26 @@ export function PainelChat({
   /**
    * Anexo do agente. A legenda vai junto quando o campo de texto tem algo
    * escrito: e o comportamento que o agente espera de qualquer mensageiro.
+   *
+   * `interno` (Achado 4 da revisao final: a spec original pedia o mesmo botao
+   * "Anexar" reaproveitado na aba Mensagem Privada, com `interno: true` — o
+   * plano de implementacao tinha esquecido) manda o anexo como nota interna:
+   * legenda vem de `textoPrivado`, nunca sai pelo canal externo, e o campo
+   * limpo depois e o da aba certa.
    */
-  const anexar = async (arquivo: File) => {
+  const anexar = async (arquivo: File, interno = false) => {
     setErro(null);
     setOcupado(true);
     try {
+      const legenda = (interno ? textoPrivado : texto).trim();
       const resp = await api.upload<{ mensagem: Mensagem; conversa: ConversaDetalhe }>(
         `/conversas/${conversa.id}/anexos`,
         arquivo,
         'arquivo',
-        texto.trim() ? { legenda: texto.trim() } : undefined,
+        { ...(legenda ? { legenda } : {}), ...(interno ? { interno: 'true' } : {}) },
       );
-      setTexto('');
+      if (interno) setTextoPrivado('');
+      else setTexto('');
       onMudou(resp.conversa);
     } catch (err) {
       setErro(err instanceof ApiError ? err.message : 'Falha ao enviar o arquivo');
@@ -523,6 +546,22 @@ export function PainelChat({
                   placeholder="Escreva uma nota interna... so a equipe ve (Enter envia, Shift+Enter quebra linha)"
                   className="max-h-32 min-h-[44px] flex-1 resize-y rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm outline-none focus:border-amber-500"
                 />
+                <label
+                  title="Anexar arquivo (nota interna)"
+                  className="flex h-[44px] cursor-pointer items-center rounded-lg border border-amber-300 px-3 text-sm text-amber-700 hover:bg-amber-50"
+                >
+                  Anexar
+                  <input
+                    type="file"
+                    className="hidden"
+                    disabled={ocupado}
+                    onChange={(e) => {
+                      const arquivo = e.target.files?.[0];
+                      e.target.value = '';
+                      if (arquivo) void anexar(arquivo, true);
+                    }}
+                  />
+                </label>
                 <Button type="submit" disabled={ocupado || !textoPrivado.trim()}>
                   Enviar
                 </Button>

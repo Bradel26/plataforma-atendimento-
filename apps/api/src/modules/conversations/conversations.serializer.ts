@@ -17,6 +17,7 @@ export const inclusaoDetalhe = {
   contato: true,
   fila: { select: { id: true, nome: true } },
   agente: { select: { id: true, nome: true } },
+  canalConfig: { select: { iaAtiva: true } },
   // Busca as mais recentes (desc) e inverte na serializacao: um atendimento com
   // dois anos de historico nao pode chegar inteiro a cada abertura do painel.
   mensagens: { orderBy: [{ criadoEm: 'desc' }, { id: 'desc' }], take: MENSAGENS_NO_DETALHE + 1 },
@@ -88,6 +89,9 @@ export function toConversaDetalhe(c: ConversaDetalhe) {
     contato: c.contato,
     fila: c.fila,
     agente: c.agente,
+    // null = conversa sem canal configurado (ex. Webchat) — nao confundir
+    // com false ("IA desligada"), que so se aplica quando ha canal.
+    iaAtiva: c.canalConfig?.iaAtiva ?? null,
     /**
      * Ordem cronologica para a tela. O registro extra (take + 1) nao vai para o
      * cliente: ele so serve para dizer se ha historico anterior.
@@ -101,4 +105,16 @@ export function toConversaDetalhe(c: ConversaDetalhe) {
      */
     cursorAnterior: temMais && maisAntiga ? codificarCursor({ valor: maisAntiga.criadoEm, id: maisAntiga.id }) : null,
   };
+}
+
+/**
+ * Remove notas internas das mensagens de um detalhe ja serializado.
+ *
+ * `toConversaDetalhe` continua devolvendo tudo (o PainelChat da equipe PRECISA
+ * ver as notas internas) — este filtro e para os caminhos que expoem esse
+ * detalhe a alguem de fora da equipe: o visitante do Webchat (REST) e a sala
+ * de socket da conversa, que o visitante tambem escuta (tempo real).
+ */
+export function semNotasInternas<T extends { mensagens: { interno: boolean }[] }>(detalhe: T): T {
+  return { ...detalhe, mensagens: detalhe.mensagens.filter((m) => !m.interno) };
 }
