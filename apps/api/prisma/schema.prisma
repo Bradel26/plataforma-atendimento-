@@ -403,6 +403,9 @@ model Message {
   anexoUrl      String?        @map("anexo_url")
   /// Id da mensagem no provedor externo. Unico: o webhook da Meta reentrega.
   idExterno     String?        @unique @map("id_externo")
+  /// true = nota interna, visivel so a equipe; nunca sai pelo canal externo.
+  /// Mesmo campo/semantica de TicketComment.interno, agora tambem em Message.
+  interno       Boolean        @default(false)
   criadoEm      DateTime       @default(now()) @map("criado_em")
 
   conversa     Conversation @relation(fields: [conversaId], references: [id], onDelete: Cascade)
