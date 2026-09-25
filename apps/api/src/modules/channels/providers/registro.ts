@@ -1,4 +1,5 @@
 import type { ChannelProvider } from './channel-provider';
+import { GowaProvider } from './gowa/gowa.provider';
 import { WahaProvider } from './waha/waha.provider';
 
 /**
@@ -11,6 +12,7 @@ import { WahaProvider } from './waha/waha.provider';
  */
 const PROVIDERS: Record<string, ChannelProvider> = {
   waha: new WahaProvider(),
+  gowa: new GowaProvider(),
 };
 
 /** `null` para nome desconhecido — quem chama decide se isso e 404 ou erro de configuracao. */
