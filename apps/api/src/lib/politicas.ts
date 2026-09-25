@@ -40,20 +40,41 @@ export const politicaConversas = {
    * Agente e comercial: as proprias, mais as em espera nas filas em que atuam.
    * Gestor: as da equipe, mais as em espera (fila e operacao, nao carteira —
    * conversa esperando nao pertence a ninguem ainda).
+   *
+   * Linha PESSOAL de WhatsApp (`ChannelConfig.donoId` preenchido) e excecao a
+   * "veTudo"/"veEquipe": e privada de quem conectou o proprio numero, mesmo
+   * para ADMIN/SUPERVISOR/GESTOR — decisao de produto, nao lacuna de dado
+   * (a conversa continua corretamente atribuida no banco a linha certa; o que
+   * muda aqui e so quem tem permissao de olhar). Webchat e linha COMPARTILHADA
+   * (`donoId` nulo) continuam com a supervisao normal.
    */
   filtro(ctx: ContextoVisibilidade): Prisma.ConversationWhereInput {
-    if (ctx.veTudo) return {};
+    const foraDeLinhaPessoalAlheia: Prisma.ConversationWhereInput = {
+      OR: [{ canalConfig: null }, { canalConfig: { donoId: null } }, { canalConfig: { donoId: ctx.usuarioId } }],
+    };
+
+    if (ctx.veTudo) return foraDeLinhaPessoalAlheia;
     if (ctx.veEquipe) {
-      return { OR: [{ agenteId: { in: ctx.equipeIds } }, { status: 'EM_ESPERA' }] };
+      return {
+        AND: [
+          foraDeLinhaPessoalAlheia,
+          { OR: [{ agenteId: { in: ctx.equipeIds } }, { status: 'EM_ESPERA' }] },
+        ],
+      };
     }
     return {
-      OR: [
-        { agenteId: ctx.usuarioId },
-        // `filaIds` vazio produz `in: []`, que nao casa com nada. E o
-        // comportamento certo: quem nao esta em fila nenhuma nao ve espera
-        // nenhuma. Um `if` que omitisse este termo transformaria "nenhuma fila"
-        // em "sem filtro".
-        { status: 'EM_ESPERA', filaId: { in: ctx.filaIds } },
+      AND: [
+        foraDeLinhaPessoalAlheia,
+        {
+          OR: [
+            { agenteId: ctx.usuarioId },
+            // `filaIds` vazio produz `in: []`, que nao casa com nada. E o
+            // comportamento certo: quem nao esta em fila nenhuma nao ve espera
+            // nenhuma. Um `if` que omitisse este termo transformaria "nenhuma
+            // fila" em "sem filtro".
+            { status: 'EM_ESPERA', filaId: { in: ctx.filaIds } },
+          ],
+        },
       ],
     };
   },

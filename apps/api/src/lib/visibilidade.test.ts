@@ -46,8 +46,21 @@ const COMERCIAL = ctx({ perfil: 'COMERCIAL', carteiraAberta: true });
 const AGENTE = ctx({ perfil: 'AGENTE', filaIds: ['f-1'] });
 const AGENTE_SEM_FILA = ctx({ perfil: 'AGENTE' });
 
+/**
+ * Termo repetido em toda politica de conversa (2026-09-25): linha pessoal de
+ * WhatsApp e privada do dono, mesmo para quem "ve tudo"/"ve equipe".
+ */
+const FORA_DE_LINHA_PESSOAL_ALHEIA = {
+  OR: [{ canalConfig: null }, { canalConfig: { donoId: null } }, { canalConfig: { donoId: EU } }],
+};
+
+/**
+ * `politicaConversas` fica FORA desta lista de proposito: desde 2026-09-25 ela
+ * e a unica excecao a "quem ve tudo recebe filtro vazio" (linha pessoal de
+ * WhatsApp e privada do dono mesmo para ADMIN/SUPERVISOR) — tem describe
+ * proprio em 'conversas', mais abaixo.
+ */
 const TODAS = [
-  politicaConversas,
   politicaProtocolos,
   politicaContatos,
   politicaContas,
@@ -57,7 +70,7 @@ const TODAS = [
 ];
 
 describe('quem ve tudo', () => {
-  it('ADMIN e SUPERVISOR recebem filtro vazio em todos os dominios', () => {
+  it('ADMIN e SUPERVISOR recebem filtro vazio em todos os dominios (exceto conversas, ver describe proprio)', () => {
     for (const politica of TODAS) {
       expect(politica.filtro(ADMIN)).toEqual({});
       expect(politica.filtro(SUPERVISOR)).toEqual({});
@@ -83,7 +96,7 @@ describe('nada vira sem filtro', () => {
     // O termo da fila continua no filtro, com lista vazia: `in: []` nao casa
     // com nada. Omitir o termo seria "qualquer conversa em espera".
     expect(filtro).toEqual({
-      OR: [{ agenteId: EU }, { status: 'EM_ESPERA', filaId: { in: [] } }],
+      AND: [FORA_DE_LINHA_PESSOAL_ALHEIA, { OR: [{ agenteId: EU }, { status: 'EM_ESPERA', filaId: { in: [] } }] }],
     });
   });
 });
@@ -107,15 +120,23 @@ describe('escopo por responsavel', () => {
 });
 
 describe('conversas', () => {
-  it('gestor ve a equipe e a espera — espera e fila, nao carteira', () => {
+  it('ADMIN e SUPERVISOR nao veem "sem filtro" — linha pessoal de outro agente fica de fora mesmo assim', () => {
+    expect(politicaConversas.filtro(ADMIN)).toEqual(FORA_DE_LINHA_PESSOAL_ALHEIA);
+    expect(politicaConversas.filtro(SUPERVISOR)).toEqual(FORA_DE_LINHA_PESSOAL_ALHEIA);
+  });
+
+  it('gestor ve a equipe e a espera — espera e fila, nao carteira — sem enxergar linha pessoal alheia', () => {
     expect(politicaConversas.filtro(GESTOR)).toEqual({
-      OR: [{ agenteId: { in: [EU, COLEGA] } }, { status: 'EM_ESPERA' }],
+      AND: [
+        FORA_DE_LINHA_PESSOAL_ALHEIA,
+        { OR: [{ agenteId: { in: [EU, COLEGA] } }, { status: 'EM_ESPERA' }] },
+      ],
     });
   });
 
-  it('comercial e agente veem as proprias e a espera das filas em que atuam', () => {
+  it('comercial e agente veem as proprias e a espera das filas em que atuam — sem enxergar linha pessoal alheia', () => {
     expect(politicaConversas.filtro(AGENTE)).toEqual({
-      OR: [{ agenteId: EU }, { status: 'EM_ESPERA', filaId: { in: ['f-1'] } }],
+      AND: [FORA_DE_LINHA_PESSOAL_ALHEIA, { OR: [{ agenteId: EU }, { status: 'EM_ESPERA', filaId: { in: ['f-1'] } }] }],
     });
   });
 });
