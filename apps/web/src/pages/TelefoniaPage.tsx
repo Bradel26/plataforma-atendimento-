@@ -124,6 +124,27 @@ export function TelefoniaPage() {
       {erro && <Alerta>{erro}</Alerta>}
       {aviso && <Alerta tipo="sucesso">{aviso}</Alerta>}
 
+      {/* O botao de ligar vem primeiro e grande: e a acao da tela. */}
+      <Card titulo="Ligar" descricao="Clique-para-ligar pelo numero configurado na plataforma">
+        <form onSubmit={ligar} className="flex flex-wrap items-end gap-3">
+          <Field label="Numero de destino">
+            <Input
+              required
+              placeholder="+5511988887777"
+              value={destino}
+              onChange={(e) => setDestino(e.target.value)}
+              className="!py-2.5 !text-base"
+            />
+          </Field>
+          <Button type="submit" disabled={ocupado || destino.trim().length < 8} className="!px-6 !py-2.5 !text-base">
+            📞 Ligar
+          </Button>
+        </form>
+        <p className="mt-2 text-xs text-slate-500">
+          Softphone no navegador, ramais e URA dependem do provedor contratado.
+        </p>
+      </Card>
+
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile
           rotulo="Chamadas (24h)"
@@ -142,10 +163,9 @@ export function TelefoniaPage() {
         <StatTile rotulo="TMA de voz" valor={duracaoCurta(indicadores?.tma ?? null)} detalhe="media das atendidas" />
       </div>
 
-      {/* Custo e qualidade (item 6.6). Ficam numa segunda faixa porque respondem
-          outra pergunta: a primeira e "estamos perdendo chamada?", esta e "o que
-          isso custou, e valeu?". */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Custo (item 6.6). Nota media e "ligacoes negativas" sairam a pedido da
+          operacao (SUGESTOES.docx): avaliacao de ligacao nao e o que ela acompanha. */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-2">
         <StatTile
           rotulo="Custo (24h)"
           valor={custoCurto(indicadores?.custoTotal)}
@@ -160,57 +180,7 @@ export function TelefoniaPage() {
           valor={custoCurto(indicadores?.custoMedio)}
           detalhe="por chamada com custo informado"
         />
-        <StatTile
-          rotulo="Nota media"
-          valor={indicadores?.notaMedia == null ? '—' : indicadores.notaMedia.toFixed(2).replace('.', ',')}
-          detalhe={
-            indicadores?.semNota
-              ? `${indicadores.semNota} ligacao(oes) sem classificacao`
-              : 'todas as ligacoes classificadas'
-          }
-        />
-        {/* Sentimento (item E.2).
-            O detalhe diz sobre QUANTAS chamadas o numero fala: sem isso, "1
-            negativa" pode sair de duas analisadas ou de duzentas, e as duas
-            frases pedem decisoes opostas. Chamada sem analise nao entra em
-            NEUTRO — ela entra no contador de nao analisadas. */}
-        <StatTile
-          rotulo="Ligacoes negativas"
-          valor={
-            indicadores?.sentimento?.fracaoNegativa == null
-              ? '—'
-              : `${Math.round(indicadores.sentimento.fracaoNegativa * 100)}%`
-          }
-          detalhe={
-            indicadores?.sentimento == null || indicadores.sentimento.analisadas === 0
-              ? 'nenhuma ligacao analisada por motor de IA'
-              : `${indicadores.sentimento.negativo} de ${indicadores.sentimento.analisadas} analisada(s)` +
-                (indicadores.sentimento.semAnalise > 0
-                  ? ` · ${indicadores.sentimento.semAnalise} sem analise`
-                  : '')
-          }
-          /*
-           * Sem tom de alerta por limiar aqui, ao contrario da taxa de
-           * atendimento. "Acima de 20% de negativas e ruim" seria um numero que
-           * eu escolheria sozinho, sem base nenhuma — e um mostrador ambar
-           * inventado ensina a ignorar o ambar dos outros indicadores.
-           */
-        />
       </div>
-
-      <Card titulo="Ligar" descricao="Clique-para-ligar pelo numero configurado na plataforma">
-        <form onSubmit={ligar} className="flex flex-wrap items-end gap-2">
-          <Field label="Numero de destino">
-            <Input required placeholder="+5511988887777" value={destino} onChange={(e) => setDestino(e.target.value)} />
-          </Field>
-          <Button type="submit" disabled={ocupado || destino.trim().length < 8}>
-            Ligar
-          </Button>
-        </form>
-        <p className="mt-2 text-xs text-slate-500">
-          Softphone no navegador, ramais e URA dependem do provedor contratado — ver "Voz" no SCOPE.md.
-        </p>
-      </Card>
 
       <Card titulo="Chamadas" descricao={`${chamadas.length} registro(s)`}>
         {chamadas.length === 0 ? (

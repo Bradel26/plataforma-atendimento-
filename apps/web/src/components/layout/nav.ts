@@ -6,7 +6,6 @@ import {
   IconConfiguracoes,
   IconCrm,
   IconDashboards,
-  IconEscalas,
   IconEsteira,
   IconGestao,
   IconMonitoramento,
@@ -89,7 +88,9 @@ export function subrotaDaRota(pathname: string): { item: NavItem; sub: SubRota }
 export const NAV: NavItem[] = [
   { rota: '/dashboards', label: 'Dashboards', icone: IconDashboards, perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR'], fase: 3 },
   { rota: '/atendimento', label: 'Atendimento', icone: IconAtendimento, perfis: ['ADMIN', 'SUPERVISOR', 'AGENTE', 'COMERCIAL'], fase: 1 },
-  { rota: '/protocolo', label: 'Protocolo', icone: IconProtocolo, perfis: ['ADMIN', 'SUPERVISOR', 'AGENTE'], fase: 2 },
+  // Esteira de Credenciamento logo depois do Atendimento: e a ordem de trabalho
+  // da operacao TIM/Starlink (SUGESTOES.docx). So aparece para a organizacao
+  // que tem funil ESTEIRA — ver o filtro em Sidebar.tsx.
   {
     rota: '/esteira',
     label: 'Esteira',
@@ -97,11 +98,11 @@ export const NAV: NavItem[] = [
     perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'],
     fase: 5,
   },
+  { rota: '/protocolo', label: 'Protocolo', icone: IconProtocolo, perfis: ['ADMIN', 'SUPERVISOR', 'AGENTE'], fase: 2 },
   { rota: '/monitoramento', label: 'Monitoramento', icone: IconMonitoramento, perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR'], fase: 3 },
   { rota: '/gestao', label: 'Area da Gestao', icone: IconGestao, perfis: ['ADMIN', 'SUPERVISOR'], fase: 3 },
   { rota: '/campanhas', label: 'Campanhas', icone: IconCampanhas, perfis: ['ADMIN', 'SUPERVISOR'], fase: 4 },
-  { rota: '/relatorios', label: 'Relatorios', icone: IconRelatorios, perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR'], fase: 3 },
-  { rota: '/escalas', label: 'Escalas', icone: IconEscalas, perfis: ['ADMIN', 'SUPERVISOR'], fase: 3 },
+  { rota: '/relatorios', label: 'Desempenho Operacional', icone: IconRelatorios, perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR'], fase: 3 },
   { rota: '/telefonia', label: 'Telefonia', icone: IconTelefonia, perfis: ['ADMIN', 'SUPERVISOR', 'AGENTE'], fase: 4 },
   {
     rota: '/crm',

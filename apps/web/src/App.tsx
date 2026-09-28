@@ -7,11 +7,10 @@ import { AtendimentoPage } from './pages/AtendimentoPage';
 import { AvaliacaoPage } from './pages/AvaliacaoPage';
 import { CampanhasPage } from './pages/CampanhasPage';
 import { DashboardsPage } from './pages/DashboardsPage';
-import { EscalasPage } from './pages/EscalasPage';
 import { GestaoPage } from './pages/GestaoPage';
 import { LoginPage } from './pages/LoginPage';
 import { MonitoramentoPage } from './pages/MonitoramentoPage';
-import { RelatoriosPage } from './pages/RelatoriosPage';
+import { DesempenhoPage } from './pages/DesempenhoPage';
 import { TelefoniaPage } from './pages/TelefoniaPage';
 import { WebchatPage } from './pages/WebchatPage';
 import { ConfiguracoesPage } from './pages/configuracoes/ConfiguracoesPage';
@@ -31,8 +30,8 @@ const PAGINAS: Record<string, ComponentType> = {
   '/monitoramento': MonitoramentoPage,
   '/gestao': GestaoPage,
   '/campanhas': CampanhasPage,
-  '/relatorios': RelatoriosPage,
-  '/escalas': EscalasPage,
+  // A rota continua /relatorios para links e atalhos antigos nao quebrarem.
+  '/relatorios': DesempenhoPage,
   '/telefonia': TelefoniaPage,
   '/crm': CrmPage,
   '/configuracoes': ConfiguracoesPage,

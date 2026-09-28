@@ -37,7 +37,7 @@ export function Sidebar({ aberta, aoFechar }: { aberta: boolean; aoFechar: () =>
   useEffect(() => {
     if (!temPerfil('ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL')) return;
     void api
-      .get<{ funis: unknown[] }>('/funis?tipo=ESTEIRA')
+      .get<{ funis: unknown[] }>('/credenciamentos/funis')
       .then((r) => setTemEsteira(r.funis.length > 0))
       .catch(() => setTemEsteira(false));
   }, [temPerfil]);

@@ -155,6 +155,14 @@ export type Contato = {
   papelNaConta?: PapelNaConta | null;
   /** O que a Receita registra, palavra por palavra. */
   qualificacaoQsa?: string | null;
+  /** Estado (UF) e cidade do parceiro. */
+  uf?: string | null;
+  cidade?: string | null;
+  /** So na listagem: agenda telefonica do CRM. */
+  conta?: { id: string; nome: string } | null;
+  responsavel?: { id: string; nome: string } | null;
+  ultimaInteracaoEm?: string | null;
+  proximoRetorno?: { id: string; titulo: string; tipo: string; prazo: string } | null;
 };
 
 type ConversaBase = {
@@ -477,12 +485,19 @@ export const LABEL_SITUACAO_EXCECAO: Record<SituacaoExcecao, string> = {
   INATIVADO: 'Inativado',
 };
 
-export type EstagioEsteira = { id: string; nome: string; ordem: number };
+export type PapelEstagio = 'NOVO' | 'ANALISE' | 'PENDENCIA' | 'APROVACAO' | 'CREDENCIADO' | 'ATIVO' | 'OUTRO';
+
+export type EstagioEsteira = { id: string; nome: string; ordem: number; papel?: PapelEstagio };
+
+/** Operacao (funil ESTEIRA): TIM, Starlink... */
+export type OperacaoEsteira = { id: string; nome: string; estagios: EstagioEsteira[] };
+
+export type Semaforo = 'NORMAL' | 'ATENCAO' | 'CRITICO';
 
 export type Credenciamento = {
   id: string;
-  contato: Referencia;
-  conta: Referencia | null;
+  contato: Referencia & { telefone?: string | null; email?: string | null; uf?: string | null; cidade?: string | null };
+  conta: (Referencia & { cnpj?: string | null }) | null;
   funil: Referencia;
   estagio: EstagioEsteira;
   responsavel: Referencia | null;
@@ -492,7 +507,91 @@ export type Credenciamento = {
   criadoEm: string;
   atualizadoEm: string;
   fechadoEm: string | null;
+  estagioDesde?: string;
   diasNoEstagio: number;
+  historico?: Array<{
+    id: string;
+    criadoEm: string;
+    segundosNoEstagio: number | null;
+    deEstagio: Referencia | null;
+    paraEstagio: Referencia;
+    usuario: Referencia | null;
+  }>;
+};
+
+export type PainelOperacao = {
+  funil: Referencia;
+  total: number;
+  ativos: number;
+  pendentes: number;
+  inativos: number;
+  reprovados: number;
+  cancelados: number;
+  novosNoPeriodo: number;
+  porEstagio: Array<{ id: string; nome: string; total: number }>;
+  porUf: Array<{ rotulo: string; total: number }>;
+  porRegiao: Array<{ rotulo: string; total: number }>;
+};
+
+export type TempoEtapa = { etapa: string; papel: PapelEstagio; passagens: number; mediaDias: number | null };
+
+export type GestaoOperacao = {
+  tempoMedioCredenciamentoDias: number | null;
+  credenciadosNoPeriodo: number;
+  parceirosParados: number;
+  maiorTempoParado: { parceiro: string; dias: number; etapa: string } | null;
+  tempoMedioPorEtapa: TempoEtapa[];
+  atendimentosSemInteracao: {
+    total: number;
+    lista: Array<{
+      id: string;
+      canal: Canal;
+      status: string;
+      contato: Referencia;
+      agente: Referencia | null;
+      ultimaMensagemEm: string;
+      horasSemInteracao: number;
+      semaforo: Semaforo;
+    }>;
+  };
+  volumePorEtapa: Array<{ funil: Referencia; etapas: Array<{ id: string; nome: string; total: number; parados: number }> }>;
+  semMovimentacao: Array<{
+    id: string;
+    parceiro: string;
+    contato: Referencia;
+    responsavel: Referencia | null;
+    operacao: Referencia;
+    etapa: string;
+    ultimaMovimentacao: string;
+    diasParado: number;
+    semaforo: Semaforo;
+  }>;
+  semaforoContagem: Record<Semaforo, number>;
+};
+
+export type DesempenhoOperacional = {
+  indicadores: {
+    primeiraRespostaSegundos: number | null;
+    tempoMedioAtendimentoSegundos: number | null;
+    tempoMedioAnaliseDias: number | null;
+    tempoMedioCredenciamentoDias: number | null;
+    slaCumpridoPct: number | null;
+    slaVencidoPct: number | null;
+    protocolosComSla: number;
+  };
+  consultores: Array<{
+    id: string;
+    nome: string;
+    atendimentos: number;
+    primeiraRespostaSegundos: number | null;
+    tempoMedioAtendimentoSegundos: number | null;
+    credenciamentosConcluidos: number;
+    tempoMedioCredenciamentoDias: number | null;
+    slaCumpridoPct: number | null;
+    slaVencidoPct: number | null;
+  }>;
+  tempoMedioPorEtapa: TempoEtapa[];
+  evolucao: Array<{ desde: string; ate: string; tempoMedioCredenciamentoDias: number | null; credenciados: number }>;
 };
 
 export type ColunaCredenciamento = {
@@ -731,6 +830,9 @@ export type AgenteMonitorado = {
   conversasAtivas: number;
   protocolosAbertos: number;
   segundosNoStatus: number | null;
+  aguardandoResposta?: number;
+  segundosAtendimentoMaisAntigo?: number | null;
+  ultimaAtividadeEm?: string | null;
 };
 
 export type Relatorio = {
@@ -1111,7 +1213,20 @@ export type EventoFicha = {
 
 export type Timeline = { eventos: EventoFicha[]; proximoCursor: string | null };
 
-export const TIPOS_ATIVIDADE = ['NOTA', 'TAREFA', 'LIGACAO', 'WHATSAPP', 'EMAIL', 'REUNIAO', 'VISITA', 'PROPOSTA'] as const;
+export const TIPOS_ATIVIDADE = [
+  'NOTA',
+  'TAREFA',
+  'LIGACAO',
+  'WHATSAPP',
+  'RETORNO',
+  'DOCUMENTACAO',
+  'ACOMPANHAMENTO',
+  'EMAIL',
+  'REUNIAO',
+  'VISITA',
+  'PROPOSTA',
+  'OUTRO',
+] as const;
 
 export type TipoAtividade = (typeof TIPOS_ATIVIDADE)[number];
 
@@ -1124,6 +1239,10 @@ export const LABEL_TIPO_ATIVIDADE: Record<TipoAtividade, string> = {
   REUNIAO: 'Reuniao',
   VISITA: 'Visita',
   PROPOSTA: 'Proposta',
+  RETORNO: 'Retorno',
+  DOCUMENTACAO: 'Envio de documentacao',
+  ACOMPANHAMENTO: 'Acompanhamento',
+  OUTRO: 'Outro',
 };
 
 export type Atividade = {

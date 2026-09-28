@@ -4,6 +4,7 @@ import { SkeletonCard } from '../components/ui/Skeleton';
 import { BarList } from '../components/viz/BarList';
 import { BarraDeMeta } from '../components/viz/BarraDeMeta';
 import { StatTile } from '../components/viz/StatTile';
+import { PainelOperacoes } from './dashboard/PainelOperacoes';
 import { useAuth } from '../features/auth/AuthProvider';
 import { ApiError, api, getAccessToken } from '../lib/api';
 import { EVENTOS, conectar } from '../lib/realtime';
@@ -132,6 +133,11 @@ export function DashboardsPage() {
   // coisa errada. Depois da primeira carga, `dados` nunca volta a `null` —
   // o recarregamento por socket so troca o conteudo, sem reativar o skeleton.
   const carregando = dados === null && !erro;
+  // Arredondado ao minuto: um `new Date()` a cada render recarregaria o painel
+  // de parceiros em loop.
+  const desdeDaJanela = new Date(
+    Math.floor((Date.now() - Number(horas) * 3_600_000) / 60_000) * 60_000,
+  ).toISOString();
 
   return (
     <div className="space-y-5">
@@ -147,6 +153,10 @@ export function DashboardsPage() {
       </div>
 
       {erro && <Alerta>{erro}</Alerta>}
+
+      {/* Visao geral dos parceiros, uma metade por operacao (TIM | Starlink).
+          A janela de "novos no periodo" e a mesma do seletor acima. */}
+      <PainelOperacoes desde={desdeDaJanela} />
 
       {/*
         Meta no dashboard (item 4.2): so para quem participa do processo

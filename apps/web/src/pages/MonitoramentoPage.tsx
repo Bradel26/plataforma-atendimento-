@@ -41,6 +41,8 @@ export function MonitoramentoPage() {
   }, [carregar]);
 
   const porStatus = (status: string) => agentes.filter((a) => a.status === status).length;
+  const online = agentes.filter((a) => a.status !== 'OFFLINE').length;
+  const aguardando = agentes.reduce((acc, a) => acc + (a.aguardandoResposta ?? 0), 0);
 
   return (
     <div className="space-y-5">
@@ -51,10 +53,21 @@ export function MonitoramentoPage() {
         <StatTile rotulo="Offline" valor={porStatus('OFFLINE')} estado={COR_STATUS_AGENTE.OFFLINE} />
       </div>
 
+      {/* Capacidade da equipe numa linha: o gestor bate o olho e sabe se a
+          operacao aguenta receber mais parceiros agora. */}
+      <p className="text-sm text-slate-600">
+        <span className="font-semibold text-slate-800">{online} consultor(es) online</span> ·{' '}
+        {porStatus('EM_ATENDIMENTO')} em atendimento · {porStatus('DISPONIVEL')} disponivel(is) · {porStatus('PAUSA')}{' '}
+        em pausa
+        {aguardando > 0 && (
+          <span className="text-amber-700"> · {aguardando} conversa(s) aguardando resposta</span>
+        )}
+      </p>
+
       {erro && <Alerta>{erro}</Alerta>}
 
       <Card
-        titulo="Agentes em tempo real"
+        titulo="Consultores em tempo real"
         descricao={atualizadoEm ? `Atualizado as ${atualizadoEm.toLocaleTimeString('pt-BR')}` : 'Carregando...'}
       >
         {agentes.length === 0 ? (
@@ -67,7 +80,10 @@ export function MonitoramentoPage() {
                   <th className="pb-2 font-medium">Agente</th>
                   <th className="pb-2 font-medium">Status</th>
                   <th className="pb-2 font-medium">No status</th>
-                  <th className="pb-2 font-medium">Conversas</th>
+                  <th className="pb-2 font-medium">Ativos</th>
+                  <th className="pb-2 font-medium">Aguardando resposta</th>
+                  <th className="pb-2 font-medium">Mais antigo</th>
+                  <th className="pb-2 font-medium">Ultima atividade</th>
                   <th className="pb-2 font-medium">Protocolos</th>
                   <th className="pb-2 font-medium">Filas</th>
                 </tr>
@@ -91,6 +107,22 @@ export function MonitoramentoPage() {
                     </td>
                     <td className="py-3 tabular-nums text-slate-600">{duracao(a.segundosNoStatus)}</td>
                     <td className="py-3 tabular-nums text-slate-600">{a.conversasAtivas}</td>
+                    <td
+                      className={`py-3 tabular-nums ${a.aguardandoResposta ? 'font-semibold text-amber-700' : 'text-slate-600'}`}
+                    >
+                      {a.aguardandoResposta ?? 0}
+                    </td>
+                    <td className="py-3 tabular-nums text-slate-600">{duracao(a.segundosAtendimentoMaisAntigo ?? null)}</td>
+                    <td className="py-3 tabular-nums text-slate-600">
+                      {a.ultimaAtividadeEm
+                        ? new Date(a.ultimaAtividadeEm).toLocaleString('pt-BR', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })
+                        : '—'}
+                    </td>
                     <td className="py-3 tabular-nums text-slate-600">{a.protocolosAbertos}</td>
                     <td className="py-3">
                       <span className="flex flex-wrap gap-1">
