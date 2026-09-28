@@ -1,4 +1,5 @@
 import { prisma } from '../../lib/prisma';
+import { ufDoTelefone } from '../../lib/ddd';
 import { badRequest, notFound } from '../../lib/errors';
 import { organizacaoAtual } from '../../lib/tenant';
 import { signWebchatToken } from '../../lib/tokens';
@@ -56,6 +57,7 @@ export async function iniciarSessao(input: IniciarInput) {
           nome: input.nome,
           email: input.email ?? null,
           telefone: input.telefone ?? null,
+          uf: ufDoTelefone(input.telefone),
           canalOrigem: 'WEBCHAT',
           consentimentoEm: new Date(),
         },

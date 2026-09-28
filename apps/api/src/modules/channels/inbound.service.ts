@@ -3,6 +3,7 @@ import { baixarAnexo } from './media.service';
 import { configDoDestino } from './channels.service';
 import { promoverPrevia } from './chat-previews.service';
 import { prisma } from '../../lib/prisma';
+import { ufDoTelefone } from '../../lib/ddd';
 import { redigirTexto } from '../../lib/redacao';
 import { notificarConversaAtualizada, notificarConversaNova, notificarMensagem } from '../../realtime/hub';
 import { responderAutomaticamente } from '../bots/bots.service';
@@ -239,6 +240,7 @@ async function encontrarOuCriarContato(dados: MensagemNormalizada) {
     data: {
       nome: dados.nomeExibicao ?? `Contato ${dados.enderecoExterno.slice(-4)}`,
       telefone: dados.telefone,
+      uf: ufDoTelefone(dados.telefone),
       canalOrigem: dados.canal,
     },
   });

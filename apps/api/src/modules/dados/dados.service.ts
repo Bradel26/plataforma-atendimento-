@@ -1,5 +1,6 @@
 import { prisma } from '../../lib/prisma';
 import { badRequest } from '../../lib/errors';
+import { ufDoTelefone } from '../../lib/ddd';
 import { filtroDe, politicaContas } from '../../lib/politicas';
 import { gerarCsv, lerCsv, type LinhaCsv } from './csv';
 import { FASES, MOTIVOS_PERDA, TIPOS } from '../crm/leads.schemas';
@@ -190,6 +191,7 @@ async function importarLinha(linha: LinhaCsv, dryRun: boolean) {
         nome,
         email: email || null,
         telefone: telefone || null,
+        uf: ufDoTelefone(telefone),
         canalOrigem,
       },
     }));
@@ -288,6 +290,7 @@ export async function importarContatos(texto: string, dryRun: boolean): Promise<
         nome,
         email: email || null,
         telefone: telefone || null,
+        uf: ufDoTelefone(telefone),
         canalOrigem: enumOu(CANAIS, linha.canal_origem ?? '', 'EMAIL'),
         contaId: conta?.id ?? null,
         observacoes: normalizar(linha.observacoes ?? '') || null,

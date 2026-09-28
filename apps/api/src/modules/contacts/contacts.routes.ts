@@ -19,6 +19,7 @@ import {
 import { CICLOS } from '../crm/cicloDeVida';
 import { apenasVisivel } from '../../lib/visibilidade';
 import { MAXIMO_POR_REGISTRO, TAMANHO_MAXIMO, normalizarTags } from '../../lib/tags';
+import { UF_POR_DDD, ufDoTelefone } from '../../lib/ddd';
 
 export const contactsRoutes = Router();
 
@@ -47,6 +48,8 @@ const listarSchema = z.object({
     .optional()
     .transform((v) => (v === undefined ? [] : normalizarTags(Array.isArray(v) ? v : [v]))),
   uf: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/).optional(),
+  /** Filtro por DDD (item pedido junto do UF): traduzido para UF na consulta. */
+  ddd: z.string().trim().regex(/^\d{2}$/).optional(),
   limite: z.coerce.number().int().min(1).max(100).default(50),
   cursor: z.string().optional(),
 });
@@ -104,7 +107,7 @@ contactsRoutes.get(
   '/',
   validateQuery(listarSchema),
   asyncHandler(async (_req, res) => {
-    const { busca, tags, limite, cursor, ciclo, uf } = res.locals.query as z.infer<typeof listarSchema>;
+    const { busca, tags, limite, cursor, ciclo, uf, ddd } = res.locals.query as z.infer<typeof listarSchema>;
     // O escopo entra como primeiro filtro, e nao como `undefined` quando nao ha
     // busca: `where: undefined` e "sem restricao", que aqui seria a base inteira.
     const filtros: Prisma.ContactWhereInput[] = [await filtroDe(politicaContatos)];
@@ -121,6 +124,14 @@ contactsRoutes.get(
     // `hasEvery` com lista vazia nao restringe, entao nao precisa de condicional.
     filtros.push({ tags: { hasEvery: tags } });
     if (uf) filtros.push({ uf });
+    /*
+     * Filtro por DDD: a coluna que existe e `uf`, entao o DDD e traduzido para
+     * ela na consulta — mesma tabela usada para preencher o estado sozinho na
+     * criacao do contato (ver `ufDoTelefone`). Um DDD fora da tabela (nao deve
+     * acontecer: o front so oferece os validos) nunca bate com nenhuma UF real,
+     * entao a lista some vazia em vez de, por engano, devolver a base toda.
+     */
+    if (ddd) filtros.push({ uf: UF_POR_DDD[ddd] ?? '__ddd_desconhecido__' });
 
     /*
      * Filtro por ciclo de vida (item E.4).
@@ -289,6 +300,10 @@ contactsRoutes.post(
     const contato = await prisma.contact.create({
       data: {
         ...(herdado === undefined ? dados : { ...dados, responsavelId: herdado }),
+        // UF informada manda; sem ela, tenta inferir do DDD do telefone — o
+        // vendedor que so digita o telefone nao precisa lembrar de marcar o
+        // estado a mao.
+        uf: dados.uf ?? ufDoTelefone(dados.telefone),
         tags: normalizarTags(dados.tags),
       },
     });
@@ -312,6 +327,7 @@ contactsRoutes.post(
       data: {
         nome,
         telefone,
+        uf: ufDoTelefone(telefone),
         canalOrigem: 'WHATSAPP',
       },
     });

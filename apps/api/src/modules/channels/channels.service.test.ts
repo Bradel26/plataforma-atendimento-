@@ -93,6 +93,7 @@ describe('dadosContatoImportado', () => {
       organizacaoId: 'org-1',
       nome: 'Fulano da Silva',
       telefone: '5511999998888',
+      uf: 'SP',
       canalOrigem: 'WHATSAPP',
       responsavelId: 'user-1',
     });

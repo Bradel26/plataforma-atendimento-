@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { Prisma, type Channel } from '@prisma/client';
 import { prisma, prismaSemIsolamento } from '../../lib/prisma';
 import { organizacaoAtual, semOrganizacao } from '../../lib/tenant';
+import { ufDoTelefone } from '../../lib/ddd';
 import { badRequest, conflict, notFound, serviceUnavailable } from '../../lib/errors';
 import { cifrar, decifrar } from '../../lib/crypto-box';
 import { modoEfetivo } from './whatsapp.modo';
@@ -584,6 +585,7 @@ export function dadosContatoImportado(
     organizacaoId: destino.organizacaoId,
     nome: contato.nome,
     telefone: contato.numero,
+    uf: ufDoTelefone(contato.numero),
     canalOrigem: 'WHATSAPP' as const,
     responsavelId: destino.responsavelId,
   };

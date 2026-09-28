@@ -97,7 +97,7 @@ describe('pipeline WAHA -> registrarMensagemEntrante', () => {
     expect(await entregar(EVENTO_WAHA)).toBe('processado');
 
     expect(db.contactCreate).toHaveBeenCalledWith({
-      data: { nome: 'Maria', telefone: '5562999990000', canalOrigem: 'WHATSAPP' },
+      data: { nome: 'Maria', telefone: '5562999990000', uf: 'GO', canalOrigem: 'WHATSAPP' },
     });
     // A linha e achada pela sessao do WAHA.
     expect(configDoDestino).toHaveBeenCalledWith('WHATSAPP', 'vendedor-1a2b3c4d');

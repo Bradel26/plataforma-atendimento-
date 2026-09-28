@@ -17,6 +17,7 @@ import { FichaContato, FichaVazia } from './ficha/FichaContato';
 import { Etiquetas, FiltroEtiquetas } from './Etiquetas';
 import { FunilDeCicloDeVida } from './FunilDeCicloDeVida';
 import { UFS } from '../esteira/ufs';
+import { DDDS } from '../../lib/ddd';
 
 const ORIGENS: Canal[] = ['WEBCHAT', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'EMAIL', 'VOZ'];
 
@@ -59,6 +60,8 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   const [erro, setErro] = useState<string | null>(null);
   const [novo, setNovo] = useState(VAZIO);
   const [uf, setUf] = useState('');
+  /** Filtro por DDD, alternativa ao UF para quem pensa no telefone e nao na sigla do estado. */
+  const [ddd, setDdd] = useState('');
   /**
    * O cadastro comeca fechado, atras de um botao no cabecalho da lista.
    *
@@ -119,6 +122,7 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
     for (const tag of tags) params.append('tags', tag);
     for (const c of ciclos) params.append('ciclo', c);
     if (uf) params.set('uf', uf);
+    if (ddd) params.set('ddd', ddd);
     const qs = params.size ? `?${params}` : '';
     setCarregando(true);
     try {
@@ -133,7 +137,7 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
     } finally {
       setCarregando(false);
     }
-  }, [busca, tags, ciclos, uf]);
+  }, [busca, tags, ciclos, uf, ddd]);
 
   useEffect(() => {
     const t = setTimeout(() => void carregar(), 250);
@@ -319,6 +323,12 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
               <option key={x} value={x}>{x}</option>
             ))}
           </Select>
+          <Select aria-label="Filtrar por DDD" value={ddd} onChange={(e) => setDdd(e.target.value)} className="!w-24">
+            <option value="">DDD</option>
+            {DDDS.map((x) => (
+              <option key={x} value={x}>{x}</option>
+            ))}
+          </Select>
         </div>
         <div className="mt-2">
           <FiltroEtiquetas
@@ -381,14 +391,14 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
               // Lista vazia por filtro nao e lista vazia por base vazia: sem
               // essa distincao a tela sugere cadastrar alguem que ja existe.
               descricao={
-                tags.length > 0 || ciclos.length > 0 || busca.trim()
-                  ? 'Nenhum contato com esse filtro. Desligue uma etiqueta, um degrau do ciclo de vida, ou limpe a busca.'
+                tags.length > 0 || ciclos.length > 0 || busca.trim() || uf || ddd
+                  ? 'Nenhum contato com esse filtro. Desligue uma etiqueta, um degrau do ciclo de vida, ou limpe a busca/UF/DDD.'
                   : 'Contatos nascem sozinhos quando alguem fala pela primeira vez. Use Novo contato para cadastrar a mao.'
               }
               acao={
                 // So quando a base esta vazia de verdade: com filtro ativo, a
                 // acao certa e limpar o filtro, nao cadastrar quem ja existe.
-                tags.length === 0 && ciclos.length === 0 && !busca.trim() && !cadastrando ? (
+                tags.length === 0 && ciclos.length === 0 && !busca.trim() && !uf && !ddd && !cadastrando ? (
                   <Button variante="neutro" onClick={() => setCadastrando(true)}>
                     Novo contato
                   </Button>
