@@ -3,6 +3,10 @@ import { Link } from 'react-router-dom';
 import { Alerta, Badge, Button, Card } from '../../components/ui';
 import { useAuth } from '../../features/auth/AuthProvider';
 import { ApiError, api } from '../../lib/api';
+import { StatTile } from '../../components/viz/StatTile';
+import { ESTADO } from '../../lib/viz';
+import { LABEL_TIPO_ATIVIDADE, type TipoAtividade } from '../../lib/types';
+import { AgendarRetorno } from './AgendarRetorno';
 
 /**
  * Agenda da semana (item E.5) — a agenda embutida no dashboard da demonstracao.
@@ -114,6 +118,13 @@ export function AgendaDaSemana() {
 
   const { agenda } = dados;
   const hoje = hojeLocal();
+  const abertos = (itens: ItemAgenda[]) => itens.filter((i) => !i.concluidoEm);
+  const deHoje = abertos(agenda.dias.find((d) => d.dia === hoje)?.itens ?? []);
+  const proximos = abertos(agenda.dias.filter((d) => d.dia > hoje).flatMap((d) => d.itens));
+  // Atrasadas desta semana (dias ja passados) somam com as de antes dela.
+  const atrasadasNaSemana = abertos(agenda.dias.filter((d) => d.dia < hoje).flatMap((d) => d.itens));
+  const atrasadas = agenda.atrasadas.length + atrasadasNaSemana.length;
+  const pendentes = atrasadas + deHoje.length + proximos.length + agenda.semPrazo.length;
 
   const linha = (item: ItemAgenda) => (
     <li key={item.id} className="flex items-start gap-2 py-1">
@@ -126,6 +137,10 @@ export function AgendaDaSemana() {
           title={item.titulo}
         >
           {item.titulo}
+        </span>
+        <span className="block truncate text-[11px] text-slate-500">
+          {LABEL_TIPO_ATIVIDADE[item.tipo as TipoAtividade] ?? item.tipo}
+          {item.responsavel ? ` · ${item.responsavel.nome}` : ''}
         </span>
         {/* Nome clicavel: da agenda direto para a oportunidade ou o contato,
             sem precisar procurar o registro em Contatos/Oportunidades depois.
@@ -168,89 +183,100 @@ export function AgendaDaSemana() {
   );
 
   return (
-    <Card
-      titulo="Agenda da semana"
-      descricao={`${agenda.totalNaSemana} compromisso(s) com data nesta semana`}
-      acao={
-        <span className="flex items-center gap-1">
-          <Button variante="neutro" onClick={() => setInicio(somarSemanas(dados.inicio, -1))}>
-            &larr;
-          </Button>
-          <Button variante="neutro" onClick={() => setInicio(null)}>
-            Hoje
-          </Button>
-          <Button variante="neutro" onClick={() => setInicio(somarSemanas(dados.inicio, 1))}>
-            &rarr;
-          </Button>
-        </span>
-      }
-    >
-      {/* Atrasadas primeiro, sempre. */}
-      {agenda.atrasadas.length > 0 && (
-        <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-          <p className="text-xs font-medium text-amber-800">
-            {agenda.atrasadas.length} atrasada(s) de antes desta semana
-          </p>
-          <ul className="mt-1 divide-y divide-amber-100">{agenda.atrasadas.slice(0, 8).map(linha)}</ul>
-          {agenda.atrasadas.length > 8 && (
-            <p className="mt-1 text-xs text-amber-700">
-              e mais {agenda.atrasadas.length - 8} atrasada(s) &mdash; o numero do cabecalho conta
-              todas.
-            </p>
-          )}
-        </div>
-      )}
-
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        {agenda.dias.map((d) => {
-          const { nome, data } = rotuloDoDia(d.dia);
-          return (
-            <div
-              key={d.dia}
-              className={`rounded-lg border px-2 py-1.5 ${
-                d.dia === hoje ? 'border-[var(--brand-primary)] bg-[var(--brand-primary)]/5' : 'border-slate-200'
-              }`}
-            >
-              <p className="flex items-baseline justify-between text-xs">
-                <span className="font-medium text-slate-700">
-                  {nome} {data}
-                </span>
-                {d.itens.length > 0 && <span className="text-slate-500">{d.itens.length}</span>}
-              </p>
-              {d.itens.length === 0 ? (
-                // Dia vazio continua na tela: dia livre e informacao para quem vai
-                // marcar visita, e some justamente quando importa.
-                <p className="py-1 text-xs text-slate-500">livre</p>
-              ) : (
-                <ul className="divide-y divide-slate-100">{d.itens.map(linha)}</ul>
-              )}
-            </div>
-          );
-        })}
+    <div className="space-y-5">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatTile rotulo="Retornos de hoje" valor={deHoje.length} estado={deHoje.length ? ESTADO.info : undefined} />
+        <StatTile rotulo="Retornos atrasados" valor={atrasadas} estado={atrasadas ? ESTADO.grave : undefined} />
+        <StatTile rotulo="Proximos retornos" valor={proximos.length} detalhe="no resto desta semana" />
+        <StatTile rotulo="Atividades pendentes" valor={pendentes} detalhe={`${agenda.semPrazo.length} sem data`} />
       </div>
 
-      {agenda.semPrazo.length > 0 && (
-        <div className="mt-3 rounded-lg border border-slate-200 px-3 py-2">
-          <p className="text-xs font-medium text-slate-600">
-            {agenda.semPrazo.length} pendente(s) sem data
-          </p>
-          <p className="text-xs text-slate-500">
-            Nao cabem em nenhum dia. A tarefa que a etapa do funil exige nasce sem prazo de
-            proposito &mdash; um prazo inventado viraria atraso sem ninguem ter combinado data.
-          </p>
-          {/* Mostra as primeiras e diz quantas faltam.
-              A base de dev tem quase 200 pendentes sem data: despejar todas aqui
-              empurraria os sete dias — que sao o assunto da tela — para fora do
-              alcance da vista. O numero completo continua no cabecalho. */}
-          <ul className="mt-1 divide-y divide-slate-100">{agenda.semPrazo.slice(0, 8).map(linha)}</ul>
-          {agenda.semPrazo.length > 8 && (
-            <p className="mt-1 text-xs text-slate-500">
-              e mais {agenda.semPrazo.length - 8} sem data &mdash; a lista completa esta em
-              Oportunidades e nas fichas.
+      <AgendarRetorno aoAgendar={() => void carregar()} />
+
+      <Card
+        titulo="Agenda da semana"
+        descricao={`${agenda.totalNaSemana} compromisso(s) com data nesta semana`}
+        acao={
+          <span className="flex items-center gap-1">
+            <Button variante="neutro" onClick={() => setInicio(somarSemanas(dados.inicio, -1))}>
+              &larr;
+            </Button>
+            <Button variante="neutro" onClick={() => setInicio(null)}>
+              Hoje
+            </Button>
+            <Button variante="neutro" onClick={() => setInicio(somarSemanas(dados.inicio, 1))}>
+              &rarr;
+            </Button>
+          </span>
+        }
+      >
+        {/* Atrasadas primeiro, sempre. */}
+        {agenda.atrasadas.length > 0 && (
+          <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+            <p className="text-xs font-medium text-amber-800">
+              {agenda.atrasadas.length} atrasada(s) de antes desta semana
             </p>
-          )}
+            <ul className="mt-1 divide-y divide-amber-100">{agenda.atrasadas.slice(0, 8).map(linha)}</ul>
+            {agenda.atrasadas.length > 8 && (
+              <p className="mt-1 text-xs text-amber-700">
+                e mais {agenda.atrasadas.length - 8} atrasada(s) &mdash; o numero do cabecalho conta
+                todas.
+              </p>
+            )}
+          </div>
+        )}
+
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {agenda.dias.map((d) => {
+            const { nome, data } = rotuloDoDia(d.dia);
+            return (
+              <div
+                key={d.dia}
+                className={`rounded-lg border px-2 py-1.5 ${
+                  d.dia === hoje ? 'border-[var(--brand-primary)] bg-[var(--brand-primary)]/5' : 'border-slate-200'
+                }`}
+              >
+                <p className="flex items-baseline justify-between text-xs">
+                  <span className="font-medium text-slate-700">
+                    {nome} {data}
+                  </span>
+                  {d.itens.length > 0 && <span className="text-slate-500">{d.itens.length}</span>}
+                </p>
+                {d.itens.length === 0 ? (
+                  // Dia vazio continua na tela: dia livre e informacao para quem vai
+                  // marcar visita, e some justamente quando importa.
+                  <p className="py-1 text-xs text-slate-500">livre</p>
+                ) : (
+                  <ul className="divide-y divide-slate-100">{d.itens.map(linha)}</ul>
+                )}
+              </div>
+            );
+          })}
         </div>
-      )}
-    </Card>
+
+        {agenda.semPrazo.length > 0 && (
+          <div className="mt-3 rounded-lg border border-slate-200 px-3 py-2">
+            <p className="text-xs font-medium text-slate-600">
+              {agenda.semPrazo.length} pendente(s) sem data
+            </p>
+            <p className="text-xs text-slate-500">
+              Nao cabem em nenhum dia. A tarefa que a etapa do funil exige nasce sem prazo de
+              proposito &mdash; um prazo inventado viraria atraso sem ninguem ter combinado data.
+            </p>
+            {/* Mostra as primeiras e diz quantas faltam.
+                A base de dev tem quase 200 pendentes sem data: despejar todas aqui
+                empurraria os sete dias — que sao o assunto da tela — para fora do
+                alcance da vista. O numero completo continua no cabecalho. */}
+            <ul className="mt-1 divide-y divide-slate-100">{agenda.semPrazo.slice(0, 8).map(linha)}</ul>
+            {agenda.semPrazo.length > 8 && (
+              <p className="mt-1 text-xs text-slate-500">
+                e mais {agenda.semPrazo.length - 8} sem data &mdash; a lista completa esta em
+                Oportunidades e nas fichas.
+              </p>
+            )}
+          </div>
+        )}
+      </Card>
+    </div>
   );
 }

@@ -350,7 +350,7 @@ export function EsteiraPage() {
   const [operacoes, setOperacoes] = useState<OperacaoEsteira[] | null>(null);
   const [funilId, setFunilId] = useState<string>('');
   const [kanban, setKanban] = useState<Kanban | null>(null);
-  const [filtro, setFiltro] = useState({ busca: '', uf: '', excecoes: 'ocultar' as 'incluir' | 'ocultar' | 'somente' });
+  const [filtro, setFiltro] = useState({ busca: '', uf: '', excecoes: 'incluir' as 'incluir' | 'ocultar' | 'somente' });
   const [arrastando, setArrastando] = useState<string | null>(null);
   const [aberto, setAberto] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -471,8 +471,8 @@ export function EsteiraPage() {
               value={filtro.excecoes}
               onChange={(e) => setFiltro({ ...filtro, excecoes: e.target.value as typeof filtro.excecoes })}
             >
-              <option value="ocultar">Ocultar</option>
               <option value="incluir">Mostrar junto</option>
+              <option value="ocultar">Ocultar</option>
               <option value="somente">Somente excecoes</option>
             </Select>
           </Field>

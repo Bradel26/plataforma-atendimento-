@@ -468,3 +468,103 @@ export async function desempenhoOperacional(
     })),
   };
 }
+
+// ---------------------------------------------------------------------------
+// CRM > Acompanhamentos
+// ---------------------------------------------------------------------------
+
+/**
+ * Parceiros que precisam de alguma acao, em cinco listas (SUGESTOES.docx, CRM >
+ * Acompanhamentos). Um parceiro pode estar em mais de uma: aguardando
+ * documentacao E sem interacao ha 10 dias sao dois motivos para ligar.
+ */
+export async function acompanhamentos(diasSemInteracao: number) {
+  const agora = Date.now();
+  const limite = new Date(agora - diasSemInteracao * DIA_MS);
+
+  const [creds, retornos] = await Promise.all([
+    prisma.credenciamento.findMany({
+      where: { AND: [await whereCredenciamentos({}), { OR: [{ situacaoExcecao: null }, { situacaoExcecao: 'INATIVADO' }] }] },
+      select: {
+        id: true,
+        situacaoExcecao: true,
+        motivoExcecao: true,
+        estagioDesde: true,
+        fechadoEm: true,
+        funil: { select: { id: true, nome: true } },
+        estagio: { select: { nome: true } },
+        responsavel: { select: { id: true, nome: true } },
+        conta: { select: { nome: true } },
+        contato: {
+          select: {
+            id: true,
+            nome: true,
+            telefone: true,
+            conversas: {
+              where: await filtroDe(politicaConversas),
+              select: { ultimaMensagemEm: true },
+              orderBy: { ultimaMensagemEm: 'desc' },
+              take: 1,
+            },
+          },
+        },
+      },
+      orderBy: { estagioDesde: 'asc' },
+    }),
+    prisma.activity.findMany({
+      where: {
+        concluidoEm: null,
+        prazo: { not: null },
+        tipo: { in: ['RETORNO', 'LIGACAO', 'WHATSAPP', 'ACOMPANHAMENTO', 'DOCUMENTACAO'] },
+        contato: { credenciamentos: { some: { AND: [await whereCredenciamentos({})] } } },
+      },
+      select: {
+        id: true,
+        titulo: true,
+        tipo: true,
+        prazo: true,
+        responsavel: { select: { id: true, nome: true } },
+        contato: { select: { id: true, nome: true, telefone: true } },
+      },
+      orderBy: { prazo: 'asc' },
+      take: 100,
+    }),
+  ]);
+
+  const item = (c: (typeof creds)[number], extra: Record<string, unknown> = {}) => ({
+    id: c.id,
+    parceiro: c.conta?.nome ?? c.contato.nome,
+    contato: { id: c.contato.id, nome: c.contato.nome, telefone: c.contato.telefone },
+    responsavel: c.responsavel,
+    operacao: c.funil,
+    etapa: c.estagio.nome,
+    diasNaEtapa: diasDesde(c.estagioDesde, agora),
+    ultimaInteracaoEm: c.contato.conversas[0]?.ultimaMensagemEm ?? null,
+    ...extra,
+  });
+
+  const emFluxo = creds.filter((c) => c.situacaoExcecao === null && papelDoEstagio(c.estagio.nome) !== 'ATIVO');
+
+  return {
+    diasSemInteracao,
+    aguardandoRetorno: retornos.map((r) => ({
+      id: r.id,
+      titulo: r.titulo,
+      tipo: r.tipo,
+      prazo: r.prazo,
+      atrasado: r.prazo!.getTime() < agora,
+      contato: r.contato,
+      responsavel: r.responsavel,
+    })),
+    aguardandoDocumentacao: emFluxo.filter((c) => papelDoEstagio(c.estagio.nome) === 'PENDENCIA').map((c) => item(c)),
+    precisamDeContato: emFluxo
+      .filter((c) => c.contato.conversas.length === 0 || c.responsavel === null)
+      .map((c) => item(c, { motivo: c.responsavel === null ? 'sem responsavel' : 'nunca houve conversa' })),
+    semInteracao: emFluxo
+      .filter((c) => c.contato.conversas[0] && c.contato.conversas[0].ultimaMensagemEm < limite)
+      .map((c) => item(c)),
+    reativacao: creds
+      .filter((c) => c.situacaoExcecao === 'INATIVADO')
+      .map((c) => item(c, { motivo: c.motivoExcecao, inativadoEm: c.fechadoEm })),
+  };
+}

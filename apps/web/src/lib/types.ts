@@ -1176,6 +1176,7 @@ export const TIPOS_EVENTO = [
   'ETAPA',
   'LEAD',
   'PESQUISA',
+  'CREDENCIAMENTO',
 ] as const;
 
 export type TipoEvento = (typeof TIPOS_EVENTO)[number];
@@ -1189,6 +1190,7 @@ export const LABEL_TIPO_EVENTO: Record<TipoEvento, string> = {
   ETAPA: 'Etapa do funil',
   LEAD: 'Lead',
   PESQUISA: 'Pesquisa',
+  CREDENCIAMENTO: 'Esteira',
 };
 
 /**

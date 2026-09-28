@@ -38,6 +38,7 @@ export const TIPOS_EVENTO = [
   'ETAPA',
   'LEAD',
   'PESQUISA',
+  'CREDENCIAMENTO',
 ] as const;
 
 export type TipoEvento = (typeof TIPOS_EVENTO)[number];
@@ -226,6 +227,27 @@ function fontes(raiz: Raiz) {
           FROM pesquisas pe
           JOIN conversas cv ON cv.id = pe.conversa_id
          WHERE cv.contato_id = ${c} AND pe.respondido_em IS NOT NULL`,
+    ],
+    [
+      // Ciclo do parceiro: cada passagem de etapa da Esteira de Credenciamento.
+      'CREDENCIAMENTO',
+      Prisma.sql`
+        SELECT 'CREDENCIAMENTO' AS tipo, h.id, h.criado_em AS ocorrido_em,
+               f.nome || ': ' || pa.nome AS titulo,
+               CASE WHEN de.nome IS NULL THEN 'Entrou na esteira'
+                    ELSE 'Saiu de ' || de.nome END AS detalhe,
+               NULL AS canal,
+               CASE WHEN h.segundos_no_estagio IS NULL THEN NULL
+                    ELSE (h.segundos_no_estagio / 86400)::text || 'd' END AS situacao,
+               NULL::numeric AS valor, cr.id AS referencia,
+               'CONTATO' AS escopo, u.nome AS usuario_nome
+          FROM credenciamento_historico h
+          JOIN credenciamentos cr ON cr.id = h.credenciamento_id
+          JOIN funis f ON f.id = cr.funil_id
+          JOIN funil_estagios pa ON pa.id = h.para_estagio_id
+          LEFT JOIN funil_estagios de ON de.id = h.de_estagio_id
+          LEFT JOIN usuarios u ON u.id = h.usuario_id
+         WHERE cr.contato_id = ${c}`,
     ],
   ]);
 }

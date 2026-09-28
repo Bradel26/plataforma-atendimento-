@@ -5,6 +5,8 @@ import { useConfirm } from '../../../components/ui/ConfirmDialog';
 import { ApiError, api } from '../../../lib/api';
 import { useAuth } from '../../../features/auth/AuthProvider';
 import { mascararTelefoneBr } from '../../../lib/telefone';
+import { UFS } from '../../esteira/ufs';
+import { CicloDoParceiro } from './CicloDoParceiro';
 import {
   LABEL_TIPO_ATIVIDADE,
   type Atividade,
@@ -57,7 +59,7 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoExcluir }: FichaPr
   const [iniciando, setIniciando] = useState(false);
   const [editando, setEditando] = useState(false);
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
-  const [edicao, setEdicao] = useState({ nome: '', email: '', telefone: '', observacoes: '' });
+  const [edicao, setEdicao] = useState({ nome: '', email: '', telefone: '', observacoes: '', uf: '', cidade: '' });
   // Contador de recargas: mudar este numero e o sinal para a linha do tempo
   // buscar de novo. Guardar a lista aqui para repassar seria duplicar o estado
   // dela — e a paginacao por cursor mora la dentro.
@@ -161,6 +163,8 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoExcluir }: FichaPr
       email: c.email ?? '',
       telefone: c.telefone ? mascararTelefoneBr(c.telefone) : '',
       observacoes: c.observacoes ?? '',
+      uf: c.uf ?? '',
+      cidade: c.cidade ?? '',
     });
     setEditando(true);
   };
@@ -181,6 +185,8 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoExcluir }: FichaPr
         email: edicao.email.trim() || null,
         telefone: edicao.telefone.replace(/\D/g, '').length >= 10 ? edicao.telefone.replace(/\D/g, '') : null,
         observacoes: edicao.observacoes.trim() || null,
+        uf: edicao.uf || null,
+        cidade: edicao.cidade.trim() || null,
       });
       setEditando(false);
       atualizar();
@@ -319,6 +325,23 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoExcluir }: FichaPr
                   maxLength={160}
                 />
               </Field>
+              <div className="grid grid-cols-[90px_1fr] gap-2">
+                <Field label="UF">
+                  <Select value={edicao.uf} onChange={(e) => setEdicao({ ...edicao, uf: e.target.value })}>
+                    <option value="">—</option>
+                    {UFS.map((uf) => (
+                      <option key={uf} value={uf}>{uf}</option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="Cidade">
+                  <Input
+                    value={edicao.cidade}
+                    onChange={(e) => setEdicao({ ...edicao, cidade: e.target.value })}
+                    maxLength={80}
+                  />
+                </Field>
+              </div>
             </div>
             <Field label="Observacoes">
               <Textarea
@@ -346,6 +369,10 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoExcluir }: FichaPr
           <div>
             <dt className="text-xs text-slate-500">Telefone</dt>
             <dd className="text-slate-800">{contato.telefone ?? '—'}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-slate-500">Cidade / UF</dt>
+            <dd className="text-slate-800">{[contato.cidade, contato.uf].filter(Boolean).join(' / ') || '—'}</dd>
           </div>
           <div>
             <dt className="text-xs text-slate-500">Origem</dt>
@@ -384,6 +411,8 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoExcluir }: FichaPr
         )}
         {erro && <div className="mt-3"><Alerta>{erro}</Alerta></div>}
       </Card>
+
+      <CicloDoParceiro contatoId={contatoId} />
 
       {atividadesAbertas.length > 0 && (
         <Card titulo="Tarefas marcadas" descricao={`${atividadesAbertas.length} em aberto`}>

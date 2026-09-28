@@ -15,6 +15,8 @@ import { OportunidadesTab } from './OportunidadesTab';
 import { EtiquetasTab } from './EtiquetasTab';
 import { ProdutosTab } from './ProdutosTab';
 import { PainelVendedorTab } from './PainelVendedorTab';
+import { HistoricoTab } from './HistoricoTab';
+import { AcompanhamentosTab } from './AcompanhamentosTab';
 
 /**
  * `perfis` na aba restringe quem a ve.
@@ -48,9 +50,20 @@ const ABAS = [
    */
   { id: 'agenda', label: 'Agenda', grupo: 'direta' },
   { id: 'contatos', label: 'Contatos', grupo: 'direta' },
-  { id: 'contas', label: 'Contas', grupo: 'direta' },
-  { id: 'leads', label: 'Leads', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'], grupo: 'direta' },
-  { id: 'oportunidades', label: 'Oportunidades', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'], grupo: 'direta' },
+  /*
+   * Agenda | Contatos | Historico | Acompanhamentos (SUGESTOES.docx, CRM).
+   *
+   * Historico e a linha do tempo 360 do parceiro; Acompanhamentos lista quem
+   * precisa de acao. Acompanhamentos le a esteira, e a esteira nao e do AGENTE
+   * (mesmo corte de `/credenciamentos`), entao a aba segue o mesmo perfil.
+   */
+  { id: 'historico', label: 'Historico', grupo: 'direta' },
+  { id: 'acompanhamentos', label: 'Acompanhamentos', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'], grupo: 'direta' },
+  // Empresas, leads e oportunidades continuam a um clique, em "Mais": o
+  // processo comercial nao e o dia a dia do credenciamento, mas nao sumiu.
+  { id: 'contas', label: 'Empresas', grupo: 'mais' },
+  { id: 'leads', label: 'Leads', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'], grupo: 'mais' },
+  { id: 'oportunidades', label: 'Oportunidades', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'], grupo: 'mais' },
   // Mesmos perfis do `requireRole` das rotas `/comercial/*`: a aba que sempre
   // recebe 403 e uma aba que nao deveria existir para aquele perfil.
   { id: 'comercial', label: 'Leitura comercial', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR'], grupo: 'mais' },
@@ -159,6 +172,8 @@ export function CrmPage() {
       </div>
 
       {aba === 'agenda' && <AgendaDaSemana />}
+      {aba === 'historico' && <HistoricoTab />}
+      {aba === 'acompanhamentos' && <AcompanhamentosTab />}
       {aba === 'contatos' && (
         <ContatosTab
           selecionadoId={registro?.base === '/contatos' ? (id ?? null) : null}

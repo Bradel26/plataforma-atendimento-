@@ -20,7 +20,8 @@ import {
   listarCredenciamentos,
   obterCredenciamento,
 } from './credenciamentos.service';
-import { desempenhoOperacional, gestaoOperacao, painelOperacoes } from './credenciamentos.indicadores';
+import { acompanhamentos, desempenhoOperacional, gestaoOperacao, painelOperacoes } from './credenciamentos.indicadores';
+import { z } from 'zod';
 
 export const credenciamentosRoutes = Router();
 
@@ -92,6 +93,15 @@ credenciamentosRoutes.get(
         estagioId: q.estagioId,
       }),
     });
+  }),
+);
+
+/** CRM > Acompanhamentos: parceiros que precisam de acao ou retorno. */
+credenciamentosRoutes.get(
+  '/acompanhamentos',
+  validateQuery(z.object({ dias: z.coerce.number().int().min(1).max(180).default(7) })),
+  asyncHandler(async (_req, res) => {
+    res.json({ acompanhamentos: await acompanhamentos(res.locals.query.dias) });
   }),
 );
 

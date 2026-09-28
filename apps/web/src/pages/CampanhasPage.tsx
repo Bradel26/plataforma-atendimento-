@@ -1,16 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alerta, Badge, Button, Card, Field, Input, Select } from '../components/ui';
-import { BarList } from '../components/viz/BarList';
+import { StatTile } from '../components/viz/StatTile';
 import { MontarPublico } from './campanhas/MontarPublico';
 import { ApiError, api } from '../lib/api';
-import { ESTADO, SERIES } from '../lib/viz';
+import { ESTADO } from '../lib/viz';
 import {
   LABEL_CAMPANHA_STATUS,
   LABEL_ITEM_STATUS,
   type Campanha,
   type CampanhaItem,
   type Canal,
-  type Contato,
 } from '../lib/types';
 
 const CANAIS: Array<{ valor: Canal; label: string }> = [
@@ -20,19 +19,45 @@ const CANAIS: Array<{ valor: Canal; label: string }> = [
   { valor: 'VOZ', label: 'Voz (exige telefonia)' },
 ];
 
-const COR_ITEM: Record<string, string> = {
-  ENVIADO: ESTADO.bom,
-  PENDENTE: SERIES[0],
-  FALHOU: ESTADO.grave,
-  IGNORADO: ESTADO.neutro,
-  RESPONDIDO: SERIES[2],
+type Resultado = { parceirosQueInteragiram: number; respostasRecebidas: number };
+type Aberta = { campanha: Campanha; itens: CampanhaItem[]; resultado?: Resultado };
+
+/** Mesma substituicao do servidor (`renderizar`), com um parceiro de exemplo. */
+const previa = (mensagem: string) =>
+  mensagem
+    .replace(/\{\{\s*nome\s*\}\}/gi, 'Joao Silva')
+    .replace(/\{\{\s*email\s*\}\}/gi, 'joao@empresa.com.br')
+    .replace(/\{\{\s*telefone\s*\}\}/gi, '(91) 98888-7777');
+
+/** Em andamento / agendadas / concluidas — o agrupamento pedido no documento. */
+function grupoDa(c: Campanha): 'andamento' | 'agendada' | 'concluida' | 'rascunho' {
+  if (c.status === 'CONCLUIDA') return 'concluida';
+  if (c.agendadaPara) return 'agendada';
+  if (c.status === 'ATIVA' || c.status === 'PAUSADA') return 'andamento';
+  return 'rascunho';
+}
+
+const GRUPOS = [
+  { id: 'andamento', titulo: 'Em andamento' },
+  { id: 'agendada', titulo: 'Agendadas' },
+  { id: 'rascunho', titulo: 'Rascunhos' },
+  { id: 'concluida', titulo: 'Concluidas' },
+] as const;
+
+const dataHora = (iso: string) =>
+  new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+
+/** `datetime-local` quer "AAAA-MM-DDTHH:MM" no fuso do navegador. */
+const paraCampoLocal = (d: Date) => {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 };
 
 export function CampanhasPage() {
   const [campanhas, setCampanhas] = useState<Campanha[]>([]);
-  const [aberta, setAberta] = useState<{ campanha: Campanha; itens: CampanhaItem[] } | null>(null);
-  const [contatos, setContatos] = useState<Contato[]>([]);
+  const [aberta, setAberta] = useState<Aberta | null>(null);
   const [nova, setNova] = useState({ nome: '', canal: 'WHATSAPP' as Canal, mensagem: '' });
+  const [agendarPara, setAgendarPara] = useState('');
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
@@ -49,15 +74,11 @@ export function CampanhasPage() {
 
   useEffect(() => {
     void carregar();
-    void api
-      .get<{ contatos: Contato[] }>('/contatos?limite=100')
-      .then(({ contatos: c }) => setContatos(c))
-      .catch(() => undefined);
   }, [carregar]);
 
   const abrir = useCallback(async (id: string) => {
     try {
-      setAberta(await api.get<{ campanha: Campanha; itens: CampanhaItem[] }>(`/campanhas/${id}`));
+      setAberta(await api.get<Aberta>(`/campanhas/${id}`));
       setErro(null);
     } catch (e) {
       setErro(e instanceof ApiError ? e.message : 'Falha ao abrir a campanha');
@@ -65,9 +86,9 @@ export function CampanhasPage() {
   }, []);
 
   /**
-   * O disparo agora so enfileira: o envio acontece no worker. Enquanto houver
-   * item pendente, a tela se atualiza sozinha — sem isso o usuario ficaria
-   * olhando uma lista congelada sem saber se a fila andou.
+   * O disparo so enfileira: o envio acontece no worker. Enquanto houver item
+   * pendente, a tela se atualiza sozinha — sem isso o usuario ficaria olhando
+   * uma lista congelada sem saber se a fila andou.
    */
   useEffect(() => {
     if (!aberta || aberta.campanha.status !== 'ATIVA') return;
@@ -101,217 +122,280 @@ export function CampanhasPage() {
     });
   };
 
-  const itensDoGrafico = aberta
-    ? Object.entries(aberta.campanha.contagens)
-        .filter(([, valor]) => valor > 0)
-        .map(([status, valor]) => ({
-          rotulo: LABEL_ITEM_STATUS[status as keyof typeof LABEL_ITEM_STATUS],
-          valor,
-          cor: COR_ITEM[status],
-        }))
-    : [];
+  /** "Enviar agora" = ativar + disparar, os mesmos dois passos de antes. */
+  const enviarAgora = (c: Campanha) =>
+    agir(async () => {
+      if (c.agendadaPara) await api.patch(`/campanhas/${c.id}/agendamento`, { agendadaPara: null });
+      if (c.status !== 'ATIVA') await api.patch(`/campanhas/${c.id}/status`, { status: 'ATIVA' });
+      const r = await api.post<{ resultado: { enfileirados: number; foraDoLote: number } }>(
+        `/campanhas/${c.id}/disparar`,
+        { limite: 500 },
+      );
+      setAviso(
+        `${r.resultado.enfileirados} envio(s) na fila.` +
+          (r.resultado.foraDoLote > 0 ? ` ${r.resultado.foraDoLote} fora deste lote — envie de novo depois.` : ''),
+      );
+    }, c.id);
+
+  const c = aberta?.campanha;
+  const pendentes = c?.contagens.PENDENTE ?? 0;
 
   return (
     <div className="grid gap-5 lg:grid-cols-[380px_1fr]">
       <div className="space-y-5">
         <Card titulo="Campanhas" descricao={`${campanhas.length} cadastrada(s)`}>
-          {erro && <div className="mb-3"><Alerta>{erro}</Alerta></div>}
-          {aviso && <div className="mb-3"><Alerta tipo="sucesso">{aviso}</Alerta></div>}
+          {erro && !aberta && (
+            <div className="mb-3">
+              <Alerta>{erro}</Alerta>
+            </div>
+          )}
           {campanhas.length === 0 ? (
             <p className="text-sm text-slate-500">Nenhuma campanha criada.</p>
           ) : (
-            <ul className="divide-y divide-slate-100">
-              {campanhas.map((c) => (
-                <li key={c.id}>
-                  <button
-                    type="button"
-                    onClick={() => void abrir(c.id)}
-                    className={`w-full py-2.5 text-left transition hover:bg-slate-50 ${
-                      aberta?.campanha.id === c.id ? 'bg-slate-50' : ''
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="truncate text-sm font-medium text-slate-800">{c.nome}</span>
-                      <Badge tom={c.status === 'ATIVA' ? 'sucesso' : c.status === 'CONCLUIDA' ? 'neutro' : 'alerta'}>
-                        {LABEL_CAMPANHA_STATUS[c.status]}
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-slate-500">
-                      {c.canal} · {c.total} contato(s) · {c.contagens.ENVIADO} enviado(s)
+            <div className="space-y-4">
+              {GRUPOS.map((g) => {
+                const lista = campanhas.filter((x) => grupoDa(x) === g.id);
+                if (lista.length === 0) return null;
+                return (
+                  <div key={g.id}>
+                    <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                      {g.titulo} ({lista.length})
                     </p>
-                  </button>
-                </li>
-              ))}
-            </ul>
+                    <ul className="divide-y divide-slate-100">
+                      {lista.map((x) => (
+                        <li key={x.id}>
+                          <button
+                            type="button"
+                            onClick={() => void abrir(x.id)}
+                            className={`w-full py-2.5 text-left transition hover:bg-slate-50 ${
+                              c?.id === x.id ? 'bg-slate-50' : ''
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="truncate text-sm font-medium text-slate-800">{x.nome}</span>
+                              <Badge
+                                tom={x.status === 'ATIVA' ? 'sucesso' : x.status === 'CONCLUIDA' ? 'neutro' : 'alerta'}
+                              >
+                                {LABEL_CAMPANHA_STATUS[x.status]}
+                              </Badge>
+                            </div>
+                            <p className="text-xs text-slate-500">
+                              {x.canal} · {x.total} parceiro(s) · {x.contagens.ENVIADO} enviada(s)
+                              {x.agendadaPara ? ` · agendada ${dataHora(x.agendadaPara)}` : ''}
+                            </p>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </Card>
 
-        <Card titulo="Nova campanha">
+        <Card titulo="Nova campanha" descricao="Depois de criar, escolha o publico e programe o envio">
           <form onSubmit={criar} className="space-y-3">
-            <Field label="Nome">
-              <Input required value={nova.nome} onChange={(e) => setNova({ ...nova, nome: e.target.value })} />
+            <Field label="Nome da campanha">
+              <Input
+                required
+                placeholder="Credenciamento Starlink — Para"
+                value={nova.nome}
+                onChange={(e) => setNova({ ...nova, nome: e.target.value })}
+              />
             </Field>
             <Field label="Canal">
               <Select value={nova.canal} onChange={(e) => setNova({ ...nova, canal: e.target.value as Canal })}>
-                {CANAIS.map((c) => (
-                  <option key={c.valor} value={c.valor}>{c.label}</option>
+                {CANAIS.map((o) => (
+                  <option key={o.valor} value={o.valor}>{o.label}</option>
                 ))}
               </Select>
             </Field>
-            <Field label="Mensagem" hint="Use as marcas de nome, email ou telefone entre chaves duplas">
+            <Field label="Mensagem" hint="Use {{nome}}, {{email}} ou {{telefone}} para personalizar">
               <textarea
                 required
-                rows={3}
+                rows={4}
                 value={nova.mensagem}
                 onChange={(e) => setNova({ ...nova, mensagem: e.target.value })}
                 className="w-full resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[var(--brand-primary)]"
               />
             </Field>
-            <Button type="submit" disabled={ocupado} className="w-full">Criar campanha</Button>
+            {nova.mensagem.trim() && (
+              <div>
+                <p className="text-xs font-medium text-slate-500">Pre-visualizacao</p>
+                <p className="mt-1 whitespace-pre-wrap rounded-lg bg-emerald-50 p-3 text-sm text-slate-800">
+                  {previa(nova.mensagem)}
+                </p>
+              </div>
+            )}
+            <Button type="submit" disabled={ocupado} className="w-full">
+              Criar campanha
+            </Button>
           </form>
         </Card>
       </div>
 
-      {aberta ? (
+      {aberta && c ? (
         <div className="space-y-5">
           <Card
-            titulo={aberta.campanha.nome}
-            descricao={`${aberta.campanha.canal} · criada em ${new Date(aberta.campanha.criadoEm).toLocaleDateString('pt-BR')}`}
+            titulo={c.nome}
+            descricao={`${c.canal} · criada em ${new Date(c.criadoEm).toLocaleDateString('pt-BR')}${
+              c.agendadaPara ? ` · envio programado para ${dataHora(c.agendadaPara)}` : ''
+            }`}
             acao={
-              <Badge tom={aberta.campanha.status === 'ATIVA' ? 'sucesso' : 'neutro'}>
-                {LABEL_CAMPANHA_STATUS[aberta.campanha.status]}
-              </Badge>
+              <Badge tom={c.status === 'ATIVA' ? 'sucesso' : 'neutro'}>{LABEL_CAMPANHA_STATUS[c.status]}</Badge>
             }
           >
-            <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-700">{aberta.campanha.mensagem}</p>
+            {erro && (
+              <div className="mb-3">
+                <Alerta>{erro}</Alerta>
+              </div>
+            )}
+            {aviso && (
+              <div className="mb-3">
+                <Alerta tipo="sucesso">{aviso}</Alerta>
+              </div>
+            )}
 
-            <div className="mt-4 flex flex-wrap gap-2">
-              {/* "Adicionar todos" continua, mas deixou de ser a unica opcao: o
-                  montador de publico (item E.3) e o caminho normal, e este botao
-                  vira o atalho de quem quer mesmo a lista inteira da carteira. */}
-              <Button
-                variante="neutro"
-                disabled={ocupado || contatos.length === 0}
-                onClick={() =>
-                  void agir(
-                    () =>
-                      api.post(`/campanhas/${aberta.campanha.id}/contatos`, {
-                        contatoIds: contatos.map((c) => c.id),
-                      }),
-                    aberta.campanha.id,
-                  )
-                }
-              >
-                Adicionar todos os contatos ({contatos.length})
-              </Button>
+            <p className="text-xs font-medium text-slate-500">Pre-visualizacao da mensagem</p>
+            <p className="mt-1 whitespace-pre-wrap rounded-lg bg-emerald-50 p-3 text-sm text-slate-800">
+              {previa(c.mensagem)}
+            </p>
 
-              {aberta.campanha.status !== 'ATIVA' ? (
-                <Button
-                  disabled={ocupado}
-                  onClick={() =>
-                    void agir(
-                      () => api.patch(`/campanhas/${aberta.campanha.id}/status`, { status: 'ATIVA' }),
-                      aberta.campanha.id,
-                    )
-                  }
-                >
-                  Ativar
-                </Button>
-              ) : (
-                <>
-                  <Button
-                    disabled={ocupado}
-                    onClick={() =>
-                      void agir(
-                        async () => {
-                          const r = await api.post<{ enfileirados: number; foraDoLote: number }>(
-                            `/campanhas/${aberta.campanha.id}/disparar`,
-                            { limite: 500 },
-                          );
-                          setAviso(
-                            `${r.enfileirados} envio(s) na fila.` +
-                              (r.foraDoLote > 0 ? ` ${r.foraDoLote} fora deste lote — dispare de novo depois.` : ''),
-                          );
-                        },
-                        aberta.campanha.id,
-                      )
-                    }
-                  >
-                    Disparar pendentes
+            {c.status !== 'CONCLUIDA' && (
+              <div className="mt-4 space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  <Button disabled={ocupado || c.total === 0} onClick={() => void enviarAgora(c)}>
+                    Enviar agora{pendentes > 0 ? ` (${pendentes})` : ''}
                   </Button>
+                  {c.status === 'ATIVA' && (
+                    <Button
+                      variante="neutro"
+                      disabled={ocupado}
+                      onClick={() =>
+                        void agir(() => api.patch(`/campanhas/${c.id}/status`, { status: 'PAUSADA' }), c.id)
+                      }
+                    >
+                      Pausar
+                    </Button>
+                  )}
+                  {c.contagens.FALHOU + c.contagens.IGNORADO > 0 && (
+                    <Button
+                      variante="neutro"
+                      disabled={ocupado}
+                      onClick={() => void agir(() => api.post(`/campanhas/${c.id}/reprocessar`), c.id)}
+                    >
+                      Reprocessar falhas
+                    </Button>
+                  )}
                   <Button
                     variante="neutro"
                     disabled={ocupado}
-                    onClick={() =>
-                      void agir(
-                        () => api.patch(`/campanhas/${aberta.campanha.id}/status`, { status: 'PAUSADA' }),
-                        aberta.campanha.id,
-                      )
-                    }
+                    onClick={() => {
+                      if (!window.confirm('Cancelar a campanha? O que ainda nao saiu nao sera enviado.')) return;
+                      void agir(() => api.post(`/campanhas/${c.id}/cancelar`), c.id);
+                    }}
                   >
-                    Pausar
+                    Cancelar campanha
                   </Button>
-                </>
-              )}
+                </div>
 
-              {aberta.campanha.contagens.FALHOU + aberta.campanha.contagens.IGNORADO > 0 && (
-                <Button
-                  variante="neutro"
-                  disabled={ocupado}
-                  onClick={() =>
-                    void agir(() => api.post(`/campanhas/${aberta.campanha.id}/reprocessar`), aberta.campanha.id)
-                  }
-                >
-                  Reprocessar falhas
-                </Button>
-              )}
-            </div>
+                {c.status !== 'ATIVA' && (
+                  <div className="flex flex-wrap items-end gap-2">
+                    <Field label="Programar envio">
+                      <Input
+                        type="datetime-local"
+                        min={paraCampoLocal(new Date())}
+                        value={agendarPara}
+                        onChange={(e) => setAgendarPara(e.target.value)}
+                      />
+                    </Field>
+                    <Button
+                      variante="neutro"
+                      disabled={ocupado || !agendarPara || c.total === 0}
+                      onClick={() =>
+                        void agir(async () => {
+                          await api.patch(`/campanhas/${c.id}/agendamento`, {
+                            agendadaPara: new Date(agendarPara).toISOString(),
+                          });
+                          setAgendarPara('');
+                        }, c.id)
+                      }
+                    >
+                      Agendar
+                    </Button>
+                    {c.agendadaPara && (
+                      <Button
+                        variante="neutro"
+                        disabled={ocupado}
+                        onClick={() =>
+                          void agir(() => api.patch(`/campanhas/${c.id}/agendamento`, { agendadaPara: null }), c.id)
+                        }
+                      >
+                        Desfazer agendamento
+                      </Button>
+                    )}
+                  </div>
+                )}
+                {c.total === 0 && (
+                  <p className="text-xs text-slate-500">Escolha o publico abaixo antes de enviar ou agendar.</p>
+                )}
+              </div>
+            )}
           </Card>
 
-          {/* Montar publico pelos filtros do CRM (item E.3). Fica depois do
-              cartao da campanha porque a ordem de trabalho e essa: ler a
-              mensagem que vai sair, e so depois escolher para quem. */}
-          <MontarPublico
-            campanhaId={aberta.campanha.id}
-            canal={aberta.campanha.canal}
-            aoAplicar={() => void abrir(aberta.campanha.id)}
-          />
+          <Card titulo="Resultado da campanha" descricao={`${c.total} parceiro(s) no publico`}>
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+              <StatTile rotulo="Enviadas" valor={c.contagens.ENVIADO} estado={c.contagens.ENVIADO ? ESTADO.bom : undefined} />
+              <StatTile rotulo="Na fila" valor={c.contagens.PENDENTE} />
+              <StatTile
+                rotulo="Nao entregues"
+                valor={c.contagens.IGNORADO}
+                detalhe="sem telefone ou cancelada"
+                estado={c.contagens.IGNORADO ? ESTADO.atencao : undefined}
+              />
+              <StatTile
+                rotulo="Falhas"
+                valor={c.contagens.FALHOU}
+                estado={c.contagens.FALHOU ? ESTADO.grave : undefined}
+              />
+              <StatTile rotulo="Respostas recebidas" valor={aberta.resultado?.respostasRecebidas ?? '—'} />
+              <StatTile rotulo="Parceiros que interagiram" valor={aberta.resultado?.parceirosQueInteragiram ?? '—'} />
+            </div>
+            <p className="mt-2 text-xs text-slate-500">
+              Respostas contam mensagens do parceiro depois do envio, em qualquer conversa dele.
+            </p>
+          </Card>
 
-          <div className="grid gap-5 lg:grid-cols-2">
-            <Card titulo="Situacao dos envios" descricao={`${aberta.campanha.total} contato(s)`}>
-              <BarList itens={itensDoGrafico} vazio="Nenhum contato adicionado" />
-            </Card>
+          {c.status !== 'CONCLUIDA' && (
+            <MontarPublico campanhaId={c.id} canal={c.canal} aoAplicar={() => void abrir(c.id)} />
+          )}
 
-            <Card titulo="Contatos" descricao="Primeiros 200">
-              {aberta.itens.length === 0 ? (
-                <p className="text-sm text-slate-500">Nenhum contato na campanha.</p>
-              ) : (
-                <ul className="max-h-80 divide-y divide-slate-100 overflow-y-auto">
-                  {aberta.itens.map((i) => (
-                    <li key={i.id} className="py-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="truncate text-sm text-slate-800">{i.contato.nome}</span>
-                        <Badge tom={i.status === 'ENVIADO' ? 'sucesso' : i.status === 'FALHOU' ? 'alerta' : 'neutro'}>
-                          {LABEL_ITEM_STATUS[i.status]}
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-slate-500">{i.contato.telefone ?? 'sem telefone'}</p>
-                      {i.erro && <p className="mt-0.5 text-xs text-red-600">{i.erro}</p>}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-          </div>
+          <Card titulo="Parceiros da campanha" descricao="Primeiros 200">
+            {aberta.itens.length === 0 ? (
+              <p className="text-sm text-slate-500">Nenhum parceiro na campanha.</p>
+            ) : (
+              <ul className="max-h-80 divide-y divide-slate-100 overflow-y-auto">
+                {aberta.itens.map((i) => (
+                  <li key={i.id} className="py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate text-sm text-slate-800">{i.contato.nome}</span>
+                      <Badge tom={i.status === 'ENVIADO' ? 'sucesso' : i.status === 'FALHOU' ? 'alerta' : 'neutro'}>
+                        {LABEL_ITEM_STATUS[i.status]}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-slate-500">{i.contato.telefone ?? 'sem telefone'}</p>
+                    {i.erro && <p className="mt-0.5 text-xs text-red-600">{i.erro}</p>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
         </div>
       ) : (
         <Card titulo="Detalhe da campanha">
           <p className="text-sm text-slate-500">
-            Selecione uma campanha para ver os contatos e disparar os envios.
-          </p>
-          <p className="mt-3 text-xs text-slate-500">
-            Campanhas de voz exigem integracao de telefonia (PABX/SIP), que ainda nao existe — o
-            disparo e recusado com essa mensagem em vez de falhar silenciosamente.
+            Selecione uma campanha para escolher o publico, programar o envio e acompanhar o resultado.
           </p>
         </Card>
       )}

@@ -32,6 +32,7 @@ const COR: Record<TipoEvento, string> = {
   ETAPA: 'bg-teal-500',
   LEAD: 'bg-indigo-500',
   PESQUISA: 'bg-fuchsia-500',
+  CREDENCIAMENTO: 'bg-teal-500',
 };
 
 const LIMITE = 30;

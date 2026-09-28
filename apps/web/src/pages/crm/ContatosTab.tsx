@@ -16,10 +16,14 @@ import { useFaixaDeLargura } from '../../lib/useFaixaDeLargura';
 import { FichaContato, FichaVazia } from './ficha/FichaContato';
 import { Etiquetas, FiltroEtiquetas } from './Etiquetas';
 import { FunilDeCicloDeVida } from './FunilDeCicloDeVida';
+import { UFS } from '../esteira/ufs';
 
 const ORIGENS: Canal[] = ['WEBCHAT', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'EMAIL', 'VOZ'];
 
-const VAZIO = { nome: '', email: '', telefone: '', canalOrigem: 'WHATSAPP' as Canal };
+const VAZIO = { nome: '', email: '', telefone: '', uf: '', cidade: '', canalOrigem: 'WHATSAPP' as Canal };
+
+const dataCurta = (iso: string) =>
+  new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 
 type Props = {
   /** Registro aberto, vindo da URL (`/contatos/:id`). Nulo em `/crm`. */
@@ -54,6 +58,7 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   const selecionado = selecionadoId;
   const [erro, setErro] = useState<string | null>(null);
   const [novo, setNovo] = useState(VAZIO);
+  const [uf, setUf] = useState('');
   /**
    * O cadastro comeca fechado, atras de um botao no cabecalho da lista.
    *
@@ -113,6 +118,7 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
     if (busca.trim()) params.set('busca', busca.trim());
     for (const tag of tags) params.append('tags', tag);
     for (const c of ciclos) params.append('ciclo', c);
+    if (uf) params.set('uf', uf);
     const qs = params.size ? `?${params}` : '';
     setCarregando(true);
     try {
@@ -127,7 +133,7 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
     } finally {
       setCarregando(false);
     }
-  }, [busca, tags, ciclos]);
+  }, [busca, tags, ciclos, uf]);
 
   useEffect(() => {
     const t = setTimeout(() => void carregar(), 250);
@@ -147,6 +153,8 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
         nome: novo.nome.trim(),
         email: novo.email.trim() || null,
         telefone: novo.telefone.trim() || null,
+        uf: novo.uf || null,
+        cidade: novo.cidade.trim() || null,
         canalOrigem: novo.canalOrigem,
       });
 
@@ -267,6 +275,19 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
                 onChange={(e) => setNovo({ ...novo, email: e.target.value })}
               />
             </Field>
+            <div className="grid grid-cols-[90px_1fr] gap-2">
+              <Field label="UF">
+                <Select value={novo.uf} onChange={(e) => setNovo({ ...novo, uf: e.target.value })}>
+                  <option value="">—</option>
+                  {UFS.map((uf) => (
+                    <option key={uf} value={uf}>{uf}</option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Cidade">
+                <Input value={novo.cidade} onChange={(e) => setNovo({ ...novo, cidade: e.target.value })} />
+              </Field>
+            </div>
             <Field label="Origem" hint="Por onde essa pessoa chegou.">
               <Select
                 value={novo.canalOrigem}
@@ -285,12 +306,20 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
           </form>
         )}
 
-        <Input
-          ref={buscaRef}
-          placeholder="Buscar por nome, e-mail ou telefone"
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-        />
+        <div className="flex gap-2">
+          <Input
+            ref={buscaRef}
+            placeholder="Buscar por nome, e-mail ou telefone"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+          />
+          <Select aria-label="Filtrar por UF" value={uf} onChange={(e) => setUf(e.target.value)} className="!w-24">
+            <option value="">UF</option>
+            {UFS.map((x) => (
+              <option key={x} value={x}>{x}</option>
+            ))}
+          </Select>
+        </div>
         <div className="mt-2">
           <FiltroEtiquetas
             ativas={tags}
@@ -396,7 +425,25 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
                       }`}
                     >
                       <p className="text-sm font-medium text-slate-800">{c.nome}</p>
-                      <p className="text-xs text-slate-500">{c.email ?? c.telefone ?? 'Sem contato'}</p>
+                      {/* Agenda telefonica: empresa, telefone, estado, responsavel,
+                          ultima interacao e proximo retorno sem abrir a ficha. */}
+                      {c.conta && <p className="truncate text-xs text-slate-600">{c.conta.nome}</p>}
+                      <p className="text-xs text-slate-500">
+                        {[c.telefone ?? c.email ?? 'Sem contato', c.uf].filter(Boolean).join(' · ')}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {c.responsavel ? c.responsavel.nome : 'sem responsavel'}
+                        {c.ultimaInteracaoEm ? ` · ultima interacao ${dataCurta(c.ultimaInteracaoEm)}` : ''}
+                      </p>
+                      {c.proximoRetorno && (
+                        <p
+                          className={`text-xs ${
+                            new Date(c.proximoRetorno.prazo) < new Date() ? 'text-red-700' : 'text-[var(--brand-primary)]'
+                          }`}
+                        >
+                          Proximo retorno {dataCurta(c.proximoRetorno.prazo)} · {c.proximoRetorno.titulo}
+                        </p>
+                      )}
                       {typeof c.totalConversas === 'number' && (
                         <p className="mt-1 text-xs text-slate-500">
                           {c.totalConversas} conversa{c.totalConversas === 1 ? '' : 's'}
