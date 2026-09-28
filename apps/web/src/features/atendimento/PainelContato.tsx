@@ -5,7 +5,7 @@ import { SkeletonBloco, SkeletonTexto } from '../../components/ui/Skeleton';
 import { Indicador } from '../../pages/crm/ficha/Indicadores';
 import { RegistrarAtividade } from '../../pages/crm/ficha/RegistrarAtividade';
 import { EditorEtiquetas } from '../../pages/crm/Etiquetas';
-import { LABEL_TIPO_ATIVIDADE, type Atividade, type FichaContato as Ficha } from '../../lib/types';
+import { LABEL_TIPO_ATIVIDADE, type Atividade, type ConversaDetalhe, type FichaContato as Ficha } from '../../lib/types';
 import { api } from '../../lib/api';
 
 /**
@@ -25,10 +25,21 @@ import { api } from '../../lib/api';
 export function PainelContato({
   contatoId,
   aoFechar,
+  conversaId,
+  conversaTags,
+  aoMudarConversa,
 }: {
   contatoId: string;
   /** So existe quando o painel e um drawer (notebook/tablet) ou um passo do mobile — no desktop a coluna e fixa. */
   aoFechar?: () => void;
+  /**
+   * Etiquetas da conversa aberta (distintas das etiquetas do contato acima):
+   * so existem quando ha uma conversa aberta, entao os tres chegam juntos ou
+   * nao chegam.
+   */
+  conversaId?: string;
+  conversaTags?: string[];
+  aoMudarConversa?: (conversa: ConversaDetalhe) => void;
 }) {
   const [ficha, setFicha] = useState<Ficha | null>(null);
   const [mostrarRegistro, setMostrarRegistro] = useState(false);
@@ -126,7 +137,7 @@ export function PainelContato({
         </dl>
 
         <div className="mt-3">
-          <p className="mb-1.5 text-xs font-medium text-slate-500">Etiquetas</p>
+          <p className="mb-1.5 text-xs font-medium text-slate-500">Etiquetas do contato</p>
           <EditorEtiquetas
             tags={contato.tags ?? []}
             aoSalvar={async (tags) => {
@@ -135,6 +146,28 @@ export function PainelContato({
             }}
           />
         </div>
+
+        {/*
+          Etiquetas da conversa aberta — distintas das etiquetas do contato
+          acima (uma classifica a pessoa, a outra classifica este atendimento
+          especifico). Veio do cabecalho do painel de chat (PainelChat) para
+          cá pra liberar espaco vertical nas mensagens.
+        */}
+        {conversaId && (
+          <div className="mt-3">
+            <p className="mb-1.5 text-xs font-medium text-slate-500">Etiquetas da conversa</p>
+            <EditorEtiquetas
+              tags={conversaTags ?? []}
+              aoSalvar={async (tags) => {
+                const { conversa: nova } = await api.put<{ conversa: ConversaDetalhe }>(
+                  `/conversas/${conversaId}/etiquetas`,
+                  { tags },
+                );
+                aoMudarConversa?.(nova);
+              }}
+            />
+          </div>
+        )}
 
         {/* Acao mais frequente do atendimento sobre o contato: marcar o que foi
             combinado ou agendar um retorno, sem sair da conversa. Mesmo

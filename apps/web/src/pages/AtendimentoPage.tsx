@@ -23,8 +23,13 @@ type PassoMobile = 'lista' | 'chat' | 'ficha';
 
 type MinhaLinhaWhatsapp = { id: string; ponteSessao: string | null; modo: string | null; ativo: boolean };
 
-const LARGURA_MIN = 220;
-const LARGURA_MAX = 480;
+// Lista (esquerda) e ficha (direita) tem faixas proprias — a ficha precisa
+// de mais espaco maximo porque "Registrar / agendar" fica cortado em
+// larguras estreitas.
+const LARGURA_MIN_LISTA = 220;
+const LARGURA_MAX_LISTA = 450;
+const LARGURA_MIN_FICHA = 260;
+const LARGURA_MAX_FICHA = 550;
 
 /**
  * Largura ajustavel por arrasto + recolher, persistida por painel (lista à
@@ -32,11 +37,11 @@ const LARGURA_MAX = 480;
  * colunas cabem lado a lado; notebook/tablet/mobile já têm layout próprio
  * (`classesLista`/`classesFicha`) que este hook não mexe.
  */
-function useLarguraAjustavel(chave: string, padrao: number) {
+function useLarguraAjustavel(chave: string, padrao: number, min: number, max: number) {
   const [largura, setLargura] = useState(() => {
     try {
       const salva = Number(localStorage.getItem(chave));
-      return salva >= LARGURA_MIN && salva <= LARGURA_MAX ? salva : padrao;
+      return salva >= min && salva <= max ? salva : padrao;
     } catch {
       return padrao;
     }
@@ -83,24 +88,34 @@ function useLarguraAjustavel(chave: string, padrao: number) {
       e.preventDefault();
       const inicioX = e.clientX;
       const larguraInicial = largura;
+      // Sem isto o arrasto seleciona o texto das mensagens por baixo do
+      // cursor — o navegador trata o mousemove como selecao de texto por
+      // padrao, mesmo com o preventDefault do mousedown acima.
+      const estiloAnterior = document.body.style.userSelect;
+      document.body.style.userSelect = 'none';
       const mover = (ev: MouseEvent) => {
         const delta = (ev.clientX - inicioX) * direcao;
-        salvarLargura(Math.min(LARGURA_MAX, Math.max(LARGURA_MIN, larguraInicial + delta)));
+        salvarLargura(Math.min(max, Math.max(min, larguraInicial + delta)));
       };
       const soltar = () => {
+        document.body.style.userSelect = estiloAnterior;
         window.removeEventListener('mousemove', mover);
         window.removeEventListener('mouseup', soltar);
       };
       window.addEventListener('mousemove', mover);
       window.addEventListener('mouseup', soltar);
     },
-    [largura, salvarLargura],
+    [largura, salvarLargura, min, max],
   );
 
   return { largura, recolhida, alternarRecolhida, iniciarArraste };
 }
 
-/** Puxador vertical entre duas colunas — arrasta para redimensionar. */
+/**
+ * Puxador vertical entre duas colunas — arrasta para redimensionar. A area
+ * clicavel (`w-2.5`) e mais larga que a linha visivel (`w-1` interno) para
+ * facilitar o clique sem deixar a divisoria com aparencia grossa.
+ */
 function Puxador({ onArrastar, titulo }: { onArrastar: (e: ReactMouseEvent) => void; titulo: string }) {
   return (
     <div
@@ -108,8 +123,10 @@ function Puxador({ onArrastar, titulo }: { onArrastar: (e: ReactMouseEvent) => v
       role="separator"
       aria-orientation="vertical"
       title={titulo}
-      className="w-1 shrink-0 cursor-col-resize self-stretch rounded transition hover:bg-slate-300 active:bg-slate-400"
-    />
+      className="group flex w-2.5 shrink-0 cursor-col-resize items-stretch justify-center self-stretch"
+    >
+      <div className="w-1 rounded transition group-hover:bg-slate-300 group-active:bg-slate-400" />
+    </div>
   );
 }
 
@@ -124,8 +141,18 @@ export function AtendimentoPage() {
   const { usuario, temPerfil } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const { ref: containerRef, faixa } = useFaixaDeLargura<HTMLDivElement>();
-  const listaAjustavel = useLarguraAjustavel('plataforma:atendimento-largura-lista', 320);
-  const fichaAjustavel = useLarguraAjustavel('plataforma:atendimento-largura-ficha', 288);
+  const listaAjustavel = useLarguraAjustavel(
+    'plataforma:atendimento-largura-lista',
+    320,
+    LARGURA_MIN_LISTA,
+    LARGURA_MAX_LISTA,
+  );
+  const fichaAjustavel = useLarguraAjustavel(
+    'plataforma:atendimento-largura-ficha',
+    288,
+    LARGURA_MIN_FICHA,
+    LARGURA_MAX_FICHA,
+  );
   /**
    * Visao da Inbox (Fase 11.3) — Minhas / Nao atribuidas / Todas. Comeca em
    * "Nao atribuidas": e a fila que precisa de alguem pegando, o mesmo motivo
@@ -728,7 +755,13 @@ export function AtendimentoPage() {
             </div>
           )}
           {(!emDesktop || !fichaAjustavel.recolhida) && (
-            <PainelContato contatoId={aberta.contato.id} aoFechar={faixa === 'desktop' ? undefined : fecharFicha} />
+            <PainelContato
+              contatoId={aberta.contato.id}
+              aoFechar={faixa === 'desktop' ? undefined : fecharFicha}
+              conversaId={aberta.id}
+              conversaTags={aberta.tags}
+              aoMudarConversa={aoMudar}
+            />
           )}
         </aside>
       )}

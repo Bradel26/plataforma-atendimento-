@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alerta, Badge, Button, Select } from '../../components/ui';
-import { EditorEtiquetas } from '../../pages/crm/Etiquetas';
 import { ApiError, api } from '../../lib/api';
 import { LABEL_CONVERSA_STATUS, type ConversaDetalhe, type Mensagem, type Usuario } from '../../lib/types';
 
@@ -255,7 +254,7 @@ export function PainelChat({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-5 py-3">
+      <header className="flex flex-col gap-1.5 border-b border-slate-200 bg-white px-5 py-2.5">
         <div className="flex min-w-0 items-center gap-2.5">
           {/* So existe no passo mobile "chat" — no notebook/tablet/desktop a
               lista fica sempre visivel ao lado, sem precisar de volta. */}
@@ -276,20 +275,13 @@ export function PainelChat({
           >
             {conversa.contato.nome.charAt(0).toUpperCase()}
           </span>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="truncate font-medium text-slate-800">{conversa.contato.nome}</p>
             <p className="truncate text-xs text-slate-500">
               {conversa.contato.email ?? conversa.contato.telefone ?? 'Sem contato informado'}
               {conversa.fila ? ` · ${conversa.fila.nome}` : ''}
             </p>
           </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge tom={finalizada ? 'neutro' : 'sucesso'}>{LABEL_CONVERSA_STATUS[conversa.status]}</Badge>
-          {/* Arquivamento e ortogonal ao status (Fase 11.9-B): a conversa pode
-              estar arquivada em qualquer um dos badges acima. */}
-          {conversa.arquivada && <Badge tom="neutro">Arquivada</Badge>}
 
           {/* So existe fora do desktop: la a ficha e coluna fixa e sempre
               visivel, entao um botao pra abrir o que ja esta aberto so
@@ -300,10 +292,24 @@ export function PainelChat({
               tamanho="sm"
               onClick={aoAlternarFicha}
               aria-pressed={fichaAberta}
+              className="shrink-0"
             >
               Ficha do contato
             </Button>
           )}
+        </div>
+
+        {/*
+          Linha compacta de status + acoes: junta status/transferir/resolver/
+          arquivar numa linha so sempre que a largura permitir (o Select de
+          transferencia cresce pra ocupar o espaco livre), so quebrando em
+          telas bem estreitas (`flex-wrap` como fallback, nao como padrao).
+        */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge tom={finalizada ? 'neutro' : 'sucesso'}>{LABEL_CONVERSA_STATUS[conversa.status]}</Badge>
+          {/* Arquivamento e ortogonal ao status (Fase 11.9-B): a conversa pode
+              estar arquivada em qualquer um dos badges acima. */}
+          {conversa.arquivada && <Badge tom="neutro">Arquivada</Badge>}
 
           {conversa.status === 'EM_ESPERA' && (
             <Button
@@ -326,7 +332,7 @@ export function PainelChat({
                     void executar(() => api.post(`/conversas/${conversa.id}/transferir`, { agenteId }));
                   }
                 }}
-                className="w-44"
+                className="min-w-[10rem] flex-1"
               >
                 <option value="">Transferir para...</option>
                 {agentes
@@ -342,6 +348,7 @@ export function PainelChat({
                 <Button
                   variante="neutro"
                   disabled={ocupado}
+                  className="shrink-0"
                   onClick={() =>
                     void executar(() =>
                       api.post(`/conversas/${conversa.id}/transferir`, { filaId: conversa.fila!.id }),
@@ -355,6 +362,7 @@ export function PainelChat({
               <Button
                 variante="perigo"
                 disabled={ocupado}
+                className="shrink-0"
                 onClick={() => void executar(() => api.post(`/conversas/${conversa.id}/finalizar`))}
               >
                 Resolver
@@ -370,6 +378,7 @@ export function PainelChat({
           <Button
             variante="neutro"
             disabled={ocupado}
+            className="shrink-0"
             onClick={() =>
               void executar(() =>
                 api.post(`/conversas/${conversa.id}/${conversa.arquivada ? 'desarquivar' : 'arquivar'}`),
@@ -380,30 +389,6 @@ export function PainelChat({
           </Button>
         </div>
       </header>
-
-      {/*
-        Barra propria entre o cabecalho e as mensagens.
-        Nao entrou no cabecalho porque o editor cresce — o campo de texto abre
-        uma lista de sugestoes por baixo, e dentro de um `flex-wrap` com os
-        botoes de acao ela empurraria "Finalizar" para outra linha no meio do
-        atendimento. Fica acima das mensagens, e nao no rodape, porque
-        classificar e contexto do atendimento, nao parte de responder.
-      */}
-      <div className="flex items-start gap-2 border-b border-slate-100 bg-white px-5 py-2">
-        <span className="mt-1 shrink-0 text-xs font-medium text-slate-500">Etiquetas</span>
-        <div className="min-w-0 flex-1">
-          <EditorEtiquetas
-            tags={conversa.tags}
-            aoSalvar={async (tags) => {
-              const { conversa: nova } = await api.put<{ conversa: ConversaDetalhe }>(
-                `/conversas/${conversa.id}/etiquetas`,
-                { tags },
-              );
-              onMudou(nova);
-            }}
-          />
-        </div>
-      </div>
 
       {/*
         Largura maxima no conteudo, nao no fundo: o painel continua esticando
