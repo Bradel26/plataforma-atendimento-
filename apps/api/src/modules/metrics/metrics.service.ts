@@ -238,7 +238,7 @@ function calcularNps(notas: number[]) {
  */
 export async function monitoramentoAgentes() {
   const agentes = await prisma.user.findMany({
-    where: { ativo: true, perfil: { in: ['AGENTE', 'SUPERVISOR'] } },
+    where: { ativo: true, perfil: { in: ['AGENTE', 'SUPERVISOR', 'COMERCIAL'] } },
     orderBy: { nome: 'asc' },
     include: {
       filas: { include: { fila: { select: { id: true, nome: true } } } },
@@ -251,16 +251,58 @@ export async function monitoramentoAgentes() {
     },
   });
 
-  const abertos = await prisma.presenceLog.findMany({
-    where: { usuarioId: { in: agentes.map((a) => a.id) }, fim: null },
-    orderBy: { iniciadoEm: 'desc' },
-  });
+  const ids = agentes.map((a) => a.id);
+  const [abertos, ativas, ultimasMensagens] = await Promise.all([
+    prisma.presenceLog.findMany({
+      where: { usuarioId: { in: ids }, fim: null },
+      orderBy: { iniciadoEm: 'desc' },
+    }),
+    /*
+     * Conversas em andamento com a ultima mensagem visivel de cada uma: se foi
+     * do cliente, a conversa esta "aguardando resposta" do consultor. Nota
+     * interna nao conta — o cliente nao a viu, entao nao respondeu nada.
+     */
+    prisma.conversation.findMany({
+      where: { agenteId: { in: ids }, status: { in: ['ATRIBUIDO', 'EM_ATENDIMENTO'] } },
+      select: {
+        agenteId: true,
+        atribuidoEm: true,
+        criadoEm: true,
+        mensagens: {
+          where: { interno: false, autor: { in: ['CLIENTE', 'AGENTE'] } },
+          orderBy: { criadoEm: 'desc' },
+          take: 1,
+          select: { autor: true },
+        },
+      },
+    }),
+    prisma.message.groupBy({
+      by: ['autorId'],
+      // Janela de 7 dias: sem indice por autor, varrer o historico inteiro a cada
+      // atualizacao do painel custaria caro. Mais antigo que isso, vale o login.
+      where: { autorId: { in: ids }, autor: 'AGENTE', criadoEm: { gte: new Date(Date.now() - 7 * 86_400_000) } },
+      _max: { criadoEm: true },
+    }),
+  ]);
 
   const agora = Date.now();
 
   return agentes.map((a) => {
     const log = abertos.find((l) => l.usuarioId === a.id);
+    const minhas = ativas.filter((c) => c.agenteId === a.id);
+    const inicioMaisAntigo = minhas.reduce<number | null>((acc, c) => {
+      const t = (c.atribuidoEm ?? c.criadoEm).getTime();
+      return acc === null || t < acc ? t : acc;
+    }, null);
+    const ultimaMensagem = ultimasMensagens.find((m) => m.autorId === a.id)?._max.criadoEm ?? null;
+    const ultimaAtividade = [ultimaMensagem, a.ultimoLogin, log?.iniciadoEm ?? null]
+      .filter((d): d is Date => d !== null)
+      .reduce<Date | null>((acc, d) => (acc === null || d > acc ? d : acc), null);
     return {
+      aguardandoResposta: minhas.filter((c) => c.mensagens[0]?.autor === 'CLIENTE').length,
+      /** Ha quanto tempo o atendimento ativo mais antigo esta aberto, em segundos. */
+      segundosAtendimentoMaisAntigo: inicioMaisAntigo === null ? null : Math.round((agora - inicioMaisAntigo) / 1000),
+      ultimaAtividadeEm: ultimaAtividade,
       id: a.id,
       nome: a.nome,
       perfil: a.perfil,

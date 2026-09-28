@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma';
 import { badRequest, notFound } from '../../lib/errors';
 import { exigeEnvioExterno } from '../channels/outbound.service';
 import { enfileirar } from '../../lib/fila';
+import { organizacaoAtual } from '../../lib/tenant';
 
 const inclusao = {
   fila: { select: { id: true, nome: true } },
@@ -67,7 +68,72 @@ export async function obterCampanha(id: string) {
     take: 200,
   });
 
-  return { campanha: await serialize(campanha), itens };
+  return { campanha: await serialize(campanha), itens, resultado: await resultadoDaCampanha(id) };
+}
+
+/**
+ * Resultado da campanha depois do envio (SUGESTOES.docx): enviadas, falhas,
+ * nao entregues, respostas recebidas e parceiros que interagiram.
+ *
+ * "Resposta" e mensagem do CLIENTE em qualquer conversa do contato DEPOIS do
+ * envio para ele — o item nunca e marcado RESPONDIDO pelo canal, entao a conta
+ * e feita na leitura, sem tocar no fluxo de recebimento do WhatsApp.
+ *
+ * SQL cru porque e um EXISTS por item; a organizacao entra a mao.
+ */
+async function resultadoDaCampanha(campanhaId: string) {
+  const [linha] = await prisma.$queryRawUnsafe<Array<{ interagiram: number; respostas: number }>>(
+    `SELECT COUNT(DISTINCT i."contato_id")::int AS interagiram, COUNT(m."id")::int AS respostas
+     FROM "campanha_itens" i
+     JOIN "campanhas" ca ON ca."id" = i."campanha_id" AND ca."organizacao_id" = $2
+     JOIN "conversas" c ON c."contato_id" = i."contato_id" AND c."organizacao_id" = $2
+     JOIN "mensagens" m ON m."conversa_id" = c."id" AND m."autor" = 'CLIENTE' AND m."criado_em" > i."enviado_em"
+     WHERE i."campanha_id" = $1 AND i."status" = 'ENVIADO' AND i."enviado_em" IS NOT NULL`,
+    campanhaId,
+    organizacaoAtual(),
+  );
+  return { parceirosQueInteragiram: linha?.interagiram ?? 0, respostasRecebidas: linha?.respostas ?? 0 };
+}
+
+/**
+ * Programa o envio. Nulo desfaz o agendamento.
+ *
+ * A campanha fica como esta (rascunho ou pausada) ate a hora: quem ativa e
+ * dispara e o agendador (`agendador.ts`), pelo mesmo caminho do "Enviar agora".
+ */
+export async function agendarCampanha(id: string, agendadaPara: Date | null) {
+  const campanha = await carregar(id);
+  if (campanha.status === 'CONCLUIDA') throw badRequest('Campanha concluida nao pode ser agendada');
+  if (campanha.status === 'ATIVA') throw badRequest('Campanha ja esta em envio — pause antes de agendar');
+  if (agendadaPara) {
+    if (agendadaPara.getTime() <= Date.now()) throw badRequest('Escolha uma data e hora no futuro');
+    if (campanha._count.itens === 0) throw badRequest('Adicione o publico antes de agendar');
+  }
+  await prisma.campaign.update({ where: { id }, data: { agendadaPara } });
+  return serialize(await carregar(id));
+}
+
+/**
+ * Cancela: o que ainda nao saiu nao sai mais.
+ *
+ * O worker ja ignora item de campanha que nao esteja ATIVA, entao trocar o
+ * status basta para parar a fila; marcar os pendentes como IGNORADO deixa o
+ * motivo visivel na lista e impede que um "reativar" dispare o resto por engano.
+ */
+export async function cancelarCampanha(id: string) {
+  const campanha = await carregar(id);
+  if (campanha.status === 'CONCLUIDA') throw badRequest('Campanha ja concluida');
+  await prisma.$transaction([
+    prisma.campaign.update({
+      where: { id },
+      data: { status: 'CONCLUIDA', concluidaEm: new Date(), agendadaPara: null },
+    }),
+    prisma.campaignItem.updateMany({
+      where: { campanhaId: id, status: 'PENDENTE' },
+      data: { status: 'IGNORADO', erro: 'Campanha cancelada' },
+    }),
+  ]);
+  return serialize(await carregar(id));
 }
 
 export async function criarCampanha(input: {

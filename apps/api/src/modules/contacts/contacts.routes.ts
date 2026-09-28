@@ -46,6 +46,7 @@ const listarSchema = z.object({
     .union([z.string(), z.array(z.string())])
     .optional()
     .transform((v) => (v === undefined ? [] : normalizarTags(Array.isArray(v) ? v : [v]))),
+  uf: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/).optional(),
   limite: z.coerce.number().int().min(1).max(100).default(50),
   cursor: z.string().optional(),
 });
@@ -64,6 +65,9 @@ const criarSchema = z.object({
   telefone: z.string().trim().min(8).max(20).nullable().optional(),
   canalOrigem: z.enum(['WEBCHAT', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'EMAIL', 'VOZ']).default('WEBCHAT'),
   observacoes: z.string().trim().max(2000).nullable().optional(),
+  /** Estado (UF) e cidade do parceiro: base do "por estado/regiao" e do publico de campanha. */
+  uf: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/, 'UF invalida').nullable().optional(),
+  cidade: z.string().trim().max(80).nullable().optional(),
   tags: z.array(z.string().trim().min(1).max(TAMANHO_MAXIMO)).max(MAXIMO_POR_REGISTRO).default([]),
   contaId: z.string().uuid().nullable().optional(),
   /** Ausente e diferente de nulo: ausente herda da conta, nulo deixa sem dono. */
@@ -81,6 +85,9 @@ const atualizarSchema = z
     email: z.string().email().nullable().optional(),
     telefone: z.string().trim().min(8).max(20).nullable().optional(),
     observacoes: z.string().trim().max(2000).nullable().optional(),
+    /** Estado (UF) e cidade do parceiro: base do "por estado/regiao" e do publico de campanha. */
+    uf: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/, 'UF invalida').nullable().optional(),
+    cidade: z.string().trim().max(80).nullable().optional(),
     tags: z.array(z.string().trim().min(1).max(TAMANHO_MAXIMO)).max(MAXIMO_POR_REGISTRO).optional(),
     /**
      * Trocar o responsavel do contato.
@@ -97,7 +104,7 @@ contactsRoutes.get(
   '/',
   validateQuery(listarSchema),
   asyncHandler(async (_req, res) => {
-    const { busca, tags, limite, cursor, ciclo } = res.locals.query as z.infer<typeof listarSchema>;
+    const { busca, tags, limite, cursor, ciclo, uf } = res.locals.query as z.infer<typeof listarSchema>;
     // O escopo entra como primeiro filtro, e nao como `undefined` quando nao ha
     // busca: `where: undefined` e "sem restricao", que aqui seria a base inteira.
     const filtros: Prisma.ContactWhereInput[] = [await filtroDe(politicaContatos)];
@@ -113,6 +120,7 @@ contactsRoutes.get(
     }
     // `hasEvery` com lista vazia nao restringe, entao nao precisa de condicional.
     filtros.push({ tags: { hasEvery: tags } });
+    if (uf) filtros.push({ uf });
 
     /*
      * Filtro por ciclo de vida (item E.4).
@@ -139,7 +147,25 @@ contactsRoutes.get(
       where: { AND: filtros },
       orderBy: [{ atualizadoEm: 'desc' }, { id: 'desc' }],
       take: limite + 1,
-      include: { _count: { select: { conversas: true } } },
+      include: {
+        _count: { select: { conversas: true } },
+        // Agenda telefonica do CRM: empresa, responsavel, ultima interacao e
+        // proximo retorno na propria lista, sem abrir a ficha.
+        conta: { select: { id: true, nome: true } },
+        responsavel: { select: { id: true, nome: true } },
+        conversas: {
+          where: await filtroDe(politicaConversas),
+          select: { ultimaMensagemEm: true },
+          orderBy: { ultimaMensagemEm: 'desc' },
+          take: 1,
+        },
+        atividades: {
+          where: { concluidoEm: null, prazo: { not: null } },
+          select: { id: true, titulo: true, tipo: true, prazo: true },
+          orderBy: { prazo: 'asc' },
+          take: 1,
+        },
+      },
     });
 
     const { itens, proximoCursor } = fatiar(registros, limite, (c) => c.atualizadoEm);
@@ -158,9 +184,11 @@ contactsRoutes.get(
     const ciclos = await ciclosDosContatos({ id: { in: itens.map((c) => c.id) } });
 
     res.json({
-      contatos: itens.map(({ _count, ...c }) => ({
+      contatos: itens.map(({ _count, conversas, atividades, ...c }) => ({
         ...c,
         totalConversas: _count.conversas,
+        ultimaInteracaoEm: conversas[0]?.ultimaMensagemEm ?? null,
+        proximoRetorno: atividades[0] ?? null,
         cicloDeVida: ciclos.get(c.id) ?? null,
       })),
       proximoCursor,

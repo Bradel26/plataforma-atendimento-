@@ -1,9 +1,9 @@
 /**
- * Cria o funil "Esteira de Credenciamento" (tipo ESTEIRA) para a organizacao
- * da Bradel, com os 5 estagios do processo de credenciamento TIM/Starlink.
+ * Cria as esteiras (funis tipo ESTEIRA) da Bradel — uma por operacao, TIM e
+ * Starlink —, com os 5 estagios do processo de credenciamento.
  *
- * Idempotente: se o funil ja existir (mesmo nome), nao faz nada — seguro de
- * rodar mais de uma vez.
+ * Idempotente: funil que ja existe (mesmo nome) e pulado — seguro de rodar
+ * mais de uma vez. Um funil antigo com outro nome continua como esta.
  *
  * Uso:
  *   npm run esteira:seed -- <organizacaoId>
@@ -11,30 +11,29 @@
 import { prisma } from '../lib/prisma';
 import { comOrganizacao } from '../lib/tenant';
 
-const NOME_FUNIL = 'Esteira de Credenciamento';
+const NOMES_FUNIL = ['Credenciamento TIM', 'Credenciamento Starlink'];
 const ESTAGIOS = ['Novo cadastro', 'Pendencia', 'Aprovacao', 'Credenciado', 'Ativo'];
 
-async function main(organizacaoId: string) {
+async function main(_organizacaoId: string) {
   try {
-    const existente = await prisma.funnel.findFirst({ where: { nome: NOME_FUNIL } });
-    if (existente) {
-      console.log(`Funil "${NOME_FUNIL}" ja existe (id ${existente.id}) — nada a fazer.`);
-      return;
-    }
-
-    const criado = await prisma.funnel.create({
-      data: {
-        nome: NOME_FUNIL,
-        tipo: 'ESTEIRA',
-        estagios: {
-          createMany: { data: ESTAGIOS.map((nome, indice) => ({ nome, ordem: indice + 1 })) },
+    for (const nome of NOMES_FUNIL) {
+      const existente = await prisma.funnel.findFirst({ where: { nome } });
+      if (existente) {
+        console.log(`Funil "${nome}" ja existe (id ${existente.id}) — pulado.`);
+        continue;
+      }
+      const criado = await prisma.funnel.create({
+        data: {
+          nome,
+          tipo: 'ESTEIRA',
+          estagios: {
+            createMany: { data: ESTAGIOS.map((e, indice) => ({ nome: e, ordem: indice + 1 })) },
+          },
         },
-      },
-      include: { estagios: { orderBy: { ordem: 'asc' } } },
-    });
-
-    console.log(`Funil "${criado.nome}" criado (id ${criado.id}) com ${criado.estagios.length} estagios:`);
-    for (const e of criado.estagios) console.log(`  ${e.ordem}. ${e.nome}`);
+        include: { estagios: { orderBy: { ordem: 'asc' } } },
+      });
+      console.log(`Funil "${criado.nome}" criado (id ${criado.id}) com ${criado.estagios.length} estagios.`);
+    }
   } finally {
     await prisma.$disconnect();
   }

@@ -29,6 +29,10 @@ export const TIPOS_ATIVIDADE = [
   'REUNIAO',
   'VISITA',
   'PROPOSTA',
+  'RETORNO',
+  'DOCUMENTACAO',
+  'ACOMPANHAMENTO',
+  'OUTRO',
 ] as const;
 
 export type TipoAtividade = (typeof TIPOS_ATIVIDADE)[number];

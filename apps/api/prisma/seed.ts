@@ -201,22 +201,23 @@ async function semearCrm() {
  * mesmo shape de `semearCrm` — pipeline diferente, entao funcao propria.
  */
 async function semearEsteira() {
-  const funilEsteira = await prisma.funnel.upsert({
-    where: { organizacaoId_nome: { organizacaoId: ORGANIZACAO_INICIAL, nome: 'Esteira de Credenciamento' } },
-    update: {},
-    create: { nome: 'Esteira de Credenciamento', tipo: 'ESTEIRA' },
-  });
-
+  // Uma esteira por operacao: o Dashboard divide a tela ao meio, uma metade por funil.
   const estagiosEsteira = ['Novo cadastro', 'Pendencia', 'Aprovacao', 'Credenciado', 'Ativo'];
-  for (const [indice, nome] of estagiosEsteira.entries()) {
-    await prisma.funnelStage.upsert({
-      where: { funilId_ordem: { funilId: funilEsteira.id, ordem: indice + 1 } },
-      update: { nome },
-      create: { funilId: funilEsteira.id, ordem: indice + 1, nome },
+  for (const nome of ['Credenciamento TIM', 'Credenciamento Starlink']) {
+    const funilEsteira = await prisma.funnel.upsert({
+      where: { organizacaoId_nome: { organizacaoId: ORGANIZACAO_INICIAL, nome } },
+      update: {},
+      create: { nome, tipo: 'ESTEIRA' },
     });
+    for (const [indice, estagio] of estagiosEsteira.entries()) {
+      await prisma.funnelStage.upsert({
+        where: { funilId_ordem: { funilId: funilEsteira.id, ordem: indice + 1 } },
+        update: {},
+        create: { funilId: funilEsteira.id, ordem: indice + 1, nome: estagio },
+      });
+    }
+    console.log(`  funil: ${funilEsteira.nome} (${estagiosEsteira.length} estagios)`);
   }
-
-  console.log(`  funil: ${funilEsteira.nome} (${estagiosEsteira.length} estagios)`);
 }
 
 /**

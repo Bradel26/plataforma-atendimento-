@@ -33,7 +33,26 @@ export type FiltroDePublico = {
   /** O "cargo" da demonstracao: o papel da pessoa dentro da conta (item 5.2). */
   papel?: PapelNaConta[];
   responsavelId?: string | null;
+  /** Estado do parceiro (SUGESTOES.docx: "parceiros por estado/regiao"). */
+  uf?: string[];
+  /** Operacao: funil ESTEIRA (TIM, Starlink...). */
+  funilIds?: string[];
+  /** Etapa da esteira em que o parceiro esta agora. */
+  estagioIds?: string[];
+  /** Situacao do parceiro na esteira, derivada do estagio. */
+  situacao?: SituacaoParceiro[];
 };
+
+/**
+ * "Todos", "ativos", "em credenciamento" e "pendentes" do documento.
+ *
+ * - TODOS: qualquer parceiro que ja entrou numa esteira;
+ * - ATIVOS: no estagio Ativo, sem excecao;
+ * - EM_CREDENCIAMENTO: na esteira e ainda nao Ativo, sem excecao;
+ * - PENDENTES: no estagio Pendencia, sem excecao.
+ */
+export const SITUACOES_PARCEIRO = ['TODOS', 'ATIVOS', 'EM_CREDENCIAMENTO', 'PENDENTES'] as const;
+export type SituacaoParceiro = (typeof SITUACOES_PARCEIRO)[number];
 
 export type ContatoDoPublico = {
   id: string;
@@ -135,6 +154,10 @@ export function filtroVazio(f: FiltroDePublico): boolean {
     (f.tags?.length ?? 0) === 0 &&
     (f.origem?.length ?? 0) === 0 &&
     (f.papel?.length ?? 0) === 0 &&
+    (f.uf?.length ?? 0) === 0 &&
+    (f.funilIds?.length ?? 0) === 0 &&
+    (f.estagioIds?.length ?? 0) === 0 &&
+    (f.situacao?.length ?? 0) === 0 &&
     f.responsavelId === undefined
   );
 }
@@ -152,6 +175,10 @@ export function descreverFiltro(f: FiltroDePublico): string {
   if (f.origem?.length) partes.push(`origem: ${f.origem.join(', ')}`);
   if (f.papel?.length) partes.push(`papel: ${f.papel.join(', ')}`);
   if (f.tags?.length) partes.push(`etiquetas: ${f.tags.join(', ')}`);
+  if (f.situacao?.length) partes.push(`parceiros: ${f.situacao.join(', ')}`);
+  if (f.uf?.length) partes.push(`UF: ${f.uf.join(', ')}`);
+  if (f.funilIds?.length) partes.push(`operacoes: ${f.funilIds.length}`);
+  if (f.estagioIds?.length) partes.push(`etapas: ${f.estagioIds.length}`);
   if (f.responsavelId !== undefined) {
     partes.push(f.responsavelId === null ? 'sem responsavel' : `responsavel: ${f.responsavelId}`);
   }

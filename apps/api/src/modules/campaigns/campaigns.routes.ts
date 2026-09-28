@@ -6,7 +6,9 @@ import { validateBody } from '../../http/middleware/validate';
 import { param } from '../../http/params';
 import {
   adicionarContatos,
+  agendarCampanha,
   alterarStatus,
+  cancelarCampanha,
   criarCampanha,
   dispararCampanha,
   listarCampanhas,
@@ -15,6 +17,7 @@ import {
 } from './campaigns.service';
 import { aplicarPublico, previaDoPublico } from './publico.service';
 import { CICLOS } from '../crm/cicloDeVida';
+import { SITUACOES_PARCEIRO } from './publico';
 
 export const campanhasRoutes = Router();
 
@@ -53,6 +56,10 @@ const filtroPublicoSchema = z.object({
     .max(7)
     .optional(),
   responsavelId: z.string().uuid().nullable().optional(),
+  uf: z.array(z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/)).max(27).optional(),
+  funilIds: z.array(z.string().uuid()).max(20).optional(),
+  estagioIds: z.array(z.string().uuid()).max(50).optional(),
+  situacao: z.array(z.enum(SITUACOES_PARCEIRO)).max(4).optional(),
 });
 
 const previaSchema = filtroPublicoSchema.extend({
@@ -151,5 +158,20 @@ campanhasRoutes.post(
   '/:id/reprocessar',
   asyncHandler(async (req, res) => {
     res.json({ resultado: await reprocessarFalhas(param(req, 'id')) });
+  }),
+);
+
+campanhasRoutes.patch(
+  '/:id/agendamento',
+  validateBody(z.object({ agendadaPara: z.coerce.date().nullable() })),
+  asyncHandler(async (req, res) => {
+    res.json({ campanha: await agendarCampanha(param(req, 'id'), req.body.agendadaPara) });
+  }),
+);
+
+campanhasRoutes.post(
+  '/:id/cancelar',
+  asyncHandler(async (req, res) => {
+    res.json({ campanha: await cancelarCampanha(param(req, 'id')) });
   }),
 );

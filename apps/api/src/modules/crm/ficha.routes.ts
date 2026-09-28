@@ -104,7 +104,7 @@ fichaRoutes.get(
 
 /* ── Atividades ────────────────────────────────────────────────────────── */
 
-const TIPOS = ['NOTA', 'TAREFA', 'LIGACAO', 'WHATSAPP', 'EMAIL', 'REUNIAO', 'VISITA', 'PROPOSTA'] as const;
+const TIPOS = ['NOTA', 'TAREFA', 'LIGACAO', 'WHATSAPP', 'EMAIL', 'REUNIAO', 'VISITA', 'PROPOSTA', 'RETORNO', 'DOCUMENTACAO', 'ACOMPANHAMENTO', 'OUTRO'] as const;
 
 const vinculos = {
   contatoId: z.string().uuid().nullable().optional(),

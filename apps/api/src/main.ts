@@ -10,6 +10,7 @@ import './modules/campaigns/campaigns.worker';
 import './modules/surveys/surveys.worker';
 import './modules/voice/voice.worker';
 import { agendarExpurgo } from './modules/lgpd/agendador';
+import { agendarCampanhas } from './modules/campaigns/agendador';
 import { criarServidorRealtime } from './realtime/server';
 
 // O Socket.IO precisa do servidor HTTP cru, por isso nao usamos app.listen().
@@ -21,7 +22,7 @@ avisarChaveDerivada();
 // Worker embutido: comodo em desenvolvimento, indesejado em producao. Quando
 // desligado, quem consome a fila e dist/src/worker.js, e o expurgo da LGPD vai
 // com ele — sao os dois trabalhos de fundo.
-const pararWorker = env.WORKER_EMBUTIDO ? (agendarExpurgo(), iniciarWorker()) : async () => {};
+const pararWorker = env.WORKER_EMBUTIDO ? (agendarExpurgo(), agendarCampanhas(), iniciarWorker()) : async () => {};
 
 if (!env.WORKER_EMBUTIDO) console.log('Worker embutido desligado: suba o processo do worker separadamente.');
 

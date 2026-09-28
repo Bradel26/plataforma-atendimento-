@@ -21,12 +21,14 @@ import './modules/campaigns/campaigns.worker';
 import './modules/surveys/surveys.worker';
 import './modules/voice/voice.worker';
 import { agendarExpurgo } from './modules/lgpd/agendador';
+import { agendarCampanhas } from './modules/campaigns/agendador';
 
 avisarChaveDerivada();
 
 // O expurgo da LGPD roda aqui, nao na API: e trabalho de fundo, e o lock em
 // Redis garante que uma unica instancia execute mesmo com varios workers.
 agendarExpurgo();
+agendarCampanhas();
 
 const pararWorker = iniciarWorker();
 

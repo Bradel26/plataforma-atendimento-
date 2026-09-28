@@ -33,6 +33,7 @@ const FILHAS: Record<string, string> = {
   FunnelStage: 'Funnel',
   OpportunityItem: 'Opportunity',
   OpportunityStageLog: 'Opportunity',
+  CredenciamentoHistorico: 'Credenciamento',
   // A trilha de auditoria (item 3.2) e filha: toda leitura confere a
   // oportunidade com o filtro de visibilidade ANTES de ler a trilha, porque a
   // extensao de multi-tenant filtra a operacao consultada e nao a relacao.

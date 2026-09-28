@@ -1,8 +1,10 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { filtroDe, politicaContas, politicaContatos, politicaCredenciamentos } from '../../lib/politicas';
+import { usuarioAtualOuNulo } from '../../lib/tenant';
 import { apenasVisivel } from '../../lib/visibilidade';
 import { badRequest, notFound } from '../../lib/errors';
+import { diasDesde, papelDoEstagio } from './esteira';
 import type {
   AtualizarCredenciamentoInput,
   CriarCredenciamentoInput,
@@ -10,8 +12,8 @@ import type {
 } from './credenciamentos.schemas';
 
 const inclusao = {
-  contato: { select: { id: true, nome: true, email: true } },
-  conta: { select: { id: true, nome: true } },
+  contato: { select: { id: true, nome: true, email: true, telefone: true, uf: true, cidade: true } },
+  conta: { select: { id: true, nome: true, cnpj: true } },
   funil: { select: { id: true, nome: true } },
   estagio: { select: { id: true, nome: true, ordem: true } },
   responsavel: { select: { id: true, nome: true } },
@@ -19,40 +21,47 @@ const inclusao = {
 
 type CredenciamentoDb = Prisma.CredenciamentoGetPayload<{ include: typeof inclusao }>;
 
-/** Dias inteiros desde a data, nunca negativo — mesmo calculo do resto do CRM. */
-const diasDesde = (data: Date) => Math.max(0, Math.floor((Date.now() - data.getTime()) / 86_400_000));
-
 function serialize(c: CredenciamentoDb) {
   return {
     id: c.id,
     contato: c.contato,
     conta: c.conta,
     funil: c.funil,
-    estagio: c.estagio,
+    estagio: { ...c.estagio, papel: papelDoEstagio(c.estagio.nome) },
     responsavel: c.responsavel,
     situacaoExcecao: c.situacaoExcecao,
     motivoExcecao: c.motivoExcecao,
     observacoes: c.observacoes,
+    estagioDesde: c.estagioDesde,
     criadoEm: c.criadoEm,
     atualizadoEm: c.atualizadoEm,
     fechadoEm: c.fechadoEm,
-    /**
-     * Aproximado por `atualizadoEm`, sem campo dedicado de "estagio desde"
-     * (decisao do spec — ver docs/superpowers/specs/2026-09-09-esteira-credenciamento-design.md).
-     * Qualquer edicao do card reseta o contador, nao so mudanca de estagio.
-     */
-    diasNoEstagio: diasDesde(c.atualizadoEm),
+    /** Desde a entrada no estagio atual — editar a observacao nao zera o contador. */
+    diasNoEstagio: diasDesde(c.estagioDesde),
   };
+}
+
+export type CredenciamentoSerializado = ReturnType<typeof serialize>;
+
+const comEstagios = { estagios: { orderBy: { ordem: 'asc' } } } satisfies Prisma.FunnelInclude;
+
+/** Funis ESTEIRA ativos da organizacao — um por operacao (ex.: TIM, Starlink). */
+export function funisDaEsteira() {
+  return prisma.funnel.findMany({
+    where: { tipo: 'ESTEIRA', ativo: true },
+    orderBy: { criadoEm: 'asc' },
+    include: comEstagios,
+  });
 }
 
 /** Funil ESTEIRA de destino: o informado, ou o primeiro funil ESTEIRA ativo. */
 async function resolverFunilEsteira(funilId?: string, estagioId?: string) {
   const funil = funilId
-    ? await prisma.funnel.findUnique({ where: { id: funilId }, include: { estagios: { orderBy: { ordem: 'asc' } } } })
+    ? await prisma.funnel.findUnique({ where: { id: funilId }, include: comEstagios })
     : await prisma.funnel.findFirst({
         where: { tipo: 'ESTEIRA', ativo: true },
         orderBy: { criadoEm: 'asc' },
-        include: { estagios: { orderBy: { ordem: 'asc' } } },
+        include: comEstagios,
       });
 
   if (!funil) throw badRequest('Nenhum funil de Esteira configurado para esta organizacao');
@@ -74,12 +83,38 @@ async function carregarVisivel(id: string) {
   return c;
 }
 
-export async function listarCredenciamentos(query: ListarCredenciamentosQuery) {
+/** Filtros comuns a lista e ao kanban. */
+function filtrosDaConsulta(query: {
+  uf?: string;
+  busca?: string;
+  responsavelId?: string;
+  excecoes?: 'incluir' | 'ocultar' | 'somente';
+}): Prisma.CredenciamentoWhereInput[] {
   const filtros: Prisma.CredenciamentoWhereInput[] = [];
+  if (query.uf) filtros.push({ contato: { uf: query.uf } });
+  if (query.responsavelId) filtros.push({ responsavelId: query.responsavelId });
+  if (query.busca) {
+    const termo = query.busca.trim();
+    filtros.push({
+      OR: [
+        { contato: { nome: { contains: termo, mode: 'insensitive' } } },
+        { contato: { telefone: { contains: termo } } },
+        { conta: { nome: { contains: termo, mode: 'insensitive' } } },
+        { conta: { cnpj: { contains: termo } } },
+      ],
+    });
+  }
+  if (query.excecoes === 'ocultar') filtros.push({ situacaoExcecao: null });
+  if (query.excecoes === 'somente') filtros.push({ situacaoExcecao: { not: null } });
+  return filtros;
+}
+
+export async function listarCredenciamentos(query: ListarCredenciamentosQuery) {
+  const filtros = filtrosDaConsulta(query);
   if (query.funilId) filtros.push({ funilId: query.funilId });
   if (query.estagioId) filtros.push({ estagioId: query.estagioId });
   if (query.contaId) filtros.push({ contaId: query.contaId });
-  if (query.responsavelId) filtros.push({ responsavelId: query.responsavelId });
+  if (query.contatoId) filtros.push({ contatoId: query.contatoId });
   filtros.push(await filtroDe(politicaCredenciamentos));
 
   const registros = await prisma.credenciamento.findMany({
@@ -92,7 +127,17 @@ export async function listarCredenciamentos(query: ListarCredenciamentosQuery) {
 }
 
 export async function obterCredenciamento(id: string) {
-  return serialize(await carregarVisivel(id));
+  const c = await carregarVisivel(id);
+  const historico = await prisma.credenciamentoHistorico.findMany({
+    where: { credenciamentoId: id },
+    include: {
+      deEstagio: { select: { id: true, nome: true } },
+      paraEstagio: { select: { id: true, nome: true } },
+      usuario: { select: { id: true, nome: true } },
+    },
+    orderBy: { criadoEm: 'asc' },
+  });
+  return { ...serialize(c), historico };
 }
 
 export async function criarCredenciamento(input: CriarCredenciamentoInput) {
@@ -110,14 +155,26 @@ export async function criarCredenciamento(input: CriarCredenciamentoInput) {
 
   const { funil, estagio } = await resolverFunilEsteira(input.funilId, input.estagioId);
 
+  // O mesmo parceiro nao entra duas vezes na mesma operacao enquanto o
+  // processo anterior esta aberto: dois cards do mesmo parceiro dividiriam o
+  // historico e dobrariam as contagens do Dashboard.
+  const aberto = await prisma.credenciamento.findFirst({
+    where: { contatoId: contato.id, funilId: funil.id, situacaoExcecao: null },
+    select: { id: true },
+  });
+  if (aberto) throw badRequest('Este parceiro ja esta nesta esteira');
+
   const criado = await prisma.credenciamento.create({
     data: {
       contatoId: contato.id,
-      contaId: input.contaId ?? null,
+      contaId: input.contaId ?? contato.contaId ?? null,
       funilId: funil.id,
       estagioId: estagio.id,
-      responsavelId: input.responsavelId ?? null,
+      responsavelId: input.responsavelId ?? contato.responsavelId ?? null,
       observacoes: input.observacoes ?? null,
+      historico: {
+        create: { paraEstagioId: estagio.id, usuarioId: usuarioAtualOuNulo()?.id ?? null },
+      },
     },
     include: inclusao,
   });
@@ -126,35 +183,56 @@ export async function criarCredenciamento(input: CriarCredenciamentoInput) {
 
 export async function atualizarCredenciamento(id: string, input: AtualizarCredenciamentoInput) {
   const atual = await carregarVisivel(id);
+  const mudouEstagio = input.estagioId !== undefined && input.estagioId !== atual.estagioId;
 
-  if (input.estagioId) {
+  if (mudouEstagio) {
     const estagio = await prisma.funnelStage.findUnique({ where: { id: input.estagioId } });
     if (!estagio) throw notFound('Estagio nao encontrado');
     if (estagio.funilId !== atual.funilId) throw badRequest('Estagio nao pertence ao funil do credenciamento');
   }
 
-  await prisma.credenciamento.update({
-    where: { id },
-    data: {
-      ...(input.estagioId !== undefined ? { estagioId: input.estagioId } : {}),
-      ...(input.responsavelId !== undefined ? { responsavelId: input.responsavelId } : {}),
-      ...(input.situacaoExcecao !== undefined ? { situacaoExcecao: input.situacaoExcecao } : {}),
-      ...(input.motivoExcecao !== undefined ? { motivoExcecao: input.motivoExcecao } : {}),
-      ...(input.observacoes !== undefined ? { observacoes: input.observacoes } : {}),
-      fechadoEm: input.situacaoExcecao ? new Date() : input.situacaoExcecao === null ? null : atual.fechadoEm,
-    },
+  const agora = new Date();
+  await prisma.$transaction(async (tx) => {
+    await tx.credenciamento.update({
+      where: { id },
+      data: {
+        ...(mudouEstagio ? { estagioId: input.estagioId, estagioDesde: agora } : {}),
+        ...(input.responsavelId !== undefined ? { responsavelId: input.responsavelId } : {}),
+        ...(input.situacaoExcecao !== undefined ? { situacaoExcecao: input.situacaoExcecao } : {}),
+        ...(input.motivoExcecao !== undefined ? { motivoExcecao: input.motivoExcecao } : {}),
+        ...(input.observacoes !== undefined ? { observacoes: input.observacoes } : {}),
+        fechadoEm: input.situacaoExcecao ? agora : input.situacaoExcecao === null ? null : atual.fechadoEm,
+      },
+    });
+    if (mudouEstagio) {
+      await tx.credenciamentoHistorico.create({
+        data: {
+          credenciamentoId: id,
+          deEstagioId: atual.estagioId,
+          paraEstagioId: input.estagioId!,
+          usuarioId: usuarioAtualOuNulo()?.id ?? null,
+          segundosNoEstagio: Math.max(0, Math.round((agora.getTime() - atual.estagioDesde.getTime()) / 1000)),
+        },
+      });
+    }
   });
   return obterCredenciamento(id);
 }
 
 /** Kanban do funil ESTEIRA: uma coluna por estagio, na ordem configurada. */
-export async function esteiraKanban(funilId?: string) {
-  const { funil } = await resolverFunilEsteira(funilId);
+export async function esteiraKanban(query: {
+  funilId?: string;
+  uf?: string;
+  busca?: string;
+  responsavelId?: string;
+  excecoes?: 'incluir' | 'ocultar' | 'somente';
+}) {
+  const { funil } = await resolverFunilEsteira(query.funilId);
 
   const registros = await prisma.credenciamento.findMany({
-    where: { AND: [{ funilId: funil.id }, await filtroDe(politicaCredenciamentos)] },
+    where: { AND: [{ funilId: funil.id }, ...filtrosDaConsulta(query), await filtroDe(politicaCredenciamentos)] },
     include: inclusao,
-    orderBy: { atualizadoEm: 'desc' },
+    orderBy: { estagioDesde: 'asc' },
   });
   const serializados = registros.map(serialize);
 
@@ -163,7 +241,7 @@ export async function esteiraKanban(funilId?: string) {
     colunas: funil.estagios.map((estagio) => {
       const itens = serializados.filter((c) => c.estagio.id === estagio.id);
       return {
-        estagio: { id: estagio.id, nome: estagio.nome, ordem: estagio.ordem },
+        estagio: { id: estagio.id, nome: estagio.nome, ordem: estagio.ordem, papel: papelDoEstagio(estagio.nome) },
         credenciamentos: itens,
         total: itens.length,
       };

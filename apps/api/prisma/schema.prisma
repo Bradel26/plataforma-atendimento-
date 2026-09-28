@@ -136,45 +136,46 @@ model User {
   criadoEm      DateTime    @default(now()) @map("criado_em")
   atualizadoEm  DateTime    @updatedAt @map("atualizado_em")
 
-  filas                 QueueAgent[]
-  conversas             Conversation[]
-  mensagensEnviadas     Message[]
-  leads                 Lead[]
-  oportunidades         Opportunity[]
-  protocolos            Ticket[]
-  escalas               WorkShift[]
-  presenca              PresenceLog[]
-  campanhas             Campaign[]
-  comentarios           TicketComment[]
-  anexos                TicketAttachment[]
-  agendamentos          TicketSchedule[]
-  registrosLgpd         LgpdLog[]
-  chamadas              Call[]
-  atividades            Activity[]            @relation("AtividadeResponsavel")
-  atividadesCriadas     Activity[]            @relation("AtividadeAutor")
-  mudancasEstagio       OpportunityStageLog[]
-  auditoriasFeitas      OpportunityAudit[]
-  descontosAprovados    Opportunity[]         @relation("DescontoAprovador")
-  tokensIntegracao      IntegrationToken[]
+  filas                   QueueAgent[]
+  conversas               Conversation[]
+  mensagensEnviadas       Message[]
+  leads                   Lead[]
+  oportunidades           Opportunity[]
+  protocolos              Ticket[]
+  escalas                 WorkShift[]
+  presenca                PresenceLog[]
+  campanhas               Campaign[]
+  comentarios             TicketComment[]
+  anexos                  TicketAttachment[]
+  agendamentos            TicketSchedule[]
+  registrosLgpd           LgpdLog[]
+  chamadas                Call[]
+  atividades              Activity[]                @relation("AtividadeResponsavel")
+  atividadesCriadas       Activity[]                @relation("AtividadeAutor")
+  mudancasEstagio         OpportunityStageLog[]
+  auditoriasFeitas        OpportunityAudit[]
+  descontosAprovados      Opportunity[]             @relation("DescontoAprovador")
+  tokensIntegracao        IntegrationToken[]
   /// Numeros de canal (ex.: WhatsApp) cadastrados como linha pessoal deste usuario.
-  canaisProprios        ChannelConfig[]
-  propostasGeradas      PropostaGerada[]
-  credenciamentos       Credenciamento[]
-  organizacao           Organizacao           @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  canaisProprios          ChannelConfig[]
+  propostasGeradas        PropostaGerada[]
+  credenciamentos         Credenciamento[]
+  historicoCredenciamento CredenciamentoHistorico[] @relation("CredHistoricoUsuario")
+  organizacao             Organizacao               @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
   /// SetNull: desligar o gestor nao pode apagar a equipe dele.
-  gestor                User?                 @relation("Equipe", fields: [gestorId], references: [id], onDelete: SetNull)
-  equipe                User[]                @relation("Equipe")
+  gestor                  User?                     @relation("Equipe", fields: [gestorId], references: [id], onDelete: SetNull)
+  equipe                  User[]                    @relation("Equipe")
   /// SetNull: remover a filial nao pode apagar as pessoas dela.
-  filial                Filial?               @relation(fields: [filialId], references: [id], onDelete: SetNull)
-  contatos              Contact[]             @relation("ContatoResponsavel")
-  contas                Account[]             @relation("ContaResponsavel")
-  metas                 Meta[]
+  filial                  Filial?                   @relation(fields: [filialId], references: [id], onDelete: SetNull)
+  contatos                Contact[]                 @relation("ContatoResponsavel")
+  contas                  Account[]                 @relation("ContaResponsavel")
+  metas                   Meta[]
   /// Ligacoes que esta pessoa classificou (item 6.6).
-  chamadasClassificadas Call[]                @relation("ChamadaClassificador")
-  acoesDescartadas      CallSuggestedAction[] @relation("AcaoDescartadaPor")
+  chamadasClassificadas   Call[]                    @relation("ChamadaClassificador")
+  acoesDescartadas        CallSuggestedAction[]     @relation("AcaoDescartadaPor")
   /// Visoes salvas que esta pessoa criou (item 6.1) — autoria, nao dono exclusivo:
   /// a visao e compartilhada com a organizacao inteira, como o funil.
-  visoesSalvas          VisaoSalva[]
+  visoesSalvas            VisaoSalva[]
 
   /// E-mail unico POR ORGANIZACAO. A mesma pessoa em duas empresas sao dois
   /// registros, com senhas independentes — vinculo N-para-N e troca de
@@ -290,6 +291,11 @@ model Contact {
   canalOrigem     Channel   @default(WEBCHAT) @map("canal_origem")
   tags            String[]  @default([])
   observacoes     String?
+  /// Estado (UF, duas letras maiusculas) e cidade do parceiro. Alimentam o
+  /// "parceiros por estado/regiao" do Dashboard e o filtro de publico de
+  /// campanha. Anulaveis: o contato que nasce no webchat nao tem endereco.
+  uf              String?   @db.VarChar(2)
+  cidade          String?
   /// Momento em que o titular aceitou o aviso de privacidade (LGPD art. 8).
   consentimentoEm DateTime? @map("consentimento_em")
   /// Preenchido quando os dados pessoais foram substituidos por placeholders.
@@ -315,8 +321,8 @@ model Contact {
   /// responsavel da conta nao propaga.
   responsavelId   String?       @map("responsavel_id")
 
-  conta           Account?       @relation(fields: [contaId], references: [id], onDelete: SetNull)
-  responsavel     User?          @relation("ContatoResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+  conta           Account?         @relation(fields: [contaId], references: [id], onDelete: SetNull)
+  responsavel     User?            @relation("ContatoResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
   conversas       Conversation[]
   leads           Lead[]
   protocolos      Ticket[]
@@ -324,11 +330,12 @@ model Contact {
   chamadas        Call[]
   atividades      Activity[]
   credenciamentos Credenciamento[]
-  organizacao     Organizacao    @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  organizacao     Organizacao      @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
   @@index([organizacaoId, email])
   @@index([organizacaoId, telefone])
   @@index([organizacaoId, responsavelId])
+  @@index([organizacaoId, uf])
   /// "Quem sao as pessoas desta conta, e o que cada uma faz nela."
   @@index([organizacaoId, contaId, papelNaConta])
   @@index([tags], type: Gin)
@@ -601,12 +608,14 @@ model FunnelStage {
   /// booleano obrigaria o vendedor a adivinhar o que falta fazer.
   tarefaObrigatoria String? @map("tarefa_obrigatoria")
 
-  funil           Funnel                @relation(fields: [funilId], references: [id], onDelete: Cascade)
+  funil           Funnel                    @relation(fields: [funilId], references: [id], onDelete: Cascade)
   oportunidades   Opportunity[]
   credenciamentos Credenciamento[]
   atividades      Activity[]
-  saidas          OpportunityStageLog[] @relation("EstagioSaida")
-  entradas        OpportunityStageLog[] @relation("EstagioEntrada")
+  saidas          OpportunityStageLog[]     @relation("EstagioSaida")
+  entradas        OpportunityStageLog[]     @relation("EstagioEntrada")
+  credSaidas      CredenciamentoHistorico[] @relation("CredEstagioSaida")
+  credEntradas    CredenciamentoHistorico[] @relation("CredEstagioEntrada")
 
   @@unique([funilId, ordem])
   @@map("funil_estagios")
@@ -742,6 +751,11 @@ enum TipoAtividade {
   REUNIAO
   VISITA
   PROPOSTA
+  /// Tipos da agenda do credenciamento (SUGESTOES.docx, CRM > Agenda).
+  RETORNO
+  DOCUMENTACAO
+  ACOMPANHAMENTO
+  OUTRO
 }
 
 /// Atividade comercial: ou um registro do que aconteceu, ou uma tarefa com prazo.
@@ -1478,31 +1492,59 @@ enum SituacaoCredenciamento {
 }
 
 model Credenciamento {
-  id            String   @id @default(uuid())
-  organizacaoId String   @default("") @map("organizacao_id")
-  contatoId     String   @map("contato_id")
-  contaId       String?  @map("conta_id")
-  funilId       String   @map("funil_id")
-  estagioId     String   @map("estagio_id")
-  responsavelId String?  @map("responsavel_id")
+  id            String  @id @default(uuid())
+  organizacaoId String  @default("") @map("organizacao_id")
+  contatoId     String  @map("contato_id")
+  contaId       String? @map("conta_id")
+  funilId       String  @map("funil_id")
+  estagioId     String  @map("estagio_id")
+  responsavelId String? @map("responsavel_id")
 
   situacaoExcecao SituacaoCredenciamento? @map("situacao_excecao")
   motivoExcecao   String?                 @map("motivo_excecao")
   observacoes     String?
 
+  /// Desde quando esta no estagio atual. Diferente de `atualizadoEm`: editar a
+  /// observacao do card nao pode zerar o "tempo parado" da Area da Gestao.
+  estagioDesde DateTime  @default(now()) @map("estagio_desde")
   criadoEm     DateTime  @default(now()) @map("criado_em")
   atualizadoEm DateTime  @updatedAt @map("atualizado_em")
   fechadoEm    DateTime? @map("fechado_em")
 
-  contato     Contact     @relation(fields: [contatoId], references: [id], onDelete: Cascade)
-  conta       Account?    @relation(fields: [contaId], references: [id], onDelete: SetNull)
-  funil       Funnel      @relation(fields: [funilId], references: [id], onDelete: Cascade)
-  estagio     FunnelStage @relation(fields: [estagioId], references: [id])
-  responsavel User?       @relation(fields: [responsavelId], references: [id], onDelete: SetNull)
-  organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  historico   CredenciamentoHistorico[]
+  contato     Contact                   @relation(fields: [contatoId], references: [id], onDelete: Cascade)
+  conta       Account?                  @relation(fields: [contaId], references: [id], onDelete: SetNull)
+  funil       Funnel                    @relation(fields: [funilId], references: [id], onDelete: Cascade)
+  estagio     FunnelStage               @relation(fields: [estagioId], references: [id])
+  responsavel User?                     @relation(fields: [responsavelId], references: [id], onDelete: SetNull)
+  organizacao Organizacao               @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
   @@index([organizacaoId, estagioId, atualizadoEm])
+  @@index([organizacaoId, funilId, estagioDesde])
   @@map("credenciamentos")
+}
+
+/// Cada passagem de estagio de um credenciamento, no molde de
+/// `OpportunityStageLog`. E a base do "tempo medio na etapa" e do "tempo medio
+/// de credenciamento" da Area da Gestao e do Desempenho Operacional.
+model CredenciamentoHistorico {
+  id                String   @id @default(uuid())
+  credenciamentoId  String   @map("credenciamento_id")
+  deEstagioId       String?  @map("de_estagio_id")
+  paraEstagioId     String   @map("para_estagio_id")
+  usuarioId         String?  @map("usuario_id")
+  /// Quanto tempo ficou no estagio de origem. Nulo no registro de entrada.
+  segundosNoEstagio Int?     @map("segundos_no_estagio")
+  criadoEm          DateTime @default(now()) @map("criado_em")
+
+  credenciamento Credenciamento @relation(fields: [credenciamentoId], references: [id], onDelete: Cascade)
+  deEstagio      FunnelStage?   @relation("CredEstagioSaida", fields: [deEstagioId], references: [id], onDelete: SetNull)
+  paraEstagio    FunnelStage    @relation("CredEstagioEntrada", fields: [paraEstagioId], references: [id], onDelete: Cascade)
+  usuario        User?          @relation("CredHistoricoUsuario", fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([credenciamentoId, criadoEm])
+  @@index([paraEstagioId, criadoEm])
+  @@map("credenciamento_historico")
 }
 
 // ---------------------------------------------------------------------------
@@ -1566,13 +1608,13 @@ model ChannelConfig {
   /// Fica em coluna propria, e nao reaproveita `accessToken`/`phoneNumberId`: os
   /// campos da Meta continuam significando o que significam, e um dia em que os
   /// dois modos estiverem configurados a troca de modo nao perde credencial.
-  ponteUrl     String? @map("ponte_url")
+  ponteUrl      String?   @map("ponte_url")
   /// Token com que a plataforma se autentica NA ponte. Cifrado em repouso.
-  ponteToken   String? @map("ponte_token")
+  ponteToken    String?   @map("ponte_token")
   /// Segredo HMAC com que a PONTE assina o que envia para ca. Cifrado.
-  ponteSegredo String? @map("ponte_segredo")
+  ponteSegredo  String?   @map("ponte_segredo")
   /// Nome da sessao/instancia na ponte, quando ela hospeda mais de um numero.
-  ponteSessao  String? @map("ponte_sessao")
+  ponteSessao   String?   @map("ponte_sessao")
   /// Ultimo status de conexao que a ponte reportou para esta linha (CONECTADO/DESCONECTADO). Nulo fora do modo NAO_OFICIAL ou antes do primeiro aviso.
   ponteStatus   String?   @map("ponte_status")
   /// Quando `ponteStatus` mudou pela ultima vez.
