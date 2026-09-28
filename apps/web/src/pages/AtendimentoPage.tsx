@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Alerta, Badge, Button, Card, Input } from '../components/ui';
 import { ListaConversas } from '../features/atendimento/ListaConversas';
@@ -23,6 +23,96 @@ type PassoMobile = 'lista' | 'chat' | 'ficha';
 
 type MinhaLinhaWhatsapp = { id: string; ponteSessao: string | null; modo: string | null; ativo: boolean };
 
+const LARGURA_MIN = 220;
+const LARGURA_MAX = 480;
+
+/**
+ * Largura ajustavel por arrasto + recolher, persistida por painel (lista à
+ * esquerda, ficha à direita) — só faz sentido no desktop, onde as tres
+ * colunas cabem lado a lado; notebook/tablet/mobile já têm layout próprio
+ * (`classesLista`/`classesFicha`) que este hook não mexe.
+ */
+function useLarguraAjustavel(chave: string, padrao: number) {
+  const [largura, setLargura] = useState(() => {
+    try {
+      const salva = Number(localStorage.getItem(chave));
+      return salva >= LARGURA_MIN && salva <= LARGURA_MAX ? salva : padrao;
+    } catch {
+      return padrao;
+    }
+  });
+  const [recolhida, setRecolhida] = useState(() => {
+    try {
+      return localStorage.getItem(`${chave}:recolhida`) === '1';
+    } catch {
+      return false;
+    }
+  });
+
+  const salvarLargura = useCallback(
+    (valor: number) => {
+      setLargura(valor);
+      try {
+        localStorage.setItem(chave, String(valor));
+      } catch {
+        // Preferencia de UI, nao dado — sem persistencia se o navegador bloquear.
+      }
+    },
+    [chave],
+  );
+
+  const alternarRecolhida = useCallback(() => {
+    setRecolhida((atual) => {
+      const proximo = !atual;
+      try {
+        localStorage.setItem(`${chave}:recolhida`, proximo ? '1' : '0');
+      } catch {
+        // idem
+      }
+      return proximo;
+    });
+  }, [chave]);
+
+  /**
+   * `direcao` inverte o sinal do arrasto: a lista (esquerda) cresce puxando
+   * pra direita, a ficha (direita) cresce puxando pra esquerda — mesmo
+   * puxador, sinal oposto.
+   */
+  const iniciarArraste = useCallback(
+    (e: ReactMouseEvent, direcao: 1 | -1) => {
+      e.preventDefault();
+      const inicioX = e.clientX;
+      const larguraInicial = largura;
+      const mover = (ev: MouseEvent) => {
+        const delta = (ev.clientX - inicioX) * direcao;
+        salvarLargura(Math.min(LARGURA_MAX, Math.max(LARGURA_MIN, larguraInicial + delta)));
+      };
+      const soltar = () => {
+        window.removeEventListener('mousemove', mover);
+        window.removeEventListener('mouseup', soltar);
+      };
+      window.addEventListener('mousemove', mover);
+      window.addEventListener('mouseup', soltar);
+    },
+    [largura, salvarLargura],
+  );
+
+  return { largura, recolhida, alternarRecolhida, iniciarArraste };
+}
+
+/** Puxador vertical entre duas colunas — arrasta para redimensionar. */
+function Puxador({ onArrastar, titulo }: { onArrastar: (e: ReactMouseEvent) => void; titulo: string }) {
+  return (
+    <div
+      onMouseDown={onArrastar}
+      role="separator"
+      aria-orientation="vertical"
+      title={titulo}
+      className="w-1 shrink-0 cursor-col-resize self-stretch rounded transition hover:bg-slate-300 active:bg-slate-400"
+    />
+  );
+}
+
 type QrDaPonte = {
   /** PNG em data URL. Nulo quando nao ha nada para escanear agora. */
   qr: string | null;
@@ -34,6 +124,8 @@ export function AtendimentoPage() {
   const { usuario, temPerfil } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const { ref: containerRef, faixa } = useFaixaDeLargura<HTMLDivElement>();
+  const listaAjustavel = useLarguraAjustavel('plataforma:atendimento-largura-lista', 320);
+  const fichaAjustavel = useLarguraAjustavel('plataforma:atendimento-largura-ficha', 288);
   /**
    * Visao da Inbox (Fase 11.3) — Minhas / Nao atribuidas / Todas. Comeca em
    * "Nao atribuidas": e a fila que precisa de alguem pegando, o mesmo motivo
@@ -399,15 +491,40 @@ export function AtendimentoPage() {
   const alternarFicha = emMobile ? () => setPassoMobile('ficha') : () => setFichaAberta((v) => !v);
   const fecharFicha = emMobile ? () => setPassoMobile('chat') : () => setFichaAberta(false);
 
+  const emDesktop = faixa === 'desktop';
   const classesLista = emMobile ? 'w-full' : faixa === 'tablet' ? 'w-64 shrink-0' : 'w-80 shrink-0';
   const classesFicha = emMobile ? 'w-full' : 'w-72 shrink-0';
+  // No desktop a largura vira inline style (arrastavel); nos outros tamanhos
+  // continua a classe fixa de sempre — o recurso so existe onde as tres
+  // colunas cabem lado a lado.
+  const larguraListaEstilo = emDesktop
+    ? { width: listaAjustavel.recolhida ? 44 : listaAjustavel.largura, flexShrink: 0 }
+    : undefined;
+  const larguraFichaEstilo = emDesktop
+    ? { width: fichaAjustavel.recolhida ? 44 : fichaAjustavel.largura, flexShrink: 0 }
+    : undefined;
 
   return (
     <div ref={containerRef} className="flex h-[calc(100vh-8rem)] gap-5">
       {mostrarLista && (
         <section
-          className={`flex ${classesLista} flex-col overflow-hidden rounded-xl border border-slate-200 bg-white`}
+          className={`flex ${emDesktop ? '' : classesLista} flex-col overflow-hidden rounded-xl border border-slate-200 bg-white`}
+          style={larguraListaEstilo}
         >
+          {emDesktop && (
+            <div className="flex items-center justify-end border-b border-slate-100 px-1.5 py-1">
+              <button
+                type="button"
+                onClick={listaAjustavel.alternarRecolhida}
+                title={listaAjustavel.recolhida ? 'Expandir lista de conversas' : 'Recolher lista de conversas'}
+                className="rounded px-1.5 py-0.5 text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              >
+                {listaAjustavel.recolhida ? '»' : '«'}
+              </button>
+            </div>
+          )}
+          {(!emDesktop || !listaAjustavel.recolhida) && (
+          <>
           <div className="border-b border-slate-100 p-3">
             <Input placeholder="Buscar por contato ou mensagem" value={busca} onChange={(e) => setBusca(e.target.value)} />
           </div>
@@ -457,7 +574,13 @@ export function AtendimentoPage() {
               />
             )}
           </div>
+          </>
+          )}
         </section>
+      )}
+
+      {emDesktop && mostrarLista && mostrarChat && !listaAjustavel.recolhida && (
+        <Puxador titulo="Arrastar para redimensionar a lista" onArrastar={(e) => listaAjustavel.iniciarArraste(e, 1)} />
       )}
 
       {mostrarChat && (
@@ -583,9 +706,30 @@ export function AtendimentoPage() {
         quando alguem pediu — reabrir a cada troca de conversa custaria mais
         cliques do que vale, entao o estado fica aberto entre trocas.
       */}
+      {fichaVisivel && aberta && emDesktop && (
+        <Puxador titulo="Arrastar para redimensionar a ficha" onArrastar={(e) => fichaAjustavel.iniciarArraste(e, -1)} />
+      )}
+
       {fichaVisivel && aberta && (
-        <aside className={`flex ${classesFicha} flex-col overflow-hidden rounded-xl border border-slate-200 bg-white`}>
-          <PainelContato contatoId={aberta.contato.id} aoFechar={faixa === 'desktop' ? undefined : fecharFicha} />
+        <aside
+          className={`flex ${emDesktop ? '' : classesFicha} flex-col overflow-hidden rounded-xl border border-slate-200 bg-white`}
+          style={larguraFichaEstilo}
+        >
+          {emDesktop && (
+            <div className="flex items-center justify-start border-b border-slate-100 px-1.5 py-1">
+              <button
+                type="button"
+                onClick={fichaAjustavel.alternarRecolhida}
+                title={fichaAjustavel.recolhida ? 'Expandir ficha do contato' : 'Recolher ficha do contato'}
+                className="rounded px-1.5 py-0.5 text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              >
+                {fichaAjustavel.recolhida ? '«' : '»'}
+              </button>
+            </div>
+          )}
+          {(!emDesktop || !fichaAjustavel.recolhida) && (
+            <PainelContato contatoId={aberta.contato.id} aoFechar={faixa === 'desktop' ? undefined : fecharFicha} />
+          )}
         </aside>
       )}
     </div>
