@@ -1,11 +1,23 @@
 import { Link } from 'react-router-dom';
 
 const CLASSE_ITEM = (ativo: boolean) =>
-  `anel-de-foco -mb-px border-b-2 px-3 py-2 text-sm font-medium transition ${
+  `anel-de-foco -mb-px shrink-0 whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium transition ${
     ativo
       ? 'border-[var(--brand-primary)] text-[var(--brand-primary)]'
       : 'border-transparent text-slate-500 hover:text-slate-700'
   }`;
+
+/**
+ * `overflow-x-auto` + `shrink-0`/`whitespace-nowrap` em cada aba: numa tela
+ * estreita (celular), quatro ou mais abas passam da largura disponivel — sem
+ * isto a ultima aba ficava cortada na borda da tela, sem rolagem nem quebra
+ * de linha para chegar nela. Rola em vez de quebrar linha porque quebrar
+ * empurraria o conteudo da pagina para baixo a cada aba nova; rolar mantem a
+ * barra de abas na mesma altura sempre. `-mb-px` continua saindo do item, e
+ * nao do container, para a borda inferior de cada aba colar exatamente na
+ * linha divisoria mesmo com a barra rolada.
+ */
+const CLASSE_CONTAINER = 'flex min-w-0 gap-1 overflow-x-auto border-b border-slate-200';
 
 /**
  * Abas que trocam conteudo sem navegar — `role="tablist"`/`aria-selected`,
@@ -25,7 +37,7 @@ export function Tabs({
   aoSelecionar: (chave: string) => void;
 }) {
   return (
-    <div role="tablist" className="flex gap-1 border-b border-slate-200">
+    <div role="tablist" className={CLASSE_CONTAINER}>
       {itens.map((item) => {
         const selecionado = item.chave === ativo;
         return (
@@ -65,7 +77,7 @@ export function TabsDeNavegacao({
   itens: Array<{ rota: string; rotulo: string; ativo: boolean }>;
 }) {
   return (
-    <div className="flex gap-1 border-b border-slate-200">
+    <div className={CLASSE_CONTAINER}>
       {itens.map((item) => (
         <Link
           key={item.rota}
