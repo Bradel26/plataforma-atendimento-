@@ -1,8 +1,15 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { Alerta, Button, Input } from '../components/ui';
 import { useAuth } from '../features/auth/AuthProvider';
 import { useBranding } from '../features/branding/BrandingProvider';
 import { ApiError } from '../lib/api';
+
+/**
+ * Carregado sob demanda: Three.js so pesa o bundle de quem realmente vai ver
+ * a cena (desktop, tela de login) — sem isto, todo mundo baixaria a lib em
+ * qualquer pagina, so por ela estar importada em algum lugar do app.
+ */
+const CenaTerra3D = lazy(() => import('../features/login/CenaTerra3D').then((m) => ({ default: m.CenaTerra3D })));
 
 /** Textarra de estrelas via radial-gradient repetido — mais leve que um SVG com centenas de pontos. */
 const ESTRELAS_BG = `
@@ -54,8 +61,21 @@ export function LoginPage() {
         @keyframes cintilar { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
       `}</style>
 
-      {/* Fundo: foto real da Terra vista do espaco + estrelas/orbitas desenhadas por cima */}
-      <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+      {/*
+        Cena 3D de verdade, so a partir de lg (1024px) — abaixo disso segue o
+        fundo CSS/SVG de sempre (bloco seguinte), mais leve pro mobile/tablet.
+        O "vazar os limites da tela" vem de dentro da propria cena (raio
+        grande + Terra deslocada na camera), nao de recortar o canvas no DOM
+        — um recorte por fora acabava cortando justo o lado iluminado.
+      */}
+      <div className="relative hidden overflow-hidden lg:block lg:w-[68%] lg:shrink-0 lg:self-stretch" aria-hidden="true">
+        <Suspense fallback={null}>
+          <CenaTerra3D />
+        </Suspense>
+      </div>
+
+      {/* Fundo: foto real da Terra vista do espaco + estrelas/orbitas desenhadas por cima — so abaixo de lg */}
+      <div className="pointer-events-none absolute inset-0 lg:hidden" aria-hidden="true">
         <div
           className="absolute inset-0"
           style={{
@@ -192,8 +212,8 @@ export function LoginPage() {
 
       <p className="absolute bottom-6 left-8 z-10 text-xs text-slate-400">Versao 0.1.0 - MVP Fase 0</p>
 
-      {/* card flutuante */}
-      <div className="relative z-10 flex w-full justify-center px-6 lg:justify-end lg:pr-20">
+      {/* card flutuante — coluna direita (~32%), centralizado nela em vez de so encostado */}
+      <div className="relative z-10 flex w-full flex-1 items-center justify-center px-6 lg:w-[32%] lg:flex-none">
         <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-slate-950/70 p-8 shadow-2xl backdrop-blur-xl">
           <div className="mb-6 flex items-center justify-center gap-4 border-b border-white/10 pb-5">
             <span className="flex items-center gap-1 text-lg font-semibold italic tracking-wide text-white">
