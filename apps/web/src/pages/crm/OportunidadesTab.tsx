@@ -233,7 +233,7 @@ export function OportunidadesTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   const emColunas = faixa === 'desktop' || faixa === 'notebook';
 
   const carregarFunis = useCallback(async () => {
-    const f = await api.get<{ funis: Funil[] }>('/funis');
+    const f = await api.get<{ funis: Funil[] }>('/funis?tipo=COMERCIAL');
     setFunis(f.funis);
   }, []);
 

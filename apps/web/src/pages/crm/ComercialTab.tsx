@@ -162,7 +162,7 @@ export function ComercialTab() {
 
   useEffect(() => {
     void api
-      .get<{ funis: Funil[] }>('/funis')
+      .get<{ funis: Funil[] }>('/funis?tipo=COMERCIAL')
       .then((f) => setFunis(f.funis))
       .catch(() => undefined);
 

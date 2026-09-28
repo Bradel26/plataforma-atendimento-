@@ -41,12 +41,13 @@ async function resolverFunil(funilId?: string, estagioId?: string) {
   const funil = funilId
     ? await prisma.funnel.findUnique({ where: { id: funilId }, include: { estagios: { orderBy: { ordem: 'asc' } } } })
     : await prisma.funnel.findFirst({
-        where: { ativo: true },
+        where: { tipo: 'COMERCIAL', ativo: true },
         orderBy: { criadoEm: 'asc' },
         include: { estagios: { orderBy: { ordem: 'asc' } } },
       });
 
   if (!funil) throw badRequest('Nenhum funil configurado — crie um funil antes de abrir oportunidades');
+  if (funil.tipo !== 'COMERCIAL') throw badRequest('O funil informado nao e do tipo Comercial');
   if (funil.estagios.length === 0) throw badRequest('O funil nao tem estagios configurados');
 
   const estagio = estagioId ? funil.estagios.find((e) => e.id === estagioId) : funil.estagios[0];
