@@ -22,13 +22,16 @@ import './modules/surveys/surveys.worker';
 import './modules/voice/voice.worker';
 import { agendarExpurgo } from './modules/lgpd/agendador';
 import { agendarCampanhas } from './modules/campaigns/agendador';
+import { agendarEncerramentoDePresenca } from './modules/users/presenca.agendador';
 
 avisarChaveDerivada();
 
-// O expurgo da LGPD roda aqui, nao na API: e trabalho de fundo, e o lock em
-// Redis garante que uma unica instancia execute mesmo com varios workers.
+// O expurgo da LGPD e o encerramento de presenca por inatividade rodam aqui,
+// nao na API: sao trabalho de fundo, e o lock em Redis garante que uma unica
+// instancia execute mesmo com varios workers.
 agendarExpurgo();
 agendarCampanhas();
+agendarEncerramentoDePresenca();
 
 const pararWorker = iniciarWorker();
 

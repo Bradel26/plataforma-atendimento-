@@ -101,3 +101,46 @@ export async function updateStatus(id: string, status: AgentStatus) {
   notificarStatusAgente(publico);
   return publico;
 }
+
+/**
+ * Heartbeat do front: a aba avisa "ainda estou aqui" enquanto fica visivel.
+ *
+ * So atualiza uma coluna — nao mexe em status nem em presenca. A cada ping o
+ * front normalmente nao mudou de status, e tratar isto como troca de status
+ * abriria um PresenceLog novo a cada minuto.
+ */
+export async function registrarHeartbeat(id: string) {
+  await prisma.user.update({ where: { id }, data: { ultimoHeartbeat: new Date() } });
+}
+
+/** Depois de quanto tempo sem heartbeat um agente e considerado inativo. */
+export const LIMITE_INATIVIDADE_MS = 3 * 60 * 1000;
+
+/**
+ * Fecha a presenca de quem parou de mandar heartbeat — fechou a aba, o
+ * computador travou, caiu a rede — sem nunca ter clicado em "Sair".
+ *
+ * Sem isto, "No status" no Monitoramento (`segundosNoStatus`) fica contando
+ * para sempre a partir da ultima troca manual de status: a pessoa aparece
+ * "Disponivel ha 3 dias" mesmo tendo saido ha 3 dias.
+ *
+ * So considera quem ja mandou pelo menos um heartbeat OU logou ha mais tempo
+ * que o limite: usuario recem-criado, que nunca logou, nao pode ser marcado
+ * offline por um job que roda antes de ele nunca ter entrado.
+ */
+export async function encerrarPresencasInativas() {
+  const limite = new Date(Date.now() - LIMITE_INATIVIDADE_MS);
+  const inativos = await prisma.user.findMany({
+    where: {
+      status: { not: 'OFFLINE' },
+      OR: [{ ultimoHeartbeat: { lt: limite } }, { ultimoHeartbeat: null, ultimoLogin: { lt: limite } }],
+    },
+    select: { id: true },
+  });
+
+  for (const { id } of inativos) {
+    await updateStatus(id, 'OFFLINE');
+  }
+
+  return inativos.length;
+}

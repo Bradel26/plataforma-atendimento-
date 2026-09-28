@@ -125,6 +125,10 @@ model User {
   status        AgentStatus @default(OFFLINE)
   ativo         Boolean     @default(true)
   ultimoLogin   DateTime?   @map("ultimo_login")
+  /// Ultimo "estou aqui" recebido do front (heartbeat) enquanto a aba fica
+  /// visivel. Base do job que fecha a presenca de quem fechou a aba ou ficou
+  /// inativo sem trocar de status manualmente (ver `encerrarPresencasInativas`).
+  ultimoHeartbeat DateTime? @map("ultimo_heartbeat")
   /// Gestor direto. Define a equipe do perfil GESTOR: equipe dele sao os
   /// usuarios que apontam para ele. Um nivel, sem arvore recursiva.
   gestorId      String?     @map("gestor_id")

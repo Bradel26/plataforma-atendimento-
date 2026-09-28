@@ -317,8 +317,23 @@ export async function monitoramentoAgentes() {
   });
 }
 
-/** Fecha o intervalo de presenca anterior e abre um novo. */
-export async function registrarPresenca(usuarioId: string, status: 'OFFLINE' | 'DISPONIVEL' | 'EM_ATENDIMENTO' | 'PAUSA') {
+/**
+ * Fecha o intervalo de presenca anterior e abre um novo.
+ *
+ * `forcarNovoIntervalo` existe para o login: sem ele, alguem que fecha a aba
+ * sem clicar em "Sair" fica com o status igual (o browser nunca chamou
+ * `marcarOffline`) e o intervalo aberto continua contando desde a ultima troca
+ * manual de status — as vezes dias atras —, mesmo que a pessoa tenha acabado de
+ * entrar de novo. O login e sempre um reinicio de verdade da presenca, entao
+ * ele ignora a deduplicacao por status igual que protege as trocas manuais
+ * (`updateStatus`) contra abrir varios intervalos ao clicar repetido no mesmo
+ * status.
+ */
+export async function registrarPresenca(
+  usuarioId: string,
+  status: 'OFFLINE' | 'DISPONIVEL' | 'EM_ATENDIMENTO' | 'PAUSA',
+  opts?: { forcarNovoIntervalo?: boolean },
+) {
   const aberto = await prisma.presenceLog.findFirst({
     where: { usuarioId, fim: null },
     orderBy: { iniciadoEm: 'desc' },
@@ -327,7 +342,7 @@ export async function registrarPresenca(usuarioId: string, status: 'OFFLINE' | '
   const agora = new Date();
 
   if (aberto) {
-    if (aberto.status === status) return; // nada mudou
+    if (aberto.status === status && !opts?.forcarNovoIntervalo) return; // nada mudou
     await prisma.presenceLog.update({
       where: { id: aberto.id },
       data: { fim: agora, duracao: Math.round((agora.getTime() - aberto.iniciadoEm.getTime()) / 1000) },

@@ -49,12 +49,18 @@ export async function login({ email, senha }: LoginInput) {
     where: { id: user.id },
     data: {
       ultimoLogin: new Date(),
+      // Evita a janela entre o login e o primeiro heartbeat do front: sem isto,
+      // o job de inatividade (ver `encerrarPresencasInativas`) poderia marcar
+      // como offline alguem que acabou de entrar, antes da primeira ping chegar.
+      ultimoHeartbeat: new Date(),
       status: user.status === 'OFFLINE' ? 'DISPONIVEL' : user.status,
     },
   });
   // O login abre a jornada: sem este registro o relatorio de horas comecaria
-  // apenas na primeira troca manual de status.
-  await registrarPresenca(atualizado.id, atualizado.status);
+  // apenas na primeira troca manual de status. `forcarNovoIntervalo` garante que
+  // "no status" no Monitoramento reflita este login, e nao um intervalo aberto
+  // ha dias por alguem que fechou a aba sem clicar em "Sair".
+  await registrarPresenca(atualizado.id, atualizado.status, { forcarNovoIntervalo: true });
 
   return buildSession(atualizado);
 }

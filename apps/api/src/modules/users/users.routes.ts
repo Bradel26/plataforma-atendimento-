@@ -15,6 +15,7 @@ import {
   deactivateUser,
   getUser,
   listUsers,
+  registrarHeartbeat,
   updateStatus,
   updateUser,
 } from './users.service';
@@ -29,6 +30,19 @@ usersRoutes.patch(
   validateBody(updateStatusSchema),
   asyncHandler(async (req, res) => {
     res.json({ usuario: await updateStatus(req.user!.sub, req.body.status) });
+  }),
+);
+
+/**
+ * Heartbeat: a aba chama isto periodicamente enquanto fica visivel, para o job
+ * de inatividade (`encerrarPresencasInativas`) saber que a pessoa ainda esta
+ * logada de verdade, e nao so com o status antigo travado.
+ */
+usersRoutes.post(
+  '/me/heartbeat',
+  asyncHandler(async (req, res) => {
+    await registrarHeartbeat(req.user!.sub);
+    res.status(204).end();
   }),
 );
 

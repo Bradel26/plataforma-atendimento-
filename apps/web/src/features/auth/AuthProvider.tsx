@@ -68,6 +68,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [usuario],
   );
 
+  /*
+   * Heartbeat: enquanto a aba fica visivel, avisa o backend "ainda estou aqui"
+   * a cada minuto. Sem isto, quem fecha a aba sem clicar em "Sair" (ou perde a
+   * conexao) fica com o status antigo (ex.: Disponivel) travado no
+   * Monitoramento para sempre — o job `encerrarPresencasInativas` do backend
+   * usa este sinal para saber quando fechar a presenca sozinho.
+   *
+   * So enquanto visivel, e nao num intervalo fixo desde o login: aba minimizada
+   * ou em segundo plano nao deve contar como "em uso".
+   */
+  useEffect(() => {
+    if (!usuario) return;
+
+    const pingar = () => {
+      if (document.visibilityState === 'visible') void api.post('/usuarios/me/heartbeat').catch(() => undefined);
+    };
+
+    pingar();
+    const intervalo = setInterval(pingar, 60_000);
+    document.addEventListener('visibilitychange', pingar);
+    return () => {
+      clearInterval(intervalo);
+      document.removeEventListener('visibilitychange', pingar);
+    };
+  }, [usuario]);
+
   const valor = useMemo(
     () => ({ usuario, carregando, entrar, sair, alterarStatus, temPerfil }),
     [usuario, carregando, entrar, sair, alterarStatus, temPerfil],
