@@ -41,6 +41,30 @@ body {
   --text-secondary: var(--color-slate-500);
   --text-tertiary: var(--color-slate-400);
   --surface-sunken: var(--color-slate-50);
+  /*
+   * Texto claro fixo — para conteudo sobre um fundo que TAMBEM nao acompanha
+   * o tema: `var(--brand-primary)`, `var(--brand-secondary)` (sidebar,
+   * topbar), a cor customizada de uma etiqueta/visao salva, ou um chip
+   * flutuante como o Tooltip. `text-white` parecia servir para isso, mas
+   * `--color-white` e remapeado no tema escuro para virar a cor de
+   * SUPERFICIE (bg-white de cartao) — nao "branco fixo". Um botao com
+   * `bg-[var(--brand-primary)] text-white` ficava com texto quase preto
+   * sobre fundo azul no tema escuro, porque os dois usavam a mesma variavel
+   * com dois significados diferentes. Este token nunca muda — o fundo dele
+   * tambem nao muda — e por isso NAO e redefinido no bloco do tema escuro,
+   * mais abaixo neste arquivo (de proposito, nao esquecimento).
+   */
+  --texto-sobre-cor-fixa: #fff;
+}
+
+/**
+ * Ver o comentario de `--texto-sobre-cor-fixa` acima.
+ * `@utility`, e nao uma classe solta: assim `hover:texto-sobre-cor-fixa` e
+ * variantes semelhantes funcionam, do mesmo jeito que em qualquer utilitario
+ * nativo do Tailwind.
+ */
+@utility texto-sobre-cor-fixa {
+  color: var(--texto-sobre-cor-fixa);
 }
 
 /*

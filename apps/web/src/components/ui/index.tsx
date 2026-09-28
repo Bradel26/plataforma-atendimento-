@@ -45,7 +45,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   ref,
 ) {
   const estilos: Record<string, string> = {
-    primario: 'bg-[var(--brand-primary)] text-white hover:brightness-110',
+    primario: 'bg-[var(--brand-primary)] texto-sobre-cor-fixa hover:brightness-110',
     neutro: 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50',
     perigo: 'border border-red-200 bg-white text-red-600 hover:bg-red-50',
   };

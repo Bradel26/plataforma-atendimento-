@@ -94,7 +94,7 @@ export function Sidebar({ aberta, aoFechar }: { aberta: boolean; aoFechar: () =>
         aria-current={estaAtivo ? 'page' : undefined}
         aria-label={colapsada ? item.label : undefined}
         className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition ${
-          estaAtivo ? 'font-medium text-white' : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+          estaAtivo ? 'font-medium texto-sobre-cor-fixa' : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
         } ${colapsada ? 'md:justify-center' : ''}`}
         style={estaAtivo ? { backgroundColor: 'var(--brand-primary)' } : undefined}
       >
@@ -138,7 +138,7 @@ export function Sidebar({ aberta, aoFechar }: { aberta: boolean; aoFechar: () =>
             <img src={branding.logoUrl} alt="" className="h-8 w-8 shrink-0 rounded object-contain" />
           ) : (
             <span
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold texto-sobre-cor-fixa"
               style={{ backgroundColor: 'var(--brand-primary)' }}
             >
               {branding.appName.charAt(0).toUpperCase()}
@@ -149,7 +149,7 @@ export function Sidebar({ aberta, aoFechar }: { aberta: boolean; aoFechar: () =>
             mobile o nome sempre aparece, colapso e conceito exclusivo do
             modo em fluxo.
           */}
-          <span className={`truncate text-sm font-semibold text-white ${colapsada ? 'md:hidden' : ''}`}>
+          <span className={`truncate text-sm font-semibold texto-sobre-cor-fixa ${colapsada ? 'md:hidden' : ''}`}>
             {branding.appName}
           </span>
         </div>

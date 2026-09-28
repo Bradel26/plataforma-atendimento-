@@ -27,7 +27,11 @@ const ESTRELAS_BG = `
 
 function IconeDecorativo({ children }: { children: React.ReactNode }) {
   return (
-    <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-300 transition hover:border-white/30 hover:bg-white/10 hover:text-white">
+    // Cor literal, nao `border-white/10`/`text-slate-300`: esta cena e SEMPRE
+    // escura, independente do tema que a pessoa escolheu no app (ela nem
+    // logou ainda) — as escalas `white`/`slate` invertem com o tema e
+    // ficariam escuras sobre um fundo que tambem e escuro.
+    <span className="flex h-9 w-9 items-center justify-center rounded-full border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.05)] text-[#cbd5e1] transition hover:border-[rgba(255,255,255,0.3)] hover:bg-[rgba(255,255,255,0.1)] hover:text-[#fff]">
       {children}
     </span>
   );
@@ -195,8 +199,10 @@ export function LoginPage() {
         />
       </div>
 
-      {/* marca no canto, substitui o bloco de texto de marketing removido */}
-      <div className="absolute left-8 top-8 z-10 flex items-center gap-3 text-white">
+      {/* marca no canto, substitui o bloco de texto de marketing removido.
+          `texto-sobre-cor-fixa`, nao `text-white`: a cena e sempre escura,
+          independente do tema do app — ver o comentario em IconeDecorativo. */}
+      <div className="absolute left-8 top-8 z-10 flex items-center gap-3 texto-sobre-cor-fixa">
         {branding.logoUrl ? (
           <img src={branding.logoUrl} alt="" className="h-9 w-9 rounded object-contain" />
         ) : (
@@ -210,21 +216,25 @@ export function LoginPage() {
         <span className="font-semibold">{branding.appName}</span>
       </div>
 
-      <p className="absolute bottom-6 left-8 z-10 text-xs text-slate-400">Versao 0.1.0 - MVP Fase 0</p>
+      {/* Cor literal pelo mesmo motivo do IconeDecorativo: cena sempre escura. */}
+      <p className="absolute bottom-6 left-8 z-10 text-xs text-[#94a3b8]">Versao 0.1.0 - MVP Fase 0</p>
 
-      {/* card flutuante — coluna direita (~32%), centralizado nela em vez de so encostado */}
+      {/* card flutuante — coluna direita (~32%), centralizado nela em vez de so encostado.
+          `border-[rgba(255,255,255,0.1)]`/`bg-slate-950/70`, nao `border-white/10`: o cartao
+          e sempre um vidro escuro, e `slate-950` fica fora da escala remapeada (so ate
+          slate-900), entao ele sozinho ja e "fixo" — so o `white` precisava de ajuste. */}
       <div className="relative z-10 flex w-full flex-1 items-center justify-center px-6 lg:w-[32%] lg:flex-none">
-        <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-slate-950/70 p-8 shadow-2xl backdrop-blur-xl">
-          <div className="mb-6 flex items-center justify-center gap-4 border-b border-white/10 pb-5">
-            <span className="flex items-center gap-1 text-lg font-semibold italic tracking-wide text-white">
+        <div className="w-full max-w-sm rounded-2xl border border-[rgba(255,255,255,0.1)] bg-slate-950/70 p-8 shadow-2xl backdrop-blur-xl">
+          <div className="mb-6 flex items-center justify-center gap-4 border-b border-[rgba(255,255,255,0.1)] pb-5">
+            <span className="flex items-center gap-1 text-lg font-semibold italic tracking-wide texto-sobre-cor-fixa">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M3 12c4-6 14-6 18 0" stroke="#e2e8f0" strokeWidth="2" strokeLinecap="round" />
                 <path d="M6 16c3-4 9-4 12 0" stroke="#e2e8f0" strokeWidth="2" strokeLinecap="round" />
               </svg>
               STARLINK
             </span>
-            <span className="h-8 w-px bg-white/20" />
-            <span className="flex items-center gap-1.5 text-lg font-bold text-white">
+            <span className="h-8 w-px bg-[rgba(255,255,255,0.2)]" />
+            <span className="flex items-center gap-1.5 text-lg font-bold texto-sobre-cor-fixa">
               <span className="grid grid-cols-2 gap-0.5">
                 <span className="h-2 w-2 rounded-[1px] bg-red-600" />
                 <span className="h-2 w-2 rounded-[1px] bg-red-600" />
@@ -237,14 +247,14 @@ export function LoginPage() {
 
           <form onSubmit={submeter} className="space-y-5">
             <div>
-              <h1 className="text-xl font-semibold text-white">Entrar</h1>
-              <p className="mt-1 text-sm text-slate-400">Acesse com suas credenciais corporativas.</p>
+              <h1 className="text-xl font-semibold texto-sobre-cor-fixa">Entrar</h1>
+              <p className="mt-1 text-sm text-[#94a3b8]">Acesse com suas credenciais corporativas.</p>
             </div>
 
             {erro && <Alerta>{erro}</Alerta>}
 
             <div>
-              <label htmlFor="login-email" className="mb-1.5 block text-xs font-medium text-slate-300">
+              <label htmlFor="login-email" className="mb-1.5 block text-xs font-medium text-[#cbd5e1]">
                 E-mail
               </label>
               <Input
@@ -260,7 +270,7 @@ export function LoginPage() {
             </div>
 
             <div>
-              <label htmlFor="login-senha" className="mb-1.5 block text-xs font-medium text-slate-300">
+              <label htmlFor="login-senha" className="mb-1.5 block text-xs font-medium text-[#cbd5e1]">
                 Senha
               </label>
               <Input
@@ -280,7 +290,7 @@ export function LoginPage() {
             </Button>
           </form>
 
-          <div className="mt-6 flex items-center justify-center gap-4 border-t border-white/10 pt-5">
+          <div className="mt-6 flex items-center justify-center gap-4 border-t border-[rgba(255,255,255,0.1)] pt-5">
             <IconeDecorativo>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M4 20l6-6M14 4l6 6-9 9-6-6z" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />

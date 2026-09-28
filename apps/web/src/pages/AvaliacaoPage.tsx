@@ -98,7 +98,9 @@ export function AvaliacaoPage() {
                   type="button"
                   onClick={() => setNota(n)}
                   className={`h-11 w-11 rounded-lg border text-sm font-semibold transition ${
-                    nota === n ? 'border-transparent text-white' : 'border-slate-300 text-slate-700 hover:bg-slate-50'
+                    nota === n
+                      ? 'border-transparent texto-sobre-cor-fixa'
+                      : 'border-slate-300 text-slate-700 hover:bg-slate-50'
                   }`}
                   style={nota === n ? { backgroundColor: 'var(--brand-primary)' } : undefined}
                 >
@@ -125,7 +127,7 @@ export function AvaliacaoPage() {
               type="button"
               onClick={() => void enviar()}
               disabled={nota === null || enviando}
-              className="mt-5 w-full rounded-lg px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"
+              className="mt-5 w-full rounded-lg px-4 py-2.5 text-sm font-medium texto-sobre-cor-fixa disabled:opacity-50"
               style={{ backgroundColor: 'var(--brand-primary)' }}
             >
               {enviando ? 'Enviando...' : 'Enviar avaliacao'}

@@ -69,7 +69,7 @@ export function CicloDoParceiro({ contatoId }: { contatoId: string }) {
                         aria-current={i === atual ? 'step' : undefined}
                         className={`rounded-full px-2.5 py-1 ${
                           i === atual
-                            ? 'bg-[var(--brand-primary)] font-semibold text-white'
+                            ? 'bg-[var(--brand-primary)] font-semibold texto-sobre-cor-fixa'
                             : i < atual
                               ? 'bg-emerald-50 text-emerald-700'
                               : 'bg-slate-100 text-slate-500'

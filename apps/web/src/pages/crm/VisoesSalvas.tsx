@@ -113,7 +113,9 @@ export function VisoesSalvas<F extends Record<string, unknown>>({
                 type="button"
                 onClick={() => aplicar(v)}
                 className={`rounded-full border px-2.5 py-1 text-xs font-medium transition ${
-                  ativaId === v.id ? 'border-transparent text-white' : 'border-slate-200 text-slate-700 hover:bg-slate-50'
+                  ativaId === v.id
+                    ? 'border-transparent texto-sobre-cor-fixa'
+                    : 'border-slate-200 text-slate-700 hover:bg-slate-50'
                 }`}
                 style={ativaId === v.id ? { backgroundColor: v.cor } : { borderLeftColor: v.cor, borderLeftWidth: 3 }}
               >

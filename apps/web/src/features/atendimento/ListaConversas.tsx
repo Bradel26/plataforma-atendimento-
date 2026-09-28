@@ -112,7 +112,7 @@ export function ListaConversas({
                   <div className="mt-1.5 flex items-center gap-1.5">
                     <Badge tom="alerta">Prévia</Badge>
                     {p.naoLidas > 0 && (
-                      <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-semibold text-white">
+                      <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-semibold texto-sobre-cor-fixa">
                         {p.naoLidas}
                       </span>
                     )}
@@ -157,7 +157,7 @@ export function ListaConversas({
                   {c.fila && <Badge tom="neutro">{c.fila.nome}</Badge>}
                   {c.agente && <Badge tom="marca">{c.agente.nome}</Badge>}
                   {c.naoLidas > 0 && (
-                    <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-semibold text-white">
+                    <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-semibold texto-sobre-cor-fixa">
                       {c.naoLidas}
                     </span>
                   )}

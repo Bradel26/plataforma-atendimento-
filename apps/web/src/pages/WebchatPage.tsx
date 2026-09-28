@@ -138,12 +138,12 @@ export function WebchatPage() {
         }
       >
         <header
-          className="flex items-start justify-between gap-2 px-5 py-4 text-white"
+          className="flex items-start justify-between gap-2 px-5 py-4 texto-sobre-cor-fixa"
           style={{ backgroundColor: 'var(--brand-primary)' }}
         >
           <div>
             <p className="font-semibold">Fale com a gente</p>
-            <p className="text-xs text-white/80">{legenda}</p>
+            <p className="text-xs texto-sobre-cor-fixa opacity-80">{legenda}</p>
           </div>
           {embutido && (
             <button
@@ -152,7 +152,7 @@ export function WebchatPage() {
               // Quem controla a visibilidade e o widget na pagina do cliente;
               // o iframe apenas avisa que o visitante quer fechar.
               onClick={() => window.parent?.postMessage('atendimento:fechar', '*')}
-              className="rounded px-1 text-white/80 hover:text-white"
+              className="rounded px-1 texto-sobre-cor-fixa opacity-80 hover:opacity-100"
             >
               ✕
             </button>
@@ -201,7 +201,7 @@ export function WebchatPage() {
             <button
               type="submit"
               disabled={enviando || !aceite}
-              className="rounded-lg px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"
+              className="rounded-lg px-4 py-2.5 text-sm font-medium texto-sobre-cor-fixa disabled:opacity-50"
               style={{ backgroundColor: 'var(--brand-primary)' }}
             >
               {enviando ? 'Abrindo...' : 'Iniciar atendimento'}
@@ -219,7 +219,7 @@ export function WebchatPage() {
                   <div key={m.id} className={`flex ${m.autor === 'CLIENTE' ? 'justify-end' : 'justify-start'}`}>
                     <div
                       className={`max-w-[80%] rounded-2xl px-3.5 py-2 text-sm ${
-                        m.autor === 'CLIENTE' ? 'text-white' : 'border border-slate-200 bg-white text-slate-800'
+                        m.autor === 'CLIENTE' ? 'texto-sobre-cor-fixa' : 'border border-slate-200 bg-white text-slate-800'
                       }`}
                       style={m.autor === 'CLIENTE' ? { backgroundColor: 'var(--brand-primary)' } : undefined}
                     >
@@ -261,7 +261,7 @@ export function WebchatPage() {
               <button
                 type="submit"
                 disabled={enviando || !texto.trim() || conversa.status === 'FINALIZADO'}
-                className="rounded-lg px-4 text-sm font-medium text-white disabled:opacity-50"
+                className="rounded-lg px-4 text-sm font-medium texto-sobre-cor-fixa disabled:opacity-50"
                 style={{ backgroundColor: 'var(--brand-primary)' }}
               >
                 Enviar

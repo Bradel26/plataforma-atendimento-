@@ -443,7 +443,7 @@ export function EsteiraPage() {
               aria-selected={o.id === funilId}
               onClick={() => setFunilId(o.id)}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
-                o.id === funilId ? 'bg-[var(--brand-primary)] text-white' : 'text-slate-600 hover:bg-slate-50'
+                o.id === funilId ? 'bg-[var(--brand-primary)] texto-sobre-cor-fixa' : 'text-slate-600 hover:bg-slate-50'
               }`}
             >
               {o.nome}

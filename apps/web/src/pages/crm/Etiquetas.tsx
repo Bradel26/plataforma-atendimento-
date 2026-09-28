@@ -283,9 +283,13 @@ export function FiltroEtiquetas({ ativas, aoAlternar, campo, versao = 0 }: Filtr
             onClick={() => aoAlternar(tag)}
             aria-pressed={ligada}
             className={`${CHIP} ${
+              // `border-brand-500`/`bg-brand-500` nao existem no tema deste
+              // projeto (nao ha escala `brand` no Tailwind) — o chip ativo
+              // ficava sem cor nenhuma, no claro e no escuro. A marca vive em
+              // `--brand-primary`, como em todo o resto do app.
               ligada
-                ? 'border-brand-500 bg-brand-500 text-white'
-                : 'border-slate-200 bg-white text-slate-600 hover:border-brand-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'
+                ? 'border-[var(--brand-primary)] bg-[var(--brand-primary)] texto-sobre-cor-fixa'
+                : 'border-slate-200 bg-white text-slate-600 hover:border-[var(--brand-primary)] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'
             }`}
           >
             {tag}

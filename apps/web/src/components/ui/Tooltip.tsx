@@ -41,8 +41,14 @@ export function Tooltip({ texto, children }: { texto: string; children: ReactNod
            * (flutuante, independente do tema da pagina) ficaria branco sobre
            * branco se usasse `bg-slate-800` e o app estivesse no tema claro
            * remapeado ao contrario, ou texto invisivel no escuro.
+           *
+           * O texto usa `texto-sobre-cor-fixa`, e nao `text-white`: o fundo
+           * deste balao ja e fixo (`#1e293b`, fora da escala), mas
+           * `--color-white` continua sendo remapeado para a cor de
+           * SUPERFICIE do tema escuro — `text-white` aqui ficaria escuro
+           * sobre escuro exatamente no tema que este comentario diz evitar.
            */
-          className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1e293b] px-2 py-1 text-xs text-white shadow-lg"
+          className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1e293b] px-2 py-1 text-xs texto-sobre-cor-fixa shadow-lg"
         >
           {texto}
         </span>

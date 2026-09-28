@@ -75,7 +75,7 @@ export function Topbar({ titulo, aoAbrirMenu }: { titulo: string; aoAbrirMenu: (
         </div>
 
         <span
-          className="flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold text-white"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold texto-sobre-cor-fixa"
           style={{ backgroundColor: 'var(--brand-primary)' }}
         >
           {usuario.nome.charAt(0).toUpperCase()}
