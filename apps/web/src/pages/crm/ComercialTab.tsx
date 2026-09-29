@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alerta, Button, Card, Field, Input, Select } from '../../components/ui';
+import { Alerta, Card, Field, Select } from '../../components/ui';
 import { BarList } from '../../components/viz/BarList';
 import { StatTile } from '../../components/viz/StatTile';
 import { ApiError, api } from '../../lib/api';
 import { ESTADO, SERIES, duracao } from '../../lib/viz';
 import { moeda, type Funil } from '../../lib/types';
-import { useAuth } from '../../features/auth/AuthProvider';
 
 /**
  * Leitura comercial do funil — itens 1.2 a 1.5 do plano em ANALISE-CRM.md.
@@ -127,10 +126,6 @@ export function ComercialTab() {
   const [ind, setInd] = useState<Indicadores | null>(null);
   const [perdas, setPerdas] = useState<Perdas | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-  const [teto, setTeto] = useState<string>('');
-  const [tetoSalvo, setTetoSalvo] = useState<number | null>(null);
-  const [salvandoTeto, setSalvandoTeto] = useState(false);
-  const { temPerfil } = useAuth();
 
   const carregar = useCallback(async () => {
     const ate = new Date();
@@ -165,36 +160,11 @@ export function ComercialTab() {
       .get<{ funis: Funil[] }>('/funis?tipo=COMERCIAL')
       .then((f) => setFunis(f.funis))
       .catch(() => undefined);
-
-    void api
-      .get<{ descontoMaximoPercentual: number }>('/comercial/politica')
-      .then((p) => {
-        setTetoSalvo(p.descontoMaximoPercentual);
-        setTeto(String(p.descontoMaximoPercentual));
-      })
-      .catch(() => undefined);
   }, []);
-
-  const salvarTeto = async () => {
-    setSalvandoTeto(true);
-    setErro(null);
-    try {
-      const n = Math.min(100, Math.max(0, Math.trunc(Number(teto) || 0)));
-      const p = await api.put<{ descontoMaximoPercentual: number }>('/comercial/politica', {
-        descontoMaximoPercentual: n,
-      });
-      setTetoSalvo(p.descontoMaximoPercentual);
-      setTeto(String(p.descontoMaximoPercentual));
-    } catch (e) {
-      setErro(e instanceof ApiError ? e.message : 'Falha ao salvar a politica de desconto');
-    } finally {
-      setSalvandoTeto(false);
-    }
-  };
 
   return (
     <div className="space-y-4">
-      <Card titulo="Leitura comercial" descricao={funil ? funil.funil.nome : 'Carregando...'}>
+      <Card titulo="Leitura do Credenciamento" descricao={funil ? funil.funil.nome : 'Carregando...'}>
         <div className="grid gap-3 sm:grid-cols-2 sm:items-end">
           <Field label="Funil">
             <Select value={funilId} onChange={(e) => setFunilId(e.target.value)}>
@@ -216,48 +186,11 @@ export function ComercialTab() {
 
       {erro && <Alerta>{erro}</Alerta>}
 
-      {/* Politica de desconto (item 2.3). Fica aqui, e nao em Configuracoes,
-          porque quem olha conversao e margem e quem decide o teto — e porque a
-          alcada e regra comercial, nao ajuste de sistema. */}
-      {tetoSalvo !== null && (
-        <Card
-          titulo="Politica de desconto"
-          descricao="Teto que o perfil Comercial concede sem aprovacao. Quem aprova nao passa por teto."
-        >
-          <div className="grid gap-3 sm:grid-cols-[10rem_auto] sm:items-end">
-            <Field label="Desconto maximo (%)" hint="100 = sem restricao">
-              <Input
-                value={teto}
-                onChange={(e) => setTeto(e.target.value)}
-                disabled={!temPerfil('ADMIN', 'SUPERVISOR')}
-              />
-            </Field>
-            {temPerfil('ADMIN', 'SUPERVISOR') && (
-              <div>
-                <Button
-                  onClick={() => void salvarTeto()}
-                  disabled={salvandoTeto || teto === String(tetoSalvo)}
-                >
-                  {salvandoTeto ? 'Salvando...' : 'Salvar politica'}
-                </Button>
-              </div>
-            )}
-          </div>
-          <p className="mt-3 text-xs text-slate-500">
-            {tetoSalvo === 100
-              ? 'Hoje sem restricao: nenhum desconto pede aprovacao.'
-              : `Hoje acima de ${tetoSalvo}% a proposta vai para aprovacao e nao pode ser marcada como ganha antes dela.`}{' '}
-            Mudar o teto nao mexe nas propostas que ja existem — a regra nova vale na proxima vez que cada uma
-            for editada.
-          </p>
-        </Card>
-      )}
-
       {/* 1.3 — risco. Primeiro na tela de proposito: e o unico bloco acionavel
           hoje; o resto e leitura. Os baldes se sobrepoem, e o texto diz isso. */}
       {risco && (
         <Card
-          titulo="Oportunidades em risco"
+          titulo="Jornadas em risco"
           descricao={`Foto do momento — ${risco.abertas.total} aberta(s). Um cartao pode entrar em mais de um balde.`}
         >
           <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
@@ -318,7 +251,7 @@ export function ComercialTab() {
               <StatTile
                 rotulo="Ticket medio"
                 valor={ind.atual.ticketMedio === null ? '—' : moeda(ind.atual.ticketMedio)}
-                detalhe="por oportunidade ganha"
+                detalhe="por jornada ganha"
               />
               <div className="mt-1 px-4"><Variacao valor={ind.variacao.ticketMedio} /></div>
             </div>
