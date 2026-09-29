@@ -197,6 +197,10 @@ export type Risco = {
   semPrevisao: Balde;
   /** Aberta sem nenhuma tarefa com prazo em aberto. Mesma regra do item 1.1. */
   semProximaAcao: Balde;
+  /** Etapa atual = 'Pendencia' (vocabulario do seed do Funil de Vendas). */
+  aguardandoParceiro: Balde;
+  /** Etapa atual = 'Aprovacao' (vocabulario do seed do Funil de Vendas). */
+  aguardandoEquipe: Balde;
   abertas: Balde;
   diasDeAviso: number;
 };
@@ -205,6 +209,8 @@ export type OportunidadeParaRisco = {
   id: string;
   valor: number;
   previsaoFechamento: Date | null;
+  /** Nome da etapa atual — usado so pelos baldes aguardandoParceiro/aguardandoEquipe. */
+  estagioNome: string;
 };
 
 /**
@@ -240,6 +246,8 @@ export function montarRisco(
     emForecast: balde((o) => o.previsaoFechamento !== null && o.previsaoFechamento >= agora),
     semPrevisao: balde((o) => o.previsaoFechamento === null),
     semProximaAcao: balde((o) => !comTarefaAberta.has(o.id)),
+    aguardandoParceiro: balde((o) => o.estagioNome === 'Pendencia'),
+    aguardandoEquipe: balde((o) => o.estagioNome === 'Aprovacao'),
     abertas: balde(() => true),
     diasDeAviso,
   };

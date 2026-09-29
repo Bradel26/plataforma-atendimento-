@@ -136,10 +136,10 @@ describe('montarRisco (1.3)', () => {
   const emDias = (n: number) => new Date(agora.getTime() + n * dia);
 
   const abertas = [
-    { id: 'a', valor: 100, previsaoFechamento: emDias(-10) }, // atrasada
-    { id: 'b', valor: 200, previsaoFechamento: emDias(3) }, // vencendo
-    { id: 'c', valor: 400, previsaoFechamento: emDias(30) }, // forecast, longe
-    { id: 'd', valor: 800, previsaoFechamento: null }, // sem previsao
+    { id: 'a', valor: 100, previsaoFechamento: emDias(-10), estagioNome: 'Qualificacao' }, // atrasada
+    { id: 'b', valor: 200, previsaoFechamento: emDias(3), estagioNome: 'Qualificacao' }, // vencendo
+    { id: 'c', valor: 400, previsaoFechamento: emDias(30), estagioNome: 'Qualificacao' }, // forecast, longe
+    { id: 'd', valor: 800, previsaoFechamento: null, estagioNome: 'Qualificacao' }, // sem previsao
   ];
 
   it('classifica os quatro baldes de prazo', () => {
@@ -172,7 +172,7 @@ describe('montarRisco (1.3)', () => {
   });
 
   it('previsao exatamente agora nao e atraso', () => {
-    const r = montarRisco([{ id: 'x', valor: 10, previsaoFechamento: agora }], new Set(['x']), agora);
+    const r = montarRisco([{ id: 'x', valor: 10, previsaoFechamento: agora, estagioNome: 'Qualificacao' }], new Set(['x']), agora);
     expect(r.atrasadas.total).toBe(0);
     expect(r.vencendo.total).toBe(1);
   });
@@ -188,6 +188,30 @@ describe('montarRisco (1.3)', () => {
     const r = montarRisco([], new Set(), agora);
     expect(r.abertas).toEqual({ total: 0, valor: 0 });
     expect(r.semProximaAcao).toEqual({ total: 0, valor: 0 });
+  });
+
+  it('aguardando parceiro e aguardando equipe usam o nome da etapa atual', () => {
+    const comEstagio = [
+      { id: 'a', valor: 100, previsaoFechamento: null, estagioNome: 'Pendencia' },
+      { id: 'b', valor: 200, previsaoFechamento: null, estagioNome: 'Aprovacao' },
+      { id: 'c', valor: 300, previsaoFechamento: null, estagioNome: 'Ativo' },
+    ];
+    const r = montarRisco(comEstagio, new Set(), agora);
+    expect(r.aguardandoParceiro).toEqual({ total: 1, valor: 100 });
+    expect(r.aguardandoEquipe).toEqual({ total: 1, valor: 200 });
+  });
+
+  it('atrasada e em pendencia entra nos dois baldes ao mesmo tempo', () => {
+    // Os baldes se sobrepoem de proposito, igual atrasada+semProximaAcao ja
+    // fazia acima — atrasada E aguardando parceiro e a pior combinacao, e
+    // teria de aparecer nos dois, nao ser forcada a escolher um.
+    const r = montarRisco(
+      [{ id: 'a', valor: 100, previsaoFechamento: emDias(-1), estagioNome: 'Pendencia' }],
+      new Set(),
+      agora,
+    );
+    expect(r.atrasadas.total).toBe(1);
+    expect(r.aguardandoParceiro.total).toBe(1);
   });
 });
 
