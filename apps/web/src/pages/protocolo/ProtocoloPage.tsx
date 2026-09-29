@@ -6,6 +6,7 @@ import {
   COR_PRIORIDADE,
   LABEL_PRIORIDADE,
   LABEL_STATUS_PROTOCOLO,
+  LABEL_TIPO_TI,
   PRIORIDADES_PROTOCOLO,
   STATUS_PROTOCOLO,
   type Contato,
@@ -31,7 +32,7 @@ export function ProtocoloPage() {
   const [aberto, setAberto] = useState<Protocolo | null>(null);
   const [agentes, setAgentes] = useState<Usuario[]>([]);
   const [contatos, setContatos] = useState<Contato[]>([]);
-  const [filtros, setFiltros] = useState({ prioridade: '', responsavelId: '', slaVencido: '', busca: '' });
+  const [filtros, setFiltros] = useState({ prioridade: '', responsavelId: '', slaVencido: '', busca: '', categoria: '' });
   const [arrastando, setArrastando] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [novo, setNovo] = useState({
@@ -47,6 +48,7 @@ export function ProtocoloPage() {
     if (filtros.prioridade) qs.set('prioridade', filtros.prioridade);
     if (filtros.responsavelId) qs.set('responsavelId', filtros.responsavelId);
     if (filtros.slaVencido) qs.set('slaVencido', filtros.slaVencido);
+    if (filtros.categoria) qs.set('categoria', filtros.categoria);
     if (filtros.busca.trim()) qs.set('busca', filtros.busca.trim());
 
     try {
@@ -133,7 +135,14 @@ export function ProtocoloPage() {
   return (
     <div className="space-y-5">
       <Card titulo="Filtros">
-        <div className="grid gap-3 sm:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-5">
+          <Field label="Categoria">
+            <Select value={filtros.categoria} onChange={(e) => setFiltros({ ...filtros, categoria: e.target.value })}>
+              <option value="">Todas</option>
+              <option value="ATENDIMENTO">Atendimento</option>
+              <option value="TI_INTERNO">TI interno</option>
+            </Select>
+          </Field>
           <Field label="Prioridade">
             <Select
               value={filtros.prioridade}
@@ -206,8 +215,11 @@ export function ProtocoloPage() {
                       </span>
                     </div>
                     <p className="mt-1 truncate text-sm font-medium text-slate-800">{p.titulo}</p>
-                    <p className="truncate text-xs text-slate-500">{p.contato?.nome ?? 'Sem contato'}</p>
+                    <p className="truncate text-xs text-slate-500">
+                      {p.tipoTi ? LABEL_TIPO_TI[p.tipoTi] : (p.contato?.nome ?? 'Sem contato')}
+                    </p>
                     <div className="mt-1.5 flex flex-wrap gap-1">
+                      {p.categoria === 'TI_INTERNO' && <Badge tom="neutro">TI interno</Badge>}
                       {p.responsavel && <Badge tom="marca">{p.responsavel.nome}</Badge>}
                       {p.slaVencido && <Badge tom="alerta">SLA</Badge>}
                       {p.agendamentos.some((a) => !a.concluido) && <Badge tom="neutro">agendado</Badge>}
