@@ -33,12 +33,28 @@ export function ChamadoTiPage() {
         categoria: 'TI_INTERNO',
         tipoTi: form.tipo,
       });
-      if (arquivo) {
-        await api.upload(`/protocolos/${protocolo.id}/anexos`, arquivo);
-      }
+
+      // O chamado ja existe a partir daqui — um reenvio por causa de falha no
+      // anexo criaria um segundo chamado duplicado. Por isso o formulario
+      // limpa e o sucesso e confirmado mesmo que so o anexo falhe; a falha do
+      // anexo vira um aviso a parte, nao um erro que convida a tentar de novo.
       setForm(VAZIO);
       setArquivo(null);
       if (inputArquivoRef.current) inputArquivoRef.current.value = '';
+
+      if (arquivo) {
+        try {
+          await api.upload(`/protocolos/${protocolo.id}/anexos`, arquivo);
+        } catch (erroAnexo) {
+          mostrarToast(
+            'erro',
+            `Chamado #${protocolo.numero} aberto, mas o print nao foi anexado: ${
+              erroAnexo instanceof ApiError ? erroAnexo.message : 'falha ao enviar o arquivo'
+            }`,
+          );
+          return;
+        }
+      }
       mostrarToast('sucesso', 'Chamado aberto! Voce recebe uma resposta em ate 72h.');
     } catch (e) {
       setErro(e instanceof ApiError ? e.message : 'Falha ao abrir o chamado');

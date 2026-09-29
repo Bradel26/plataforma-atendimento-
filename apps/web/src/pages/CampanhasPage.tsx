@@ -4,6 +4,7 @@ import { Tabs } from '../components/ui/Tabs';
 import { StatTile } from '../components/viz/StatTile';
 import { MontarPublico } from './campanhas/MontarPublico';
 import { LeadsTab } from './crm/LeadsTab';
+import { useAuth } from '../features/auth/AuthProvider';
 import { ApiError, api } from '../lib/api';
 import { ESTADO } from '../lib/viz';
 import {
@@ -63,7 +64,15 @@ const SUBABAS = [
 type SubAba = (typeof SUBABAS)[number]['chave'];
 
 export function CampanhasPage() {
-  const [subAba, setSubAba] = useState<SubAba>('campanhas');
+  // Disparar/gerenciar campanha e ADMIN/SUPERVISOR (ver `campanhasRoutes` na
+  // API); GESTOR/COMERCIAL so tem acesso a Leads nesta pagina — sem este
+  // corte, os dois pousariam na sub-aba Campanhas e o `GET /campanhas` inicial
+  // devolveria 403 antes de a pessoa sequer ver a aba Leads.
+  const { temPerfil } = useAuth();
+  const podeVerCampanhas = temPerfil('ADMIN', 'SUPERVISOR');
+  const subAbasVisiveis = SUBABAS.filter((s) => s.chave !== 'campanhas' || podeVerCampanhas);
+
+  const [subAba, setSubAba] = useState<SubAba>(podeVerCampanhas ? 'campanhas' : 'leads');
   const [campanhas, setCampanhas] = useState<Campanha[]>([]);
   const [aberta, setAberta] = useState<Aberta | null>(null);
   const [nova, setNova] = useState({ nome: '', canal: 'WHATSAPP' as Canal, mensagem: '' });
@@ -83,8 +92,8 @@ export function CampanhasPage() {
   }, []);
 
   useEffect(() => {
-    void carregar();
-  }, [carregar]);
+    if (podeVerCampanhas) void carregar();
+  }, [carregar, podeVerCampanhas]);
 
   const abrir = useCallback(async (id: string) => {
     try {
@@ -152,7 +161,7 @@ export function CampanhasPage() {
 
   return (
     <div className="space-y-5">
-      <Tabs itens={SUBABAS} ativo={subAba} aoSelecionar={(chave) => setSubAba(chave as SubAba)} />
+      <Tabs itens={subAbasVisiveis} ativo={subAba} aoSelecionar={(chave) => setSubAba(chave as SubAba)} />
 
       {subAba === 'leads' && <LeadsTab />}
 

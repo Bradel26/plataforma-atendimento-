@@ -172,6 +172,25 @@ async function reservarNumero(): Promise<number> {
   return Number(linha.numero);
 }
 
+/**
+ * Chamado de TI sem responsavel definido comeca atribuido a quem abriu.
+ *
+ * `politicaProtocolos` so mostra um chamado sem fila para quem ja e o
+ * responsavel (`responsavelId` no escopo, ou sem responsavel mas com fila no
+ * escopo). Chamado de TI nunca tem fila — sem isto, quem abre nao enxergaria
+ * o proprio chamado, e o upload do print (que usa a mesma politica) devolveria
+ * 404 para qualquer perfil que nao seja ADMIN/SUPERVISOR (os unicos que veem
+ * tudo). Chamado de atendimento ao cliente nao muda: continua sem responsavel
+ * automatico, exatamente como sempre foi.
+ */
+export function responsavelPadrao(
+  input: Pick<CriarTicketInput, 'categoria' | 'responsavelId'>,
+  autorId: string,
+): string | null | undefined {
+  if (input.categoria === 'TI_INTERNO' && !input.responsavelId) return autorId;
+  return input.responsavelId;
+}
+
 export async function criarTicket(input: CriarTicketInput, autorId: string) {
   // Contato, conta e conversa vem por id no corpo: sem esta conferencia, abrir
   // um protocolo era o caminho para pendurar trabalho no cliente de outra
@@ -188,6 +207,7 @@ export async function criarTicket(input: CriarTicketInput, autorId: string) {
     input.filaId ??= conversa.filaId;
   }
 
+  input.responsavelId = responsavelPadrao(input, autorId);
   const criado = await prisma.ticket.create({ data: { ...input, numero: await reservarNumero() } });
   await prisma.ticketComment.create({
     data: { ticketId: criado.id, autorId, conteudo: 'Chamado aberto.', interno: true },
