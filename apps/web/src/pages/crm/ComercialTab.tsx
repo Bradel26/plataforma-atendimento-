@@ -351,7 +351,7 @@ export function ComercialTab() {
           perde poucas grandes. */}
       {perdas && (
         <Card
-          titulo="Perdas por motivo"
+          titulo="Motivos de desistencia"
           descricao={`${perdas.total} perda(s) na janela — ${moeda(perdas.valor)} deixados na mesa`}
         >
           <BarList
