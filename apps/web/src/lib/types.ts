@@ -712,6 +712,8 @@ export const moeda = (valor: number | null, sigla = 'BRL') =>
 
 export type TicketStatus = 'ABERTO' | 'EM_ANDAMENTO' | 'AGUARDANDO_CLIENTE' | 'RESOLVIDO' | 'FECHADO';
 export type TicketPrioridade = 'BAIXA' | 'NORMAL' | 'ALTA' | 'URGENTE';
+export type TicketCategoria = 'ATENDIMENTO' | 'TI_INTERNO';
+export type TicketTipoTi = 'ERRO' | 'MELHORIA';
 
 export type ProtocoloComentario = {
   id: string;
@@ -746,6 +748,8 @@ export type Protocolo = {
   descricao: string;
   status: TicketStatus;
   prioridade: TicketPrioridade;
+  categoria: TicketCategoria;
+  tipoTi: TicketTipoTi | null;
   prazoSla: string | null;
   criadoEm: string;
   atualizadoEm: string;
@@ -792,6 +796,20 @@ export const COR_PRIORIDADE: Record<TicketPrioridade, string> = {
   NORMAL: 'bg-blue-50 text-blue-700',
   ALTA: 'bg-amber-50 text-amber-700',
   URGENTE: 'bg-red-50 text-red-700',
+};
+
+export const CATEGORIAS_TICKET: TicketCategoria[] = ['ATENDIMENTO', 'TI_INTERNO'];
+
+export const LABEL_CATEGORIA_TICKET: Record<TicketCategoria, string> = {
+  ATENDIMENTO: 'Atendimento',
+  TI_INTERNO: 'TI interno',
+};
+
+export const TIPOS_TI: TicketTipoTi[] = ['ERRO', 'MELHORIA'];
+
+export const LABEL_TIPO_TI: Record<TicketTipoTi, string> = {
+  ERRO: 'Erro/bug',
+  MELHORIA: 'Melhoria',
 };
 
 // --------------------------------------------------------------------------
@@ -1187,7 +1205,7 @@ export const LABEL_TIPO_EVENTO: Record<TipoEvento, string> = {
   CHAMADA: 'Ligacao',
   ATIVIDADE: 'Atividade',
   PROTOCOLO: 'Protocolo',
-  OPORTUNIDADE: 'Oportunidade',
+  OPORTUNIDADE: 'Jornada',
   ETAPA: 'Etapa do funil',
   LEAD: 'Lead',
   PESQUISA: 'Pesquisa',
@@ -1564,10 +1582,10 @@ export const LABEL_CICLO_DE_VIDA: Record<CicloDeVida, string> = {
 
 /** O que cada degrau significa, para a tela nao precisar de manual. */
 export const AJUDA_CICLO_DE_VIDA: Record<CicloDeVida, string> = {
-  CLIENTE: 'Tem oportunidade ganha. Compra nao expira: cliente que sumiu continua tendo comprado.',
+  CLIENTE: 'Tem jornada ganha. Compra nao expira: cliente que sumiu continua tendo comprado.',
   EM_NEGOCIACAO: 'Tem negociacao aberta agora.',
   PERDIDO: 'Perdeu e nao tem nada aberto.',
-  QUALIFICADO: 'Lead que passou da triagem, ainda sem oportunidade.',
+  QUALIFICADO: 'Lead que passou da triagem, ainda sem jornada.',
   CONTATADO: 'Ja houve conversa, ou existe lead na entrada.',
   LEAD: 'Cadastro e mais nada — nunca houve conversa.',
 };
