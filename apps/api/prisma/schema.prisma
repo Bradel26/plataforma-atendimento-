@@ -249,7 +249,7 @@ model QueueAgent {
 model Branding {
   id            String      @id @default(uuid())
   organizacaoId String      @unique @default("") @map("organizacao_id")
-  appName       String      @default("Plataforma de Atendimento") @map("app_name")
+  appName       String      @default("Plataforma de Atendimento Bradel") @map("app_name")
   logoUrl       String?     @map("logo_url")
   corPrimaria   String      @default("#2563eb") @map("cor_primaria")
   corSecundaria String      @default("#0f172a") @map("cor_secundaria")
