@@ -243,11 +243,11 @@ export function ComercialTab() {
         <Card titulo="Indicadores do periodo" descricao={`Comparados com os ${dias} dias anteriores`}>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <div>
-              <StatTile rotulo="Ganhas" valor={ind.atual.ganhas} detalhe={moeda(ind.atual.valorGanho)} />
+              <StatTile rotulo="Credenciamentos concluidos" valor={ind.atual.ganhas} />
               <div className="mt-1 px-4"><Variacao valor={ind.variacao.ganhas} /></div>
             </div>
             <div>
-              <StatTile rotulo="Perdidas" valor={ind.atual.perdidas} detalhe={moeda(ind.atual.valorPerdido)} />
+              <StatTile rotulo="Desistencias" valor={ind.atual.perdidas} />
               {/* Perda subindo e ruim: a cor inverte. */}
               <div className="mt-1 px-4"><Variacao valor={ind.variacao.perdidas} inverter /></div>
             </div>
@@ -257,17 +257,9 @@ export function ComercialTab() {
             </div>
             <div>
               <StatTile
-                rotulo="Ticket medio"
-                valor={ind.atual.ticketMedio === null ? '—' : moeda(ind.atual.ticketMedio)}
-                detalhe="por jornada ganha"
-              />
-              <div className="mt-1 px-4"><Variacao valor={ind.variacao.ticketMedio} /></div>
-            </div>
-            <div>
-              <StatTile
-                rotulo="Ciclo medio"
+                rotulo="Lead Time medio"
                 valor={ind.atual.cicloMedioDias === null ? '—' : `${ind.atual.cicloMedioDias.toFixed(1)} d`}
-                detalhe="abertura ate ganho"
+                detalhe="abertura ate credenciado"
               />
               {/* Ciclo mais longo e pior: inverte tambem. */}
               <div className="mt-1 px-4"><Variacao valor={ind.variacao.cicloMedioDias} inverter /></div>
@@ -278,13 +270,13 @@ export function ComercialTab() {
             <p className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-500">
               Foto do momento — sem comparacao com periodo anterior
             </p>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <StatTile rotulo="Abertas" valor={ind.agora.abertas} />
-              <StatTile rotulo="Valor em aberto" valor={moeda(ind.agora.valorEmAberto)} />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <StatTile rotulo="Parceiros em andamento" valor={ind.agora.abertas} />
               <StatTile
-                rotulo="Previsao ponderada"
-                valor={moeda(ind.agora.previsaoPonderada)}
-                detalhe="valor x probabilidade da etapa"
+                rotulo="Parceiros parados"
+                valor={risco?.atrasadas.total ?? 0}
+                detalhe={`${risco?.diasDeAviso ?? 7} dias de aviso`}
+                estado={risco && risco.atrasadas.total > 0 ? ESTADO.atencao : undefined}
               />
             </div>
           </div>
