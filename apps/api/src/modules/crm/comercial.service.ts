@@ -257,13 +257,14 @@ export async function relatorioRisco(diasDeAviso = 7, funilId?: string) {
   const visivel = await filtroDe(politicaOportunidades);
   const abertas = await prisma.opportunity.findMany({
     where: { AND: [{ status: 'ABERTA', ...(funilId ? { funilId } : {}) }, visivel] },
-    select: { id: true, valor: true, previsaoFechamento: true },
+    select: { id: true, valor: true, previsaoFechamento: true, estagio: { select: { nome: true } } },
   });
 
   const paraRisco = abertas.map((o) => ({
     id: o.id,
     valor: Number(o.valor),
     previsaoFechamento: o.previsaoFechamento,
+    estagioNome: o.estagio.nome,
   }));
   const tarefas = await tarefasPorOportunidade(paraRisco.map((o) => o.id));
 
