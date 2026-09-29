@@ -1,4 +1,4 @@
-export type Perfil = 'ADMIN' | 'SUPERVISOR' | 'GESTOR' | 'COMERCIAL' | 'AGENTE';
+export type Perfil = 'ADMIN' | 'SUPERVISOR' | 'GESTOR' | 'COMERCIAL' | 'SUPORTE' | 'AGENTE';
 
 export type AgentStatus = 'OFFLINE' | 'DISPONIVEL' | 'EM_ATENDIMENTO' | 'PAUSA';
 
@@ -95,7 +95,8 @@ export const LABEL_PERFIL: Record<Perfil, string> = {
   SUPERVISOR: 'Supervisor',
   GESTOR: 'Gestor',
   COMERCIAL: 'Comercial',
-  AGENTE: 'Agente',
+  SUPORTE: 'Suporte',
+  AGENTE: 'Agente de IA',
 };
 
 export const LABEL_STATUS: Record<AgentStatus, string> = {

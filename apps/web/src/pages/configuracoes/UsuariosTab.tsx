@@ -155,9 +155,11 @@ export function UsuariosTab() {
           </Field>
           <Field label="Perfil">
             <Select value={form.perfil} onChange={(e) => setForm({ ...form, perfil: e.target.value as Perfil })}>
-              <option value="AGENTE">Agente</option>
-              <option value="SUPERVISOR">Supervisor</option>
-              <option value="ADMIN">Administrador</option>
+              <option value="AGENTE">{LABEL_PERFIL.AGENTE}</option>
+              <option value="SUPORTE">{LABEL_PERFIL.SUPORTE}</option>
+              <option value="COMERCIAL">{LABEL_PERFIL.COMERCIAL}</option>
+              <option value="SUPERVISOR">{LABEL_PERFIL.SUPERVISOR}</option>
+              <option value="ADMIN">{LABEL_PERFIL.ADMIN}</option>
             </Select>
           </Field>
           <Button type="submit" disabled={enviando} className="w-full">

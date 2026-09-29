@@ -104,6 +104,8 @@ enum Role {
   GESTOR
   /// Vendas: enxerga a propria carteira e o que esta sem responsavel.
   COMERCIAL
+  /// Suporte: mesmo escopo de atendimento do agente, sem acesso a dados (import/export).
+  SUPORTE
   AGENTE
 }
 

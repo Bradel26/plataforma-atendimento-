@@ -4,7 +4,7 @@ import { Badge, Button } from '../../components/ui';
 import { SkeletonBloco, SkeletonTexto } from '../../components/ui/Skeleton';
 import { Indicador } from '../../pages/crm/ficha/Indicadores';
 import { RegistrarAtividade } from '../../pages/crm/ficha/RegistrarAtividade';
-import { EditorEtiquetas } from '../../pages/crm/Etiquetas';
+import { EditorEtiquetas, ETIQUETAS_CONTATO, ETIQUETAS_CONVERSA } from '../../pages/crm/Etiquetas';
 import { LABEL_TIPO_ATIVIDADE, type Atividade, type ConversaDetalhe, type FichaContato as Ficha } from '../../lib/types';
 import { api } from '../../lib/api';
 
@@ -140,6 +140,7 @@ export function PainelContato({
           <p className="mb-1.5 text-xs font-medium text-slate-500">Etiquetas do contato</p>
           <EditorEtiquetas
             tags={contato.tags ?? []}
+            opcoes={ETIQUETAS_CONTATO}
             aoSalvar={async (tags) => {
               await api.patch(`/contatos/${contatoId}`, { tags });
               await carregar();
@@ -158,6 +159,7 @@ export function PainelContato({
             <p className="mb-1.5 text-xs font-medium text-slate-500">Etiquetas da conversa</p>
             <EditorEtiquetas
               tags={conversaTags ?? []}
+              opcoes={ETIQUETAS_CONVERSA}
               aoSalvar={async (tags) => {
                 const { conversa: nova } = await api.put<{ conversa: ConversaDetalhe }>(
                   `/conversas/${conversaId}/etiquetas`,

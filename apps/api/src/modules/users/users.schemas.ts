@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const perfil = z.enum(['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL', 'AGENTE']);
+const perfil = z.enum(['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL', 'SUPORTE', 'AGENTE']);
 const status = z.enum(['OFFLINE', 'DISPONIVEL', 'EM_ATENDIMENTO', 'PAUSA']);
 
 export const createUserSchema = z.object({

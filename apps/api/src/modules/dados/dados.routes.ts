@@ -61,6 +61,7 @@ dadosRoutes.get('/modelos/:recurso.csv', (req, res) => {
 
 dadosRoutes.get(
   '/exportar/:recurso.csv',
+  requireRole('ADMIN', 'SUPERVISOR'),
   asyncHandler(async (req, res) => {
     const recurso = req.params.recurso ?? '';
     const exportar = EXPORTACOES[recurso];

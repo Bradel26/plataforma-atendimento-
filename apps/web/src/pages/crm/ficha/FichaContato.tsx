@@ -17,7 +17,7 @@ import { Indicadores } from './Indicadores';
 import { LinhaDoTempo } from './LinhaDoTempo';
 import { CheckinDeVisita } from './CheckinDeVisita';
 import { RegistrarAtividade } from './RegistrarAtividade';
-import { EditorEtiquetas } from '../Etiquetas';
+import { EditorEtiquetas, ETIQUETAS_CONTATO } from '../Etiquetas';
 
 /**
  * A vida do cliente numa tela: quem e, o que esta em aberto, o que ficou
@@ -391,6 +391,7 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoExcluir }: FichaPr
           <dt className="mb-1.5 text-xs text-slate-500">Etiquetas</dt>
           <EditorEtiquetas
             tags={contato.tags ?? []}
+            opcoes={ETIQUETAS_CONTATO}
             aoSalvar={async (tags) => {
               await api.patch(`/contatos/${contatoId}`, { tags });
               aoMudarEtiquetas?.();

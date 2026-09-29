@@ -20,6 +20,48 @@ export type TagEmUso = {
   total: number;
 };
 
+/**
+ * Catalogo fechado de etiquetas de conversa: o atendimento classifica o
+ * andamento do atendimento em si, e um campo livre deixava a mesma etapa
+ * grafada de varias formas (ex.: "sem retorno" vs "sem-retorno"), quebrando
+ * filtro e relatorio. Ordem e a do funil, do primeiro contato ao desfecho.
+ */
+export const ETIQUETAS_CONVERSA = [
+  'Novo contato',
+  'Em atendimento',
+  'Qualificação',
+  'Interessado',
+  'Documentação pendente',
+  'Documentação em análise',
+  'Cadastro em andamento',
+  'Cadastro enviado',
+  'Aguardando aprovação',
+  'Credenciado',
+  'Credenciado — ativo',
+  'Desistiu',
+  'Sem interesse',
+  'Sem retorno',
+  'Fora do perfil',
+  'Duplicado',
+  'Encaminhado para outra região',
+  'Problema no cadastro',
+] as const;
+
+/** Catalogo fechado de etiquetas de contato: mesmo motivo do de conversa acima. */
+export const ETIQUETAS_CONTATO = [
+  'Parceiro potencial',
+  'Parceiro credenciado',
+  'Parceiro ativo',
+  'Parceiro inativo',
+  'Parceiro especializado',
+  'Parceiro não especializado',
+  'Cliente atual',
+  'Lead de campanha',
+  'Pessoa jurídica',
+  'Pessoa física MEI',
+  'Região/UF',
+] as const;
+
 const CHIP =
   'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors';
 
@@ -90,6 +132,12 @@ type EditorProps = {
   tags: readonly string[];
   /** Grava a lista inteira; quem chama decide a rota (contato ou conta). */
   aoSalvar: (tags: string[]) => Promise<void>;
+  /**
+   * Catalogo fechado (ex.: `ETIQUETAS_CONVERSA`, `ETIQUETAS_CONTATO`). Quando
+   * presente, troca o campo livre por um `<select>` com essas opcoes — quem
+   * etiqueta escolhe da lista, nao digita.
+   */
+  opcoes?: readonly string[];
 };
 
 /**
@@ -99,7 +147,7 @@ type EditorProps = {
  * API expoe (PATCH com `tags`), e evita o estado intermediario em que a tela
  * mostra uma etiqueta que o servidor ainda nao tem.
  */
-export function EditorEtiquetas({ tags, aoSalvar }: EditorProps) {
+export function EditorEtiquetas({ tags, aoSalvar, opcoes }: EditorProps) {
   const [texto, setTexto] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -109,6 +157,7 @@ export function EditorEtiquetas({ tags, aoSalvar }: EditorProps) {
   // Sugestao vem do catalogo, que ja respeita o escopo de visibilidade: quem
   // digita so recebe etiquetas de registros que ele mesmo poderia abrir.
   useEffect(() => {
+    if (opcoes) return;
     const termo = texto.trim();
     if (!termo) {
       setSugestoes([]);
@@ -121,7 +170,7 @@ export function EditorEtiquetas({ tags, aoSalvar }: EditorProps) {
         .catch(() => setSugestoes([]));
     }, 200);
     return () => clearTimeout(t);
-  }, [texto, tags]);
+  }, [texto, tags, opcoes]);
 
   const gravar = async (proximas: string[]) => {
     setErro(null);
@@ -177,44 +226,65 @@ export function EditorEtiquetas({ tags, aoSalvar }: EditorProps) {
         ))}
       </ul>
 
-      <div className="relative">
-        <input
-          ref={campo}
-          value={texto}
-          onChange={(e) => setTexto(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              // A ficha inteira vive dentro de formularios; sem isto o Enter
-              // aqui submeteria outro formulario e recarregaria a tela.
-              e.preventDefault();
-              acrescentar(texto);
-            }
-            if (e.key === 'Escape') setTexto('');
-          }}
-          disabled={salvando}
-          maxLength={30}
-          placeholder="Nova etiqueta e Enter"
-          aria-label="Nova etiqueta"
-          className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 placeholder:text-slate-400 focus:border-[var(--brand-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-primary)]/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-        />
-
-        {sugestoes.length > 0 && (
-          <ul className="absolute z-10 mt-1 w-full overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900">
-            {sugestoes.map((s) => (
-              <li key={s.tag}>
-                <button
-                  type="button"
-                  onClick={() => acrescentar(s.tag)}
-                  className="flex w-full items-center justify-between px-2 py-1 text-left text-xs text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
-                >
-                  <span>{s.tag}</span>
-                  <span className="tabular-nums text-slate-500">{s.total}</span>
-                </button>
-              </li>
+      {opcoes ? (
+        // Catalogo fechado: campo de selecao, nao texto livre — quem etiqueta
+        // escolhe uma das opcoes previstas, sem grafia divergente possivel.
+        <select
+          value=""
+          onChange={(e) => acrescentar(e.target.value)}
+          disabled={salvando || opcoes.every((o) => tags.includes(o.toLocaleLowerCase('pt-BR')))}
+          aria-label="Adicionar etiqueta"
+          className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 focus:border-[var(--brand-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-primary)]/20 disabled:opacity-40 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+        >
+          <option value="">+ Adicionar etiqueta</option>
+          {opcoes
+            .filter((o) => !tags.includes(o.toLocaleLowerCase('pt-BR')))
+            .map((o) => (
+              <option key={o} value={o}>
+                {o}
+              </option>
             ))}
-          </ul>
-        )}
-      </div>
+        </select>
+      ) : (
+        <div className="relative">
+          <input
+            ref={campo}
+            value={texto}
+            onChange={(e) => setTexto(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                // A ficha inteira vive dentro de formularios; sem isto o Enter
+                // aqui submeteria outro formulario e recarregaria a tela.
+                e.preventDefault();
+                acrescentar(texto);
+              }
+              if (e.key === 'Escape') setTexto('');
+            }}
+            disabled={salvando}
+            maxLength={30}
+            placeholder="Nova etiqueta e Enter"
+            aria-label="Nova etiqueta"
+            className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 placeholder:text-slate-400 focus:border-[var(--brand-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-primary)]/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+          />
+
+          {sugestoes.length > 0 && (
+            <ul className="absolute z-10 mt-1 w-full overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900">
+              {sugestoes.map((s) => (
+                <li key={s.tag}>
+                  <button
+                    type="button"
+                    onClick={() => acrescentar(s.tag)}
+                    className="flex w-full items-center justify-between px-2 py-1 text-left text-xs text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
+                  >
+                    <span>{s.tag}</span>
+                    <span className="tabular-nums text-slate-500">{s.total}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {erro && <p className="text-xs text-rose-600 dark:text-rose-400">{erro}</p>}
     </div>

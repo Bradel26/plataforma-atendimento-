@@ -1,5 +1,4 @@
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Dropdown } from '../../components/ui/Dropdown';
 import { TabsDeNavegacao } from '../../components/ui/Tabs';
 import { useAuth } from '../../features/auth/AuthProvider';
 import type { Perfil } from '../../lib/types';
@@ -25,13 +24,9 @@ import { AcompanhamentosTab } from './AcompanhamentosTab';
  * processo comercial, a API recusa por perfil, e uma aba que sempre falha e uma
  * aba que nao deveria estar la. Ausente = todos que ja chegaram ao CRM.
  *
- * `grupo` separa o que e trabalho do dia a dia (aba direta, sempre visivel)
- * do que e leitura de gestao ou administracao (agrupado em "Mais"). O corte
- * segue o que o proprio codigo das telas ja documentava antes desta fase:
- * comercial/metas/produtividade sao descritas como "painel de gestao" nos
- * comentarios originais, e produtos/etiquetas/dados sao tarefas de
- * configuracao com o mesmo perfil de acesso (ADMIN/SUPERVISOR). Nenhuma
- * dessas seis e o que faz alguem abrir o CRM no meio de um atendimento.
+ * Todas na mesma barra, sem agrupamento em "Mais": a barra ja rola na
+ * horizontal (ver `TabsDeNavegacao`/`CLASSE_CONTAINER`), entao esconder metade
+ * das abas atras de um segundo clique so custava descoberta, sem ganhar espaco.
  */
 const ABAS = [
   /*
@@ -48,8 +43,8 @@ const ABAS = [
    *
    * Sem perfil restrito: cada um ve a propria agenda pela politica de atividades.
    */
-  { id: 'agenda', label: 'Agenda', grupo: 'direta' },
-  { id: 'contatos', label: 'Contatos', grupo: 'direta' },
+  { id: 'agenda', label: 'Agenda' },
+  { id: 'contatos', label: 'Contatos' },
   /*
    * Agenda | Contatos | Historico | Acompanhamentos (SUGESTOES.docx, CRM).
    *
@@ -57,32 +52,30 @@ const ABAS = [
    * precisa de acao. Acompanhamentos le a esteira, e a esteira nao e do AGENTE
    * (mesmo corte de `/credenciamentos`), entao a aba segue o mesmo perfil.
    */
-  { id: 'historico', label: 'Historico', grupo: 'direta' },
-  { id: 'acompanhamentos', label: 'Acompanhamentos', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'], grupo: 'direta' },
-  // Empresas, leads e oportunidades continuam a um clique, em "Mais": o
-  // processo comercial nao e o dia a dia do credenciamento, mas nao sumiu.
-  { id: 'contas', label: 'Empresas', grupo: 'mais' },
-  { id: 'leads', label: 'Leads', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'], grupo: 'mais' },
-  { id: 'oportunidades', label: 'Oportunidades', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'], grupo: 'mais' },
+  { id: 'historico', label: 'Historico' },
+  { id: 'acompanhamentos', label: 'Acompanhamentos', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'] },
+  { id: 'contas', label: 'Empresas' },
+  { id: 'leads', label: 'Leads', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'] },
+  { id: 'oportunidades', label: 'Oportunidades', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'] },
   // Mesmos perfis do `requireRole` das rotas `/comercial/*`: a aba que sempre
   // recebe 403 e uma aba que nao deveria existir para aquele perfil.
-  { id: 'comercial', label: 'Leitura comercial', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR'], grupo: 'mais' },
+  { id: 'comercial', label: 'Leitura comercial', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR'] },
   // Ler o painel de metas e trabalho de gestao (inclui GESTOR); DEFINIR meta e
   // ADMIN/SUPERVISOR, e o formulario da rampa se esconde dentro da aba. Mesmo
   // corte da politica de desconto e do processo do funil.
-  { id: 'metas', label: 'Metas', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR'], grupo: 'mais' },
+  { id: 'metas', label: 'Metas', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR'] },
   // Mesmo corte de leitura de metas e da leitura comercial: e painel de gestao.
-  { id: 'produtividade', label: 'Produtividade', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR'], grupo: 'mais' },
+  { id: 'produtividade', label: 'Produtividade', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR'] },
   // Mesmo corte de leitura de metas e produtividade: e painel de gestao. COMERCIAL
   // entra tambem porque, ao contrario das outras tres, esta aba serve para a propria
   // pessoa ver o proprio resumo — nao so para quem gerencia.
-  { id: 'painel-vendedor', label: 'Painel do vendedor', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'], grupo: 'mais' },
-  { id: 'produtos', label: 'Produtos e precos', perfis: ['ADMIN', 'SUPERVISOR'], grupo: 'mais' },
+  { id: 'painel-vendedor', label: 'Painel do vendedor', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'] },
+  { id: 'produtos', label: 'Produtos e precos', perfis: ['ADMIN', 'SUPERVISOR'] },
   // Renomear e remover etiqueta alcancam registros que quem clica nao ve, entao
   // a aba segue o mesmo perfil da rota: ADMIN e SUPERVISOR.
-  { id: 'etiquetas', label: 'Etiquetas', perfis: ['ADMIN', 'SUPERVISOR'], grupo: 'mais' },
-  { id: 'dados', label: 'Importar / Exportar', perfis: ['ADMIN', 'SUPERVISOR'], grupo: 'mais' },
-] as const satisfies ReadonlyArray<{ id: string; label: string; perfis?: readonly Perfil[]; grupo: 'direta' | 'mais' }>;
+  { id: 'etiquetas', label: 'Etiquetas', perfis: ['ADMIN', 'SUPERVISOR'] },
+  { id: 'dados', label: 'Importar / Exportar', perfis: ['ADMIN', 'SUPERVISOR'] },
+] as const satisfies ReadonlyArray<{ id: string; label: string; perfis?: readonly Perfil[] }>;
 
 type AbaId = (typeof ABAS)[number]['id'];
 
@@ -135,41 +128,15 @@ export function CrmPage() {
   /** Mesmo endereco que `trocarAba` ja monta — a URL nao muda, so quem a desenha. */
   const hrefDaAba = (abaId: AbaId) => (abaId === 'contatos' ? '/crm' : `/crm?aba=${abaId}`);
 
-  const diretas = abasVisiveis.filter((a) => a.grupo === 'direta');
-  const agrupadas = abasVisiveis.filter((a) => a.grupo === 'mais');
-  const abaAgrupadaAtiva = agrupadas.find((a) => a.id === aba);
-
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-x-2 gap-y-1">
-        <TabsDeNavegacao
-          itens={diretas.map(({ id: abaId, label }) => ({
-            rota: hrefDaAba(abaId),
-            rotulo: label,
-            ativo: aba === abaId,
-          }))}
-        />
-
-        {/*
-          Leitura de gestao e tarefas administrativas — nao e o que faz
-          alguem abrir o CRM no meio do dia, mas continuam a um clique, nunca
-          escondidas atras de uma segunda tela. Preserva a mesma URL
-          (`?aba=`) que a aba direta usaria: so muda quem desenha o link.
-        */}
-        {agrupadas.length > 0 && (
-          <div className="mb-1">
-            <Dropdown
-              rotulo={abaAgrupadaAtiva ? abaAgrupadaAtiva.label : 'Mais'}
-              ativo={Boolean(abaAgrupadaAtiva)}
-              itens={agrupadas.map(({ id: abaId, label }) => ({
-                chave: abaId,
-                rotulo: label,
-                aoSelecionar: () => trocarAba(abaId),
-              }))}
-            />
-          </div>
-        )}
-      </div>
+      <TabsDeNavegacao
+        itens={abasVisiveis.map(({ id: abaId, label }) => ({
+          rota: hrefDaAba(abaId),
+          rotulo: label,
+          ativo: aba === abaId,
+        }))}
+      />
 
       {aba === 'agenda' && <AgendaDaSemana />}
       {aba === 'historico' && <HistoricoTab />}

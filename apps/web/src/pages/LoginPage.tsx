@@ -25,23 +25,12 @@ const ESTRELAS_BG = `
   radial-gradient(1px 1px at 60% 60%, rgba(255,255,255,0.8), transparent)
 `;
 
-function IconeDecorativo({ children }: { children: React.ReactNode }) {
-  return (
-    // Cor literal, nao `border-white/10`/`text-slate-300`: esta cena e SEMPRE
-    // escura, independente do tema que a pessoa escolheu no app (ela nem
-    // logou ainda) — as escalas `white`/`slate` invertem com o tema e
-    // ficariam escuras sobre um fundo que tambem e escuro.
-    <span className="flex h-9 w-9 items-center justify-center rounded-full border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.05)] text-[#cbd5e1] transition hover:border-[rgba(255,255,255,0.3)] hover:bg-[rgba(255,255,255,0.1)] hover:text-[#fff]">
-      {children}
-    </span>
-  );
-}
-
 export function LoginPage() {
   const { entrar } = useAuth();
   const { branding } = useBranding();
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
+  const [senhaVisivel, setSenhaVisivel] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
 
@@ -217,7 +206,7 @@ export function LoginPage() {
       </div>
 
       {/* Cor literal pelo mesmo motivo do IconeDecorativo: cena sempre escura. */}
-      <p className="absolute bottom-6 left-8 z-10 text-xs text-[#94a3b8]">Versao 0.1.0 - MVP Fase 0</p>
+      <p className="absolute bottom-6 left-8 z-10 text-xs text-[#94a3b8]">Versao 0.1.0 - MVP Fase 1</p>
 
       {/* card flutuante — coluna direita (~32%), centralizado nela em vez de so encostado.
           `border-[rgba(255,255,255,0.1)]`/`bg-slate-950/70`, nao `border-white/10`: o cartao
@@ -273,47 +262,55 @@ export function LoginPage() {
               <label htmlFor="login-senha" className="mb-1.5 block text-xs font-medium text-[#cbd5e1]">
                 Senha
               </label>
-              <Input
-                id="login-senha"
-                type="password"
-                autoComplete="current-password"
-                required
-                value={senha}
-                onChange={(e) => setSenha(e.target.value)}
-                placeholder="********"
-                style={{ backgroundColor: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.15)', color: '#fff' }}
-              />
+              <div className="relative">
+                <Input
+                  id="login-senha"
+                  type={senhaVisivel ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  required
+                  value={senha}
+                  onChange={(e) => setSenha(e.target.value)}
+                  placeholder="********"
+                  className="pr-10"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.15)', color: '#fff' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setSenhaVisivel((v) => !v)}
+                  aria-label={senhaVisivel ? 'Ocultar senha' : 'Mostrar senha'}
+                  aria-pressed={senhaVisivel}
+                  className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-[#94a3b8] transition hover:text-[#fff]"
+                >
+                  {senhaVisivel ? (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path
+                        d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.6" />
+                    </svg>
+                  ) : (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path
+                        d="M3 3l18 18M10.6 10.7a2.5 2.5 0 003.5 3.5M6.7 6.9C4.3 8.5 2 12 2 12s3.6 7 10 7c1.8 0 3.4-.5 4.7-1.2M9.9 4.2A9.9 9.9 0 0112 4c6.4 0 10 7 10 7-.6 1.1-1.5 2.4-2.7 3.6"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  )}
+                </button>
+              </div>
             </div>
 
             <Button type="submit" disabled={enviando} className="w-full">
               {enviando ? 'Entrando...' : 'Entrar'}
             </Button>
           </form>
-
-          <div className="mt-6 flex items-center justify-center gap-4 border-t border-[rgba(255,255,255,0.1)] pt-5">
-            <IconeDecorativo>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M4 20l6-6M14 4l6 6-9 9-6-6z" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </IconeDecorativo>
-            <IconeDecorativo>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path
-                  d="M4 13a8 8 0 0116 0v4a2 2 0 01-2 2h-1v-6h3M4 13v6h1a2 2 0 002-2v-4H4z"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </IconeDecorativo>
-            <IconeDecorativo>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.6" />
-                <path d="M4 12h16M12 4c2.5 2.5 2.5 13.5 0 16M12 4c-2.5 2.5-2.5 13.5 0 16" stroke="currentColor" strokeWidth="1.6" />
-              </svg>
-            </IconeDecorativo>
-          </div>
         </div>
       </div>
     </div>

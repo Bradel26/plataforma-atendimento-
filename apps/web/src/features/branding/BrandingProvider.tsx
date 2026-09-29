@@ -4,7 +4,7 @@ import type { Branding } from '../../lib/types';
 
 const PADRAO: Branding = {
   id: 'default',
-  appName: 'Plataforma de Atendimento',
+  appName: 'Plataforma de Atendimento Bradel',
   logoUrl: null,
   corPrimaria: '#2563eb',
   corSecundaria: '#0f172a',
