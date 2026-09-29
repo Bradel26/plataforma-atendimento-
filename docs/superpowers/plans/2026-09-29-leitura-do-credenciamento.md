@@ -68,7 +68,7 @@ cartões trocados — sem endpoint novo, sem componente novo.
   mesma assinatura — os baldes novos vêm do campo novo em `abertas`, não de
   parâmetro novo. Task 2 depende desses dois tipos e desse cálculo.
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 Em `apps/api/src/modules/crm/comercial.test.ts`, dentro do `describe('montarRisco (1.3)', ...)`, a fixture `abertas` (linhas 138-143) precisa do campo novo — sem ele o `it('conta aguardando parceiro...')` abaixo nem compila. Troque:
 
@@ -133,12 +133,12 @@ Por fim, adicione este `it` novo logo antes do `});` que fecha o `describe('mont
   });
 ```
 
-- [ ] **Step 2: Rodar os testes e confirmar que falham**
+- [x] **Step 2: Rodar os testes e confirmar que falham**
 
 Run: `cd apps/api && npx vitest run src/modules/crm/comercial.test.ts`
 Expected: FAIL — `estagioNome` não existe no tipo `OportunidadeParaRisco`, e `r.aguardandoParceiro`/`r.aguardandoEquipe` são `undefined`.
 
-- [ ] **Step 3: Implementar**
+- [x] **Step 3: Implementar**
 
 Em `apps/api/src/modules/crm/comercial.service.ts`, troque o bloco de tipos (linhas 187-208):
 
@@ -234,12 +234,12 @@ por:
   };
 ```
 
-- [ ] **Step 4: Rodar os testes e confirmar que passam**
+- [x] **Step 4: Rodar os testes e confirmar que passam**
 
 Run: `cd apps/api && npx vitest run src/modules/crm/comercial.test.ts`
 Expected: PASS (todos os `it` do arquivo, incluindo os dois novos).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/api/src/modules/crm/comercial.service.ts apps/api/src/modules/crm/comercial.test.ts
@@ -260,7 +260,7 @@ git commit -m "feat(comercial): baldes de risco aguardandoParceiro/aguardandoEqu
   tipo) — é o que a rota `GET /comercial/risco` expõe, consumido pela
   Task 4.
 
-- [ ] **Step 1: Implementar**
+- [x] **Step 1: Implementar**
 
 Em `apps/api/src/modules/crm/comercial.service.ts`, troque `relatorioRisco` (linhas 248-263):
 
@@ -305,12 +305,12 @@ export async function relatorioRisco(diasDeAviso = 7, funilId?: string) {
 }
 ```
 
-- [ ] **Step 2: Rodar a suite inteira da API e o typecheck**
+- [x] **Step 2: Rodar a suite inteira da API e o typecheck**
 
 Run: `cd apps/api && npx tsc --noEmit && npx vitest run`
 Expected: PASS — nenhum teste existente de `comercial`/`opportunities` depende do shape antigo do `select`.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add apps/api/src/modules/crm/comercial.service.ts
@@ -330,7 +330,7 @@ git commit -m "feat(comercial): relatorioRisco le o nome da etapa atual da oport
   a função `salvarTeto`, sem o `fetch` de `/comercial/politica`. As Tasks 4 e
   5 editam o mesmo arquivo depois desta.
 
-- [ ] **Step 1: Remover imports que só serviam a política de desconto**
+- [x] **Step 1: Remover imports que só serviam a política de desconto**
 
 Troque a linha 2:
 
@@ -350,7 +350,7 @@ E remova a linha 8 inteira:
 import { useAuth } from '../../features/auth/AuthProvider';
 ```
 
-- [ ] **Step 2: Remover estado e a chamada de `useAuth`**
+- [x] **Step 2: Remover estado e a chamada de `useAuth`**
 
 Troque (linhas 121-133):
 
@@ -384,7 +384,7 @@ export function ComercialTab() {
   const [erro, setErro] = useState<string | null>(null);
 ```
 
-- [ ] **Step 3: Remover o fetch de `/comercial/politica` e a função `salvarTeto`**
+- [x] **Step 3: Remover o fetch de `/comercial/politica` e a função `salvarTeto`**
 
 Troque (linhas 163-193):
 
@@ -433,7 +433,7 @@ por:
   }, []);
 ```
 
-- [ ] **Step 4: Remover o cartão da JSX e renomear o cabeçalho**
+- [x] **Step 4: Remover o cartão da JSX e renomear o cabeçalho**
 
 Troque (linha 197):
 
@@ -491,12 +491,12 @@ E remova o bloco inteiro (comentário + card condicional):
 
 (o resultado é a `{erro && <Alerta>{erro}</Alerta>}` seguida direto pelo comentário `{/* 1.3 — risco. ... */}`).
 
-- [ ] **Step 5: Typecheck**
+- [x] **Step 5: Typecheck**
 
 Run: `cd apps/web && npx tsc --noEmit`
 Expected: PASS — sem import/variável não usada.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/web/src/pages/crm/ComercialTab.tsx
@@ -517,7 +517,7 @@ git commit -m "refactor(comercial): remove cartao de politica de desconto da Lei
 - Produces: nenhuma interface nova — o `risco` que este task consome
   continua disponível para a Task 5 usar em "Parceiros parados".
 
-- [ ] **Step 1: Espelhar os dois campos novos no tipo local `Risco`**
+- [x] **Step 1: Espelhar os dois campos novos no tipo local `Risco`**
 
 Troque (linhas 44-52):
 
@@ -549,7 +549,7 @@ type Risco = {
 };
 ```
 
-- [ ] **Step 2: Renomear o cartão e os tiles**
+- [x] **Step 2: Renomear o cartão e os tiles**
 
 Troque o bloco inteiro do cartão de risco:
 
@@ -651,12 +651,12 @@ por:
       )}
 ```
 
-- [ ] **Step 3: Typecheck**
+- [x] **Step 3: Typecheck**
 
 Run: `cd apps/web && npx tsc --noEmit`
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add apps/web/src/pages/crm/ComercialTab.tsx
@@ -674,7 +674,7 @@ git commit -m "feat(comercial): Credenciamentos em Risco com baldes aguardando p
 - Consumes: `risco` (Task 3/4) para o tile "Parceiros parados".
 - Produces: nenhuma interface nova.
 
-- [ ] **Step 1: Renomear/remover os tiles do fluxo do período**
+- [x] **Step 1: Renomear/remover os tiles do fluxo do período**
 
 Troque:
 
@@ -779,12 +779,12 @@ API) — só pararam de ser lidos nesta tela. Não apague os campos do tipo
 querer os mesmos dados, e apagar tipo que a API ainda devolve é trabalho sem
 motivo.
 
-- [ ] **Step 2: Typecheck**
+- [x] **Step 2: Typecheck**
 
 Run: `cd apps/web && npx tsc --noEmit`
 Expected: PASS.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add apps/web/src/pages/crm/ComercialTab.tsx
@@ -802,7 +802,7 @@ git commit -m "feat(comercial): indicadores do periodo e foto do momento em voca
 - Consumes: nada de tarefa anterior.
 - Produces: nenhuma.
 
-- [ ] **Step 1: Renomear o título do cartão**
+- [x] **Step 1: Renomear o título do cartão**
 
 Troque:
 
@@ -822,12 +822,12 @@ por:
         >
 ```
 
-- [ ] **Step 2: Typecheck**
+- [x] **Step 2: Typecheck**
 
 Run: `cd apps/web && npx tsc --noEmit`
 Expected: PASS.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add apps/web/src/pages/crm/ComercialTab.tsx
@@ -840,17 +840,17 @@ git commit -m "refactor(comercial): renomeia cartao de Perdas por motivo para Mo
 
 **Files:** nenhum (só rodar comandos).
 
-- [ ] **Step 1: Typecheck completo dos dois workspaces**
+- [x] **Step 1: Typecheck completo dos dois workspaces**
 
 Run: `cd apps/api && npx tsc --noEmit && cd ../web && npx tsc --noEmit`
 Expected: PASS nos dois.
 
-- [ ] **Step 2: Suite de testes completa dos dois workspaces**
+- [x] **Step 2: Suite de testes completa dos dois workspaces**
 
 Run: `cd apps/api && npx vitest run && cd ../web && npx vitest run`
 Expected: PASS em todos os arquivos, incluindo os testes novos da Task 1.
 
-- [ ] **Step 3: Conferir visualmente**
+- [x] **Step 3: Conferir visualmente**
 
 Abrir `http://localhost:5173/gestao` logado como ADMIN e confirmar: o bloco
 "Leitura do Credenciamento" aparece abaixo dos cartões da Esteira, sem
