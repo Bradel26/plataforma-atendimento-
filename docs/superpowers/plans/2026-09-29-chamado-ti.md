@@ -66,7 +66,7 @@ tipos de chamado na mesma lista.
   e `tipo_ti` (`TicketTipoTi`, nula) na tabela `protocolos`. Task 2 usa os
   dois nomes de enum e de campo exatamente como definidos aqui.
 
-- [ ] **Step 1: Editar o schema**
+- [x] **Step 1: Editar o schema**
 
 Em `apps/api/prisma/schema.prisma`, troque (linhas 1379-1394):
 
@@ -139,7 +139,7 @@ por:
   tipoTi        TicketTipoTi?    @map("tipo_ti")
 ```
 
-- [ ] **Step 2: Escrever a migration**
+- [x] **Step 2: Escrever a migration**
 
 Crie `apps/api/prisma/migrations/20260929130000_chamado_ti/migration.sql`:
 
@@ -159,7 +159,7 @@ ALTER TABLE "protocolos"
   ADD COLUMN "tipo_ti" "TicketTipoTi";
 ```
 
-- [ ] **Step 3: Aplicar a migration e regenerar o client**
+- [x] **Step 3: Aplicar a migration e regenerar o client**
 
 Run: `cd apps/api && npx prisma migrate deploy`
 Expected: `20260929130000_chamado_ti` aparece em "The following migration(s) have been applied".
@@ -171,12 +171,12 @@ travado, é o processo do `tsx watch` da API segurando o
 processos `node ... tsx/dist/cli.mjs watch src/main.ts`) e rode de novo;
 já aconteceu nesta sessão e a causa foi exatamente essa.
 
-- [ ] **Step 4: Confirmar**
+- [x] **Step 4: Confirmar**
 
 Run: `cd apps/api && npx tsc --noEmit`
 Expected: PASS (o client novo já expõe `categoria`/`tipoTi` em `Prisma.Ticket`).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/api/prisma/schema.prisma apps/api/prisma/migrations/20260929130000_chamado_ti
@@ -200,7 +200,7 @@ git commit -m "feat(protocolo): campos categoria e tipoTi no Ticket, para chamad
   `serialize()` devolve `categoria`/`tipoTi` em todo `Protocolo` — é esse
   shape que a Task 5 (frontend, tipo `Protocolo`) espelha.
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 Crie `apps/api/src/modules/tickets/tickets.schemas.test.ts`:
 
@@ -254,7 +254,7 @@ describe('listarTicketsSchema — filtro de categoria', () => {
 });
 ```
 
-- [ ] **Step 2: Rodar e confirmar que falha**
+- [x] **Step 2: Rodar e confirmar que falha**
 
 Run: `cd apps/api && npx vitest run src/modules/tickets/tickets.schemas.test.ts`
 Expected: FAIL — `criarTicketSchema`/`listarTicketsSchema` ainda não
@@ -264,7 +264,7 @@ padrão — então o teste 2 falha em `expect(erro.categoria).toBe('TI_INTERNO')
 por `categoria` vir `undefined`, e o teste 3 falha porque nada rejeita
 `tipoTi` inválido).
 
-- [ ] **Step 3: Implementar os schemas**
+- [x] **Step 3: Implementar os schemas**
 
 Em `apps/api/src/modules/tickets/tickets.schemas.ts`, troque as linhas 1-26:
 
@@ -375,12 +375,12 @@ export const listarTicketsSchema = z.object({
 });
 ```
 
-- [ ] **Step 4: Rodar e confirmar que passam**
+- [x] **Step 4: Rodar e confirmar que passam**
 
 Run: `cd apps/api && npx vitest run src/modules/tickets/tickets.schemas.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: `listarTickets`/`ticketsKanban` filtram por categoria, e `serialize` devolve os campos novos**
+- [x] **Step 5: `listarTickets`/`ticketsKanban` filtram por categoria, e `serialize` devolve os campos novos**
 
 Em `apps/api/src/modules/tickets/tickets.service.ts`, troque o objeto
 devolvido por `serialize` (linhas 38-68):
@@ -429,12 +429,12 @@ por:
   if (query.categoria) filtros.push({ categoria: query.categoria });
 ```
 
-- [ ] **Step 6: Typecheck e suite completa da API**
+- [x] **Step 6: Typecheck e suite completa da API**
 
 Run: `cd apps/api && npx tsc --noEmit && npx vitest run`
 Expected: PASS em tudo, incluindo o arquivo novo.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/api/src/modules/tickets/tickets.schemas.ts apps/api/src/modules/tickets/tickets.schemas.test.ts apps/api/src/modules/tickets/tickets.service.ts
@@ -456,7 +456,7 @@ git commit -m "feat(protocolo): categoria/tipoTi em criar, listar e serializar c
   `LABEL_CATEGORIA_TICKET`, `TIPOS_TI`, `LABEL_TIPO_TI` — usados pelas
   Tasks 5 e 6.
 
-- [ ] **Step 1: Adicionar os tipos e o campo em `Protocolo`**
+- [x] **Step 1: Adicionar os tipos e o campo em `Protocolo`**
 
 Troque (linhas 713-714):
 
@@ -490,7 +490,7 @@ por:
   prazoSla: string | null;
 ```
 
-- [ ] **Step 2: Adicionar as listas e os rótulos, ao lado dos de prioridade**
+- [x] **Step 2: Adicionar as listas e os rótulos, ao lado dos de prioridade**
 
 Troque (linhas 781-795):
 
@@ -546,7 +546,7 @@ export const LABEL_TIPO_TI: Record<TicketTipoTi, string> = {
 };
 ```
 
-- [ ] **Step 3: Typecheck**
+- [x] **Step 3: Typecheck**
 
 Run: `cd apps/web && npx tsc --noEmit`
 Expected: FAIL — nenhum consumidor preenche `categoria`/`tipoTi` ainda em
@@ -555,7 +555,7 @@ lugar nenhum que construa um `Protocolo` literal à mão. Na prática, como
 isso deve passar direto; se algum teste construir um `Protocolo` fake sem
 os dois campos novos, adicione-os ali antes de seguir.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add apps/web/src/lib/types.ts
@@ -579,7 +579,7 @@ git commit -m "feat(protocolo): tipos TicketCategoria/TicketTipoTi e campos em P
   perfis; `ChamadoTiPage` exportado de `apps/web/src/pages/ChamadoTiPage.tsx`
   — é esse export que a Task 5 preenche.
 
-- [ ] **Step 1: Ícone novo**
+- [x] **Step 1: Ícone novo**
 
 No fim de `apps/web/src/components/layout/icons.tsx`, depois de
 `IconTelefonia` (linhas 106-110), adicione:
@@ -595,7 +595,7 @@ export const IconChamadoTi = (p: IconProps) => (
 );
 ```
 
-- [ ] **Step 2: Esqueleto da página**
+- [x] **Step 2: Esqueleto da página**
 
 Crie `apps/web/src/pages/ChamadoTiPage.tsx`:
 
@@ -605,7 +605,7 @@ export function ChamadoTiPage() {
 }
 ```
 
-- [ ] **Step 3: Item no menu**
+- [x] **Step 3: Item no menu**
 
 Em `apps/web/src/components/layout/nav.ts`, adicione `IconChamadoTi` à
 lista de imports (linhas 3-15) — troque:
@@ -669,7 +669,7 @@ por:
 ];
 ```
 
-- [ ] **Step 4: Registrar a rota**
+- [x] **Step 4: Registrar a rota**
 
 Em `apps/web/src/App.tsx`, adicione o import (junto dos outros de
 `./pages/`) — troque:
@@ -706,13 +706,13 @@ const PAGINAS: Record<string, ComponentType> = {
   '/chamado-ti': ChamadoTiPage,
 ```
 
-- [ ] **Step 5: Typecheck e teste de navegação**
+- [x] **Step 5: Typecheck e teste de navegação**
 
 Run: `cd apps/web && npx tsc --noEmit && npx vitest run src/components/layout/nav.test.ts`
 Expected: PASS nos dois — o item novo não restringe nenhuma subrota
 existente, então `nav.test.ts` não deveria nem notar a diferença.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/web/src/components/layout/icons.tsx apps/web/src/components/layout/nav.ts apps/web/src/App.tsx apps/web/src/pages/ChamadoTiPage.tsx
@@ -732,7 +732,7 @@ git commit -m "feat(chamado-ti): rota /chamado-ti visivel a todos os perfis"
   (`apps/web/src/components/ui/Toast.tsx`, já existente).
 - Produces: nada consumido por outra tarefa — é a folha da árvore.
 
-- [ ] **Step 1: Escrever o formulário completo**
+- [x] **Step 1: Escrever o formulário completo**
 
 Substitua todo o conteúdo de `apps/web/src/pages/ChamadoTiPage.tsx` (o
 esqueleto da Task 4) por:
@@ -848,12 +848,12 @@ export function ChamadoTiPage() {
 }
 ```
 
-- [ ] **Step 2: Typecheck**
+- [x] **Step 2: Typecheck**
 
 Run: `cd apps/web && npx tsc --noEmit`
 Expected: PASS.
 
-- [ ] **Step 3: Conferir no navegador**
+- [x] **Step 3: Conferir no navegador**
 
 Com a API e o front rodando (`npm run dev`), abrir
 `http://localhost:5173/chamado-ti` logado com qualquer perfil, preencher
@@ -862,7 +862,7 @@ sucesso aparece no canto superior direito, formulario limpa, e o chamado
 aparece na coluna "Aberto" de `http://localhost:5173/protocolo` (Task 6
 ainda nao mostra o badge "TI interno" — isso e esperado ate a Task 6).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add apps/web/src/pages/ChamadoTiPage.tsx
@@ -881,7 +881,7 @@ git commit -m "feat(chamado-ti): formulario de abertura com print opcional e con
   (Task 3).
 - Produces: nada consumido por outra tarefa.
 
-- [ ] **Step 1: Import e estado do filtro**
+- [x] **Step 1: Import e estado do filtro**
 
 Troque o bloco de import de tipos (linhas 5-16):
 
@@ -930,7 +930,7 @@ por:
   const [filtros, setFiltros] = useState({ prioridade: '', responsavelId: '', slaVencido: '', busca: '', categoria: '' });
 ```
 
-- [ ] **Step 2: Mandar o filtro na querystring**
+- [x] **Step 2: Mandar o filtro na querystring**
 
 Troque (linhas 46-50):
 
@@ -953,7 +953,7 @@ por:
     if (filtros.busca.trim()) qs.set('busca', filtros.busca.trim());
 ```
 
-- [ ] **Step 3: Campo de filtro na tela**
+- [x] **Step 3: Campo de filtro na tela**
 
 Troque o card de Filtros (linhas 135-169):
 
@@ -1042,7 +1042,7 @@ por:
       </Card>
 ```
 
-- [ ] **Step 4: Badge e texto do cartão no kanban**
+- [x] **Step 4: Badge e texto do cartão no kanban**
 
 Troque o `<li>` de cada chamado (linhas 192-216):
 
@@ -1103,19 +1103,19 @@ por:
                   </li>
 ```
 
-- [ ] **Step 5: Typecheck**
+- [x] **Step 5: Typecheck**
 
 Run: `cd apps/web && npx tsc --noEmit`
 Expected: PASS.
 
-- [ ] **Step 6: Conferir no navegador**
+- [x] **Step 6: Conferir no navegador**
 
 Logado como ADMIN em `http://localhost:5173/protocolo`, com pelo menos um
 chamado de TI já aberto (Task 5, Step 3): confirmar que o cartão mostra o
 badge "TI interno" e o tipo (Erro/bug ou Melhoria) em vez de "Sem
 contato", e que o filtro "Categoria" isola só os chamados de TI.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/web/src/pages/protocolo/ProtocoloPage.tsx
@@ -1128,18 +1128,18 @@ git commit -m "feat(protocolo): badge TI interno e filtro de categoria no kanban
 
 **Files:** nenhum (só rodar comandos).
 
-- [ ] **Step 1: Typecheck completo dos dois workspaces**
+- [x] **Step 1: Typecheck completo dos dois workspaces**
 
 Run: `cd apps/api && npx tsc --noEmit && cd ../web && npx tsc --noEmit`
 Expected: PASS nos dois.
 
-- [ ] **Step 2: Suite de testes completa dos dois workspaces**
+- [x] **Step 2: Suite de testes completa dos dois workspaces**
 
 Run: `cd apps/api && npx vitest run && cd ../web && npx vitest run`
 Expected: PASS em todos os arquivos, incluindo `tickets.schemas.test.ts`
 (Task 2) e `nav.test.ts` (Task 4).
 
-- [ ] **Step 3: Fluxo ponta a ponta no navegador**
+- [x] **Step 3: Fluxo ponta a ponta no navegador**
 
 Com `npm run dev` rodando os dois workspaces: abrir `/chamado-ti` com um
 perfil que **não** vê `/protocolo` hoje (ex. login como
