@@ -1391,6 +1391,19 @@ enum TicketPrioridade {
   URGENTE
 }
 
+/// Chamado de atendimento ao cliente (padrao) ou chamado interno de TI —
+/// mesma tabela, dois publicos diferentes. Ver TicketTipoTi para o
+/// segundo so fazer sentido quando categoria = TI_INTERNO.
+enum TicketCategoria {
+  ATENDIMENTO
+  TI_INTERNO
+}
+
+enum TicketTipoTi {
+  ERRO
+  MELHORIA
+}
+
 model Ticket {
   /// Numero sequencial legivel, usado na comunicacao com o cliente.
   /// Numero do protocolo, sequencial POR ORGANIZACAO.
@@ -1407,6 +1420,9 @@ model Ticket {
   descricao     String
   status        TicketStatus     @default(ABERTO)
   prioridade    TicketPrioridade @default(NORMAL)
+  categoria     TicketCategoria  @default(ATENDIMENTO)
+  /// So preenchido quando categoria = TI_INTERNO.
+  tipoTi        TicketTipoTi?    @map("tipo_ti")
   contatoId     String?          @map("contato_id")
   contaId       String?          @map("conta_id")
   /// Conversa que originou o chamado, quando aberto pelo atendimento.
