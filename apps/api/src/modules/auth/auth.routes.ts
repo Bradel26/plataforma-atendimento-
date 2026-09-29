@@ -13,8 +13,8 @@ import {
   revokeRefreshToken,
 } from '../../lib/tokens';
 import { toPublicUser } from '../users/users.serializer';
-import { loginSchema } from './auth.schemas';
-import { login, marcarOffline, sessionForUserId } from './auth.service';
+import { alterarSenhaInicialSchema, loginSchema } from './auth.schemas';
+import { alterarSenhaInicial, login, marcarOffline, sessionForUserId } from './auth.service';
 
 export const authRoutes = Router();
 
@@ -35,6 +35,16 @@ authRoutes.post(
     );
     res.cookie(REFRESH_COOKIE, refreshToken, refreshCookieOptions);
     res.json({ accessToken, usuario });
+  }),
+);
+
+authRoutes.post(
+  '/alterar-senha-inicial',
+  limitar({ nome: 'login', janelaSegundos: 300, maximo: 30 }),
+  validateBody(alterarSenhaInicialSchema),
+  asyncHandler(async (req, res) => {
+    await semOrganizacao('troca de senha temporaria antes do login', () => alterarSenhaInicial(req.body));
+    res.status(204).end();
   }),
 );
 

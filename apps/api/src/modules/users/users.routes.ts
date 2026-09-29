@@ -12,6 +12,7 @@ import {
 } from './users.schemas';
 import {
   createUser,
+  deleteUserPermanently,
   deactivateUser,
   getUser,
   listUsers,
@@ -87,5 +88,15 @@ usersRoutes.delete(
   asyncHandler(async (req, res) => {
     if (param(req, 'id') === req.user!.sub) throw badRequest('Voce nao pode desativar o proprio usuario');
     res.json({ usuario: await deactivateUser(param(req, 'id')) });
+  }),
+);
+
+usersRoutes.delete(
+  '/:id/permanente',
+  requireRole('ADMIN'),
+  asyncHandler(async (req, res) => {
+    const id = param(req, 'id');
+    if (id === req.user!.sub) throw badRequest('Voce nao pode excluir a propria conta');
+    res.json({ usuario: await deleteUserPermanently(id) });
   }),
 );

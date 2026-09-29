@@ -218,3 +218,23 @@ html.tema-escuro {
     animation: none;
   }
 }
+/* Barra discreta e cinza nas listas independentes do quadro de chamados. */
+.barra-rolagem-cinza {
+  scrollbar-color: #94a3b8 #f1f5f9;
+  scrollbar-width: thin;
+}
+.barra-rolagem-cinza::-webkit-scrollbar {
+  width: 8px;
+}
+.barra-rolagem-cinza::-webkit-scrollbar-track {
+  border-radius: 9999px;
+  background: #f1f5f9;
+}
+.barra-rolagem-cinza::-webkit-scrollbar-thumb {
+  border: 2px solid #f1f5f9;
+  border-radius: 9999px;
+  background: #94a3b8;
+}
+.barra-rolagem-cinza::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}

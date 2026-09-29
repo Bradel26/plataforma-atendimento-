@@ -123,6 +123,7 @@ model User {
   nome          String
   email         String
   senhaHash     String      @map("senha_hash")
+  senhaPendente Boolean     @default(false) @map("senha_pendente")
   perfil        Role        @default(AGENTE)
   status        AgentStatus @default(OFFLINE)
   ativo         Boolean     @default(true)

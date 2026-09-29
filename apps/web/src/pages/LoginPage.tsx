@@ -2,7 +2,7 @@ import { lazy, Suspense, useState } from 'react';
 import { Alerta, Button, Input } from '../components/ui';
 import { useAuth } from '../features/auth/AuthProvider';
 import { useBranding } from '../features/branding/BrandingProvider';
-import { ApiError } from '../lib/api';
+import { ApiError, api } from '../lib/api';
 
 /**
  * Carregado sob demanda: Three.js so pesa o bundle de quem realmente vai ver
@@ -31,6 +31,9 @@ export function LoginPage() {
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [senhaVisivel, setSenhaVisivel] = useState(false);
+  const [trocaObrigatoria, setTrocaObrigatoria] = useState(false);
+  const [novaSenha, setNovaSenha] = useState('');
+  const [confirmarSenha, setConfirmarSenha] = useState('');
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
 
@@ -41,7 +44,30 @@ export function LoginPage() {
     try {
       await entrar(email, senha);
     } catch (err) {
+      if (err instanceof ApiError && err.code === 'PASSWORD_CHANGE_REQUIRED') {
+        setTrocaObrigatoria(true);
+        setErro(null);
+        return;
+      }
       setErro(err instanceof ApiError ? err.message : 'Nao foi possivel conectar a API');
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  const trocarSenha = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErro(null);
+    if (novaSenha !== confirmarSenha) {
+      setErro('A confirmação da nova senha não confere.');
+      return;
+    }
+    setEnviando(true);
+    try {
+      await api.post('/auth/alterar-senha-inicial', { email, senhaAtual: senha, novaSenha });
+      await entrar(email, novaSenha);
+    } catch (err) {
+      setErro(err instanceof ApiError ? err.message : 'Nao foi possivel alterar a senha');
     } finally {
       setEnviando(false);
     }
@@ -234,15 +260,17 @@ export function LoginPage() {
             </span>
           </div>
 
-          <form onSubmit={submeter} className="space-y-5">
+          <form onSubmit={trocaObrigatoria ? trocarSenha : submeter} className="space-y-5">
             <div>
-              <h1 className="text-xl font-semibold texto-sobre-cor-fixa">Entrar</h1>
-              <p className="mt-1 text-sm text-[#94a3b8]">Acesse com suas credenciais corporativas.</p>
+              <h1 className="text-xl font-semibold texto-sobre-cor-fixa">{trocaObrigatoria ? 'Crie uma nova senha' : 'Entrar'}</h1>
+              <p className="mt-1 text-sm text-[#94a3b8]">
+                {trocaObrigatoria ? 'Por segurança, troque a senha temporária para continuar.' : 'Acesse com suas credenciais corporativas.'}
+              </p>
             </div>
 
             {erro && <Alerta>{erro}</Alerta>}
 
-            <div>
+            {!trocaObrigatoria && <div>
               <label htmlFor="login-email" className="mb-1.5 block text-xs font-medium text-[#cbd5e1]">
                 E-mail
               </label>
@@ -256,9 +284,9 @@ export function LoginPage() {
                 placeholder="voce@empresa.com"
                 style={{ backgroundColor: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.15)', color: '#fff' }}
               />
-            </div>
+            </div>}
 
-            <div>
+            {!trocaObrigatoria ? <div>
               <label htmlFor="login-senha" className="mb-1.5 block text-xs font-medium text-[#cbd5e1]">
                 Senha
               </label>
@@ -305,10 +333,20 @@ export function LoginPage() {
                   )}
                 </button>
               </div>
-            </div>
+            </div> : <>
+              <div>
+                <label htmlFor="nova-senha" className="mb-1.5 block text-xs font-medium text-[#cbd5e1]">Nova senha</label>
+                <Input id="nova-senha" type="password" autoComplete="new-password" required minLength={12} value={novaSenha} onChange={(e) => setNovaSenha(e.target.value)} />
+                <p className="mt-1 text-xs text-[#94a3b8]">Use ao menos 12 caracteres.</p>
+              </div>
+              <div>
+                <label htmlFor="confirmar-senha" className="mb-1.5 block text-xs font-medium text-[#cbd5e1]">Confirme a nova senha</label>
+                <Input id="confirmar-senha" type="password" autoComplete="new-password" required minLength={12} value={confirmarSenha} onChange={(e) => setConfirmarSenha(e.target.value)} />
+              </div>
+            </>}
 
             <Button type="submit" disabled={enviando} className="w-full">
-              {enviando ? 'Entrando...' : 'Entrar'}
+              {enviando ? 'Salvando...' : trocaObrigatoria ? 'Alterar senha e entrar' : 'Entrar'}
             </Button>
           </form>
         </div>

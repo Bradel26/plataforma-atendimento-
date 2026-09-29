@@ -1,10 +1,10 @@
 import { prisma } from '../../lib/prisma';
 import { AppError, unauthorized } from '../../lib/errors';
-import { verifyPassword } from '../../lib/password';
+import { hashPassword, verifyPassword } from '../../lib/password';
 import { issueRefreshToken, signAccessToken } from '../../lib/tokens';
 import { registrarPresenca } from '../metrics/metrics.service';
 import { toPublicUser } from '../users/users.serializer';
-import type { LoginInput } from './auth.schemas';
+import type { AlterarSenhaInicialInput, LoginInput } from './auth.schemas';
 import { garantirNaoBloqueado, limparFalhas, registrarFalha } from './tentativas';
 
 const CREDENCIAIS_INVALIDAS = new AppError(401, 'INVALID_CREDENTIALS', 'Email ou senha incorretos');
@@ -42,6 +42,9 @@ export async function login({ email, senha }: LoginInput) {
     throw CREDENCIAIS_INVALIDAS;
   }
   if (!user.ativo) throw new AppError(403, 'USER_INACTIVE', 'Usuario desativado — procure um administrador');
+  if (user.senhaPendente) {
+    throw new AppError(403, 'PASSWORD_CHANGE_REQUIRED', 'Altere sua senha temporaria para continuar');
+  }
 
   await limparFalhas(email);
 
@@ -63,6 +66,28 @@ export async function login({ email, senha }: LoginInput) {
   await registrarPresenca(atualizado.id, atualizado.status, { forcarNovoIntervalo: true });
 
   return buildSession(atualizado);
+}
+
+/** A troca da senha temporaria ocorre antes de emitir qualquer sessao autenticada. */
+export async function alterarSenhaInicial({ email, senhaAtual, novaSenha }: AlterarSenhaInicialInput) {
+  await garantirNaoBloqueado(email);
+  const candidatos = await prisma.user.findMany({ where: { email: email.toLowerCase() }, take: 2 });
+  if (candidatos.length > 1) {
+    throw new AppError(409, 'ORGANIZACAO_AMBIGUA', 'Este e-mail existe em mais de uma organizacao.');
+  }
+  const user = candidatos[0];
+  if (!user || !(await verifyPassword(senhaAtual, user.senhaHash))) {
+    await registrarFalha(email);
+    throw CREDENCIAIS_INVALIDAS;
+  }
+  if (!user.ativo) throw new AppError(403, 'USER_INACTIVE', 'Usuario desativado — procure um administrador');
+  if (!user.senhaPendente) throw new AppError(409, 'PASSWORD_CHANGE_NOT_REQUIRED', 'A senha desta conta ja foi alterada.');
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { senhaHash: await hashPassword(novaSenha), senhaPendente: false },
+  });
+  await limparFalhas(email);
 }
 
 /** Emite um novo par de tokens a partir de um refresh token ja validado. */

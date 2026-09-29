@@ -1,34 +1,31 @@
 import { useState } from 'react';
 import { Alerta, Badge, Button, Card, Field, Input, Select } from '../../components/ui';
+import { useConfirm } from '../../components/ui/ConfirmDialog';
 import { ApiError, api } from '../../lib/api';
 import {
-  LABEL_PRIORIDADE,
   LABEL_STATUS_PROTOCOLO,
-  PRIORIDADES_PROTOCOLO,
   STATUS_PROTOCOLO,
   type Protocolo,
-  type TicketPrioridade,
   type TicketStatus,
-  type Usuario,
 } from '../../lib/types';
 
 const dataHora = (iso: string) => new Date(iso).toLocaleString('pt-BR');
 
 /** Espelha UPLOAD_MAX_MB da API; quem recusa de fato e o servidor. */
 const LIMITE_MB = 10;
+const STATUS_TI: TicketStatus[] = ['ABERTO', 'EM_ANDAMENTO', 'RESOLVIDO', 'FECHADO'];
 
 const tamanhoLegivel = (bytes: number) =>
   bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 
 export function DetalheProtocolo({
   protocolo,
-  agentes,
   onMudou,
 }: {
   protocolo: Protocolo;
-  agentes: Usuario[];
   onMudou: (p: Protocolo) => void;
 }) {
+  const confirmar = useConfirm();
   const [comentario, setComentario] = useState('');
   const [interno, setInterno] = useState(true);
   const [anexo, setAnexo] = useState({ nome: '', url: '' });
@@ -43,10 +40,31 @@ export function DetalheProtocolo({
       const { protocolo: novo } = await acao();
       onMudou(novo);
     } catch (e) {
-      setErro(e instanceof ApiError ? e.message : 'Falha na operacao');
+      setErro(e instanceof ApiError ? e.message : 'Não foi possível concluir a operação.');
     } finally {
       setOcupado(false);
     }
+  };
+
+  const fecharChamado = () => {
+    confirmar({
+      titulo: `Fechar o chamado #${protocolo.numero}?`,
+      descricao: 'Ele será movido para Concluídos e continuará no histórico.',
+      variante: 'perigo',
+      rotuloConfirmar: 'Fechar chamado',
+      aoConfirmar: async () => {
+        setErro(null);
+        try {
+          const { protocolo: fechado } = await api.patch<{ protocolo: Protocolo }>(
+            `/protocolos/${protocolo.id}`,
+            { status: 'FECHADO' },
+          );
+          onMudou(fechado);
+        } catch (e) {
+          setErro(e instanceof ApiError ? e.message : 'Falha ao fechar o chamado');
+        }
+      },
+    });
   };
 
   return (
@@ -54,15 +72,22 @@ export function DetalheProtocolo({
       <Card
         titulo={`#${protocolo.numero} · ${protocolo.titulo}`}
         descricao={`Aberto em ${dataHora(protocolo.criadoEm)}`}
-        acao={
-          protocolo.slaVencido ? <Badge tom="alerta">SLA vencido</Badge> : <Badge tom="neutro">No prazo</Badge>
-        }
+        acao={(
+          <div className="flex items-center gap-2">
+            {protocolo.slaVencido ? <Badge tom="alerta">SLA vencido</Badge> : <Badge tom="neutro">No prazo</Badge>}
+            {protocolo.categoria === 'TI_INTERNO' && protocolo.status !== 'FECHADO' && (
+              <Button type="button" variante="perigo" tamanho="sm" onClick={fecharChamado} disabled={ocupado}>
+                Fechar chamado
+              </Button>
+            )}
+          </div>
+        )}
       >
         {erro && <div className="mb-4"><Alerta>{erro}</Alerta></div>}
 
         <p className="whitespace-pre-wrap text-sm text-slate-700">{protocolo.descricao}</p>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <Field label="Status">
             <Select
               disabled={ocupado}
@@ -73,61 +98,24 @@ export function DetalheProtocolo({
                 )
               }
             >
-              {STATUS_PROTOCOLO.map((s) => (
-                <option key={s} value={s}>{LABEL_STATUS_PROTOCOLO[s]}</option>
+              {(protocolo.categoria === 'TI_INTERNO' ? STATUS_TI : STATUS_PROTOCOLO).map((s) => (
+                <option key={s} value={s}>
+                  {protocolo.categoria === 'TI_INTERNO' && s === 'FECHADO' ? 'Concluído' : LABEL_STATUS_PROTOCOLO[s]}
+                </option>
               ))}
             </Select>
           </Field>
-          <Field label="Prioridade">
-            <Select
-              disabled={ocupado}
-              value={protocolo.prioridade}
-              onChange={(e) =>
-                void executar(() =>
-                  api.patch(`/protocolos/${protocolo.id}`, { prioridade: e.target.value as TicketPrioridade }),
-                )
-              }
-            >
-              {PRIORIDADES_PROTOCOLO.map((p) => (
-                <option key={p} value={p}>{LABEL_PRIORIDADE[p]}</option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Responsavel">
-            <Select
-              disabled={ocupado}
-              value={protocolo.responsavel?.id ?? ''}
-              onChange={(e) =>
-                void executar(() =>
-                  api.patch(`/protocolos/${protocolo.id}`, { responsavelId: e.target.value || null }),
-                )
-              }
-            >
-              <option value="">Sem responsavel</option>
-              {agentes.map((a) => (
-                <option key={a.id} value={a.id}>{a.nome}</option>
-              ))}
-            </Select>
-          </Field>
+          <div>
+            <p className="mb-1.5 text-xs font-medium text-slate-600">Solicitante</p>
+            <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+              {protocolo.solicitante?.nome ?? 'Não identificado'}
+            </p>
+          </div>
         </div>
 
-        <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
-          <div>
-            <dt className="text-xs text-slate-500">Contato</dt>
-            <dd className="text-slate-800">{protocolo.contato?.nome ?? '—'}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-slate-500">Conta</dt>
-            <dd className="text-slate-800">{protocolo.conta?.nome ?? '—'}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-slate-500">Prazo de SLA</dt>
-            <dd className="text-slate-800">{protocolo.prazoSla ? dataHora(protocolo.prazoSla) : '—'}</dd>
-          </div>
-        </dl>
       </Card>
 
-      <Card titulo="Historico" descricao="Notas internas nao sao visiveis ao cliente">
+      <Card titulo="Histórico" descricao="Notas internas não são visíveis ao cliente">
         <ul className="space-y-3">
           {protocolo.comentarios.map((c) => (
             <li
@@ -168,7 +156,7 @@ export function DetalheProtocolo({
             value={comentario}
             onChange={(e) => setComentario(e.target.value)}
             rows={3}
-            placeholder="Escreva um comentario"
+            placeholder="Escreva um comentário"
             className="w-full resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[var(--brand-primary)]"
           />
           <div className="flex items-center justify-between gap-3">
@@ -301,10 +289,10 @@ export function DetalheProtocolo({
               });
             }}
           >
-            <Field label="Titulo">
+            <Field label="Título">
               <Input required value={agenda.titulo} onChange={(e) => setAgenda({ ...agenda, titulo: e.target.value })} />
             </Field>
-            <Field label="Inicio">
+            <Field label="Início">
               <Input
                 required
                 type="datetime-local"

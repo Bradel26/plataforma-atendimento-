@@ -17,7 +17,6 @@ import { WebchatPage } from './pages/WebchatPage';
 import { ConfiguracoesPage } from './pages/configuracoes/ConfiguracoesPage';
 import { CrmPage } from './pages/crm/CrmPage';
 import { EsteiraPage } from './pages/esteira/EsteiraPage';
-import { ProtocoloPage } from './pages/protocolo/ProtocoloPage';
 
 /**
  * Pagina de cada rota do menu. Os perfis com acesso vivem em NAV, entao a mesma
@@ -26,7 +25,6 @@ import { ProtocoloPage } from './pages/protocolo/ProtocoloPage';
 const PAGINAS: Record<string, ComponentType> = {
   '/dashboards': DashboardsPage,
   '/atendimento': AtendimentoPage,
-  '/protocolo': ProtocoloPage,
   '/chamado-ti': ChamadoTiPage,
   '/esteira': EsteiraPage,
   '/monitoramento': MonitoramentoPage,
@@ -75,6 +73,7 @@ function AppRoutes() {
     <Routes>
       {RotasPublicas()}
       <Route path="/login" element={<Navigate to={inicial} replace />} />
+      <Route path="/protocolo" element={<Navigate to="/chamado-ti" replace />} />
       <Route element={<AppShell />}>
         {permitidos.flatMap(({ rota, subrotas }) => {
           const Pagina = PAGINAS[rota];

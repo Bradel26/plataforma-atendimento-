@@ -19,7 +19,7 @@ import {
 import { CICLOS } from '../crm/cicloDeVida';
 import { apenasVisivel } from '../../lib/visibilidade';
 import { MAXIMO_POR_REGISTRO, TAMANHO_MAXIMO, normalizarTags } from '../../lib/tags';
-import { UF_POR_DDD, ufDoTelefone } from '../../lib/ddd';
+import { ufDoTelefone } from '../../lib/ddd';
 
 export const contactsRoutes = Router();
 
@@ -48,7 +48,7 @@ const listarSchema = z.object({
     .optional()
     .transform((v) => (v === undefined ? [] : normalizarTags(Array.isArray(v) ? v : [v]))),
   uf: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/).optional(),
-  /** Filtro por DDD (item pedido junto do UF): traduzido para UF na consulta. */
+  /** Filtro exato pelo prefixo de DDD do telefone. */
   ddd: z.string().trim().regex(/^\d{2}$/).optional(),
   limite: z.coerce.number().int().min(1).max(100).default(50),
   cursor: z.string().optional(),
@@ -125,13 +125,16 @@ contactsRoutes.get(
     filtros.push({ tags: { hasEvery: tags } });
     if (uf) filtros.push({ uf });
     /*
-     * Filtro por DDD: a coluna que existe e `uf`, entao o DDD e traduzido para
+     * Filtro por DDD: busca o prefixo do telefone independentemente da UF.
      * ela na consulta — mesma tabela usada para preencher o estado sozinho na
      * criacao do contato (ver `ufDoTelefone`). Um DDD fora da tabela (nao deve
      * acontecer: o front so oferece os validos) nunca bate com nenhuma UF real,
      * entao a lista some vazia em vez de, por engano, devolver a base toda.
      */
-    if (ddd) filtros.push({ uf: UF_POR_DDD[ddd] ?? '__ddd_desconhecido__' });
+    if (ddd) {
+      const prefixos = [ddd, `(${ddd})`, `+55${ddd}`, `+55 ${ddd}`, `+55 (${ddd})`, `55${ddd}`, `55 ${ddd}`];
+      filtros.push({ OR: prefixos.map((prefixo) => ({ telefone: { startsWith: prefixo } })) });
+    }
 
     /*
      * Filtro por ciclo de vida (item E.4).

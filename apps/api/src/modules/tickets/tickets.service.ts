@@ -53,6 +53,8 @@ function serialize(t: TicketDb) {
     contato: t.contato,
     conta: t.conta,
     responsavel: t.responsavel,
+    // O primeiro comentario e criado junto com o chamado e registra quem o abriu.
+    solicitante: t.comentarios[0]?.autor ?? null,
     fila: t.fila,
     comentarios: t.comentarios.map((c) => ({
       id: c.id,

@@ -3,14 +3,15 @@ import { Alerta, Button, Card, Field, Select } from '../components/ui';
 import { useToast } from '../components/ui/Toast';
 import { ApiError, api } from '../lib/api';
 import { LABEL_TIPO_TI, TIPOS_TI, type Protocolo, type TicketTipoTi } from '../lib/types';
+import { ProtocoloPage } from './protocolo/ProtocoloPage';
 
 const VAZIO = { tipo: 'ERRO' as TicketTipoTi, titulo: '', descricao: '' };
 
 /**
  * Abertura de chamado de TI — qualquer perfil pode abrir (ver nav.ts).
  *
- * So cria o chamado e confirma: quem gerencia ve e responde pela tela
- * Protocolo, que ja existe. Duas chamadas HTTP quando ha print (criar,
+ * So cria o chamado e confirma: o acompanhamento e a resposta ficam no quadro
+ * de Chamados de TI abaixo. Duas chamadas HTTP quando ha print (criar,
  * depois anexar) porque `POST /protocolos/:id/anexos` exige o id do
  * chamado ja criado — nao da para mandar tudo de uma vez.
  */
@@ -48,14 +49,14 @@ export function ChamadoTiPage() {
         } catch (erroAnexo) {
           mostrarToast(
             'erro',
-            `Chamado #${protocolo.numero} aberto, mas o print nao foi anexado: ${
+            `Chamado #${protocolo.numero} aberto, mas a captura de tela não foi anexada: ${
               erroAnexo instanceof ApiError ? erroAnexo.message : 'falha ao enviar o arquivo'
             }`,
           );
           return;
         }
       }
-      mostrarToast('sucesso', 'Chamado aberto! Voce recebe uma resposta em ate 72h.');
+      mostrarToast('sucesso', 'Chamado aberto! Você receberá uma resposta em até 72 horas.');
     } catch (e) {
       setErro(e instanceof ApiError ? e.message : 'Falha ao abrir o chamado');
     } finally {
@@ -66,10 +67,10 @@ export function ChamadoTiPage() {
   return (
     <div className="space-y-5">
       <Alerta tipo="aviso">
-        Use esta tela para relatar um erro do sistema ou sugerir uma melhoria. Escolha <strong>Erro/bug</strong>{' '}
-        quando algo nao funciona como deveria — descreva o que voce fez antes de acontecer, e o que esperava ver
-        em vez disso. Escolha <strong>Melhoria</strong> para uma ideia que facilitaria o trabalho. Um print da
-        tela ajuda bastante, mas nao e obrigatorio. Voce recebe uma resposta em ate 72h.
+        Use esta tela para relatar um erro do sistema ou sugerir uma melhoria. Selecione <strong>Erro/bug</strong>{' '}
+        quando algo não funcionar como deveria. Descreva o que você fez antes do problema e o que esperava ver.
+        Selecione <strong>Melhoria</strong> para compartilhar uma ideia que facilitaria o trabalho. Uma captura de
+        tela ajuda bastante, mas não é obrigatória. Você receberá uma resposta em até 72 horas.
       </Alerta>
 
       {erro && <Alerta>{erro}</Alerta>}
@@ -84,7 +85,7 @@ export function ChamadoTiPage() {
             </Select>
           </Field>
 
-          <Field label="Titulo">
+          <Field label="Título">
             <input
               required
               value={form.titulo}
@@ -94,7 +95,7 @@ export function ChamadoTiPage() {
             />
           </Field>
 
-          <Field label="Descricao" hint="Quanto mais detalhe, mais rapido o time de TI entende o que aconteceu">
+          <Field label="Descrição" hint="Quanto mais detalhes, mais rápido o time de TI entenderá o que aconteceu">
             <textarea
               required
               rows={5}
@@ -104,7 +105,7 @@ export function ChamadoTiPage() {
             />
           </Field>
 
-          <Field label="Print da tela (opcional)">
+          <Field label="Captura de tela (opcional)">
             <input
               ref={inputArquivoRef}
               type="file"
@@ -119,6 +120,11 @@ export function ChamadoTiPage() {
           </Button>
         </form>
       </Card>
+
+      <section className="space-y-3" aria-labelledby="chamados-ti-kanban">
+        <h2 id="chamados-ti-kanban" className="text-sm font-semibold text-slate-700">Acompanhamento dos chamados de TI</h2>
+        <ProtocoloPage somenteTi />
+      </section>
     </div>
   );
 }

@@ -43,6 +43,7 @@ export async function createUser(input: CreateUserInput) {
       email: input.email,
       perfil: input.perfil,
       senhaHash: await hashPassword(input.senha),
+      senhaPendente: true,
     },
   });
   return toPublicUser(user);
@@ -90,6 +91,22 @@ export async function deactivateUser(id: string) {
     data: { ativo: false, status: 'OFFLINE' },
   });
   return toPublicUser(user);
+}
+
+/** Exclui definitivamente a conta selecionada; historicos com autoria opcional ficam preservados. */
+export async function deleteUserPermanently(id: string) {
+  const atual = await prisma.user.findUnique({ where: { id } });
+  if (!atual) throw notFound('Usuario nao encontrado');
+
+  if (atual.perfil === 'ADMIN' && atual.ativo) {
+    const outrosAdministradores = await prisma.user.count({
+      where: { perfil: 'ADMIN', ativo: true, id: { not: id } },
+    });
+    if (outrosAdministradores === 0) throw conflict('Nao e possivel excluir o ultimo administrador ativo');
+  }
+
+  await prisma.user.delete({ where: { id } });
+  return toPublicUser(atual);
 }
 
 export async function updateStatus(id: string, status: AgentStatus) {

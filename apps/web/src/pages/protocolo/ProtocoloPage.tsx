@@ -27,12 +27,44 @@ const vazio: Colunas = {
   FECHADO: [],
 };
 
-export function ProtocoloPage() {
+const STATUS_HISTORICO_TI: TicketStatus[] = ['ABERTO', 'EM_ANDAMENTO', 'RESOLVIDO', 'FECHADO'];
+
+const TOM_STATUS: Record<TicketStatus, { coluna: string; etiqueta: string; cartao: string }> = {
+  ABERTO: {
+    coluna: 'border-red-200 bg-red-50 text-red-800',
+    etiqueta: 'bg-red-100 text-red-800',
+    cartao: 'border-l-4 border-l-red-500',
+  },
+  EM_ANDAMENTO: {
+    coluna: 'border-amber-200 bg-amber-50 text-amber-800',
+    etiqueta: 'bg-amber-100 text-amber-800',
+    cartao: 'border-l-4 border-l-amber-500',
+  },
+  AGUARDANDO_CLIENTE: {
+    coluna: 'border-sky-200 bg-sky-50 text-sky-800',
+    etiqueta: 'bg-sky-100 text-sky-800',
+    cartao: 'border-l-4 border-l-sky-500',
+  },
+  RESOLVIDO: {
+    coluna: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+    etiqueta: 'bg-emerald-100 text-emerald-800',
+    cartao: 'border-l-4 border-l-emerald-500',
+  },
+  FECHADO: {
+    coluna: 'border-slate-300 bg-slate-100 text-slate-700',
+    etiqueta: 'bg-slate-200 text-slate-700',
+    cartao: 'border-l-4 border-l-slate-400',
+  },
+};
+
+export function ProtocoloPage({ somenteTi = false }: { somenteTi?: boolean }) {
   const [colunas, setColunas] = useState<Colunas>(vazio);
   const [aberto, setAberto] = useState<Protocolo | null>(null);
   const [agentes, setAgentes] = useState<Usuario[]>([]);
   const [contatos, setContatos] = useState<Contato[]>([]);
-  const [filtros, setFiltros] = useState({ prioridade: '', responsavelId: '', slaVencido: '', busca: '', categoria: '' });
+  const [filtros, setFiltros] = useState({
+    prioridade: '', responsavelId: '', slaVencido: '', busca: '', categoria: somenteTi ? 'TI_INTERNO' : '',
+  });
   const [arrastando, setArrastando] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [novo, setNovo] = useState({
@@ -88,6 +120,7 @@ export function ProtocoloPage() {
         const limpo = Object.fromEntries(
           STATUS_PROTOCOLO.map((s) => [s, atual[s].filter((p) => p.id !== protocolo.id)]),
         ) as Colunas;
+        if (somenteTi && protocolo.categoria !== 'TI_INTERNO') return limpo;
         limpo[protocolo.status] = [protocolo, ...limpo[protocolo.status]];
         return limpo;
       });
@@ -99,7 +132,7 @@ export function ProtocoloPage() {
       socket.off(EVENTOS.protocoloAtualizado, aoAtualizar);
       socket.disconnect();
     };
-  }, []);
+  }, [somenteTi]);
 
   const mover = async (status: TicketStatus) => {
     const id = arrastando;
@@ -135,15 +168,15 @@ export function ProtocoloPage() {
   return (
     <div className="space-y-5">
       <Card titulo="Filtros">
-        <div className="grid gap-3 sm:grid-cols-5">
-          <Field label="Categoria">
+        <div className={`grid gap-3 ${somenteTi ? 'sm:grid-cols-2' : 'sm:grid-cols-5'}`}>
+          {!somenteTi && <Field label="Categoria">
             <Select value={filtros.categoria} onChange={(e) => setFiltros({ ...filtros, categoria: e.target.value })}>
               <option value="">Todas</option>
               <option value="ATENDIMENTO">Atendimento</option>
               <option value="TI_INTERNO">TI interno</option>
             </Select>
-          </Field>
-          <Field label="Prioridade">
+          </Field>}
+          {!somenteTi && <Field label="Prioridade">
             <Select
               value={filtros.prioridade}
               onChange={(e) => setFiltros({ ...filtros, prioridade: e.target.value })}
@@ -153,8 +186,8 @@ export function ProtocoloPage() {
                 <option key={p} value={p}>{LABEL_PRIORIDADE[p]}</option>
               ))}
             </Select>
-          </Field>
-          <Field label="Responsavel">
+          </Field>}
+          <Field label="Responsável">
             <Select
               value={filtros.responsavelId}
               onChange={(e) => setFiltros({ ...filtros, responsavelId: e.target.value })}
@@ -165,13 +198,13 @@ export function ProtocoloPage() {
               ))}
             </Select>
           </Field>
-          <Field label="SLA">
+          {!somenteTi && <Field label="SLA">
             <Select value={filtros.slaVencido} onChange={(e) => setFiltros({ ...filtros, slaVencido: e.target.value })}>
               <option value="">Todos</option>
               <option value="true">Somente vencidos</option>
             </Select>
-          </Field>
-          <Field label="Busca" hint="Titulo, descricao, contato ou numero">
+          </Field>}
+          <Field label="Busca" hint="Título, descrição, contato ou número">
             <Input value={filtros.busca} onChange={(e) => setFiltros({ ...filtros, busca: e.target.value })} />
           </Field>
         </div>
@@ -180,7 +213,9 @@ export function ProtocoloPage() {
       {erro && <Alerta>{erro}</Alerta>}
 
       <div className="flex gap-3 overflow-x-auto pb-2">
-        {STATUS_PROTOCOLO.map((status) => {
+        {STATUS_PROTOCOLO.filter((status) =>
+          !somenteTi || status !== 'AGUARDANDO_CLIENTE',
+        ).map((status) => {
           const lista = colunas[status];
           const vencidos = lista.filter((p) => p.slaVencido).length;
           return (
@@ -188,23 +223,25 @@ export function ProtocoloPage() {
               key={status}
               onDragOver={(e) => e.preventDefault()}
               onDrop={() => void mover(status)}
-              className="flex w-64 shrink-0 flex-col rounded-xl border border-slate-200 bg-slate-50"
+              className={`flex h-[420px] w-64 shrink-0 flex-col rounded-xl border bg-slate-50 ${TOM_STATUS[status].coluna}`}
             >
-              <header className="border-b border-slate-200 px-3 py-2.5">
-                <p className="text-sm font-semibold text-slate-700">{LABEL_STATUS_PROTOCOLO[status]}</p>
+              <header className={`border-b px-3 py-2.5 ${TOM_STATUS[status].coluna}`}>
+                <p className="text-sm font-semibold">
+                  {somenteTi && status === 'FECHADO' ? 'Concluídos' : LABEL_STATUS_PROTOCOLO[status]}
+                </p>
                 <p className="text-xs text-slate-500">
                   {lista.length} chamado{lista.length === 1 ? '' : 's'}
                   {vencidos > 0 ? ` · ${vencidos} com SLA vencido` : ''}
                 </p>
               </header>
-              <ul className="min-h-24 flex-1 space-y-2 p-2">
+              <ul className="barra-rolagem-cinza min-h-0 flex-1 space-y-2 overflow-y-auto p-2">
                 {lista.map((p) => (
                   <li
                     key={p.id}
                     draggable
                     onDragStart={() => setArrastando(p.id)}
                     onClick={() => setAberto(p)}
-                    className={`cursor-grab rounded-lg border bg-white p-2.5 shadow-sm active:cursor-grabbing ${
+                    className={`cursor-grab rounded-lg border bg-white p-2.5 shadow-sm active:cursor-grabbing ${TOM_STATUS[status].cartao} ${
                       aberto?.id === p.id ? 'border-[var(--brand-primary)]' : 'border-slate-200'
                     }`}
                   >
@@ -232,24 +269,72 @@ export function ProtocoloPage() {
         })}
       </div>
 
+      {somenteTi && (() => {
+        const historico = Object.values(colunas)
+          .flat()
+          .filter((p) => STATUS_HISTORICO_TI.includes(p.status))
+          .sort((a, b) => new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime());
+        return (
+          <Card titulo="Histórico de chamados de TI" descricao={`${historico.length} chamado(s), do mais recente ao mais antigo`}>
+            {historico.length === 0 ? (
+              <p className="text-sm text-slate-500">Nenhum chamado de TI encontrado.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[720px] text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-xs text-slate-500">
+                      <th className="px-3 py-2 font-medium">Chamado</th>
+                      <th className="px-3 py-2 font-medium">Descrição</th>
+                      <th className="px-3 py-2 font-medium">Status</th>
+                      <th className="px-3 py-2 font-medium">Aberto em</th>
+                      <th className="px-3 py-2 font-medium">Solicitante</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historico.map((p) => (
+                      <tr key={p.id} className="border-b border-slate-100 align-top last:border-0">
+                        <td className="px-3 py-3">
+                          <p className="font-mono text-xs text-slate-500">#{p.numero}</p>
+                          <p className="mt-1 font-medium text-slate-800">{p.titulo}</p>
+                          <p className="mt-1 text-xs text-slate-500">{p.tipoTi ? LABEL_TIPO_TI[p.tipoTi] : 'Chamado de TI'}</p>
+                        </td>
+                        <td className="max-w-lg whitespace-pre-wrap px-3 py-3 text-slate-600">{p.descricao}</td>
+                        <td className="px-3 py-3">
+                          <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${TOM_STATUS[p.status].etiqueta}`}>
+                            {somenteTi && p.status === 'FECHADO' ? 'Concluído' : LABEL_STATUS_PROTOCOLO[p.status]}
+                          </span>
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-3 text-slate-600">
+                          {new Date(p.criadoEm).toLocaleString('pt-BR')}
+                        </td>
+                        <td className="px-3 py-3 text-slate-600">{p.solicitante?.nome ?? 'Não identificado'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+        );
+      })()}
+
       {aberto ? (
         <>
           <Button variante="neutro" onClick={() => setAberto(null)}>
-            Fechar detalhe e abrir novo chamado
+            {somenteTi ? 'Fechar detalhes' : 'Fechar detalhe e abrir novo chamado'}
           </Button>
           <DetalheProtocolo
             protocolo={aberto}
-            agentes={agentes}
             onMudou={(p) => {
-              setAberto(p);
+              setAberto(p.status === 'FECHADO' ? null : p);
               void carregar();
             }}
           />
         </>
-      ) : (
-        <Card titulo="Novo chamado" descricao="Clique num cartao para abrir o detalhe">
+      ) : !somenteTi ? (
+        <Card titulo="Novo chamado" descricao="Clique em um cartão para abrir os detalhes">
           <form onSubmit={criar} className="grid gap-3 sm:grid-cols-2">
-            <Field label="Titulo">
+            <Field label="Título">
               <Input required value={novo.titulo} onChange={(e) => setNovo({ ...novo, titulo: e.target.value })} />
             </Field>
             <Field label="Contato">
@@ -278,7 +363,7 @@ export function ProtocoloPage() {
               />
             </Field>
             <div className="sm:col-span-2">
-              <Field label="Descricao">
+              <Field label="Descrição">
                 <textarea
                   required
                   rows={3}
@@ -291,7 +376,7 @@ export function ProtocoloPage() {
             <Button type="submit" className="sm:col-span-2">Abrir chamado</Button>
           </form>
         </Card>
-      )}
+      ) : null}
     </div>
   );
 }

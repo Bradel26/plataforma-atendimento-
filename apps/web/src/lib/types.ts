@@ -759,6 +759,7 @@ export type Protocolo = {
   contato: { id: string; nome: string; email: string | null } | null;
   conta: { id: string; nome: string } | null;
   responsavel: { id: string; nome: string } | null;
+  solicitante?: { id: string; nome: string } | null;
   fila: { id: string; nome: string } | null;
   comentarios: ProtocoloComentario[];
   anexos: ProtocoloAnexo[];

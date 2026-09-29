@@ -10,7 +10,6 @@ import {
   IconEsteira,
   IconGestao,
   IconMonitoramento,
-  IconProtocolo,
   IconRelatorios,
   IconTelefonia,
 } from './icons';
@@ -99,7 +98,6 @@ export const NAV: NavItem[] = [
     perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'],
     fase: 5,
   },
-  { rota: '/protocolo', label: 'Protocolo', icone: IconProtocolo, perfis: ['ADMIN', 'SUPERVISOR', 'AGENTE'], fase: 2 },
   { rota: '/monitoramento', label: 'Monitoramento', icone: IconMonitoramento, perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR'], fase: 3 },
   { rota: '/gestao', label: 'Area da Gestao', icone: IconGestao, perfis: ['ADMIN', 'SUPERVISOR'], fase: 3 },
   // GESTOR e COMERCIAL entram aqui pelo mesmo motivo que entravam na aba Leads
@@ -129,7 +127,7 @@ export const NAV: NavItem[] = [
   // qualquer pessoa que usa a plataforma, nao so quem administra.
   {
     rota: '/chamado-ti',
-    label: 'Chamado TI',
+    label: 'Chamado de TI',
     icone: IconChamadoTi,
     perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL', 'SUPORTE', 'AGENTE'],
     fase: 6,

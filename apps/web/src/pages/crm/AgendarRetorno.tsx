@@ -18,6 +18,8 @@ export function AgendarRetorno({ aoAgendar }: { aoAgendar: () => void }) {
   const [form, setForm] = useState({ tipo: 'RETORNO' as TipoAtividade, titulo: '', prazo: '' });
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  const horaAgendada = form.prazo.slice(11, 16);
+  const horarioPermitido = !form.prazo || (horaAgendada >= '08:00' && horaAgendada <= '18:00');
 
   useEffect(() => {
     if (contato || busca.trim().length < 2) {
@@ -106,11 +108,18 @@ export function AgendarRetorno({ aoAgendar }: { aoAgendar: () => void }) {
           <Input
             required
             type="datetime-local"
+            min="0001-01-01T08:00"
+            max="9999-12-31T18:00"
             value={form.prazo}
             onChange={(e) => setForm({ ...form, prazo: e.target.value })}
           />
+          {!horarioPermitido && (
+            <p role="alert" className="mt-1 text-xs text-red-600">
+              Escolha um horário entre 08:00 e 18:00.
+            </p>
+          )}
         </Field>
-        <Button type="submit" disabled={ocupado || !contato || !form.titulo.trim() || !form.prazo}>
+        <Button type="submit" disabled={ocupado || !contato || !form.titulo.trim() || !form.prazo || !horarioPermitido}>
           {ocupado ? 'Agendando...' : 'Agendar'}
         </Button>
       </form>

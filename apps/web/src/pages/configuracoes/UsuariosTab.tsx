@@ -1,17 +1,20 @@
 import { useEffect, useState } from 'react';
 import { Alerta, Badge, Button, Card, EmptyState, Field, Input, Select } from '../../components/ui';
+import { useConfirm } from '../../components/ui/ConfirmDialog';
 import { ApiError, api } from '../../lib/api';
 import { COR_STATUS, LABEL_PERFIL, LABEL_STATUS, type Filial, type Perfil, type Usuario } from '../../lib/types';
 
 const FORM_VAZIO = { nome: '', email: '', senha: '', perfil: 'AGENTE' as Perfil };
 
 export function UsuariosTab() {
+  const confirmar = useConfirm();
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [filiais, setFiliais] = useState<Filial[]>([]);
   const [form, setForm] = useState(FORM_VAZIO);
   const [erro, setErro] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
+  const [usuarioSelecionadoId, setUsuarioSelecionadoId] = useState('');
 
   const carregar = async () => {
     const { usuarios: lista } = await api.get<{ usuarios: Usuario[] }>('/usuarios');
@@ -64,10 +67,43 @@ export function UsuariosTab() {
     }
   };
 
+  const excluirSelecionado = () => {
+    const usuario = usuarios.find((u) => u.id === usuarioSelecionadoId);
+    if (!usuario) return;
+
+    confirmar({
+      titulo: `Excluir definitivamente ${usuario.nome}?`,
+      descricao: 'A conta será removida. Registros associados, como presença, escala e vínculo com filas, também podem ser excluídos. Esta ação não pode ser desfeita.',
+      variante: 'perigo',
+      rotuloConfirmar: 'Excluir usuário',
+      aoConfirmar: async () => {
+        setErro(null);
+        setOk(null);
+        try {
+          await api.del(`/usuarios/${usuario.id}/permanente`);
+          setUsuarioSelecionadoId('');
+          setOk(`O usuário ${usuario.nome} foi excluído.`);
+          await carregar();
+        } catch (err) {
+          setErro(err instanceof ApiError ? err.message : 'Falha ao excluir usuário.');
+        }
+      },
+    });
+  };
+
   return (
     <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
-      <Card titulo="Usuarios" descricao={`${usuarios.length} cadastrado(s)`}>
+      <Card
+        titulo="Usuários"
+        descricao={`${usuarios.length} cadastrado(s)`}
+        acao={(
+          <Button type="button" variante="perigo" disabled={!usuarioSelecionadoId} onClick={excluirSelecionado}>
+            Excluir usuário selecionado
+          </Button>
+        )}
+      >
         {erro && <div className="mb-4"><Alerta>{erro}</Alerta></div>}
+        {ok && <div className="mb-4"><Alerta tipo="sucesso">{ok}</Alerta></div>}
         {usuarios.length === 0 ? (
           <EmptyState titulo="Nenhum usuario" descricao="Cadastre o primeiro usuario no formulario ao lado." />
         ) : (
@@ -75,6 +111,7 @@ export function UsuariosTab() {
             <table className="w-full text-left text-sm">
               <thead className="text-xs uppercase tracking-wide text-slate-500">
                 <tr>
+                  <th className="pb-2 pr-3 font-medium">Selecionar</th>
                   <th className="pb-2 font-medium">Nome</th>
                   <th className="pb-2 font-medium">Perfil</th>
                   <th className="pb-2 font-medium">Filial</th>
@@ -85,7 +122,16 @@ export function UsuariosTab() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {usuarios.map((u) => (
-                  <tr key={u.id}>
+                  <tr key={u.id} className={usuarioSelecionadoId === u.id ? 'bg-blue-50/50' : undefined}>
+                    <td className="py-3 pr-3">
+                      <input
+                        type="radio"
+                        name="usuario-selecionado"
+                        aria-label={`Selecionar ${u.nome}`}
+                        checked={usuarioSelecionadoId === u.id}
+                        onChange={() => setUsuarioSelecionadoId(u.id)}
+                      />
+                    </td>
                     <td className="py-3">
                       <p className="font-medium text-slate-800">{u.nome}</p>
                       <p className="text-xs text-slate-500">{u.email}</p>
@@ -132,7 +178,6 @@ export function UsuariosTab() {
 
       <Card titulo="Novo usuario" descricao="Apenas administradores">
         <form onSubmit={criar} className="space-y-4">
-          {ok && <Alerta tipo="sucesso">{ok}</Alerta>}
           <Field label="Nome">
             <Input required value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} />
           </Field>
@@ -144,7 +189,7 @@ export function UsuariosTab() {
               onChange={(e) => setForm({ ...form, email: e.target.value })}
             />
           </Field>
-          <Field label="Senha" hint="Minimo de 8 caracteres">
+          <Field label="Senha" hint="Mínimo de 8 caracteres">
             <Input
               type="password"
               required
@@ -163,7 +208,7 @@ export function UsuariosTab() {
             </Select>
           </Field>
           <Button type="submit" disabled={enviando} className="w-full">
-            {enviando ? 'Salvando...' : 'Criar usuario'}
+            {enviando ? 'Salvando...' : 'Criar usuário'}
           </Button>
         </form>
       </Card>

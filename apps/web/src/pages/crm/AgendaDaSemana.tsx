@@ -226,21 +226,28 @@ export function AgendaDaSemana() {
           </div>
         )}
 
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
           {agenda.dias.map((d) => {
             const { nome, data } = rotuloDoDia(d.dia);
             return (
               <div
                 key={d.dia}
-                className={`rounded-lg border px-2 py-1.5 ${
-                  d.dia === hoje ? 'border-[var(--brand-primary)] bg-[var(--brand-primary)]/5' : 'border-slate-200'
+                aria-current={d.dia === hoje ? 'date' : undefined}
+                className={`min-h-40 rounded-xl border p-3 ${
+                  d.dia === hoje
+                    ? 'border-2 border-[var(--brand-primary)] bg-[var(--brand-primary)]/10 ring-2 ring-[var(--brand-primary)]/20'
+                    : 'border-slate-200 bg-white'
                 }`}
               >
-                <p className="flex items-baseline justify-between text-xs">
-                  <span className="font-medium text-slate-700">
+                <p className="flex min-h-6 items-baseline justify-between text-sm">
+                  <span className={`font-semibold ${d.dia === hoje ? 'text-[var(--brand-primary)]' : 'text-slate-700'}`}>
                     {nome} {data}
                   </span>
-                  {d.itens.length > 0 && <span className="text-slate-500">{d.itens.length}</span>}
+                  {d.dia === hoje ? (
+                    <span className="rounded-full bg-[var(--brand-primary)] px-2 py-0.5 text-[10px] font-semibold text-white">Hoje</span>
+                  ) : d.itens.length > 0 ? (
+                    <span className="text-xs text-slate-500">{d.itens.length}</span>
+                  ) : null}
                 </p>
                 {d.itens.length === 0 ? (
                   // Dia vazio continua na tela: dia livre e informacao para quem vai

@@ -17,7 +17,6 @@ import { FichaContato, FichaVazia } from './ficha/FichaContato';
 import { Etiquetas, FiltroEtiquetas } from './Etiquetas';
 import { FunilDeCicloDeVida } from './FunilDeCicloDeVida';
 import { UFS } from '../esteira/ufs';
-import { DDDS } from '../../lib/ddd';
 
 const ORIGENS: Canal[] = ['WEBCHAT', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'EMAIL', 'VOZ'];
 
@@ -122,7 +121,7 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
     for (const tag of tags) params.append('tags', tag);
     for (const c of ciclos) params.append('ciclo', c);
     if (uf) params.set('uf', uf);
-    if (ddd) params.set('ddd', ddd);
+    if (ddd.length === 2) params.set('ddd', ddd);
     const qs = params.size ? `?${params}` : '';
     setCarregando(true);
     try {
@@ -156,7 +155,7 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
       }>('/contatos', {
         nome: novo.nome.trim(),
         email: novo.email.trim() || null,
-        telefone: novo.telefone.trim() || null,
+        telefone: novo.telefone.trim() ? mascararTelefoneBr(novo.telefone.trim()) : null,
         uf: novo.uf || null,
         cidade: novo.cidade.trim() || null,
         canalOrigem: novo.canalOrigem,
@@ -267,8 +266,10 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
             <Field label="Telefone" hint="Com DDD. E o que liga o contato ao WhatsApp.">
               <Input
                 value={novo.telefone}
-                onChange={(e) => setNovo({ ...novo, telefone: mascararTelefoneBr(e.target.value) })}
-                placeholder="+55 62 99288-5001"
+                onChange={(e) => setNovo({ ...novo, telefone: e.target.value })}
+                placeholder="+55 00 00000-0000"
+                type="tel"
+                inputMode="tel"
                 maxLength={20}
               />
             </Field>
@@ -310,25 +311,45 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
           </form>
         )}
 
-        <div className="flex gap-2">
+        <div className="space-y-2">
           <Input
             ref={buscaRef}
             placeholder="Buscar por nome, e-mail ou telefone"
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
           />
-          <Select aria-label="Filtrar por UF" value={uf} onChange={(e) => setUf(e.target.value)} className="!w-24">
-            <option value="">UF</option>
-            {UFS.map((x) => (
-              <option key={x} value={x}>{x}</option>
-            ))}
-          </Select>
-          <Select aria-label="Filtrar por DDD" value={ddd} onChange={(e) => setDdd(e.target.value)} className="!w-24">
-            <option value="">DDD</option>
-            {DDDS.map((x) => (
-              <option key={x} value={x}>{x}</option>
-            ))}
-          </Select>
+          <div className="grid grid-cols-[1fr_80px] gap-2">
+            <Select aria-label="Filtrar por UF" value={uf} onChange={(e) => setUf(e.target.value)}>
+              <option value="">Todas as UFs</option>
+              {UFS.map((x) => (
+                <option key={x} value={x}>{x}</option>
+              ))}
+            </Select>
+            <Input
+              aria-label="Filtrar por DDD"
+              placeholder="DDD"
+              value={ddd}
+              inputMode="numeric"
+              maxLength={2}
+              onChange={(e) => setDdd(e.target.value.replace(/\D/g, '').slice(0, 2))}
+            />
+          </div>
+          <div className="flex justify-end">
+            <Button
+              tamanho="sm"
+              variante="neutro"
+              disabled={!busca.trim() && !uf && !ddd && tags.length === 0 && ciclos.length === 0}
+              onClick={() => {
+                setBusca('');
+                setUf('');
+                setDdd('');
+                setTags([]);
+                setCiclos([]);
+              }}
+            >
+              Limpar filtros
+            </Button>
+          </div>
         </div>
         <div className="mt-2">
           <FiltroEtiquetas
