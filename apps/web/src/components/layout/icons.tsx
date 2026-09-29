@@ -108,3 +108,11 @@ export const IconTelefonia = (p: IconProps) => (
     <path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a1 1 0 0 1-1 1A16 16 0 0 1 4 5a1 1 0 0 1 1-1z" />
   </Svg>
 );
+
+export const IconChamadoTi = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <circle cx="12" cy="12" r="3.5" />
+    <path d="M5.5 5.5l3 3M18.5 5.5l-3 3M18.5 18.5l-3-3M5.5 18.5l3-3" />
+  </Svg>
+);

@@ -6,6 +6,7 @@ import { useAuth } from './features/auth/AuthProvider';
 import { AtendimentoPage } from './pages/AtendimentoPage';
 import { AvaliacaoPage } from './pages/AvaliacaoPage';
 import { CampanhasPage } from './pages/CampanhasPage';
+import { ChamadoTiPage } from './pages/ChamadoTiPage';
 import { DashboardsPage } from './pages/DashboardsPage';
 import { GestaoPage } from './pages/GestaoPage';
 import { LoginPage } from './pages/LoginPage';
@@ -26,6 +27,7 @@ const PAGINAS: Record<string, ComponentType> = {
   '/dashboards': DashboardsPage,
   '/atendimento': AtendimentoPage,
   '/protocolo': ProtocoloPage,
+  '/chamado-ti': ChamadoTiPage,
   '/esteira': EsteiraPage,
   '/monitoramento': MonitoramentoPage,
   '/gestao': GestaoPage,

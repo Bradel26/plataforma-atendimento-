@@ -3,6 +3,7 @@ import type { Perfil } from '../../lib/types';
 import {
   IconAtendimento,
   IconCampanhas,
+  IconChamadoTi,
   IconConfiguracoes,
   IconCrm,
   IconDashboards,
@@ -101,7 +102,9 @@ export const NAV: NavItem[] = [
   { rota: '/protocolo', label: 'Protocolo', icone: IconProtocolo, perfis: ['ADMIN', 'SUPERVISOR', 'AGENTE'], fase: 2 },
   { rota: '/monitoramento', label: 'Monitoramento', icone: IconMonitoramento, perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR'], fase: 3 },
   { rota: '/gestao', label: 'Area da Gestao', icone: IconGestao, perfis: ['ADMIN', 'SUPERVISOR'], fase: 3 },
-  { rota: '/campanhas', label: 'Campanhas', icone: IconCampanhas, perfis: ['ADMIN', 'SUPERVISOR'], fase: 4 },
+  // GESTOR e COMERCIAL entram aqui pelo mesmo motivo que entravam na aba Leads
+  // do CRM antes dela mudar de casa: leitura/trabalho do proprio funil.
+  { rota: '/campanhas', label: 'Campanhas', icone: IconCampanhas, perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'], fase: 4 },
   { rota: '/relatorios', label: 'Desempenho Operacional', icone: IconRelatorios, perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR'], fase: 3 },
   { rota: '/telefonia', label: 'Telefonia', icone: IconTelefonia, perfis: ['ADMIN', 'SUPERVISOR', 'AGENTE'], fase: 4 },
   {
@@ -122,4 +125,13 @@ export const NAV: NavItem[] = [
     ],
   },
   { rota: '/configuracoes', label: 'Configuracoes', icone: IconConfiguracoes, perfis: ['ADMIN'], fase: 0 },
+  // Visivel a todo perfil, de proposito: problema de sistema afeta
+  // qualquer pessoa que usa a plataforma, nao so quem administra.
+  {
+    rota: '/chamado-ti',
+    label: 'Chamado TI',
+    icone: IconChamadoTi,
+    perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL', 'SUPORTE', 'AGENTE'],
+    fase: 6,
+  },
 ];
