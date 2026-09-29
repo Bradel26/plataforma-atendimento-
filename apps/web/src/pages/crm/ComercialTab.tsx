@@ -46,6 +46,8 @@ type Risco = {
   emForecast: Balde;
   semPrevisao: Balde;
   semProximaAcao: Balde;
+  aguardandoParceiro: Balde;
+  aguardandoEquipe: Balde;
   abertas: Balde;
   diasDeAviso: number;
 };
@@ -190,12 +192,12 @@ export function ComercialTab() {
           hoje; o resto e leitura. Os baldes se sobrepoem, e o texto diz isso. */}
       {risco && (
         <Card
-          titulo="Jornadas em risco"
-          descricao={`Foto do momento — ${risco.abertas.total} aberta(s). Um cartao pode entrar em mais de um balde.`}
+          titulo="Credenciamentos em Risco"
+          descricao={`Foto do momento — ${risco.abertas.total} aberto(s). Um cartao pode entrar em mais de um balde.`}
         >
-          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
             <StatTile
-              rotulo="Atrasadas"
+              rotulo="Atrasados"
               valor={risco.atrasadas.total}
               detalhe={moeda(risco.atrasadas.valor)}
               estado={risco.atrasadas.total > 0 ? ESTADO.atencao : undefined}
@@ -204,11 +206,6 @@ export function ComercialTab() {
               rotulo={`Vencem em ${risco.diasDeAviso}d`}
               valor={risco.vencendo.total}
               detalhe={moeda(risco.vencendo.valor)}
-            />
-            <StatTile
-              rotulo="Em forecast"
-              valor={risco.emForecast.total}
-              detalhe={moeda(risco.emForecast.valor)}
             />
             <StatTile
               rotulo="Sem previsao"
@@ -221,10 +218,21 @@ export function ComercialTab() {
               detalhe={moeda(risco.semProximaAcao.valor)}
               estado={risco.semProximaAcao.total > 0 ? ESTADO.atencao : undefined}
             />
+            <StatTile
+              rotulo="Aguardando parceiro"
+              valor={risco.aguardandoParceiro.total}
+              detalhe={moeda(risco.aguardandoParceiro.valor)}
+            />
+            <StatTile
+              rotulo="Aguardando equipe"
+              valor={risco.aguardandoEquipe.total}
+              detalhe={moeda(risco.aguardandoEquipe.valor)}
+            />
           </div>
           <p className="mt-3 text-xs text-slate-500">
             &quot;Sem proxima acao&quot; usa a mesma regra do cartao do funil: conta apenas tarefa com prazo em
-            aberto. Nota sem prazo e registro do que aconteceu, nao proximo passo.
+            aberto. Nota sem prazo e registro do que aconteceu, nao proximo passo. &quot;Aguardando parceiro&quot;
+            e &quot;aguardando equipe&quot; contam pela etapa atual (Pendencia e Aprovacao).
           </p>
         </Card>
       )}
