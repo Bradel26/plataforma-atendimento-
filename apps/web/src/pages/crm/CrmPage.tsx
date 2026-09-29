@@ -2,17 +2,13 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { TabsDeNavegacao } from '../../components/ui/Tabs';
 import { useAuth } from '../../features/auth/AuthProvider';
 import type { Perfil } from '../../lib/types';
-import { ComercialTab } from './ComercialTab';
 import { MetasTab } from './MetasTab';
 import { ProdutividadeTab } from './ProdutividadeTab';
 import { ContasTab } from './ContasTab';
 import { DadosTab } from './DadosTab';
 import { AgendaDaSemana } from './AgendaDaSemana';
 import { ContatosTab } from './ContatosTab';
-import { LeadsTab } from './LeadsTab';
 import { OportunidadesTab } from './OportunidadesTab';
-import { EtiquetasTab } from './EtiquetasTab';
-import { ProdutosTab } from './ProdutosTab';
 import { PainelVendedorTab } from './PainelVendedorTab';
 import { HistoricoTab } from './HistoricoTab';
 import { AcompanhamentosTab } from './AcompanhamentosTab';
@@ -55,11 +51,8 @@ const ABAS = [
   { id: 'historico', label: 'Historico' },
   { id: 'acompanhamentos', label: 'Acompanhamentos', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'] },
   { id: 'contas', label: 'Empresas' },
-  { id: 'leads', label: 'Leads', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'] },
-  { id: 'oportunidades', label: 'Oportunidades', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'] },
-  // Mesmos perfis do `requireRole` das rotas `/comercial/*`: a aba que sempre
-  // recebe 403 e uma aba que nao deveria existir para aquele perfil.
-  { id: 'comercial', label: 'Leitura comercial', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR'] },
+  // Leads mudou para a aba Campanhas (mesmo funil de captacao); nao mora mais aqui.
+  { id: 'oportunidades', label: 'Jornadas', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'] },
   // Ler o painel de metas e trabalho de gestao (inclui GESTOR); DEFINIR meta e
   // ADMIN/SUPERVISOR, e o formulario da rampa se esconde dentro da aba. Mesmo
   // corte da politica de desconto e do processo do funil.
@@ -70,10 +63,8 @@ const ABAS = [
   // entra tambem porque, ao contrario das outras tres, esta aba serve para a propria
   // pessoa ver o proprio resumo — nao so para quem gerencia.
   { id: 'painel-vendedor', label: 'Painel do vendedor', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'] },
-  { id: 'produtos', label: 'Produtos e precos', perfis: ['ADMIN', 'SUPERVISOR'] },
   // Renomear e remover etiqueta alcancam registros que quem clica nao ve, entao
   // a aba segue o mesmo perfil da rota: ADMIN e SUPERVISOR.
-  { id: 'etiquetas', label: 'Etiquetas', perfis: ['ADMIN', 'SUPERVISOR'] },
   { id: 'dados', label: 'Importar / Exportar', perfis: ['ADMIN', 'SUPERVISOR'] },
 ] as const satisfies ReadonlyArray<{ id: string; label: string; perfis?: readonly Perfil[] }>;
 
@@ -111,7 +102,7 @@ export function CrmPage() {
 
   const registro = POR_PREFIXO.find((r) => pathname.startsWith(`${r.base}/`));
   const abaDaBusca = new URLSearchParams(search).get('aba');
-  // Aba pedida na URL so vale se o perfil a enxerga: `?aba=leads` digitado por
+  // Aba pedida na URL so vale se o perfil a enxerga: `?aba=metas` digitado por
   // um agente cai em Contatos, e nao numa aba que a API vai recusar.
   const aba: AbaId =
     registro?.aba ??
@@ -155,7 +146,6 @@ export function CrmPage() {
           aoFechar={fechar('contas')}
         />
       )}
-      {aba === 'leads' && <LeadsTab />}
       {aba === 'oportunidades' && (
         <OportunidadesTab
           selecionadoId={registro?.base === '/oportunidades' ? (id ?? null) : null}
@@ -163,12 +153,9 @@ export function CrmPage() {
           aoFechar={fechar('oportunidades')}
         />
       )}
-      {aba === 'comercial' && <ComercialTab />}
       {aba === 'metas' && <MetasTab />}
       {aba === 'produtividade' && <ProdutividadeTab />}
       {aba === 'painel-vendedor' && <PainelVendedorTab />}
-      {aba === 'produtos' && <ProdutosTab />}
-      {aba === 'etiquetas' && <EtiquetasTab />}
       {aba === 'dados' && <DadosTab />}
     </div>
   );

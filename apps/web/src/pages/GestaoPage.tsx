@@ -7,6 +7,7 @@ import { ApiError, api } from '../lib/api';
 import { ESTADO, SERIES } from '../lib/viz';
 import type { GestaoOperacao, OperacaoEsteira, Semaforo } from '../lib/types';
 import { ConsumoDeIaCard } from './gestao/ConsumoDeIa';
+import { ComercialTab } from './crm/ComercialTab';
 
 const hoje = () => new Date().toISOString().slice(0, 10);
 const trintaDias = () => new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -211,7 +212,7 @@ export function GestaoPage() {
           )}
         </Card>
 
-        <Card titulo="Tempo medio na etapa" descricao="Media das saidas de cada etapa no periodo, em dias (passagens)">
+        <Card titulo="Leadtime" descricao="Media das saidas de cada etapa no periodo, em dias (passagens)">
           <BarList itens={tempoEtapa} unidade="dias" vazio="Nenhum parceiro mudou de etapa no periodo" />
         </Card>
       </div>
@@ -290,6 +291,11 @@ export function GestaoPage() {
           </ul>
         )}
       </Card>
+
+      {/* Leitura do funil de Vendas/Jornadas do CRM — funil diferente da esteira
+          acima (ver spec 2026-09-29-leitura-do-credenciamento-design.md).
+          Convivem na mesma pagina de proposito: cada uma le um funil. */}
+      <ComercialTab />
 
       {/* Consumo de IA (item 6.8): custo da instalacao, lido por quem administra. */}
       <ConsumoDeIaCard />

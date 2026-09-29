@@ -86,7 +86,7 @@ export function FichaOportunidade({ oportunidadeId }: { oportunidadeId: string }
         setNaoEncontrada(true);
         return;
       }
-      setErro(e instanceof ApiError ? e.message : 'Falha ao carregar a oportunidade');
+      setErro(e instanceof ApiError ? e.message : 'Falha ao carregar a jornada');
     }
   }, [oportunidadeId]);
 
@@ -159,9 +159,9 @@ export function FichaOportunidade({ oportunidadeId }: { oportunidadeId: string }
 
   if (naoEncontrada) {
     return (
-      <Card titulo="Oportunidade">
+      <Card titulo="Jornada">
         <EmptyState
-          titulo="Oportunidade nao encontrada"
+          titulo="Jornada nao encontrada"
           descricao="O endereco aponta para um registro que nao existe ou que voce nao pode ver."
         />
       </Card>
@@ -170,8 +170,8 @@ export function FichaOportunidade({ oportunidadeId }: { oportunidadeId: string }
   if (erro) return <Alerta>{erro}</Alerta>;
   if (!oportunidade) {
     return (
-      <Card titulo="Oportunidade">
-        <p className="text-sm text-slate-500">Carregando oportunidade...</p>
+      <Card titulo="Jornada">
+        <p className="text-sm text-slate-500">Carregando jornada...</p>
       </Card>
     );
   }
@@ -430,7 +430,7 @@ export function FichaOportunidade({ oportunidadeId }: { oportunidadeId: string }
           <div className="space-y-3">
             <EmptyState
               titulo="Sem itens"
-              descricao="O valor desta oportunidade foi informado direto, sem produtos do catalogo."
+              descricao="O valor desta jornada foi informado direto, sem produtos do catalogo."
             />
             {o.status === 'ABERTA' && <Button onClick={() => setEditando(true)}>Montar proposta</Button>}
           </div>

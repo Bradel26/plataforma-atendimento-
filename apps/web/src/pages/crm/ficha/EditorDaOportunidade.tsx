@@ -112,7 +112,7 @@ export function EditorDaOportunidade({ oportunidade: o, aoSalvar, aoCancelar }: 
       await api.patch(`/oportunidades/${o.id}`, mudou);
       aoSalvar();
     } catch (e) {
-      setErro(e instanceof ApiError ? e.message : 'Falha ao salvar a oportunidade');
+      setErro(e instanceof ApiError ? e.message : 'Falha ao salvar a jornada');
     } finally {
       setSalvando(false);
     }

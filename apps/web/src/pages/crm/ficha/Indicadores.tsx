@@ -32,7 +32,7 @@ export function Indicadores({ dados, escopo }: { dados: IndicadoresFicha; escopo
       {/* Rotulo curto e a qualificacao no detalhe: "Protocolos abertos" em duas
           linhas desalinha a altura dos cartoes. */}
       <Indicador rotulo="Protocolos" valor={String(dados.protocolosAbertos)} detalhe="abertos" />
-      <Indicador rotulo="Oportunidades" valor={String(dados.oportunidadesAbertas)} detalhe="em aberto" />
+      <Indicador rotulo="Jornadas" valor={String(dados.oportunidadesAbertas)} detalhe="em aberto" />
       <Indicador
         rotulo="Ja comprou"
         valor={moeda(dados.valorGanho)}

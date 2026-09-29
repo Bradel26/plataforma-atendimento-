@@ -141,12 +141,15 @@ async function main() {
  * oportunidades. Idempotente — pode rodar de novo sem duplicar.
  */
 async function semearCrm() {
+  // Mesmo vocabulario da Esteira (`semearEsteira`, mais abaixo): a operacao e
+  // credenciamento de parceiro, nao venda classica, e as duas telas devem
+  // falar a mesma lingua sobre o mesmo tipo de jornada.
   const estagios = [
-    { nome: 'Prospeccao', probabilidade: 10 },
-    { nome: 'Qualificacao', probabilidade: 25 },
-    { nome: 'Proposta', probabilidade: 50 },
-    { nome: 'Negociacao', probabilidade: 75 },
-    { nome: 'Fechamento', probabilidade: 90 },
+    { nome: 'Novo cadastro', probabilidade: 10 },
+    { nome: 'Pendencia', probabilidade: 25 },
+    { nome: 'Aprovacao', probabilidade: 50 },
+    { nome: 'Credenciado', probabilidade: 75 },
+    { nome: 'Ativo', probabilidade: 90 },
   ];
 
   const funil = await prisma.funnel.upsert({

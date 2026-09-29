@@ -92,7 +92,7 @@ export function PainelVendedorTab() {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <StatTile rotulo="Oportunidades abertas" valor={resumo.oportunidades.abertas} />
+            <StatTile rotulo="Jornadas abertas" valor={resumo.oportunidades.abertas} />
             <StatTile rotulo="Propostas" valor={resumo.propostas} detalhe="geradas no periodo" />
             <StatTile rotulo="Vendas" valor={resumo.vendas.quantidade} detalhe={moeda(resumo.vendas.valor)} />
             <StatTile

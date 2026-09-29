@@ -7,7 +7,7 @@ import type { CampoCustomizadoDef, EntidadeCampoCustomizado, TipoCampoCustomizad
 const ENTIDADES: Array<{ valor: EntidadeCampoCustomizado; label: string }> = [
   { valor: 'CONTA', label: 'Contas' },
   { valor: 'LEAD', label: 'Leads' },
-  { valor: 'OPORTUNIDADE', label: 'Oportunidades' },
+  { valor: 'OPORTUNIDADE', label: 'Jornadas' },
 ];
 
 const TIPOS: Array<{ valor: TipoCampoCustomizado; label: string }> = [

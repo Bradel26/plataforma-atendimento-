@@ -142,7 +142,7 @@ export function PaletaDeComando() {
             }
             if (e.key === 'Enter' && itens[selecionado]) escolher(itens[selecionado]);
           }}
-          placeholder="Buscar contato, cliente, oportunidade, protocolo — ou ir para uma tela"
+          placeholder="Buscar contato, cliente, jornada, protocolo — ou ir para uma tela"
           aria-label="Buscar ou ir para"
           className="anel-de-foco w-full border-b border-slate-200 px-4 py-3 text-sm placeholder:text-slate-400"
         />

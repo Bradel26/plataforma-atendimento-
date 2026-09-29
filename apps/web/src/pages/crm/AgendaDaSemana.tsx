@@ -271,7 +271,7 @@ export function AgendaDaSemana() {
             {agenda.semPrazo.length > 8 && (
               <p className="mt-1 text-xs text-slate-500">
                 e mais {agenda.semPrazo.length - 8} sem data &mdash; a lista completa esta em
-                Oportunidades e nas fichas.
+                Jornadas e nas fichas.
               </p>
             )}
           </div>

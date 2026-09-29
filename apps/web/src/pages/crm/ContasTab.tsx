@@ -136,7 +136,7 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
       // estava marcado, e agir sobre quem sumiu da tela nao pode ser silencioso.
       setSelecionados(new Set());
     } catch (e) {
-      setErro(e instanceof ApiError ? e.message : 'Falha ao carregar contas');
+      setErro(e instanceof ApiError ? e.message : 'Falha ao carregar empresas');
     } finally {
       setCarregando(false);
     }
@@ -179,7 +179,7 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
       setErro(null);
     } catch (e) {
       setFicha(null);
-      setErro(e instanceof ApiError ? e.message : 'Falha ao abrir a conta');
+      setErro(e instanceof ApiError ? e.message : 'Falha ao abrir a empresa');
     }
   }, []);
 
@@ -320,7 +320,7 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
       await carregar();
       mostrarToast('sucesso', `${nomeCriada} cadastrada.`);
     } catch (err) {
-      setErro(err instanceof ApiError ? err.message : 'Falha ao criar conta');
+      setErro(err instanceof ApiError ? err.message : 'Falha ao criar empresa');
     }
   };
 
@@ -363,7 +363,7 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
     if (falhas > 0) {
       mostrarToast('erro', `Etiqueta aplicada em ${alvos.length - falhas} de ${alvos.length}. ${falhas} falharam.`);
     } else {
-      mostrarToast('sucesso', `Etiqueta aplicada em ${alvos.length} conta${alvos.length === 1 ? '' : 's'}.`);
+      mostrarToast('sucesso', `Etiqueta aplicada em ${alvos.length} empresa${alvos.length === 1 ? '' : 's'}.`);
     }
   };
 
@@ -382,7 +382,7 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
     if (falhas > 0) {
       mostrarToast('erro', `Filial definida em ${ids.length - falhas} de ${ids.length}. ${falhas} falharam.`);
     } else {
-      mostrarToast('sucesso', `${nomeFilial} definida em ${ids.length} conta${ids.length === 1 ? '' : 's'}.`);
+      mostrarToast('sucesso', `${nomeFilial} definida em ${ids.length} empresa${ids.length === 1 ? '' : 's'}.`);
     }
   };
 
@@ -396,7 +396,7 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
     if (selecionados.size === 0) return;
     const ids = [...selecionados];
     confirmar({
-      titulo: `Excluir ${ids.length} conta${ids.length === 1 ? '' : 's'}?`,
+      titulo: `Excluir ${ids.length} empresa${ids.length === 1 ? '' : 's'}?`,
       descricao: 'Nao pode ser desfeito. Contatos vinculados perdem o vinculo, nao sao excluidos.',
       variante: 'perigo',
       rotuloConfirmar: 'Excluir',
@@ -409,14 +409,14 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
         if (falhas > 0) {
           mostrarToast('erro', `${ids.length - falhas} de ${ids.length} excluidas. ${falhas} falharam.`);
         } else {
-          mostrarToast('sucesso', `${ids.length} conta${ids.length === 1 ? '' : 's'} excluida${ids.length === 1 ? '' : 's'}.`);
+          mostrarToast('sucesso', `${ids.length} empresa${ids.length === 1 ? '' : 's'} excluida${ids.length === 1 ? '' : 's'}.`);
         }
       },
     });
   };
 
   const painelLista = (
-    <Card titulo="Contas" descricao={`${contas.length} encontrada(s)`}>
+    <Card titulo="Empresas" descricao={`${contas.length} encontrada(s)`}>
       <div className="mb-3">
         <VisoesSalvas<FiltroContaSalvo>
           entidade="CONTA"
@@ -517,7 +517,7 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
           </div>
         ) : contas.length === 0 ? (
           <EmptyState
-            titulo="Nenhuma conta"
+            titulo="Nenhuma empresa"
             descricao={
               tags.length > 0 || busca.trim()
                 ? 'Nenhum cliente com esse filtro. Desligue uma etiqueta ou limpe a busca.'
@@ -526,7 +526,7 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
             acao={
               tags.length === 0 && !busca.trim() ? (
                 <Button variante="neutro" onClick={() => nomeNovaContaRef.current?.focus()}>
-                  Cadastrar conta
+                  Cadastrar empresa
                 </Button>
               ) : undefined
             }
@@ -537,7 +537,7 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
               <input
                 ref={selecionarTodosRef}
                 type="checkbox"
-                aria-label="Selecionar todas as contas visiveis"
+                aria-label="Selecionar todas as empresas visiveis"
                 checked={selecionados.size > 0 && selecionados.size === contas.length}
                 onChange={(e) => alternarTodos(e.target.checked)}
               />
@@ -564,7 +564,7 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
                   <p className="text-xs text-slate-500">{mascararCnpj(c.cnpj)}</p>
                   <p className="mt-1 text-xs text-slate-500">
                     {c.totalContatos ?? 0} contato(s) · {c.totalLeads ?? 0} lead(s) ·{' '}
-                    {c.totalOportunidades ?? 0} oportunidade(s)
+                    {c.totalOportunidades ?? 0} jornada(s)
                   </p>
                   {c.tags && c.tags.length > 0 && (
                     <div className="mt-1.5">
@@ -582,7 +582,7 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   );
 
   const painelFormulario = (
-    <Card titulo="Nova conta">
+    <Card titulo="Nova empresa">
       <form onSubmit={criar} className="space-y-3">
         <Field label="Nome">
           <Input
@@ -606,7 +606,7 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
             ))}
           </Select>
         </Field>
-        <Button type="submit" className="w-full">Criar conta</Button>
+        <Button type="submit" className="w-full">Criar empresa</Button>
       </form>
       {camposDef.length > 0 && (
         <div className="mt-4 border-t border-slate-100 pt-4">
@@ -674,7 +674,7 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
                 <dt className="text-xs text-slate-500">Filial</dt>
                 <dd>
                   <Select
-                    aria-label="Filial desta conta"
+                    aria-label="Filial desta empresa"
                     value={ficha.conta.filialId ?? ''}
                     disabled={salvandoCampo === 'filial'}
                     onChange={(e) => void definirFilial(e.target.value)}
@@ -829,7 +829,7 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
                     </div>
                     <div className="w-40 shrink-0">
                       <Select
-                        aria-label={`Papel de ${c.nome} na conta`}
+                        aria-label={`Papel de ${c.nome} na empresa`}
                         value={c.papelNaConta ?? ''}
                         disabled={salvandoCampo === `papel:${c.id}`}
                         onChange={(e) => void definirPapel(c.id, e.target.value)}
@@ -874,7 +874,7 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
 
           <Card titulo="Leads" descricao={`${ficha.leads.length} registro(s)`}>
             {ficha.leads.length === 0 ? (
-              <EmptyState titulo="Sem leads" descricao="Nenhum lead vinculado a esta conta." />
+              <EmptyState titulo="Sem leads" descricao="Nenhum lead vinculado a esta empresa." />
             ) : (
               <ul className="divide-y divide-slate-100">
                 {ficha.leads.map((l) => (
@@ -892,9 +892,9 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
             )}
           </Card>
 
-          <Card titulo="Oportunidades" descricao={`${ficha.oportunidades.length} registro(s)`}>
+          <Card titulo="Jornadas" descricao={`${ficha.oportunidades.length} registro(s)`}>
             {ficha.oportunidades.length === 0 ? (
-              <EmptyState titulo="Sem oportunidades" descricao="Abra uma oportunidade na aba Oportunidades." />
+              <EmptyState titulo="Sem jornadas" descricao="Abra uma jornada na aba Jornadas." />
             ) : (
               <ul className="divide-y divide-slate-100">
                 {ficha.oportunidades.map((o) => (
@@ -928,7 +928,7 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
           </Card>
         </div>
       ) : (
-        <Card titulo="Ficha da conta">
+        <Card titulo="Ficha da empresa">
           {/* URL com id que nao existe — ou que e de outra organizacao, caso em
               que a API responde 404 justamente para nao revelar que existe. Os
               dois chegam aqui iguais, e e assim que deve ser. */}
@@ -939,8 +939,8 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
             />
           ) : (
             <EmptyState
-              titulo="Selecione uma conta"
-              descricao="Contatos, leads, oportunidades e a linha do tempo da empresa aparecem aqui."
+              titulo="Selecione uma empresa"
+              descricao="Contatos, leads, jornadas e a linha do tempo da empresa aparecem aqui."
             />
           )}
         </Card>

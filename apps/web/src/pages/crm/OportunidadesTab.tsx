@@ -298,7 +298,7 @@ export function OportunidadesTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
       await api.patch(`/oportunidades/${id}`, { estagioId });
       await carregar();
     } catch (e) {
-      setErro(e instanceof ApiError ? e.message : 'Falha ao mover a oportunidade');
+      setErro(e instanceof ApiError ? e.message : 'Falha ao mover a jornada');
     }
   };
 
@@ -314,7 +314,7 @@ export function OportunidadesTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
       await api.post(`/oportunidades/${id}/fechar`, { status, ...(motivoPerda ? { motivoPerda } : {}) });
       await carregar();
     } catch (e) {
-      setErro(e instanceof ApiError ? e.message : 'Falha ao fechar a oportunidade');
+      setErro(e instanceof ApiError ? e.message : 'Falha ao fechar a jornada');
     }
   };
 
@@ -345,7 +345,7 @@ export function OportunidadesTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
       setNovosCampos({});
       await carregar();
     } catch (err) {
-      setErro(err instanceof ApiError ? err.message : 'Falha ao criar oportunidade');
+      setErro(err instanceof ApiError ? err.message : 'Falha ao criar jornada');
     }
   };
 
@@ -590,7 +590,7 @@ export function OportunidadesTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
         </Card>
       )}
 
-      <Card titulo="Nova oportunidade" descricao="Arraste os cartoes entre os estagios do funil">
+      <Card titulo="Nova jornada" descricao="Arraste os cartoes entre os estagios do funil">
         <form onSubmit={criar} className="grid gap-3 sm:grid-cols-4 sm:items-end">
           <Field label="Titulo">
             <Input required value={nova.titulo} onChange={(e) => setNova({ ...nova, titulo: e.target.value })} />

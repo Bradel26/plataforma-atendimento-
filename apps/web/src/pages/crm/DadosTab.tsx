@@ -13,7 +13,7 @@ const EXPORTACOES = [
   { recurso: 'leads', label: 'Leads' },
   { recurso: 'contatos', label: 'Contatos' },
   { recurso: 'contas', label: 'Contas' },
-  { recurso: 'oportunidades', label: 'Oportunidades' },
+  { recurso: 'oportunidades', label: 'Jornadas' },
   { recurso: 'protocolos', label: 'Protocolos' },
   { recurso: 'conversas', label: 'Conversas' },
 ] as const;
@@ -36,7 +36,7 @@ const IMPORTACOES = [
   },
   {
     recurso: 'oportunidades',
-    label: 'Oportunidades',
+    label: 'Jornadas',
     colunas: 'titulo (obrigatoria), conta (obrigatoria), funil, estagio, valor, responsavel_email, previsao_fechamento, canal_origem',
   },
 ] as const;

@@ -29,7 +29,7 @@ export const ROTULO_TIPO: Record<ItemDaPaleta['tipo'], string> = {
   NAVEGAR: 'Ir para',
   CONTATO: 'Contato',
   CONTA: 'Cliente',
-  OPORTUNIDADE: 'Oportunidade',
+  OPORTUNIDADE: 'Jornada',
   PROTOCOLO: 'Protocolo',
 };
 
