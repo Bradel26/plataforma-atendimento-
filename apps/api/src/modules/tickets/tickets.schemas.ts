@@ -10,13 +10,23 @@ export const STATUS_TICKET = [
 
 export const PRIORIDADES = ['BAIXA', 'NORMAL', 'ALTA', 'URGENTE'] as const;
 
+/** ATENDIMENTO = chamado de cliente (padrao). TI_INTERNO = chamado de TI, aberto por quem usa a plataforma. */
+export const CATEGORIAS_TICKET = ['ATENDIMENTO', 'TI_INTERNO'] as const;
+
+/** So faz sentido quando categoria = TI_INTERNO. */
+export const TIPOS_TI = ['ERRO', 'MELHORIA'] as const;
+
 const status = z.enum(STATUS_TICKET);
 const prioridade = z.enum(PRIORIDADES);
+const categoria = z.enum(CATEGORIAS_TICKET);
+const tipoTi = z.enum(TIPOS_TI);
 
 export const criarTicketSchema = z.object({
   titulo: z.string().trim().min(3, 'Titulo muito curto').max(160),
   descricao: z.string().trim().min(3, 'Descreva o chamado').max(4000),
   prioridade: prioridade.default('NORMAL'),
+  categoria: categoria.default('ATENDIMENTO'),
+  tipoTi: tipoTi.nullable().optional(),
   contatoId: z.string().uuid().nullable().optional(),
   contaId: z.string().uuid().nullable().optional(),
   conversaId: z.string().uuid().nullable().optional(),
@@ -42,6 +52,7 @@ export const atualizarTicketSchema = z
 export const listarTicketsSchema = z.object({
   status: status.optional(),
   prioridade: prioridade.optional(),
+  categoria: categoria.optional(),
   responsavelId: z.string().uuid().optional(),
   filaId: z.string().uuid().optional(),
   contatoId: z.string().uuid().optional(),

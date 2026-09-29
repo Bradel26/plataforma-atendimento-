@@ -42,6 +42,8 @@ function serialize(t: TicketDb) {
     descricao: t.descricao,
     status: t.status,
     prioridade: t.prioridade,
+    categoria: t.categoria,
+    tipoTi: t.tipoTi,
     prazoSla: t.prazoSla,
     criadoEm: t.criadoEm,
     atualizadoEm: t.atualizadoEm,
@@ -107,6 +109,7 @@ export async function listarTickets(query: ListarTicketsQuery) {
   const filtros: Prisma.TicketWhereInput[] = [];
   if (query.status) filtros.push({ status: query.status });
   if (query.prioridade) filtros.push({ prioridade: query.prioridade });
+  if (query.categoria) filtros.push({ categoria: query.categoria });
   if (query.responsavelId) filtros.push({ responsavelId: query.responsavelId });
   if (query.filaId) filtros.push({ filaId: query.filaId });
   if (query.contatoId) filtros.push({ contatoId: query.contatoId });
