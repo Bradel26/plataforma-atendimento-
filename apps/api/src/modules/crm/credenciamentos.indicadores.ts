@@ -411,6 +411,9 @@ export async function desempenhoOperacional(
   }
   for (const c of concluidos) if (c.responsavelId) linha(c.responsavelId).cred.push(c.dias);
   for (const id of primeira.keys()) if (id) linha(id);
+  // Todo o time comercial aparece na tabela, mesmo sem movimento no periodo
+  // (linha zerada), para o gestor ver quem esta parado e nao so quem trabalhou.
+  for (const u of usuarios) if (u.perfil === 'COMERCIAL' && (!f.consultorId || u.id === f.consultorId)) linha(u.id);
 
   const nomes = new Map(usuarios.map((u) => [u.id, u.nome]));
   const consultores = [...porConsultor.entries()]

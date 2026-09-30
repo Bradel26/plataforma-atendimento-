@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alerta, Badge, Card, EmptyState, Field, Input, Select } from '../../components/ui';
 import { StatTile } from '../../components/viz/StatTile';
-import { duracao } from '../../lib/viz';
 import { ApiError, api } from '../../lib/api';
-import { moeda, type ResumoVendedor, type VendedorOpcao } from '../../lib/types';
+import { type ResumoVendedor, type VendedorOpcao } from '../../lib/types';
 
 const mesCorrente = () => new Date().toISOString().slice(0, 7);
 
@@ -52,6 +51,12 @@ export function PainelVendedorTab() {
     void carregarResumo();
   }, [carregarResumo]);
 
+  // Percentual da meta atingido; sem meta (ou meta zerada) nao ha base de calculo.
+  const percentualMeta =
+    resumo && resumo.meta.definida && resumo.meta.valor > 0
+      ? Math.round((resumo.vendas.valor / resumo.meta.valor) * 100)
+      : null;
+
   if (vendedores === null) return <p className="text-sm text-slate-500">Carregando...</p>;
 
   if (vendedores.length === 0) {
@@ -84,17 +89,15 @@ export function PainelVendedorTab() {
 
       {resumo && (
         <>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2">
             <StatTile rotulo="Clientes atendidos" valor={resumo.clientesAtendidos} />
             <StatTile rotulo="Conversas" valor={resumo.conversas.total} detalhe={`${resumo.conversas.abertas} aberta(s)`} />
-            <StatTile rotulo="TME" valor={duracao(resumo.tempos.tmeSegundos)} detalhe="tempo médio de espera" />
-            <StatTile rotulo="TMA" valor={duracao(resumo.tempos.tmaSegundos)} detalhe="tempo médio de atendimento" />
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <StatTile rotulo="Jornadas abertas" valor={resumo.oportunidades.abertas} />
             <StatTile rotulo="Propostas" valor={resumo.propostas} detalhe="geradas no período" />
-            <StatTile rotulo="Vendas" valor={resumo.vendas.quantidade} detalhe={moeda(resumo.vendas.valor)} />
+            <StatTile rotulo="Vendas" valor={resumo.vendas.quantidade} detalhe={percentualMeta === null ? 'sem meta definida' : `${percentualMeta}% da meta`} />
             <StatTile
               rotulo="Conversão"
               valor={resumo.conversao === null ? '—' : `${Math.round(resumo.conversao * 100)}%`}
@@ -109,11 +112,11 @@ export function PainelVendedorTab() {
             <dl className="grid gap-3 sm:grid-cols-2 text-sm">
               <div>
                 <dt className="text-xs text-slate-500">Meta</dt>
-                <dd className="text-slate-800">{moeda(resumo.meta.valor)}</dd>
+                <dd className="text-slate-800">{resumo.meta.definida ? '100%' : '—'}</dd>
               </div>
               <div>
                 <dt className="text-xs text-slate-500">Realizado</dt>
-                <dd className="text-slate-800">{moeda(resumo.vendas.valor)}</dd>
+                <dd className="text-slate-800">{percentualMeta === null ? '—' : `${percentualMeta}%`}</dd>
               </div>
             </dl>
           </Card>

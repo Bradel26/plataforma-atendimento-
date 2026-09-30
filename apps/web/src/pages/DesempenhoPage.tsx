@@ -5,7 +5,7 @@ import { StatTile } from '../components/viz/StatTile';
 import { ApiError, api } from '../lib/api';
 import { ESTADO, SERIES, duracao } from '../lib/viz';
 import type { AgenteMonitorado, DesempenhoOperacional, OperacaoEsteira } from '../lib/types';
-import { UFS } from './esteira/ufs';
+import { UFS_ATENDIDAS } from './esteira/ufs';
 import { RelatoriosPage } from './RelatoriosPage';
 
 const hoje = () => new Date().toISOString().slice(0, 10);
@@ -42,7 +42,7 @@ export function DesempenhoPage() {
       .catch(() => undefined);
     void api
       .get<{ agentes: AgenteMonitorado[] }>('/metricas/agentes')
-      .then((r) => setConsultores(r.agentes.map((a) => ({ id: a.id, nome: a.nome }))))
+      .then((r) => setConsultores(r.agentes.filter((a) => a.perfil === 'COMERCIAL').map((a) => ({ id: a.id, nome: a.nome }))))
       .catch(() => undefined);
   }, []);
 
@@ -86,8 +86,8 @@ export function DesempenhoPage() {
           <Field label="Estado">
             <Select value={f.uf} onChange={(e) => setF({ ...f, uf: e.target.value })}>
               <option value="">Todos</option>
-              {UFS.map((uf) => (
-                <option key={uf} value={uf}>{uf}</option>
+              {UFS_ATENDIDAS.map((u) => (
+                <option key={u.sigla} value={u.sigla}>{u.nome}</option>
               ))}
             </Select>
           </Field>
