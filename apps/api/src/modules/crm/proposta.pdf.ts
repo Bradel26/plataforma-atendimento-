@@ -26,9 +26,9 @@ const dataBr = (d: Date) => d.toLocaleDateString('pt-BR');
 const COLUNAS = [
   { rotulo: 'Item', peso: 0.4, alinhamento: 'left' as const },
   { rotulo: 'Qtd', peso: 0.08, alinhamento: 'right' as const },
-  { rotulo: 'Unitario', peso: 0.15, alinhamento: 'right' as const },
+  { rotulo: 'Unitário', peso: 0.15, alinhamento: 'right' as const },
   { rotulo: 'Desc.', peso: 0.13, alinhamento: 'right' as const },
-  { rotulo: 'Cobranca', peso: 0.11, alinhamento: 'left' as const },
+  { rotulo: 'Cobrança', peso: 0.11, alinhamento: 'left' as const },
   { rotulo: 'Total', peso: 0.13, alinhamento: 'right' as const },
 ];
 
@@ -85,7 +85,7 @@ export function gerarPropostaPdf(proposta: Proposta, corPrimaria: string): Promi
     if (proposta.validaAte) {
       // A validade so aparece se a oportunidade tiver previsao. Prazo inventado
       // seria a plataforma assumindo compromisso comercial pela empresa.
-      doc.fillColor(CINZA).fontSize(8).text('VALIDA ATE', meio, yLado);
+      doc.fillColor(CINZA).fontSize(8).text('VALIDA ATÉ', meio, yLado);
       doc.fillColor(TINTA).fontSize(9).text(dataBr(proposta.validaAte), meio, yLado + 11);
     }
 
@@ -175,7 +175,7 @@ export function gerarPropostaPdf(proposta: Proposta, corPrimaria: string): Promi
      * cobranca imediata.
      */
     if (proposta.totais.unico > 0 && proposta.totais.mensal > 0) {
-      total('Cobranca unica', dinheiro(proposta.totais.unico));
+      total('Cobrança única', dinheiro(proposta.totais.unico));
       total(`Mensal (x${proposta.totais.mesesRecorrencia})`, dinheiro(proposta.totais.mensal));
     }
     total('Total', dinheiro(proposta.totais.total), true);
@@ -188,7 +188,7 @@ export function gerarPropostaPdf(proposta: Proposta, corPrimaria: string): Promi
      * comparar. Cada uma so aparece se estiver preenchida.
      */
     const condicoes: Array<[string, string]> = [];
-    if (proposta.condicaoPagamento) condicoes.push(['Condicao de pagamento', proposta.condicaoPagamento]);
+    if (proposta.condicaoPagamento) condicoes.push(['Condição de pagamento', proposta.condicaoPagamento]);
     if (proposta.prazoEntrega) condicoes.push(['Prazo de entrega', proposta.prazoEntrega]);
 
     if (condicoes.length > 0) {

@@ -75,11 +75,11 @@ export function EmpresaInput({ value, onChange }: Props) {
         label="Empresa"
         hint={
           value.contaId
-            ? 'Vinculada a uma empresa ja cadastrada.'
+            ? 'Vinculada a uma empresa já cadastrada.'
             : nova
               ? igual
-                ? 'Escolha a empresa na lista para vincular a ja cadastrada.'
-                : 'Empresa nova: sera criada na aba Empresas junto com o contato.'
+                ? 'Escolha a empresa na lista para vincular a já cadastrada.'
+                : 'Empresa nova: será criada na aba Empresas junto com o contato.'
               : 'Opcional. Digite para vincular ou criar a empresa do cliente.'
         }
       >

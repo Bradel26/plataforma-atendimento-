@@ -340,7 +340,7 @@ export async function fichaContato(contatoId: string) {
     where: apenasVisivel(contatoId, await filtroDe(politicaContatos)),
     include: { conta: true },
   });
-  if (!contato) throw notFound('Contato nao encontrado');
+  if (!contato) throw notFound('Contato não encontrado');
 
   const raiz: Raiz = { contatoId, contaId: contato.contaId };
   const [indicadores, atividades] = await Promise.all([
@@ -371,7 +371,7 @@ export async function fichaConta(contaId: string) {
       },
     },
   });
-  if (!conta) throw notFound('Conta nao encontrada');
+  if (!conta) throw notFound('Conta não encontrada');
 
   const raiz: Raiz = { contatoId: null, contaId };
   const [indicadores, atividades] = await Promise.all([

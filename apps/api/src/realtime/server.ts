@@ -41,7 +41,7 @@ export function criarServidorRealtime(httpServer: HttpServer) {
       }
       return next(new Error('Credencial ausente'));
     } catch (err) {
-      return next(err instanceof Error ? err : new Error('Credencial invalida'));
+      return next(err instanceof Error ? err : new Error('Credencial inválida'));
     }
   });
 

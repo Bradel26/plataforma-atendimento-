@@ -86,7 +86,7 @@ usersRoutes.delete(
   '/:id',
   requireRole('ADMIN'),
   asyncHandler(async (req, res) => {
-    if (param(req, 'id') === req.user!.sub) throw badRequest('Voce nao pode desativar o proprio usuario');
+    if (param(req, 'id') === req.user!.sub) throw badRequest('Você não pode desativar o próprio usuário');
     res.json({ usuario: await deactivateUser(param(req, 'id')) });
   }),
 );
@@ -96,7 +96,7 @@ usersRoutes.delete(
   requireRole('ADMIN'),
   asyncHandler(async (req, res) => {
     const id = param(req, 'id');
-    if (id === req.user!.sub) throw badRequest('Voce nao pode excluir a propria conta');
+    if (id === req.user!.sub) throw badRequest('Você não pode excluir a própria conta');
     res.json({ usuario: await deleteUserPermanently(id) });
   }),
 );

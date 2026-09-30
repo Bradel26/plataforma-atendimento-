@@ -40,20 +40,20 @@ export function validarValorCampo(
     case 'TEXTO': {
       if (typeof bruto !== 'string') return { ok: false, erro: 'Valor deve ser texto' };
       const valor = bruto.trim();
-      if (!valor) return { ok: false, erro: 'Valor nao pode ser vazio' };
+      if (!valor) return { ok: false, erro: 'Valor não pode ser vazio' };
       return { ok: true, valor };
     }
     case 'NUMERO': {
       const n = typeof bruto === 'number' ? bruto : Number(bruto);
       if (typeof bruto === 'boolean' || bruto === '' || bruto === null || Number.isNaN(n)) {
-        return { ok: false, erro: 'Valor deve ser um numero' };
+        return { ok: false, erro: 'Valor deve ser um número' };
       }
       return { ok: true, valor: String(n) };
     }
     case 'DATA': {
       if (typeof bruto !== 'string') return { ok: false, erro: 'Valor deve ser uma data' };
       const d = new Date(bruto);
-      if (Number.isNaN(d.getTime())) return { ok: false, erro: 'Data invalida' };
+      if (Number.isNaN(d.getTime())) return { ok: false, erro: 'Data inválida' };
       return { ok: true, valor: d.toISOString() };
     }
     case 'BOOLEANO': {
@@ -62,7 +62,7 @@ export function validarValorCampo(
     }
     case 'SELECAO': {
       if (typeof bruto !== 'string' || !opcoes.includes(bruto)) {
-        return { ok: false, erro: `Valor deve ser uma das opcoes: ${opcoes.join(', ')}` };
+        return { ok: false, erro: `Valor deve ser uma das opções: ${opcoes.join(', ')}` };
       }
       return { ok: true, valor: bruto };
     }

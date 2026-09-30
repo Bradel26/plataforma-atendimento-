@@ -31,7 +31,7 @@ export function obterConfigWaha(): ConfigWaha | null {
 
   if (!url) return null;
   if (!apiKey) {
-    throw new Error('Configuracao do WAHA incompleta: defina WAHA_API_KEY junto com WAHA_BASE_URL.');
+    throw new Error('Configuração do WAHA incompleta: defina WAHA_API_KEY junto com WAHA_BASE_URL.');
   }
   return { url: url.replace(/\/+$/, ''), apiKey };
 }

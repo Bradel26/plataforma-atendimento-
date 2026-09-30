@@ -46,7 +46,7 @@ export function getWhatsAppProvider(): WhatsAppProvider {
   const fabrica = FABRICAS[nome];
   if (!fabrica) {
     throw new Error(
-      `WHATSAPP_PROVIDER invalido: "${nome}". Valores aceitos: ${Object.keys(FABRICAS).join(', ')}.`,
+      `WHATSAPP_PROVIDER inválido: "${nome}". Valores aceitos: ${Object.keys(FABRICAS).join(', ')}.`,
     );
   }
   return fabrica();

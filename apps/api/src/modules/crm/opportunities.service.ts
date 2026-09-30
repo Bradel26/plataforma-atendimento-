@@ -47,11 +47,11 @@ async function resolverFunil(funilId?: string, estagioId?: string) {
       });
 
   if (!funil) throw badRequest('Nenhum funil configurado — crie um funil antes de abrir oportunidades');
-  if (funil.tipo !== 'COMERCIAL') throw badRequest('O funil informado nao e do tipo Comercial');
-  if (funil.estagios.length === 0) throw badRequest('O funil nao tem estagios configurados');
+  if (funil.tipo !== 'COMERCIAL') throw badRequest('O funil informado não e do tipo Comercial');
+  if (funil.estagios.length === 0) throw badRequest('O funil não tem estágios configurados');
 
   const estagio = estagioId ? funil.estagios.find((e) => e.id === estagioId) : funil.estagios[0];
-  if (!estagio) throw badRequest('Estagio nao pertence ao funil informado');
+  if (!estagio) throw badRequest('Estágio não pertence ao funil informado');
 
   return { funil, estagio };
 }
@@ -60,7 +60,7 @@ async function resolverFunil(funilId?: string, estagioId?: string) {
 async function montarItens(input: ItensInput) {
   const produtoIds = input.itens.map((i) => i.produtoId);
   const produtos = await prisma.product.findMany({ where: { id: { in: produtoIds } } });
-  if (produtos.length !== new Set(produtoIds).size) throw notFound('Produto nao encontrado');
+  if (produtos.length !== new Set(produtoIds).size) throw notFound('Produto não encontrado');
 
   const catalogo = input.catalogoId
     ? await prisma.priceCatalog.findUnique({ where: { id: input.catalogoId } })
@@ -74,7 +74,7 @@ async function montarItens(input: ItensInput) {
     const doCatalogo = precos.find((p) => p.produtoId === item.produtoId);
     const preco = item.precoUnitario ?? (doCatalogo ? Number(doCatalogo.preco) : undefined);
     if (preco === undefined) {
-      throw badRequest('Produto sem preco no catalogo — informe precoUnitario');
+      throw badRequest('Produto sem preço no catálogo — informe precoUnitario');
     }
 
     /*
@@ -237,7 +237,7 @@ export async function obterOportunidade(id: string) {
     where: apenasVisivel(id, await filtroDe(politicaOportunidades)),
     include: inclusaoOportunidade,
   });
-  if (!o) throw notFound('Oportunidade nao encontrada');
+  if (!o) throw notFound('Oportunidade não encontrada');
   const [comSinal] = comTarefaDeEtapa(
     comSinalDeTarefa([toOportunidade(o)], await tarefasPorOportunidade([o.id])),
     await tarefasDeEtapaAbertas([o.id]),
@@ -250,7 +250,7 @@ export async function criarOportunidade(input: CriarOportunidadeInput, usuarioId
   const conta = await prisma.account.findFirst({
     where: apenasVisivel(input.contaId, await filtroDe(politicaContas)),
   });
-  if (!conta) throw notFound('Conta nao encontrada');
+  if (!conta) throw notFound('Conta não encontrada');
 
   // O responsavel, quando informado, tem de existir nesta organizacao — senao a
   // oportunidade fica "dona" de alguem que ninguem com acesso legitimo enxerga.
@@ -428,9 +428,9 @@ export async function decidirDesconto(id: string, aprovar: boolean) {
     where: apenasVisivel(id, await filtroDe(politicaOportunidades)),
     select: { id: true, aprovacaoDesconto: true },
   });
-  if (!atual) throw notFound('Oportunidade nao encontrada');
+  if (!atual) throw notFound('Oportunidade não encontrada');
   if (atual.aprovacaoDesconto === 'NAO_REQUER') {
-    throw badRequest('Esta proposta nao precisa de aprovacao de desconto');
+    throw badRequest('Esta proposta não precisa de aprovação de desconto');
   }
 
   const { id: usuarioId } = usuarioAtual();
@@ -462,16 +462,16 @@ export async function atualizarOportunidade(
     // a auditoria ilegivel depois de o usuario ser removido.
     include: { responsavel: { select: { id: true, nome: true } } },
   });
-  if (!atual) throw notFound('Oportunidade nao encontrada');
-  if (atual.status !== 'ABERTA') throw badRequest('Oportunidade fechada nao pode ser alterada');
+  if (!atual) throw notFound('Oportunidade não encontrada');
+  if (atual.status !== 'ABERTA') throw badRequest('Oportunidade fechada não pode ser alterada');
 
   const mudouEstagio = Boolean(input.estagioId) && input.estagioId !== atual.estagioId;
 
   let destino: { id: string; nome: string; ordem: number; tarefaObrigatoria: string | null } | null = null;
   if (input.estagioId) {
     const estagio = await prisma.funnelStage.findUnique({ where: { id: input.estagioId } });
-    if (!estagio) throw notFound('Estagio nao encontrado');
-    if (estagio.funilId !== atual.funilId) throw badRequest('Estagio nao pertence ao funil da oportunidade');
+    if (!estagio) throw notFound('Estágio não encontrado');
+    if (estagio.funilId !== atual.funilId) throw badRequest('Estágio não pertence ao funil da oportunidade');
     destino = estagio;
   }
 
@@ -615,8 +615,8 @@ export async function fecharOportunidade(id: string, input: FecharOportunidadeIn
   const atual = await prisma.opportunity.findFirst({
     where: apenasVisivel(id, await filtroDe(politicaOportunidades)),
   });
-  if (!atual) throw notFound('Oportunidade nao encontrada');
-  if (atual.status !== 'ABERTA') throw badRequest('Oportunidade ja esta fechada');
+  if (!atual) throw notFound('Oportunidade não encontrada');
+  if (atual.status !== 'ABERTA') throw badRequest('Oportunidade já está fechada');
 
   /*
    * Ganhar exige desconto dentro da alcada. Perder, nao.
@@ -629,8 +629,8 @@ export async function fecharOportunidade(id: string, input: FecharOportunidadeIn
   if (input.status === 'GANHA' && atual.aprovacaoDesconto !== 'NAO_REQUER' && atual.aprovacaoDesconto !== 'APROVADA') {
     throw badRequest(
       atual.aprovacaoDesconto === 'PENDENTE'
-        ? 'O desconto desta proposta passa da alcada e ainda espera aprovacao.'
-        : 'O desconto desta proposta foi reprovado. Reduza o desconto ou peca nova aprovacao.',
+        ? 'O desconto desta proposta passa da alçada e ainda espera aprovação.'
+        : 'O desconto desta proposta foi reprovado. Reduza o desconto ou peca nova aprovação.',
     );
   }
 
@@ -682,8 +682,8 @@ export async function definirItens(id: string, input: ItensInput) {
       },
     },
   });
-  if (!atual) throw notFound('Oportunidade nao encontrada');
-  if (atual.status !== 'ABERTA') throw badRequest('Oportunidade fechada nao pode ser alterada');
+  if (!atual) throw notFound('Oportunidade não encontrada');
+  if (atual.status !== 'ABERTA') throw badRequest('Oportunidade fechada não pode ser alterada');
 
   const itens = await montarItens(input);
   const produtosUnicos = new Set(itens.map((i) => i.produtoId));
@@ -737,16 +737,16 @@ export async function dadosDaProposta(id: string, emissor: string, agora = new D
       itens: { include: { produto: { select: { nome: true, sku: true } } } },
     },
   });
-  if (!o) throw notFound('Oportunidade nao encontrada');
+  if (!o) throw notFound('Oportunidade não encontrada');
 
   if (o.itens.length === 0) {
-    throw badRequest('Monte a proposta antes de gerar o PDF: uma proposta sem itens nao diz o que esta sendo vendido.');
+    throw badRequest('Monte a proposta antes de gerar o PDF: uma proposta sem itens não diz o que está sendo vendido.');
   }
   if (o.aprovacaoDesconto === 'PENDENTE' || o.aprovacaoDesconto === 'REPROVADA') {
     throw badRequest(
       o.aprovacaoDesconto === 'PENDENTE'
-        ? 'O desconto desta proposta passa da alcada e ainda espera aprovacao.'
-        : 'O desconto desta proposta foi reprovado. Reduza o desconto ou peca nova aprovacao.',
+        ? 'O desconto desta proposta passa da alçada e ainda espera aprovação.'
+        : 'O desconto desta proposta foi reprovado. Reduza o desconto ou peca nova aprovação.',
     );
   }
 
@@ -782,7 +782,7 @@ export async function auditoriaDaOportunidade(id: string) {
     where: apenasVisivel(id, await filtroDe(politicaOportunidades)),
     select: { id: true },
   });
-  if (!existe) throw notFound('Oportunidade nao encontrada');
+  if (!existe) throw notFound('Oportunidade não encontrada');
   return trilhaDaOportunidade(id);
 }
 
@@ -850,10 +850,10 @@ export async function listarFunis(tipo?: 'COMERCIAL' | 'ESTEIRA') {
  */
 export async function definirTarefaDaEtapa(funilId: string, estagioId: string, tarefaObrigatoria: string | null) {
   const funil = await prisma.funnel.findFirst({ where: { id: funilId }, select: { id: true } });
-  if (!funil) throw notFound('Funil nao encontrado');
+  if (!funil) throw notFound('Funil não encontrado');
 
   const estagio = await prisma.funnelStage.findFirst({ where: { id: estagioId, funilId: funil.id } });
-  if (!estagio) throw notFound('Estagio nao encontrado neste funil');
+  if (!estagio) throw notFound('Estágio não encontrado neste funil');
 
   const texto = tarefaObrigatoria?.trim();
   /*
@@ -877,7 +877,7 @@ export async function criarFunil(input: {
   estagios: Array<{ nome: string; probabilidade: number }>;
 }) {
   const existente = await prisma.funnel.findFirst({ where: { nome: input.nome } });
-  if (existente) throw conflict('Ja existe um funil com este nome');
+  if (existente) throw conflict('Já existe um funil com este nome');
 
   return prisma.funnel.create({
     data: {

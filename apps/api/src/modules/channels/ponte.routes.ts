@@ -65,7 +65,7 @@ const mensagemSchema = z.object({
  * quem e isto?", e nao ha contexto para abrir antes da resposta.
  */
 async function organizacaoExiste(id: string) {
-  return semOrganizacao('webhook da ponte: descobrir a organizacao pela URL', async () => {
+  return semOrganizacao('webhook da ponte: descobrir a organização pela URL', async () => {
     const org = await prismaSemIsolamento.organizacao.findUnique({ where: { id }, select: { id: true } });
     return org !== null;
   });
@@ -83,7 +83,7 @@ ponteRoutes.post(
     if (!(await organizacaoExiste(organizacaoId))) {
       // 404 e nao 401: o id na URL nao e credencial, e fingir que existe nao
       // protege nada — a assinatura e que protege.
-      res.status(404).json({ error: { code: 'NAO_ENCONTRADO', message: 'Organizacao nao encontrada' } });
+      res.status(404).json({ error: { code: 'NAO_ENCONTRADO', message: 'Organização não encontrada' } });
       return;
     }
 
@@ -95,7 +95,7 @@ ponteRoutes.post(
         // 400 e o fim da linha: a ponte nao deve reentregar o que nunca vai
         // passar, e responder 200 esconderia o defeito de integracao.
         throw badRequest(
-          `Corpo invalido: ${erro instanceof Error ? erro.message.slice(0, 200) : 'nao e JSON'}`,
+          `Corpo inválido: ${erro instanceof Error ? erro.message.slice(0, 200) : 'não e JSON'}`,
         );
       }
 
@@ -117,7 +117,7 @@ ponteRoutes.post(
 
       if (sessaoBruta && config?.ponteSessao !== sessaoBruta) {
         console.warn(
-          `[ponte] sessao "${sessaoBruta}" nao corresponde a nenhuma linha cadastrada; a mensagem caiu na config compartilhada/primeira do canal`,
+          `[ponte] sessão "${sessaoBruta}" não corresponde a nenhuma linha cadastrada; a mensagem caiu na config compartilhada/primeira do canal`,
         );
       }
 
@@ -125,7 +125,7 @@ ponteRoutes.post(
         res.status(503).json({
           error: {
             code: 'CANAL_INDISPONIVEL',
-            message: 'O WhatsApp desta organizacao nao esta no modo nao oficial',
+            message: 'O WhatsApp desta organização não está no modo não oficial',
           },
         });
         return;
@@ -153,7 +153,7 @@ ponteRoutes.post(
       if (!assinaturaValida(corpoBruto, assinatura, config.ponteSegredo)) {
         res
           .status(401)
-          .json({ error: { code: 'ASSINATURA_INVALIDA', message: 'Assinatura da ponte invalida' } });
+          .json({ error: { code: 'ASSINATURA_INVALIDA', message: 'Assinatura da ponte inválida' } });
         return;
       }
 
@@ -164,12 +164,12 @@ ponteRoutes.post(
         // 400 e o fim da linha: a ponte nao deve reentregar o que nunca vai
         // passar, e responder 200 esconderia o defeito de integracao.
         throw badRequest(
-          `Corpo invalido: ${erro instanceof Error ? erro.message.slice(0, 200) : 'nao e JSON'}`,
+          `Corpo inválido: ${erro instanceof Error ? erro.message.slice(0, 200) : 'não e JSON'}`,
         );
       }
 
       const numero = numeroNormalizado(corpo.numero);
-      if (!numero) throw badRequest(`Numero "${corpo.numero}" nao parece um telefone`);
+      if (!numero) throw badRequest(`Número "${corpo.numero}" não parece um telefone`);
 
       const tipoAnexo = corpo.tipoAnexo ?? (corpo.anexoUrl ? 'ARQUIVO' : 'TEXTO');
       const conteudo = corpo.texto?.trim() || (corpo.anexoUrl ? '[arquivo recebido]' : '');
@@ -231,7 +231,7 @@ ponteRoutes.post(
     const corpoBruto = Buffer.isBuffer(req.body) ? req.body : Buffer.from('');
 
     if (!(await organizacaoExiste(organizacaoId))) {
-      res.status(404).json({ error: { code: 'NAO_ENCONTRADO', message: 'Organizacao nao encontrada' } });
+      res.status(404).json({ error: { code: 'NAO_ENCONTRADO', message: 'Organização não encontrada' } });
       return;
     }
 
@@ -241,7 +241,7 @@ ponteRoutes.post(
         corpoJson = JSON.parse(corpoBruto.toString('utf8'));
       } catch (erro) {
         throw badRequest(
-          `Corpo invalido: ${erro instanceof Error ? erro.message.slice(0, 200) : 'nao e JSON'}`,
+          `Corpo inválido: ${erro instanceof Error ? erro.message.slice(0, 200) : 'não e JSON'}`,
         );
       }
 
@@ -260,7 +260,7 @@ ponteRoutes.post(
         res.status(503).json({
           error: {
             code: 'CANAL_INDISPONIVEL',
-            message: 'O WhatsApp desta organizacao nao esta no modo nao oficial',
+            message: 'O WhatsApp desta organização não está no modo não oficial',
           },
         });
         return;
@@ -280,7 +280,7 @@ ponteRoutes.post(
       if (!assinaturaValida(corpoBruto, assinatura, config.ponteSegredo)) {
         res
           .status(401)
-          .json({ error: { code: 'ASSINATURA_INVALIDA', message: 'Assinatura da ponte invalida' } });
+          .json({ error: { code: 'ASSINATURA_INVALIDA', message: 'Assinatura da ponte inválida' } });
         return;
       }
 
@@ -289,7 +289,7 @@ ponteRoutes.post(
         corpo = statusSchema.parse(corpoJson);
       } catch (erro) {
         throw badRequest(
-          `Corpo invalido: ${erro instanceof Error ? erro.message.slice(0, 200) : 'nao e JSON'}`,
+          `Corpo inválido: ${erro instanceof Error ? erro.message.slice(0, 200) : 'não e JSON'}`,
         );
       }
 
@@ -349,7 +349,7 @@ ponteRoutes.post(
     const corpoBruto = Buffer.isBuffer(req.body) ? req.body : Buffer.from('');
 
     if (!(await organizacaoExiste(organizacaoId))) {
-      res.status(404).json({ error: { code: 'NAO_ENCONTRADO', message: 'Organizacao nao encontrada' } });
+      res.status(404).json({ error: { code: 'NAO_ENCONTRADO', message: 'Organização não encontrada' } });
       return;
     }
 
@@ -359,7 +359,7 @@ ponteRoutes.post(
         corpoJson = JSON.parse(corpoBruto.toString('utf8'));
       } catch (erro) {
         throw badRequest(
-          `Corpo invalido: ${erro instanceof Error ? erro.message.slice(0, 200) : 'nao e JSON'}`,
+          `Corpo inválido: ${erro instanceof Error ? erro.message.slice(0, 200) : 'não e JSON'}`,
         );
       }
 
@@ -378,7 +378,7 @@ ponteRoutes.post(
         res.status(503).json({
           error: {
             code: 'CANAL_INDISPONIVEL',
-            message: 'O WhatsApp desta organizacao nao esta no modo nao oficial',
+            message: 'O WhatsApp desta organização não está no modo não oficial',
           },
         });
         return;
@@ -398,7 +398,7 @@ ponteRoutes.post(
       if (!assinaturaValida(corpoBruto, assinatura, config.ponteSegredo)) {
         res
           .status(401)
-          .json({ error: { code: 'ASSINATURA_INVALIDA', message: 'Assinatura da ponte invalida' } });
+          .json({ error: { code: 'ASSINATURA_INVALIDA', message: 'Assinatura da ponte inválida' } });
         return;
       }
 
@@ -407,7 +407,7 @@ ponteRoutes.post(
         corpo = contatosSchema.parse(corpoJson);
       } catch (erro) {
         throw badRequest(
-          `Corpo invalido: ${erro instanceof Error ? erro.message.slice(0, 200) : 'nao e JSON'}`,
+          `Corpo inválido: ${erro instanceof Error ? erro.message.slice(0, 200) : 'não e JSON'}`,
         );
       }
 
@@ -461,7 +461,7 @@ ponteRoutes.post(
     const corpoBruto = Buffer.isBuffer(req.body) ? req.body : Buffer.from('');
 
     if (!(await organizacaoExiste(organizacaoId))) {
-      res.status(404).json({ error: { code: 'NAO_ENCONTRADO', message: 'Organizacao nao encontrada' } });
+      res.status(404).json({ error: { code: 'NAO_ENCONTRADO', message: 'Organização não encontrada' } });
       return;
     }
 
@@ -471,7 +471,7 @@ ponteRoutes.post(
         corpoJson = JSON.parse(corpoBruto.toString('utf8'));
       } catch (erro) {
         throw badRequest(
-          `Corpo invalido: ${erro instanceof Error ? erro.message.slice(0, 200) : 'nao e JSON'}`,
+          `Corpo inválido: ${erro instanceof Error ? erro.message.slice(0, 200) : 'não e JSON'}`,
         );
       }
 
@@ -488,7 +488,7 @@ ponteRoutes.post(
 
       if (!config?.ativo || modoEfetivo(config.modo) !== 'NAO_OFICIAL') {
         res.status(503).json({
-          error: { code: 'CANAL_INDISPONIVEL', message: 'O WhatsApp desta organizacao nao esta no modo nao oficial' },
+          error: { code: 'CANAL_INDISPONIVEL', message: 'O WhatsApp desta organização não está no modo não oficial' },
         });
         return;
       }
@@ -502,7 +502,7 @@ ponteRoutes.post(
 
       const assinatura = req.header('x-ponte-assinatura') ?? req.header('x-hub-signature-256');
       if (!assinaturaValida(corpoBruto, assinatura, config.ponteSegredo)) {
-        res.status(401).json({ error: { code: 'ASSINATURA_INVALIDA', message: 'Assinatura da ponte invalida' } });
+        res.status(401).json({ error: { code: 'ASSINATURA_INVALIDA', message: 'Assinatura da ponte inválida' } });
         return;
       }
 
@@ -518,7 +518,7 @@ ponteRoutes.post(
         corpo = chatsSchema.parse(corpoJson);
       } catch (erro) {
         throw badRequest(
-          `Corpo invalido: ${erro instanceof Error ? erro.message.slice(0, 200) : 'nao e JSON'}`,
+          `Corpo inválido: ${erro instanceof Error ? erro.message.slice(0, 200) : 'não e JSON'}`,
         );
       }
 

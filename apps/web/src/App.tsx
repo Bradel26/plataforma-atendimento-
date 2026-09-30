@@ -12,7 +12,6 @@ import { GestaoPage } from './pages/GestaoPage';
 import { LoginPage } from './pages/LoginPage';
 import { MonitoramentoPage } from './pages/MonitoramentoPage';
 import { DesempenhoPage } from './pages/DesempenhoPage';
-import { TelefoniaPage } from './pages/TelefoniaPage';
 import { WebchatPage } from './pages/WebchatPage';
 import { ConfiguracoesPage } from './pages/configuracoes/ConfiguracoesPage';
 import { CrmPage } from './pages/crm/CrmPage';
@@ -32,7 +31,6 @@ const PAGINAS: Record<string, ComponentType> = {
   '/campanhas': CampanhasPage,
   // A rota continua /relatorios para links e atalhos antigos nao quebrarem.
   '/relatorios': DesempenhoPage,
-  '/telefonia': TelefoniaPage,
   '/crm': CrmPage,
   '/configuracoes': ConfiguracoesPage,
 };
@@ -52,7 +50,7 @@ function AppRoutes() {
 
   if (carregando) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-slate-500">Carregando sessao...</div>
+      <div className="flex h-full items-center justify-center text-sm text-slate-500">Carregando sessão...</div>
     );
   }
 

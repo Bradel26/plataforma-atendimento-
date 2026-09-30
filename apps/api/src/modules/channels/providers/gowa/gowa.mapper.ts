@@ -24,7 +24,7 @@ export function situacaoDaSessaoGowa(status: StatusResultadoGowa, numeroProprio:
     return { estado: 'DESCONHECIDO', detalhe: null, telefone: null };
   }
   if (status.tipo === 'inexistente') {
-    return { estado: 'DESCONECTADO', detalhe: 'device ainda nao criado', telefone: null };
+    return { estado: 'DESCONECTADO', detalhe: 'device ainda não criado', telefone: null };
   }
 
   let estado: EstadoSessao;
@@ -52,8 +52,8 @@ function telefoneDoChatId(chatId: string | null): string | null {
 
 function descricaoDoAnexo(p: MensagemGowa): string | null {
   if (p.image !== undefined) return '[Imagem recebida]';
-  if (p.video !== undefined) return '[Video recebido]';
-  if (p.audio !== undefined) return '[Audio recebido]';
+  if (p.video !== undefined) return '[Vídeo recebido]';
+  if (p.audio !== undefined) return '[Áudio recebido]';
   if (p.document !== undefined) return '[Arquivo recebido]';
   if (p.sticker !== undefined) return '[Figurinha recebida]';
   return null;
@@ -67,7 +67,7 @@ function mensagemRecebida(sessaoExterna: string, p: MensagemGowa): EventoDeCanal
 
   const corpo = texto(p.body) ?? texto(p.content) ?? texto(p.text);
   const anexo = descricaoDoAnexo(p);
-  if (!corpo && !anexo) return { tipo: 'ignorado', motivo: 'mensagem sem conteudo' };
+  if (!corpo && !anexo) return { tipo: 'ignorado', motivo: 'mensagem sem conteúdo' };
 
   const mensagem: MensagemNormalizada = {
     canal: 'WHATSAPP',
@@ -100,7 +100,7 @@ const STATUS_DO_RECIBO: Record<string, StatusDeEntrega> = {
  * (ver spec, "Limite conhecido da v1"), nunca algo lido do payload ou da URL.
  */
 export function interpretarEventoGowa(corpo: unknown, deviceId: string): EventoDeCanal[] {
-  if (!corpo || typeof corpo !== 'object') return [{ tipo: 'ignorado', motivo: 'corpo nao e objeto' }];
+  if (!corpo || typeof corpo !== 'object') return [{ tipo: 'ignorado', motivo: 'corpo não e objeto' }];
   const envelope = corpo as EventoGowa;
   const evento = texto(envelope.event);
   if (!evento) return [{ tipo: 'ignorado', motivo: 'evento sem nome' }];
@@ -119,12 +119,12 @@ export function interpretarEventoGowa(corpo: unknown, deviceId: string): EventoD
       const idExterno = texto(payload.id);
       return idExterno
         ? [{ tipo: 'mensagem.propria', sessaoExterna: deviceId, idExterno }]
-        : [{ tipo: 'ignorado', motivo: 'mensagem propria sem id' }];
+        : [{ tipo: 'ignorado', motivo: 'mensagem própria sem id' }];
     }
     return [mensagemRecebida(deviceId, payload)];
   }
 
-  return [{ tipo: 'ignorado', motivo: `evento ${evento} nao tratado` }];
+  return [{ tipo: 'ignorado', motivo: `evento ${evento} não tratado` }];
 }
 
 /** Id da mensagem na resposta de envio — `extract_msg_id` do cliente de referencia. */

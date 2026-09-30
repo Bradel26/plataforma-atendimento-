@@ -86,7 +86,7 @@ export function RegistrarAtividade({ contatoId, contaId, aoRegistrar }: Props) {
           <Input
             value={form.titulo}
             onChange={(e) => setForm({ ...form, titulo: e.target.value })}
-            placeholder="Ex.: Cliente pediu orcamento de 3 splits para a loja nova"
+            placeholder="Ex.: Cliente pediu orçamento de 3 splits para a loja nova"
             maxLength={160}
             required
           />
@@ -103,12 +103,12 @@ export function RegistrarAtividade({ contatoId, contaId, aoRegistrar }: Props) {
         aria-expanded={expandido}
         className="text-xs font-medium text-[var(--brand-primary)] hover:underline"
       >
-        {expandido ? 'Menos opcoes' : 'Detalhes e prazo'}
+        {expandido ? 'Menos opções' : 'Detalhes e prazo'}
       </button>
 
       {expandido && (
         <div className="space-y-3">
-          <Field label="Detalhes" hint="O que ficou combinado, numeros citados, quem participou.">
+          <Field label="Detalhes" hint="O que ficou combinado, números citados, quem participou.">
             <Textarea
               rows={3}
               value={form.descricao}
@@ -117,7 +117,7 @@ export function RegistrarAtividade({ contatoId, contaId, aoRegistrar }: Props) {
             />
           </Field>
 
-          <Field label="Prazo" hint="Preencha para virar tarefa. Vazio, e so registro.">
+          <Field label="Prazo" hint="Preencha para virar tarefa. Vazio, e só registro.">
             <Input
               type="datetime-local"
               className="sm:max-w-[240px]"

@@ -28,7 +28,7 @@ function resolverPeriodo(query: z.infer<typeof periodoSchema>) {
 
 function resolverRelatorio(nome: string) {
   const gerar = RELATORIOS[nome as NomeRelatorio];
-  if (!gerar) throw notFound(`Relatorio "${nome}" nao existe. Disponiveis: ${Object.keys(RELATORIOS).join(', ')}`);
+  if (!gerar) throw notFound(`Relatório "${nome}" não existe. Disponíveis: ${Object.keys(RELATORIOS).join(', ')}`);
   return gerar;
 }
 
@@ -39,7 +39,7 @@ relatoriosRoutes.get(
       relatorios: [
         { nome: 'atendimentos', titulo: 'Atendimentos por agente' },
         { nome: 'filas', titulo: 'Desempenho por fila' },
-        { nome: 'protocolos', titulo: 'Protocolos abertos no periodo' },
+        { nome: 'protocolos', titulo: 'Protocolos abertos no período' },
         { nome: 'jornada', titulo: 'Jornada de trabalho' },
         { nome: 'funil', titulo: 'Funil de leads' },
       ],

@@ -161,8 +161,8 @@ export function FichaOportunidade({ oportunidadeId }: { oportunidadeId: string }
     return (
       <Card titulo="Jornada">
         <EmptyState
-          titulo="Jornada nao encontrada"
-          descricao="O endereco aponta para um registro que nao existe ou que voce nao pode ver."
+          titulo="Jornada não encontrada"
+          descricao="O endereço aponta para um registro que não existe ou que você não pode ver."
         />
       </Card>
     );
@@ -215,11 +215,11 @@ export function FichaOportunidade({ oportunidadeId }: { oportunidadeId: string }
             </dd>
           </div>
           <div>
-            <dt className="text-xs text-slate-500">Responsavel</dt>
-            <dd className="text-slate-800">{o.responsavel?.nome ?? 'Sem responsavel'}</dd>
+            <dt className="text-xs text-slate-500">Responsável</dt>
+            <dd className="text-slate-800">{o.responsavel?.nome ?? 'Sem responsável'}</dd>
           </div>
           <div>
-            <dt className="text-xs text-slate-500">Previsao de fechamento</dt>
+            <dt className="text-xs text-slate-500">Previsão de fechamento</dt>
             <dd className="text-slate-800">{data(o.previsaoFechamento)}</dd>
           </div>
           <div>
@@ -242,7 +242,7 @@ export function FichaOportunidade({ oportunidadeId }: { oportunidadeId: string }
             <div>
               <dt className="text-xs text-slate-500">Motivo da perda</dt>
               <dd className="text-slate-800">
-                {o.motivoPerda ? LABEL_MOTIVO_PERDA[o.motivoPerda] : 'Nao informado'}
+                {o.motivoPerda ? LABEL_MOTIVO_PERDA[o.motivoPerda] : 'Não informado'}
               </dd>
             </div>
           )}
@@ -257,7 +257,7 @@ export function FichaOportunidade({ oportunidadeId }: { oportunidadeId: string }
               tambem e vazio no PDF. */}
           {o.condicaoPagamento && (
             <div>
-              <dt className="text-xs text-slate-500">Condicao de pagamento</dt>
+              <dt className="text-xs text-slate-500">Condição de pagamento</dt>
               <dd className="text-slate-800">{o.condicaoPagamento}</dd>
             </div>
           )}
@@ -273,7 +273,7 @@ export function FichaOportunidade({ oportunidadeId }: { oportunidadeId: string }
           {o.temperatura && (
             <div>
               <dt className="text-xs text-slate-500">Temperatura</dt>
-              <dd className="text-slate-800" title="Leitura de quem esta na negociacao, e nao a probabilidade da etapa">
+              <dd className="text-slate-800" title="Leitura de quem está na negociação, é não a probabilidade da etapa">
                 {LABEL_TEMPERATURA[o.temperatura]}
               </dd>
             </div>
@@ -319,7 +319,7 @@ export function FichaOportunidade({ oportunidadeId }: { oportunidadeId: string }
           titulo="Tarefas pendentes"
           descricao={
             tarefas.some((t) => t.obrigatoria)
-              ? 'A etapa exige concluir a tarefa marcada antes de o negocio avancar'
+              ? 'A etapa exige concluir a tarefa marcada antes de o negócio avançar'
               : `${tarefas.length} em aberto`
           }
         >
@@ -371,8 +371,8 @@ export function FichaOportunidade({ oportunidadeId }: { oportunidadeId: string }
         {o.aprovacaoDesconto === 'PENDENTE' && (
           <div className="mb-3 space-y-2">
             <Alerta>
-              O desconto desta proposta passa da alcada de quem a montou e espera aprovacao. Enquanto isso, ela
-              nao pode ser marcada como ganha.
+              O desconto desta proposta passa da alçada de quem a montou e espera aprovação. Enquanto isso, ela
+              não pode ser marcada como ganha.
             </Alerta>
             {/* Os botoes so aparecem para quem pode decidir. Mostrar desabilitado
                 a quem nao tem alcada convida a pedir permissao a quem tambem nao
@@ -394,15 +394,15 @@ export function FichaOportunidade({ oportunidadeId }: { oportunidadeId: string }
           <div className="mb-3">
             <Alerta>
               O desconto foi reprovado{o.aprovadoPor ? ` por ${o.aprovadoPor.nome}` : ''}. Reduza o desconto para
-              poder fechar — reprovar nao apagou o valor negociado.
+              poder fechar — reprovar não apagou o valor negociado.
             </Alerta>
           </div>
         )}
 
         {o.aprovacaoDesconto === 'APROVADA' && (
           <p className="mb-3 text-xs text-slate-500">
-            Desconto acima da alcada, aprovado{o.aprovadoPor ? ` por ${o.aprovadoPor.nome}` : ''}
-            {o.aprovadoEm ? ` em ${data(o.aprovadoEm)}` : ''}. Editar a proposta pede nova aprovacao.
+            Desconto acima da alçada, aprovado{o.aprovadoPor ? ` por ${o.aprovadoPor.nome}` : ''}
+            {o.aprovadoEm ? ` em ${data(o.aprovadoEm)}` : ''}. Editar a proposta pede nova aprovação.
           </p>
         )}
 
@@ -411,7 +411,7 @@ export function FichaOportunidade({ oportunidadeId }: { oportunidadeId: string }
         {o.divergeDoInformado && (
           <div className="mb-3">
             <Alerta>
-              O valor digitado a mao ({moeda(o.valorInformado ?? 0)}) discorda do que os itens somam (
+              O valor digitado a mão ({moeda(o.valorInformado ?? 0)}) discorda do que os itens somam (
               {moeda(o.valor)}). Os itens mandam: e o que a proposta impressa vai dizer.
             </Alerta>
           </div>
@@ -430,7 +430,7 @@ export function FichaOportunidade({ oportunidadeId }: { oportunidadeId: string }
           <div className="space-y-3">
             <EmptyState
               titulo="Sem itens"
-              descricao="O valor desta jornada foi informado direto, sem produtos do catalogo."
+              descricao="O valor desta jornada foi informado direto, sem produtos do catálogo."
             />
             {o.status === 'ABERTA' && <Button onClick={() => setEditando(true)}>Montar proposta</Button>}
           </div>
@@ -443,7 +443,7 @@ export function FichaOportunidade({ oportunidadeId }: { oportunidadeId: string }
                   <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
                     <th scope="col" className="pb-2">Produto</th>
                     <th scope="col" className="pb-2 text-right">Qtd.</th>
-                    <th scope="col" className="pb-2 text-right">Preco</th>
+                    <th scope="col" className="pb-2 text-right">Preço</th>
                     <th scope="col" className="pb-2 text-right">Desc.</th>
                     <th scope="col" className="pb-2 text-right">Total</th>
                     <th scope="col" className="pb-2 text-right">Margem</th>
@@ -456,7 +456,7 @@ export function FichaOportunidade({ oportunidadeId }: { oportunidadeId: string }
                         {item.produto.nome}
                         <span className="block text-xs text-slate-500">
                           {item.produto.sku}
-                          {item.recorrencia === 'MENSAL' && ' · cobrado por mes'}
+                          {item.recorrencia === 'MENSAL' && ' · cobrado por mês'}
                         </span>
                       </td>
                       {/* tabular-nums: coluna de numero que nao dança conforme o digito. */}
@@ -468,7 +468,7 @@ export function FichaOportunidade({ oportunidadeId }: { oportunidadeId: string }
                       <td className="py-2 text-right font-medium tabular-nums text-slate-800">
                         {moeda(item.total)}
                         {item.recorrencia === 'MENSAL' && (
-                          <span className="block text-xs font-normal text-slate-500">/mes</span>
+                          <span className="block text-xs font-normal text-slate-500">/mês</span>
                         )}
                       </td>
                       {/* Travessao, e nao 0%, quando o custo nao foi informado:
@@ -486,7 +486,7 @@ export function FichaOportunidade({ oportunidadeId }: { oportunidadeId: string }
                 <dd className="font-semibold tabular-nums text-slate-800">{moeda(o.valorUnico ?? 0)}</dd>
               </div>
               <div>
-                <dt className="text-xs text-slate-500">Por mes</dt>
+                <dt className="text-xs text-slate-500">Por mês</dt>
                 <dd className="font-semibold tabular-nums text-slate-800">
                   {moeda(o.valorMensal ?? 0)}
                   {(o.valorMensal ?? 0) > 0 && (
@@ -551,7 +551,7 @@ export function FichaOportunidade({ oportunidadeId }: { oportunidadeId: string }
           depois da proposta porque quem abre a oportunidade quer negociar; quem
           desconfia de um numero desce ate aqui. */}
       {trilha.length > 0 && (
-        <Card titulo="Historico" descricao={`${trilha.length} alteracao(oes) registrada(s)`}>
+        <Card titulo="Histórico" descricao={`${trilha.length} alteração(oes) registrada(s)`}>
           <ul className="divide-y divide-slate-100">
             {trilha.map((e) => (
               <li key={e.id} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-2">
@@ -562,7 +562,7 @@ export function FichaOportunidade({ oportunidadeId }: { oportunidadeId: string }
                   {/* Autor nulo e mudanca de rotina automatica, nao "nao sei":
                       escrever um nome ali seria atribuir a alguem o que a
                       plataforma fez sozinha. */}
-                  <p className="text-xs text-slate-500">{e.autor ?? 'automatico'}</p>
+                  <p className="text-xs text-slate-500">{e.autor ?? 'automático'}</p>
                 </div>
                 <p className="text-xs text-slate-500">{new Date(e.ocorridoEm).toLocaleString('pt-BR')}</p>
               </li>

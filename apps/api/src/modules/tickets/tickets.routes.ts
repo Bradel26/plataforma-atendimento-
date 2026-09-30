@@ -60,12 +60,12 @@ ticketsRoutes.get(
   '/numero/:numero',
   asyncHandler(async (req, res) => {
     const numero = Number(param(req, 'numero'));
-    if (!Number.isInteger(numero)) throw notFound('Chamado nao encontrado');
+    if (!Number.isInteger(numero)) throw notFound('Chamado não encontrado');
 
     // O numero do protocolo e unico por organizacao, entao ele sozinho nao e mais
     // chave: `findFirst` com o filtro da extensao acha o protocolo desta empresa.
     const ticket = await prisma.ticket.findFirst({ where: { numero }, select: { id: true } });
-    if (!ticket) throw notFound('Chamado nao encontrado');
+    if (!ticket) throw notFound('Chamado não encontrado');
     res.json({ protocolo: await obterTicket(ticket.id) });
   }),
 );
@@ -151,7 +151,7 @@ ticketsRoutes.delete(
     const existe = await prisma.ticket.findFirst({
       where: apenasVisivel(id, await filtroDe(politicaProtocolos)),
     });
-    if (!existe) throw notFound('Chamado nao encontrado');
+    if (!existe) throw notFound('Chamado não encontrado');
     await prisma.ticket.delete({ where: { id } });
     res.status(204).end();
   }),

@@ -73,14 +73,14 @@ function renderizar(props: Partial<Parameters<typeof PainelChat>[0]> = {}) {
   );
 }
 
-describe('PainelChat — botao Resolver (Task 5)', () => {
-  it('renderiza o botao como "Resolver" (nao mais "Finalizar")', () => {
+describe('PainelChat — botão Resolver (Task 5)', () => {
+  it('renderiza o botão como "Resolver" (não mais "Finalizar")', () => {
     const html = renderizar();
     expect(html).toContain('Resolver');
     expect(html).not.toContain('Finalizar');
   });
 
-  it('conversa finalizada nao mostra nem "Resolver" nem "Finalizar"', () => {
+  it('conversa finalizada não mostra nem "Resolver" nem "Finalizar"', () => {
     const html = renderizar({
       conversa: criarConversaDetalheMock({ status: 'FINALIZADO', finalizadoEm: '2026-09-25T11:00:00.000Z' }),
     });
@@ -96,7 +96,7 @@ describe('PainelChat — abas do rodape (Task 5)', () => {
     expect(html).toContain('Mensagem Privada');
   });
 
-  it('aba "Responder" comeca ativa: o formulario padrao (placeholder de resposta) esta no HTML', () => {
+  it('aba "Responder" comeca ativa: o formulário padrão (placeholder de resposta) está no HTML', () => {
     const html = renderizar();
     expect(html).toContain('Escreva sua resposta');
     // O form da nota interna so existe quando a aba "privada" esta ativa;
@@ -109,19 +109,19 @@ describe('PainelChat — abas do rodape (Task 5)', () => {
 describe('PainelChat — selo de nota interna na bolha (Task 5)', () => {
   it('mensagem com interno=true mostra o selo "Nota interna"', () => {
     const conversa = criarConversaDetalheMock({
-      mensagens: [criarMensagemMock({ interno: true, conteudo: 'so a equipe ve' })],
+      mensagens: [criarMensagemMock({ interno: true, conteudo: 'só a equipe vê' })],
     });
     const html = renderizar({ conversa });
     expect(html).toContain('Nota interna');
-    expect(html).toContain('so a equipe ve');
+    expect(html).toContain('só a equipe vê');
   });
 
-  it('mensagem normal (interno=false) nao mostra o selo "Nota interna"', () => {
+  it('mensagem normal (interno=false) não mostra o selo "Nota interna"', () => {
     const conversa = criarConversaDetalheMock({
-      mensagens: [criarMensagemMock({ interno: false, conteudo: 'mensagem publica' })],
+      mensagens: [criarMensagemMock({ interno: false, conteudo: 'mensagem pública' })],
     });
     const html = renderizar({ conversa });
     expect(html).not.toContain('Nota interna');
-    expect(html).toContain('mensagem publica');
+    expect(html).toContain('mensagem pública');
   });
 });

@@ -35,8 +35,8 @@ export function obterConfigGlobalPonte(): ConfigGlobalPonte | null {
   if (definidas === 0) return null;
   if (definidas < 3) {
     throw new Error(
-      'Configuracao global da ponte incompleta: defina PONTE_URL, PONTE_TOKEN e PONTE_SEGREDO juntos, ' +
-        'ou nenhuma das 3 para depender so da linha compartilhada legada (ver apps/api/.env.example).',
+      'Configuração global da ponte incompleta: defina PONTE_URL, PONTE_TOKEN e PONTE_SEGREDO juntos, ' +
+        'ou nenhuma das 3 para depender só da linha compartilhada legada (ver apps/api/.env.example).',
     );
   }
 

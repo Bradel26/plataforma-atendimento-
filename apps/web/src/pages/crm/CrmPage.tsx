@@ -51,7 +51,7 @@ const ABAS = [
    * precisa de acao. Acompanhamentos le a esteira, e a esteira nao e do AGENTE
    * (mesmo corte de `/credenciamentos`), entao a aba segue o mesmo perfil.
    */
-  { id: 'historico', label: 'Historico' },
+  { id: 'historico', label: 'Histórico' },
   { id: 'acompanhamentos', label: 'Acompanhamentos', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'] },
   // Ciclo de vida do parceiro depois de credenciado. Le a esteira, entao segue o mesmo perfil.
   { id: 'ciclo-parceiro', label: 'Ciclo do parceiro', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'] },

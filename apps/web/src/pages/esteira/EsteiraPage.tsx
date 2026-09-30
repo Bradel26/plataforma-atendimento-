@@ -96,14 +96,14 @@ function CartaoCredenciamento({
             onClick={() => aoMarcarExcecao(c.id)}
             className="text-xs text-slate-500 underline decoration-dotted underline-offset-2 hover:text-slate-700"
           >
-            Excecao
+            Exceção
           </button>
         )}
       </div>
 
       {c.responsavel && (
         <p className="mt-2 truncate border-t border-slate-100 pt-2 text-xs text-slate-500">
-          Responsavel: <span className="text-slate-700">{c.responsavel.nome}</span>
+          Responsável: <span className="text-slate-700">{c.responsavel.nome}</span>
         </p>
       )}
     </li>
@@ -189,13 +189,13 @@ function DetalheCredenciamento({
             <dd className="text-slate-800">{c.contato.email ?? '—'}</dd>
             <dt className="text-slate-500">Cidade/UF</dt>
             <dd className="text-slate-800">{[c.contato.cidade, c.contato.uf].filter(Boolean).join(' / ') || '—'}</dd>
-            <dt className="text-slate-500">Responsavel</dt>
-            <dd className="text-slate-800">{c.responsavel?.nome ?? 'sem responsavel'}</dd>
+            <dt className="text-slate-500">Responsável</dt>
+            <dd className="text-slate-800">{c.responsavel?.nome ?? 'sem responsável'}</dd>
             <dt className="text-slate-500">Entrou em</dt>
             <dd className="text-slate-800">{dataCurta(c.criadoEm)}</dd>
             {c.situacaoExcecao && (
               <>
-                <dt className="text-slate-500">Excecao</dt>
+                <dt className="text-slate-500">Exceção</dt>
                 <dd className="text-slate-800">
                   <Badge tom="erro">{LABEL_SITUACAO_EXCECAO[c.situacaoExcecao]}</Badge> {c.motivoExcecao}
                   <button
@@ -203,7 +203,7 @@ function DetalheCredenciamento({
                     onClick={() => void reativar()}
                     className="ml-2 text-xs text-[var(--brand-primary)] underline"
                   >
-                    Retirar excecao
+                    Retirar exceção
                   </button>
                 </dd>
               </>
@@ -305,7 +305,7 @@ function NovoParceiro({ funilId, aoCriar }: { funilId: string; aoCriar: () => vo
   const pronto = modo === 'existente' ? Boolean(escolhido) : novo.nome.trim().length >= 2;
 
   return (
-    <Card titulo="Novo cadastro" descricao="O parceiro entra na primeira etapa da operacao selecionada">
+    <Card titulo="Novo cadastro" descricao="O parceiro entra na primeira etapa da operação selecionada">
       <div className="mb-3 flex gap-2 text-xs">
         {(['existente', 'novo'] as const).map((m) => (
           <button
@@ -319,7 +319,7 @@ function NovoParceiro({ funilId, aoCriar }: { funilId: string; aoCriar: () => vo
                 : 'border-slate-300 text-slate-600'
             }`}
           >
-            {m === 'existente' ? 'Contato ja cadastrado' : 'Parceiro novo'}
+            {m === 'existente' ? 'Contato já cadastrado' : 'Parceiro novo'}
           </button>
         ))}
       </div>
@@ -403,7 +403,7 @@ export function EsteiraPage() {
       })
       .catch((e) => {
         setOperacoes([]);
-        setErro(e instanceof ApiError ? e.message : 'Falha ao carregar as operacoes');
+        setErro(e instanceof ApiError ? e.message : 'Falha ao carregar as operações');
       });
   }, []);
 
@@ -449,7 +449,7 @@ export function EsteiraPage() {
       setMotivo('');
       await carregar();
     } catch (e) {
-      setErro(e instanceof ApiError ? e.message : 'Falha ao marcar excecao');
+      setErro(e instanceof ApiError ? e.message : 'Falha ao marcar exceção');
     }
   };
 
@@ -460,7 +460,7 @@ export function EsteiraPage() {
       <Card titulo="Esteira de Credenciamento" descricao="Nenhuma esteira configurada ainda">
         {erro && <Alerta>{erro}</Alerta>}
         <p className="text-sm text-slate-500">
-          Peca a um administrador para configurar a esteira de cada operacao antes de usar esta tela.
+          Peca a um administrador para configurar a esteira de cada operação antes de usar esta tela.
         </p>
       </Card>
     );
@@ -471,7 +471,7 @@ export function EsteiraPage() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div role="tablist" aria-label="Operacao" className="flex gap-1 rounded-xl border border-slate-200 bg-white p-1">
+        <div role="tablist" aria-label="Operação" className="flex gap-1 rounded-xl border border-slate-200 bg-white p-1">
           {operacoes.map((o) => (
             <button
               key={o.id}
@@ -502,21 +502,21 @@ export function EsteiraPage() {
               ))}
             </Select>
           </Field>
-          <Field label="Excecoes">
+          <Field label="Exceções">
             <Select
               value={filtro.excecoes}
               onChange={(e) => setFiltro({ ...filtro, excecoes: e.target.value as typeof filtro.excecoes })}
             >
               <option value="incluir">Mostrar junto</option>
               <option value="ocultar">Ocultar</option>
-              <option value="somente">Somente excecoes</option>
+              <option value="somente">Somente exceções</option>
             </Select>
           </Field>
         </div>
       </div>
 
       <p className="text-xs text-slate-500">
-        {total} parceiro(s) · Novo cadastro → Pendencia → Aprovacao → Credenciado → Ativo · Reprovado, Cancelado e
+        {total} parceiro(s) · Novo cadastro → Pendência → Aprovação → Credenciado → Ativo · Reprovado, Cancelado e
         Inativado ficam marcados no card, sem virar coluna.
       </p>
 
@@ -554,9 +554,9 @@ export function EsteiraPage() {
       </div>
 
       {pedidoExcecao && (
-        <Card titulo="Marcar excecao" descricao="O card continua na etapa atual, marcado com a situacao">
+        <Card titulo="Marcar exceção" descricao="O card continua na etapa atual, marcado com a situação">
           <div className="grid gap-3 sm:grid-cols-[auto_1fr_auto] sm:items-end">
-            <Field label="Situacao">
+            <Field label="Situação">
               <Select value={situacao} onChange={(e) => setSituacao(e.target.value as SituacaoExcecao)}>
                 {(['REPROVADO', 'CANCELADO', 'INATIVADO'] as const).map((s) => (
                   <option key={s} value={s}>{LABEL_SITUACAO_EXCECAO[s]}</option>

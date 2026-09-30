@@ -26,7 +26,7 @@ export function requireIntegration(escopo: EscopoIntegracao) {
   return async (req: Request, _res: Response, next: NextFunction) => {
     const header = req.headers.authorization;
     if (!header?.startsWith('Bearer ')) {
-      return next(unauthorized('Informe o header Authorization: Bearer <token de integracao>'));
+      return next(unauthorized('Informe o header Authorization: Bearer <token de integração>'));
     }
 
     try {
@@ -34,12 +34,12 @@ export function requireIntegration(escopo: EscopoIntegracao) {
       // organizacao a chamada e. Perguntar dentro de um contexto exigiria saber
       // a organizacao antes de descobri-la.
       const token = await semOrganizacao(
-        'token de integracao: o hash e que revela a organizacao',
+        'token de integração: o hash e que revela a organização',
         () => resolverToken(header.slice('Bearer '.length).trim(), escopo),
       );
       // Mensagem generica: dizer "token revogado" em vez de "token invalido"
       // confirma para quem tentou que o valor um dia foi bom.
-      if (!token) return next(unauthorized('Token de integracao invalido'));
+      if (!token) return next(unauthorized('Token de integração inválido'));
       req.integracao = token;
       // Daqui para frente a maquina esta presa a organizacao do proprio token:
       // nao existe parametro de rota que a faca falar com outra.

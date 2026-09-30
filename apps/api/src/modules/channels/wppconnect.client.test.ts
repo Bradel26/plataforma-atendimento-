@@ -63,7 +63,7 @@ describe('wppconnect.client', () => {
 
       await expect(estadoWpp(CONFIG)).resolves.toEqual({
         situacao: 'DESCONHECIDO',
-        detalhe: 'WPPConnect nao configurado',
+        detalhe: 'WPPConnect não configurado',
       });
       expect(fetchMock).not.toHaveBeenCalled();
     });
@@ -74,7 +74,7 @@ describe('wppconnect.client', () => {
       await expect(qrWpp(CONFIG)).resolves.toEqual({
         qr: null,
         conectado: false,
-        motivo: 'o WPPConnect ainda nao foi configurado',
+        motivo: 'o WPPConnect ainda não foi configurado',
       });
     });
   });
@@ -338,7 +338,7 @@ describe('wppconnect.client', () => {
       const { estadoWpp } = await import('./wppconnect.client');
       await expect(estadoWpp(CONFIG)).resolves.toEqual({
         situacao: 'DESCONHECIDO',
-        detalhe: 'Nao foi possivel falar com o WPPConnect: timeout',
+        detalhe: 'Não foi possível falar com o WPPConnect: timeout',
       });
     });
   });
@@ -464,7 +464,7 @@ describe('wppconnect.client', () => {
       await expect(qrWpp(LINHA_PESSOAL)).resolves.toEqual({
         qr: null,
         conectado: false,
-        motivo: 'a sessao esta INITIALIZING',
+        motivo: 'a sessão está INITIALIZING',
       });
     });
 

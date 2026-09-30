@@ -20,8 +20,8 @@ export const COR_SEMAFORO: Record<Semaforo, string> = {
 
 export const LABEL_SEMAFORO: Record<Semaforo, string> = {
   NORMAL: 'Normal',
-  ATENCAO: 'Atencao',
-  CRITICO: 'Critico',
+  ATENCAO: 'Atenção',
+  CRITICO: 'Crítico',
 };
 
 function Farol({ s }: { s: Semaforo }) {
@@ -72,7 +72,7 @@ export function GestaoPage() {
       setDados(gestao);
       setErro(null);
     } catch (e) {
-      setErro(e instanceof ApiError ? e.message : 'Falha ao carregar a gestao da operacao');
+      setErro(e instanceof ApiError ? e.message : 'Falha ao carregar a gestão da operação');
     }
   }, [desde, ate, funilId, limiteDias, horas]);
 
@@ -88,15 +88,15 @@ export function GestaoPage() {
 
   return (
     <div className="space-y-5">
-      <Card titulo="Filtros" descricao="O periodo vale para os tempos medios; parados e sem interacao sao a foto de agora">
+      <Card titulo="Filtros" descricao="O período vale para os tempos medios; parados e sem interação são a foto de agora">
         <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
           <Field label="De">
             <Input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} />
           </Field>
-          <Field label="Ate">
+          <Field label="Até">
             <Input type="date" value={ate} onChange={(e) => setAte(e.target.value)} />
           </Field>
-          <Field label="Operacao">
+          <Field label="Operação">
             <Select value={funilId} onChange={(e) => setFunilId(e.target.value)}>
               <option value="">Todas</option>
               {operacoes.map((o) => (
@@ -104,7 +104,7 @@ export function GestaoPage() {
               ))}
             </Select>
           </Field>
-          <Field label="Parado a partir de" hint="dias sem avancar">
+          <Field label="Parado a partir de" hint="dias sem avançar">
             <Input
               type="number"
               min={1}
@@ -113,7 +113,7 @@ export function GestaoPage() {
               onChange={(e) => setLimiteDias(Math.max(1, Number(e.target.value) || 1))}
             />
           </Field>
-          <Field label="Sem interacao ha" hint="horas">
+          <Field label="Sem interação há" hint="horas">
             <Input
               type="number"
               min={1}
@@ -129,14 +129,14 @@ export function GestaoPage() {
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <StatTile
-          rotulo="Tempo medio de credenciamento"
+          rotulo="Tempo médio de credenciamento"
           valor={dias(dados?.tempoMedioCredenciamentoDias ?? null)}
-          detalhe={`do cadastro ao credenciado · ${dados?.credenciadosNoPeriodo ?? 0} no periodo`}
+          detalhe={`do cadastro ao credenciado · ${dados?.credenciadosNoPeriodo ?? 0} no período`}
         />
         <StatTile
           rotulo="Parceiros parados"
           valor={dados?.parceirosParados ?? '—'}
-          detalhe={`${limiteDias}+ dias sem avancar na esteira`}
+          detalhe={`${limiteDias}+ dias sem avançar na esteira`}
           estado={dados && dados.parceirosParados > 0 ? ESTADO.grave : undefined}
         />
         <StatTile
@@ -145,7 +145,7 @@ export function GestaoPage() {
           detalhe={
             dados?.maiorTempoParado
               ? `${dados.maiorTempoParado.parceiro} · ${dados.maiorTempoParado.etapa}`
-              : 'ninguem parado'
+              : 'ninguém parado'
           }
         />
         <StatTile
@@ -156,13 +156,13 @@ export function GestaoPage() {
           })()}
           detalhe={
             [...(dados?.tempoMedioPorEtapa ?? [])].sort((a, b) => (b.mediaDias ?? 0) - (a.mediaDias ?? 0))[0]?.etapa ??
-            'sem passagens no periodo'
+            'sem passagens no período'
           }
         />
         <StatTile
-          rotulo="Atendimentos sem interacao"
+          rotulo="Atendimentos sem interação"
           valor={dados?.atendimentosSemInteracao.total ?? '—'}
-          detalhe={`abertos e sem mensagem ha ${horas}h+`}
+          detalhe={`abertos e sem mensagem há ${horas}h+`}
           estado={dados && dados.atendimentosSemInteracao.total > 0 ? ESTADO.atencao : undefined}
         />
       </div>
@@ -173,7 +173,7 @@ export function GestaoPage() {
             <Farol s="NORMAL" /> dentro do tempo esperado ({dados.semaforoContagem.NORMAL})
           </span>
           <span>
-            <Farol s="ATENCAO" /> proximo do limite ({dados.semaforoContagem.ATENCAO})
+            <Farol s="ATENCAO" /> próximo do limite ({dados.semaforoContagem.ATENCAO})
           </span>
           <span>
             <Farol s="CRITICO" /> acima do tempo esperado ({dados.semaforoContagem.CRITICO})
@@ -212,14 +212,14 @@ export function GestaoPage() {
           )}
         </Card>
 
-        <Card titulo="Leadtime" descricao="Media das saidas de cada etapa no periodo, em dias (passagens)">
-          <BarList itens={tempoEtapa} unidade="dias" vazio="Nenhum parceiro mudou de etapa no periodo" />
+        <Card titulo="Leadtime" descricao="Média das saídas de cada etapa no período, em dias (passagens)">
+          <BarList itens={tempoEtapa} unidade="dias" vazio="Nenhum parceiro mudou de etapa no período" />
         </Card>
       </div>
 
       <Card
-        titulo="Parceiros sem movimentacao"
-        descricao={`Os ${dados?.semMovimentacao.length ?? 0} parados ha mais tempo, fora da etapa Ativo`}
+        titulo="Parceiros sem movimentação"
+        descricao={`Os ${dados?.semMovimentacao.length ?? 0} parados há mais tempo, fora da etapa Ativo`}
       >
         {!dados || dados.semMovimentacao.length === 0 ? (
           <p className="text-sm text-slate-500">Nenhum parceiro na esteira.</p>
@@ -229,12 +229,12 @@ export function GestaoPage() {
               <thead className="text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="pb-2 pr-3 font-medium">Parceiro</th>
-                  <th className="pb-2 pr-3 font-medium">Responsavel</th>
-                  <th className="pb-2 pr-3 font-medium">Operacao</th>
+                  <th className="pb-2 pr-3 font-medium">Responsável</th>
+                  <th className="pb-2 pr-3 font-medium">Operação</th>
                   <th className="pb-2 pr-3 font-medium">Etapa</th>
-                  <th className="pb-2 pr-3 font-medium">Ultima movimentacao</th>
+                  <th className="pb-2 pr-3 font-medium">Última movimentação</th>
                   <th className="pb-2 pr-3 font-medium">Tempo parado</th>
-                  <th className="pb-2 font-medium">Situacao</th>
+                  <th className="pb-2 font-medium">Situação</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -264,8 +264,8 @@ export function GestaoPage() {
       </Card>
 
       <Card
-        titulo="Atendimentos sem interacao"
-        descricao={`Conversas abertas sem nenhuma mensagem ha ${horas} hora(s) ou mais`}
+        titulo="Atendimentos sem interação"
+        descricao={`Conversas abertas sem nenhuma mensagem há ${horas} hora(s) ou mais`}
       >
         {!dados || dados.atendimentosSemInteracao.lista.length === 0 ? (
           <p className="text-sm text-slate-500">Nenhum atendimento parado.</p>

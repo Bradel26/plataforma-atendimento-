@@ -94,13 +94,13 @@ export async function executarExpurgo(opcoes: { simulacao: boolean; autorId?: st
   await prisma.ticketAttachment.deleteMany({ where: { ticketId: { in: protocoloIds } } });
   await prisma.ticket.updateMany({
     where: { id: { in: protocoloIds } },
-    data: { descricao: '[expurgado pela politica de retencao]' },
+    data: { descricao: '[expurgado pela política de retenção]' },
   });
 
   await prisma.presenceLog.deleteMany({ where: { iniciadoEm: { lt: cortePresenca } } });
 
   for (const { id } of candidatos) {
-    await anonimizarTitular(id, { autorId: opcoes.autorId, motivo: 'politica de retencao' });
+    await anonimizarTitular(id, { autorId: opcoes.autorId, motivo: 'política de retenção' });
   }
 
   resumo.arquivosOrfaos = await varrerOrfaos(false);

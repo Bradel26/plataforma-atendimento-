@@ -28,7 +28,7 @@ const periodoSchema = z.object({
   usuarioId: z.string().uuid().optional(),
 });
 
-const DIAS = ['Domingo', 'Segunda', 'Terca', 'Quarta', 'Quinta', 'Sexta', 'Sabado'];
+const DIAS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 
 /** Minutos do dia, para comparar inicio e fim como texto "HH:MM". */
 const minutos = (hora: string) => {
@@ -74,10 +74,10 @@ escalasRoutes.put(
   validateBody(escalaSchema),
   asyncHandler(async (req, res) => {
     const { agenteId, diaSemana, inicio, fim, ativo } = req.body as z.infer<typeof escalaSchema>;
-    if (minutos(fim) <= minutos(inicio)) throw badRequest('O fim do turno deve ser depois do inicio');
+    if (minutos(fim) <= minutos(inicio)) throw badRequest('O fim do turno deve ser depois do início');
 
     const agente = await prisma.user.findUnique({ where: { id: agenteId } });
-    if (!agente) throw notFound('Agente nao encontrado');
+    if (!agente) throw notFound('Agente não encontrado');
 
     const escala = await prisma.workShift.upsert({
       where: { agenteId_diaSemana: { agenteId, diaSemana } },
@@ -96,7 +96,7 @@ escalasRoutes.delete(
   asyncHandler(async (req, res) => {
     const id = param(req, 'id');
     const existe = await prisma.workShift.findUnique({ where: { id } });
-    if (!existe) throw notFound('Escala nao encontrada');
+    if (!existe) throw notFound('Escala não encontrada');
     await prisma.workShift.delete({ where: { id } });
     res.status(204).end();
   }),

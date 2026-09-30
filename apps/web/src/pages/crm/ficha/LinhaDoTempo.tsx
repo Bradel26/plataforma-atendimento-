@@ -148,11 +148,11 @@ export function LinhaDoTempo({ base, raizId, recarregar = 0 }: Props) {
       <div className="mt-4">
         {eventos.length === 0 && !carregando ? (
           <EmptyState
-            titulo={filtrando ? 'Nada neste filtro' : 'Sem historico'}
+            titulo={filtrando ? 'Nada neste filtro' : 'Sem histórico'}
             descricao={
               filtrando
                 ? 'Nenhum evento dos tipos selecionados. Tire um filtro para ver o resto.'
-                : 'Assim que houver conversa, ligacao, proposta ou atividade, aparece aqui.'
+                : 'Assim que houver conversa, ligação, proposta ou atividade, aparece aqui.'
             }
           />
         ) : (
@@ -216,7 +216,7 @@ export function LinhaDoTempo({ base, raizId, recarregar = 0 }: Props) {
             </Button>
           </div>
         )}
-        {carregando && eventos.length === 0 && <p className="text-sm text-slate-500">Carregando historico...</p>}
+        {carregando && eventos.length === 0 && <p className="text-sm text-slate-500">Carregando histórico...</p>}
       </div>
     </div>
   );

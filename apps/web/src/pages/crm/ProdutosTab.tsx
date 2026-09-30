@@ -22,7 +22,7 @@ export function ProdutosTab() {
       setCatalogos(c.catalogos);
       setErro(null);
     } catch (e) {
-      setErro(e instanceof ApiError ? e.message : 'Falha ao carregar o catalogo');
+      setErro(e instanceof ApiError ? e.message : 'Falha ao carregar o catálogo');
     }
   }, [busca]);
 
@@ -52,7 +52,7 @@ export function ProdutosTab() {
       setPreco({ ...preco, produtoId: '', preco: '' });
       await carregar();
     } catch (err) {
-      setErro(err instanceof ApiError ? err.message : 'Falha ao definir o preco');
+      setErro(err instanceof ApiError ? err.message : 'Falha ao definir o preço');
     }
   };
 
@@ -64,7 +64,7 @@ export function ProdutosTab() {
         <Input placeholder="Buscar por nome ou SKU" value={busca} onChange={(e) => setBusca(e.target.value)} />
         <div className="mt-3">
           {produtos.length === 0 ? (
-            <EmptyState titulo="Nenhum produto" descricao="Cadastre um produto no formulario abaixo." />
+            <EmptyState titulo="Nenhum produto" descricao="Cadastre um produto no formulário abaixo." />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
@@ -72,8 +72,8 @@ export function ProdutosTab() {
                   <tr>
                     <th className="pb-2 font-medium">SKU</th>
                     <th className="pb-2 font-medium">Produto</th>
-                    <th className="pb-2 font-medium">Precos</th>
-                    <th className="pb-2 font-medium">Situacao</th>
+                    <th className="pb-2 font-medium">Preços</th>
+                    <th className="pb-2 font-medium">Situação</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -83,7 +83,7 @@ export function ProdutosTab() {
                       <td className="py-2.5 text-slate-800">{p.nome}</td>
                       <td className="py-2.5">
                         {p.precos.length === 0 ? (
-                          <span className="text-xs text-amber-600">sem preco</span>
+                          <span className="text-xs text-amber-600">sem preço</span>
                         ) : (
                           <span className="flex flex-wrap gap-1">
                             {p.precos.map((x) => (
@@ -112,16 +112,16 @@ export function ProdutosTab() {
             <Field label="Nome">
               <Input required value={novo.nome} onChange={(e) => setNovo({ ...novo, nome: e.target.value })} />
             </Field>
-            <Field label="SKU" hint="Convertido para maiusculas">
+            <Field label="SKU" hint="Convertido para maiúsculas">
               <Input required value={novo.sku} onChange={(e) => setNovo({ ...novo, sku: e.target.value })} />
             </Field>
             <Button type="submit" className="sm:col-span-2">Cadastrar produto</Button>
           </form>
         </Card>
 
-        <Card titulo="Preco no catalogo" descricao={`${catalogos.length} catalogo(s)`}>
+        <Card titulo="Preço no catálogo" descricao={`${catalogos.length} catalogo(s)`}>
           <form onSubmit={definirPreco} className="grid gap-3 sm:grid-cols-2 sm:items-end">
-            <Field label="Catalogo">
+            <Field label="Catálogo">
               <Select
                 required
                 value={preco.catalogoId}
@@ -145,7 +145,7 @@ export function ProdutosTab() {
                 ))}
               </Select>
             </Field>
-            <Field label="Preco">
+            <Field label="Preço">
               <Input
                 required
                 type="number"
@@ -155,7 +155,7 @@ export function ProdutosTab() {
                 onChange={(e) => setPreco({ ...preco, preco: e.target.value })}
               />
             </Field>
-            <Button type="submit">Definir preco</Button>
+            <Button type="submit">Definir preço</Button>
           </form>
         </Card>
       </div>

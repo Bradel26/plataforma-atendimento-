@@ -169,7 +169,7 @@ export function PainelChat({
       const { conversa: nova } = await acao();
       onMudou(nova);
     } catch (err) {
-      setErro(err instanceof ApiError ? err.message : 'Falha na operacao');
+      setErro(err instanceof ApiError ? err.message : 'Falha na operação');
     } finally {
       setOcupado(false);
     }
@@ -215,7 +215,7 @@ export function PainelChat({
       setCursorHistorico(resp.proximoCursor);
       setFimDoHistorico(resp.proximoCursor === null);
     } catch (err) {
-      setErro(err instanceof ApiError ? err.message : 'Falha ao carregar o historico');
+      setErro(err instanceof ApiError ? err.message : 'Falha ao carregar o histórico');
     } finally {
       setOcupado(false);
     }
@@ -528,7 +528,7 @@ export function PainelChat({
                     }
                   }}
                   rows={2}
-                  placeholder="Escreva uma nota interna... so a equipe ve (Enter envia, Shift+Enter quebra linha)"
+                  placeholder="Escreva uma nota interna... só a equipe vê (Enter envia, Shift+Enter quebra linha)"
                   className="max-h-32 min-h-[44px] flex-1 resize-y rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm outline-none focus:border-amber-500"
                 />
                 <label

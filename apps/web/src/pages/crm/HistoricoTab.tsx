@@ -29,7 +29,7 @@ export function HistoricoTab() {
 
   return (
     <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
-      <Card titulo="Parceiro" descricao="Escolha de quem ver o historico">
+      <Card titulo="Parceiro" descricao="Escolha de quem ver o histórico">
         <Field label="Buscar">
           <Input placeholder="Nome, e-mail ou telefone" value={busca} onChange={(e) => setBusca(e.target.value)} />
         </Field>
@@ -54,8 +54,8 @@ export function HistoricoTab() {
 
       {escolhido ? (
         <Card
-          titulo={`Historico de ${escolhido.nome}`}
-          descricao="WhatsApp, ligacoes, atividades, pesquisas, protocolos e etapas da esteira"
+          titulo={`Histórico de ${escolhido.nome}`}
+          descricao="WhatsApp, ligações, atividades, pesquisas, protocolos e etapas da esteira"
           acao={
             <Link to={`/contatos/${escolhido.id}`} className="text-sm text-[var(--brand-primary)] hover:underline">
               Abrir perfil
@@ -65,7 +65,7 @@ export function HistoricoTab() {
           <LinhaDoTempo base={`/ficha/contato/${escolhido.id}`} raizId={escolhido.id} />
         </Card>
       ) : (
-        <Card titulo="Historico do parceiro">
+        <Card titulo="Histórico do parceiro">
           <p className="text-sm text-slate-500">Selecione um parceiro para ver a linha do tempo completa.</p>
         </Card>
       )}

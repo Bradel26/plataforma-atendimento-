@@ -57,15 +57,15 @@ export function PainelVendedorTab() {
   if (vendedores.length === 0) {
     return (
       <EmptyState
-        titulo="Nenhum vendedor visivel"
-        descricao="Nao ha, dentro do que voce pode ver, nenhum vendedor cadastrado."
+        titulo="Nenhum vendedor visível"
+        descricao="Não há, dentro do que você pode ver, nenhum vendedor cadastrado."
       />
     );
   }
 
   return (
     <div className="space-y-4">
-      <Card titulo="Painel do vendedor" descricao="Indicadores combinados de um vendedor, por mes">
+      <Card titulo="Painel do vendedor" descricao="Indicadores combinados de um vendedor, por mês">
         <div className="flex flex-wrap gap-3">
           <Field label="Vendedor">
             <Select value={vendedorId} onChange={(e) => setVendedorId(e.target.value)} className="w-64">
@@ -74,7 +74,7 @@ export function PainelVendedorTab() {
               ))}
             </Select>
           </Field>
-          <Field label="Mes">
+          <Field label="Mês">
             <Input type="month" value={mes} onChange={(e) => setMes(e.target.value)} className="max-w-[180px]" />
           </Field>
         </div>
@@ -87,24 +87,24 @@ export function PainelVendedorTab() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <StatTile rotulo="Clientes atendidos" valor={resumo.clientesAtendidos} />
             <StatTile rotulo="Conversas" valor={resumo.conversas.total} detalhe={`${resumo.conversas.abertas} aberta(s)`} />
-            <StatTile rotulo="TME" valor={duracao(resumo.tempos.tmeSegundos)} detalhe="tempo medio de espera" />
-            <StatTile rotulo="TMA" valor={duracao(resumo.tempos.tmaSegundos)} detalhe="tempo medio de atendimento" />
+            <StatTile rotulo="TME" valor={duracao(resumo.tempos.tmeSegundos)} detalhe="tempo médio de espera" />
+            <StatTile rotulo="TMA" valor={duracao(resumo.tempos.tmaSegundos)} detalhe="tempo médio de atendimento" />
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <StatTile rotulo="Jornadas abertas" valor={resumo.oportunidades.abertas} />
-            <StatTile rotulo="Propostas" valor={resumo.propostas} detalhe="geradas no periodo" />
+            <StatTile rotulo="Propostas" valor={resumo.propostas} detalhe="geradas no período" />
             <StatTile rotulo="Vendas" valor={resumo.vendas.quantidade} detalhe={moeda(resumo.vendas.valor)} />
             <StatTile
-              rotulo="Conversao"
+              rotulo="Conversão"
               valor={resumo.conversao === null ? '—' : `${Math.round(resumo.conversao * 100)}%`}
               detalhe="ganhas sobre fechadas"
             />
           </div>
 
           <Card
-            titulo="Meta do mes"
-            descricao={resumo.meta.definida ? undefined : 'Ninguem definiu uma meta para esta pessoa neste mes'}
+            titulo="Meta do mês"
+            descricao={resumo.meta.definida ? undefined : 'Ninguém definiu uma meta para esta pessoa neste mês'}
           >
             <dl className="grid gap-3 sm:grid-cols-2 text-sm">
               <div>
@@ -118,16 +118,16 @@ export function PainelVendedorTab() {
             </dl>
           </Card>
 
-          <Card titulo="WhatsApp" descricao="Numeros cadastrados como linha pessoal desta pessoa">
+          <Card titulo="WhatsApp" descricao="Números cadastrados como linha pessoal desta pessoa">
             {resumo.whatsapp.length === 0 ? (
-              <p className="text-sm text-slate-500">Nenhum numero pessoal cadastrado.</p>
+              <p className="text-sm text-slate-500">Nenhum número pessoal cadastrado.</p>
             ) : (
               <ul className="space-y-2 text-sm">
                 {resumo.whatsapp.map((c) => (
                   <li key={c.id} className="flex items-center justify-between gap-3">
-                    <span className="text-slate-700">{c.nome ?? 'Sem rotulo'}</span>
+                    <span className="text-slate-700">{c.nome ?? 'Sem rótulo'}</span>
                     <span className="flex items-center gap-2">
-                      {c.modo && <span className="text-xs text-slate-500">{c.modo === 'OFICIAL' ? 'Oficial' : 'Nao oficial'}</span>}
+                      {c.modo && <span className="text-xs text-slate-500">{c.modo === 'OFICIAL' ? 'Oficial' : 'Não oficial'}</span>}
                       <Badge tom={c.ativo ? 'sucesso' : 'neutro'}>{c.ativo ? 'Ativo' : 'Inativo'}</Badge>
                     </span>
                   </li>

@@ -64,8 +64,8 @@ export function FunilDeCicloDeVida({
       <Card titulo="Ciclo de vida" descricao="Onde cada contato da carteira esta hoje">
         <p className="text-sm text-slate-600">
           Nenhum contato na sua carteira ainda. O degrau de cada um e calculado do que acontece com
-          ele &mdash; uma conversa, uma negociacao, uma venda &mdash; e nao de um campo preenchido a
-          mao.
+          ele &mdash; uma conversa, uma negociação, uma venda &mdash; é não de um campo preenchido a
+          mão.
         </p>
       </Card>
     );
@@ -76,7 +76,7 @@ export function FunilDeCicloDeVida({
   return (
     <Card
       titulo="Ciclo de vida"
-      descricao={`${funil.total} contato(s) na carteira · foto de hoje, nao conversao do periodo`}
+      descricao={`${funil.total} contato(s) na carteira · foto de hoje, não conversão do período`}
     >
       <ul className="space-y-1.5">
         {funil.degraus.map((d) => {
@@ -127,7 +127,7 @@ export function FunilDeCicloDeVida({
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <Badge tom="neutro">derivado</Badge>
         <p className="text-xs text-slate-500">
-          Nenhum degrau e digitado: o ciclo sai do que a plataforma ja sabe. Nao existe degrau
+          Nenhum degrau e digitado: o ciclo sai do que a plataforma já sabe. Não existe degrau
           &ldquo;inativo&rdquo; porque ele exigiria um limite de dias que seria escolhido no escuro.
         </p>
       </div>

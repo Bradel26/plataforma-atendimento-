@@ -22,8 +22,8 @@ type IniciarInput = {
 async function resolverFila(filaId?: string) {
   if (filaId) {
     const fila = await prisma.queue.findUnique({ where: { id: filaId } });
-    if (!fila) throw notFound('Fila nao encontrada');
-    if (!fila.ativa) throw badRequest('Fila indisponivel');
+    if (!fila) throw notFound('Fila não encontrada');
+    if (!fila.ativa) throw badRequest('Fila indisponível');
     return fila;
   }
 
@@ -103,14 +103,14 @@ export async function historico(conversaId: string) {
     where: { id: conversaId },
     include: inclusaoDetalhe,
   });
-  if (!conversa) throw notFound('Conversa nao encontrada');
+  if (!conversa) throw notFound('Conversa não encontrada');
   return semNotasInternas(toConversaDetalhe(conversa));
 }
 
 /** Mensagem enviada pelo visitante: incrementa nao lidas para o agente. */
 export async function mensagemDoCliente(conversaId: string, conteudo: string) {
   const conversa = await prisma.conversation.findUnique({ where: { id: conversaId } });
-  if (!conversa) throw notFound('Conversa nao encontrada');
+  if (!conversa) throw notFound('Conversa não encontrada');
   if (conversa.status === 'FINALIZADO') throw badRequest('Este atendimento foi finalizado');
 
   const mensagem = await prisma.message.create({

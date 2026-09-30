@@ -69,7 +69,7 @@ export function WebchatPage() {
       ...(corpo === undefined ? {} : { body: JSON.stringify(corpo) }),
     });
     const dados = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(dados?.error?.message ?? 'Falha na requisicao');
+    if (!res.ok) throw new Error(dados?.error?.message ?? 'Falha na requisição');
     return dados as T;
   };
 
@@ -194,7 +194,7 @@ export function WebchatPage() {
               />
               <span>
                 Autorizo o uso dos meus dados para este atendimento. A conversa e os arquivos ficam
-                guardados pelo prazo da politica de retencao e posso pedir copia ou eliminacao a
+                guardados pelo prazo da política de retenção e posso pedir copia ou eliminação a
                 qualquer momento.
               </span>
             </label>

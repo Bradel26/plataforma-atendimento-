@@ -82,7 +82,7 @@ function serialize(t: TicketDb) {
  */
 async function carregar(id: string) {
   const ticket = await prisma.ticket.findUnique({ where: { id }, include: inclusao });
-  if (!ticket) throw notFound('Chamado nao encontrado');
+  if (!ticket) throw notFound('Chamado não encontrado');
   return ticket;
 }
 
@@ -96,7 +96,7 @@ async function carregarVisivel(id: string) {
     where: apenasVisivel(id, await filtroDe(politicaProtocolos)),
     include: inclusao,
   });
-  if (!ticket) throw notFound('Chamado nao encontrado');
+  if (!ticket) throw notFound('Chamado não encontrado');
   return ticket;
 }
 
@@ -170,7 +170,7 @@ async function reservarNumero(): Promise<number> {
      WHERE id = ${organizacaoAtual()}
     RETURNING proximo_protocolo - 1 AS numero
   `;
-  if (!linha) throw new Error('organizacao nao encontrada ao reservar numero de protocolo');
+  if (!linha) throw new Error('organização não encontrada ao reservar número de protocolo');
   return Number(linha.numero);
 }
 
@@ -203,7 +203,7 @@ export async function criarTicket(input: CriarTicketInput, autorId: string) {
     const conversa = await prisma.conversation.findFirst({
       where: apenasVisivel(input.conversaId, await filtroDe(politicaConversas)),
     });
-    if (!conversa) throw notFound('Conversa de origem nao encontrada');
+    if (!conversa) throw notFound('Conversa de origem não encontrada');
     // Herda contato e fila da conversa quando nao informados.
     input.contatoId ??= conversa.contatoId;
     input.filaId ??= conversa.filaId;
@@ -260,14 +260,14 @@ export async function anexar(
 
 export async function agendar(id: string, input: AgendamentoInput) {
   await carregarVisivel(id);
-  if (input.fim && input.fim <= input.inicio) throw badRequest('O fim deve ser depois do inicio');
+  if (input.fim && input.fim <= input.inicio) throw badRequest('O fim deve ser depois do início');
   await prisma.ticketSchedule.create({ data: { ticketId: id, ...input } });
   return publicar(id);
 }
 
 export async function concluirAgendamento(id: string, agendamentoId: string) {
   const agendamento = await prisma.ticketSchedule.findUnique({ where: { id: agendamentoId } });
-  if (!agendamento || agendamento.ticketId !== id) throw notFound('Agendamento nao encontrado');
+  if (!agendamento || agendamento.ticketId !== id) throw notFound('Agendamento não encontrado');
 
   await prisma.ticketSchedule.update({ where: { id: agendamentoId }, data: { concluido: true } });
   return publicar(id);

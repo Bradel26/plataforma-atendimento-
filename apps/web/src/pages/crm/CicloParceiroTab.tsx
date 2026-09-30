@@ -70,12 +70,12 @@ export function CicloParceiroTab() {
 
       <Card
         titulo="Ciclo de vida do parceiro"
-        descricao="Como esta a relacao com cada parceiro depois de credenciado. Nao mede vendas: ainda nao ha producao por parceiro no CRM."
+        descricao="Como esta a relação com cada parceiro depois de credenciado. Não mede vendas: ainda não há produção por parceiro no CRM."
       >
         {resumo.total === 0 ? (
           <EmptyState
             titulo="Nenhum parceiro no ciclo ainda"
-            descricao="O parceiro entra aqui, como Novo parceiro, quando o credenciamento chega ao estagio Ativo da esteira."
+            descricao="O parceiro entra aqui, como Novo parceiro, quando o credenciamento chega ao estágio Ativo da esteira."
             acao={
               <Link to="/esteira" className="text-sm text-[var(--brand-primary)] hover:underline">
                 Abrir esteira
@@ -109,10 +109,10 @@ export function CicloParceiroTab() {
         <div className="grid gap-5 xl:grid-cols-[1fr_440px]">
           <div className="space-y-5">
             <Card
-              titulo="Parceiros que precisam de acao"
+              titulo="Parceiros que precisam de ação"
               descricao={
                 atencao.length === 0
-                  ? 'Nenhum parceiro pede acao agora.'
+                  ? 'Nenhum parceiro pede ação agora.'
                   : `${atencao.length} parceiro(s) — os mais urgentes primeiro`
               }
             >
@@ -168,7 +168,7 @@ export function CicloParceiroTab() {
               <Card titulo="Ciclo de vida">
                 <EmptyState
                   titulo="Selecione um parceiro"
-                  descricao="Veja a implantacao, o historico e marque em risco, inativo ou reativado."
+                  descricao="Veja a implantação, o histórico e marque em risco, inativo ou reativado."
                 />
               </Card>
             )}
@@ -202,7 +202,7 @@ function LinhaDeParceiro({
         <span className="min-w-0">
           <span className="block truncate text-sm font-medium text-slate-800">{item.contato.nome}</span>
           <span className="block truncate text-xs text-slate-500">
-            {item.funil.nome} · parceiro desde {dataBr(item.credenciadoEm)} · {item.responsavel?.nome ?? 'sem responsavel'}
+            {item.funil.nome} · parceiro desde {dataBr(item.credenciadoEm)} · {item.responsavel?.nome ?? 'sem responsável'}
           </span>
           {alerta && <span className="block text-xs text-amber-700">{alerta}</span>}
         </span>

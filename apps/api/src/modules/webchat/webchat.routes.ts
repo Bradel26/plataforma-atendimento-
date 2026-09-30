@@ -13,7 +13,7 @@ export const webchatRoutes = Router();
 
 const iniciarSchema = z.object({
   nome: z.string().trim().min(2, 'Informe seu nome').max(120),
-  email: z.string().email('Informe um email valido').optional(),
+  email: z.string().email('Informe um email válido').optional(),
   telefone: z.string().trim().min(8).max(20).optional(),
   assunto: z.string().trim().max(140).optional(),
   filaId: z.string().uuid().optional(),
@@ -22,7 +22,7 @@ const iniciarSchema = z.object({
    * telefone e o problema dele antes de existir qualquer relacao — sem aviso na
    * entrada, a coleta comeca sem o titular saber para que.
    */
-  aceiteLgpd: z.literal(true, { message: 'E necessario aceitar o aviso de privacidade' }),
+  aceiteLgpd: z.literal(true, { message: 'E necessário aceitar o aviso de privacidade' }),
   /** Slug da organizacao dona do widget. Ausente = organizacao inicial. */
   organizacao: z.string().trim().min(1).max(60).optional(),
 });
@@ -34,7 +34,7 @@ const mensagemSchema = z.object({
 /** Le o token de sessao do visitante (header Authorization: Bearer <sessaoToken>). */
 function sessao(req: { headers: { authorization?: string } }) {
   const header = req.headers.authorization;
-  if (!header?.startsWith('Bearer ')) throw unauthorized('Sessao do webchat ausente');
+  if (!header?.startsWith('Bearer ')) throw unauthorized('Sessão do webchat ausente');
   return verifyWebchatToken(header.slice('Bearer '.length).trim());
 }
 

@@ -65,7 +65,7 @@ export function CredenciamentosDaEmpresa({
                     {c.contato.nome}
                   </Link>
                   <p className="text-xs text-slate-500">
-                    {c.funil.nome} · {c.estagio.nome} ha {c.diasNoEstagio} dia(s)
+                    {c.funil.nome} · {c.estagio.nome} há {c.diasNoEstagio} dia(s)
                   </p>
                 </div>
                 {c.situacaoExcecao && <Badge tom="erro">{LABEL_SITUACAO_EXCECAO[c.situacaoExcecao]}</Badge>}

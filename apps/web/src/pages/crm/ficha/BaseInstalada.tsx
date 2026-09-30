@@ -23,9 +23,9 @@ const TIPOS_GARANTIA: TipoGarantia[] = ['LEGAL', 'CONTRATUAL', 'COMPRESSOR', 'OU
 const LABEL_STATUS_GARANTIA: Record<StatusGarantia, string> = {
   VIGENTE: 'Vigente',
   VENCIDA: 'Vencida',
-  SEM_DATA_INICIO: 'Sem data de inicio',
-  REQUISITO_NAO_INFORMADO: 'Instalador nao informado',
-  NAO_APLICAVEL: 'Nao aplicavel',
+  SEM_DATA_INICIO: 'Sem data de início',
+  REQUISITO_NAO_INFORMADO: 'Instalador não informado',
+  NAO_APLICAVEL: 'Não aplicável',
 };
 
 const TOM_STATUS_GARANTIA: Record<StatusGarantia, 'neutro' | 'sucesso' | 'alerta' | 'marca'> = {
@@ -151,7 +151,7 @@ export function BaseInstalada({ contaId, produtos, aoMudar }: Props) {
                   </p>
                   <p className="text-xs text-slate-500">
                     Instalador credenciado:{' '}
-                    {p.instaladorCredenciado === null ? 'nao informado' : p.instaladorCredenciado ? 'sim' : 'nao'}
+                    {p.instaladorCredenciado === null ? 'não informado' : p.instaladorCredenciado ? 'sim' : 'não'}
                     {' · '}
                     NF: {p.notaFiscalNumero ?? '—'}
                   </p>
@@ -193,10 +193,10 @@ export function BaseInstalada({ contaId, produtos, aoMudar }: Props) {
                 placeholder="Ex.: Split Hi-Wall 12000 BTU Philco"
               />
             </Field>
-            <Field label="Numero de serie">
+            <Field label="Número de série">
               <Input value={form.numeroSerie} onChange={(e) => setForm({ ...form, numeroSerie: e.target.value })} />
             </Field>
-            <Field label="Data de instalacao" hint="Vazio: garantia fica sem data ate ser preenchida.">
+            <Field label="Data de instalação" hint="Vazio: garantia fica sem data até ser preenchida.">
               <Input
                 type="date"
                 value={form.dataInstalacao}
@@ -209,14 +209,14 @@ export function BaseInstalada({ contaId, produtos, aoMudar }: Props) {
                 onChange={(e) => setForm({ ...form, instaladorNome: e.target.value })}
               />
             </Field>
-            <Field label="Instalador credenciado" hint="A garantia contratual so vale com instalador credenciado.">
+            <Field label="Instalador credenciado" hint="A garantia contratual só vale com instalador credenciado.">
               <Select
                 value={form.instaladorCredenciado}
                 onChange={(e) => setForm({ ...form, instaladorCredenciado: e.target.value as NovoProduto['instaladorCredenciado'] })}
               >
-                <option value="">Nao informado</option>
+                <option value="">Não informado</option>
                 <option value="sim">Sim</option>
-                <option value="nao">Nao</option>
+                <option value="nao">Não</option>
               </Select>
             </Field>
             <Field label="Nota fiscal">

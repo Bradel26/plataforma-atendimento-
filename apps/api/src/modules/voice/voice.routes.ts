@@ -86,7 +86,7 @@ vozRoutes.get(
 vozRoutes.post(
   '/chamadas',
   requireAuth,
-  validateBody(z.object({ destino: z.string().trim().min(8, 'Informe o numero com DDD').max(20) })),
+  validateBody(z.object({ destino: z.string().trim().min(8, 'Informe o número com DDD').max(20) })),
   asyncHandler(async (req, res) => {
     res.status(201).json({ chamada: await originarChamada(req.user!.sub, req.body.destino) });
   }),
@@ -195,7 +195,7 @@ async function organizacaoDoEventoDeVoz(corpo: unknown): Promise<string | null> 
     .map((v) => (typeof v === 'string' ? v.trim() : ''))
     .find(Boolean);
 
-  return semOrganizacao('webhook de voz: o id da chamada e que revela a organizacao', async () => {
+  return semOrganizacao('webhook de voz: o id da chamada e que revela a organização', async () => {
     if (idExterno) {
       const chamada = await prismaSemIsolamento.call.findFirst({
         where: { idExterno },
@@ -216,7 +216,7 @@ async function organizacaoDoEventoDeVoz(corpo: unknown): Promise<string | null> 
     // diagnosticavel em vez de 500.
     if (ativas.length === 0) return ORGANIZACAO_INICIAL;
 
-    console.warn('[voz] evento sem chamada conhecida e mais de uma organizacao com voz ativa — descartado');
+    console.warn('[voz] evento sem chamada conhecida e mais de uma organização com voz ativa — descartado');
     return null;
   });
 }
@@ -233,7 +233,7 @@ vozWebhookRoutes.use(
     if (!organizacaoId) {
       // 200 de proposito: o provedor reentrega o que nao recebe 200, e reentrega
       // infinita de um evento que nao da para rotear nao melhora nada.
-      _res.status(200).json({ ignorado: true, motivo: 'evento sem organizacao identificavel' });
+      _res.status(200).json({ ignorado: true, motivo: 'evento sem organização identificável' });
       return;
     }
     comOrganizacao(organizacaoId, () => next());
@@ -266,7 +266,7 @@ vozWebhookRoutes.post(
   asyncHandler(async (req, res) => {
     const { valida, parametros } = await autorizado(req, '/eventos');
     if (!valida) {
-      res.status(401).json({ error: { code: 'ASSINATURA_INVALIDA', message: 'Assinatura do provedor invalida' } });
+      res.status(401).json({ error: { code: 'ASSINATURA_INVALIDA', message: 'Assinatura do provedor inválida' } });
       return;
     }
 
@@ -295,12 +295,12 @@ vozWebhookRoutes.post(
   asyncHandler(async (req, res) => {
     const { valida } = await autorizado(req, '/instrucoes');
     if (!valida) {
-      res.status(401).type('text/plain').send('assinatura invalida');
+      res.status(401).type('text/plain').send('assinatura inválida');
       return;
     }
 
     const branding = await getBranding();
-    const aviso = `Voce ligou para ${branding.appName}. Esta chamada sera gravada para fins de qualidade e seguranca.`;
+    const aviso = `Você ligou para ${branding.appName}. Esta chamada sera gravada para fins de qualidade e seguranca.`;
 
     res.status(200).type('text/xml').send(
       [
@@ -308,7 +308,7 @@ vozWebhookRoutes.post(
         '<Response>',
         `  <Say language="pt-BR">${aviso}</Say>`,
         '  <Record maxLength="600" playBeep="true" trim="trim-silence" />',
-        '  <Say language="pt-BR">Nao recebemos sua mensagem. Ate logo.</Say>',
+        '  <Say language="pt-BR">Não recebemos sua mensagem. Até logo.</Say>',
         '</Response>',
       ].join('\n'),
     );

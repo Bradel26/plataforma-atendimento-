@@ -25,7 +25,7 @@ export async function garantirNaoBloqueado(email: string) {
   throw new AppError(
     429,
     'CONTA_BLOQUEADA',
-    `Muitas tentativas de senha. Este acesso esta bloqueado por ${Math.ceil((restante > 0 ? restante : BLOQUEIO_SEGUNDOS) / 60)} minuto(s).`,
+    `Muitas tentativas de senha. Este acesso está bloqueado por ${Math.ceil((restante > 0 ? restante : BLOQUEIO_SEGUNDOS) / 60)} minuto(s).`,
   );
 }
 

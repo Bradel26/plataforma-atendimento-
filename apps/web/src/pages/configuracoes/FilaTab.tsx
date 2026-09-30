@@ -76,7 +76,7 @@ export function FilaTab() {
 
       <Card
         titulo="Trabalhos que desistiram"
-        descricao="Reprocessar devolve ate 50 por vez, com a contagem de tentativas zerada."
+        descricao="Reprocessar devolve até 50 por vez, com a contagem de tentativas zerada."
       >
         <div className="flex flex-wrap items-center gap-3">
           <Button onClick={reprocessar} disabled={reprocessando || !fila || fila.mortos === 0}>

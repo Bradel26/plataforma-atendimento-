@@ -4,7 +4,7 @@ import { mascararTelefoneBr, telefoneLegivel } from './telefone';
 describe('telefoneLegivel', () => {
   it('celular brasileiro com DDD', () => expect(telefoneLegivel('5562999990000')).toBe('(62) 99999-0000'));
   it('fixo brasileiro', () => expect(telefoneLegivel('556232220000')).toBe('(62) 3222-0000'));
-  it('numero estrangeiro fica como veio', () => expect(telefoneLegivel('595981402525')).toBe('+595981402525'));
+  it('número estrangeiro fica como veio', () => expect(telefoneLegivel('595981402525')).toBe('+595981402525'));
 });
 
 describe('mascararTelefoneBr', () => {
@@ -16,20 +16,20 @@ describe('mascararTelefoneBr', () => {
     expect(mascararTelefoneBr('6232220000')).toBe('+55 62 3222-0000');
   });
 
-  it('ja com 55 na frente nao duplica o DDI', () => {
+  it('já com 55 na frente não duplica o DDI', () => {
     expect(mascararTelefoneBr('+55 62 99288-5001')).toBe('+55 62 99288-5001');
     expect(mascararTelefoneBr('5562992885001')).toBe('+55 62 99288-5001');
   });
 
-  it('so DDD, sem numero ainda', () => {
+  it('só DDD, sem número ainda', () => {
     expect(mascararTelefoneBr('62')).toBe('+55 62');
   });
 
-  it('campo vazio devolve so o DDI', () => {
+  it('campo vazio devolve só o DDI', () => {
     expect(mascararTelefoneBr('')).toBe('+55');
   });
 
-  it('digitos alem do maximo (DDD + 9) sao ignorados, nao empurram o formato', () => {
+  it('digitos além do máximo (DDD + 9) são ignorados, não empurram o formato', () => {
     expect(mascararTelefoneBr('629928850019999')).toBe('+55 62 99288-5001');
   });
 });

@@ -7,9 +7,9 @@ import type { Contato, PoliticaRetencao, RegistroLgpd, ResumoExpurgo } from '../
 const dataHora = (iso: string | null) => (iso ? new Date(iso).toLocaleString('pt-BR') : 'nunca');
 
 const CAMPOS = [
-  { chave: 'diasConversas', label: 'Conversas finalizadas', hint: 'Apaga mensagens e arquivos; mantem canal, fila e datas' },
-  { chave: 'diasProtocolos', label: 'Protocolos encerrados', hint: 'Apaga comentarios, anexos e a descricao' },
-  { chave: 'diasPresenca', label: 'Log de presenca', hint: 'Base do relatorio de jornada' },
+  { chave: 'diasConversas', label: 'Conversas finalizadas', hint: 'Apaga mensagens e arquivos; mantém canal, fila e datas' },
+  { chave: 'diasProtocolos', label: 'Protocolos encerrados', hint: 'Apaga comentários, anexos e a descrição' },
+  { chave: 'diasPresenca', label: 'Log de presenca', hint: 'Base do relatório de jornada' },
 ] as const;
 
 /** Politica de retencao, expurgo e direitos do titular (LGPD). Somente admin. */
@@ -33,7 +33,7 @@ export function LgpdTab() {
       setPolitica(p.politica);
       setRegistros(r.registros);
     } catch (e) {
-      setErro(e instanceof ApiError ? e.message : 'Falha ao carregar a politica');
+      setErro(e instanceof ApiError ? e.message : 'Falha ao carregar a política');
     }
   }, []);
 
@@ -48,7 +48,7 @@ export function LgpdTab() {
     try {
       await acao();
     } catch (e) {
-      setErro(e instanceof ApiError ? e.message : 'Falha na operacao');
+      setErro(e instanceof ApiError ? e.message : 'Falha na operação');
     } finally {
       setOcupado(false);
     }
@@ -64,7 +64,7 @@ export function LgpdTab() {
         diasPresenca: politica.diasPresenca,
       });
       setPolitica(nova);
-      setAviso('Politica salva.');
+      setAviso('Política salva.');
     });
 
   const rodarExpurgo = (real: boolean) =>
@@ -92,13 +92,13 @@ export function LgpdTab() {
       link.download = `titular-${c.id}.json`;
       link.click();
       URL.revokeObjectURL(url);
-      setAviso(`Dados de ${c.nome} exportados. A exportacao entrou na trilha de auditoria.`);
+      setAviso(`Dados de ${c.nome} exportados. A exportação entrou na trilha de auditoria.`);
     });
 
   const anonimizar = (c: Contato) => {
     confirmar({
       titulo: `Anonimizar ${c.nome}?`,
-      descricao: 'A operacao nao tem volta.',
+      descricao: 'A operação não tem volta.',
       variante: 'perigo',
       rotuloConfirmar: 'Anonimizar',
       aoConfirmar: () =>
@@ -117,9 +117,9 @@ export function LgpdTab() {
       {aviso && <Alerta tipo="sucesso">{aviso}</Alerta>}
 
       <Card
-        titulo="Politica de retencao"
+        titulo="Política de retenção"
         descricao="Prazo, em dias, que cada tipo de dado fica guardado depois de encerrado"
-        acao={<Badge tom={politica?.ativa ? 'sucesso' : 'neutro'}>{politica?.ativa ? 'automatico' : 'manual'}</Badge>}
+        acao={<Badge tom={politica?.ativa ? 'sucesso' : 'neutro'}>{politica?.ativa ? 'automático' : 'manual'}</Badge>}
       >
         {politica && (
           <div className="space-y-4">
@@ -147,13 +147,13 @@ export function LgpdTab() {
               <span>
                 Executar o expurgo automaticamente uma vez por dia.
                 <span className="block text-xs text-slate-500">
-                  Ultimo expurgo: {dataHora(politica.ultimoExpurgoEm)}
+                  Último expurgo: {dataHora(politica.ultimoExpurgoEm)}
                 </span>
               </span>
             </label>
 
             <div className="flex flex-wrap gap-2">
-              <Button onClick={salvar} disabled={ocupado}>Salvar politica</Button>
+              <Button onClick={salvar} disabled={ocupado}>Salvar política</Button>
               <Button variante="neutro" onClick={() => void rodarExpurgo(false)} disabled={ocupado}>
                 Simular expurgo
               </Button>
@@ -163,7 +163,7 @@ export function LgpdTab() {
                 onClick={() =>
                   confirmar({
                     titulo: 'Executar expurgo?',
-                    descricao: 'Isto apaga dados de forma irreversivel.',
+                    descricao: 'Isto apaga dados de forma irreversível.',
                     variante: 'perigo',
                     rotuloConfirmar: 'Executar',
                     aoConfirmar: () => rodarExpurgo(true),
@@ -174,7 +174,7 @@ export function LgpdTab() {
               </Button>
             </div>
             <p className="text-xs text-slate-500">
-              O botao de executar so libera depois de uma simulacao: o numero na tela e o que sera apagado.
+              O botão de executar só libera depois de uma simulação: o número na tela e o que será apagado.
             </p>
           </div>
         )}
@@ -182,7 +182,7 @@ export function LgpdTab() {
 
       {resumo && (
         <Card
-          titulo={resumo.simulacao ? 'Simulacao' : 'Expurgo executado'}
+          titulo={resumo.simulacao ? 'Simulação' : 'Expurgo executado'}
           descricao={`Corte de conversas em ${dataHora(resumo.corte.conversas)}`}
         >
           <dl className="grid gap-3 sm:grid-cols-4">
@@ -190,11 +190,11 @@ export function LgpdTab() {
               ['Conversas', resumo.conversas],
               ['Mensagens', resumo.mensagens],
               ['Protocolos', resumo.protocolos],
-              ['Comentarios', resumo.comentarios],
+              ['Comentários', resumo.comentarios],
               ['Anexos', resumo.anexos],
               ['Presenca', resumo.presenca],
               ['Titulares', resumo.titulares],
-              ['Arquivos orfaos', resumo.arquivosOrfaos],
+              ['Arquivos órfãos', resumo.arquivosOrfaos],
             ].map(([rotulo, valor]) => (
               <div key={String(rotulo)} className="rounded-lg border border-slate-200 px-3 py-2">
                 <dt className="text-xs text-slate-500">{rotulo}</dt>
@@ -205,7 +205,7 @@ export function LgpdTab() {
         </Card>
       )}
 
-      <Card titulo="Direitos do titular" descricao="Copia dos dados (portabilidade) e eliminacao a pedido">
+      <Card titulo="Direitos do titular" descricao="Copia dos dados (portabilidade) e eliminação a pedido">
         <form
           className="flex gap-2"
           onSubmit={(e) => {
@@ -245,9 +245,9 @@ export function LgpdTab() {
         )}
       </Card>
 
-      <Card titulo="Trilha de auditoria" descricao="Ultimas operacoes de expurgo, anonimizacao e exportacao">
+      <Card titulo="Trilha de auditoria" descricao="Últimas operações de expurgo, anonimização e exportação">
         {registros.length === 0 ? (
-          <p className="text-sm text-slate-500">Nenhuma operacao registrada.</p>
+          <p className="text-sm text-slate-500">Nenhuma operação registrada.</p>
         ) : (
           <ul className="divide-y divide-slate-100">
             {registros.map((r) => (

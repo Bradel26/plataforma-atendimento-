@@ -132,7 +132,7 @@ export async function resumoDoVendedor(vendedorId: string, mes: Date): Promise<R
     }),
   ]);
 
-  if (!vendedor) throw notFound('Vendedor nao encontrado');
+  if (!vendedor) throw notFound('Vendedor não encontrado');
 
   const propostas = gruposDePropostas.length;
 

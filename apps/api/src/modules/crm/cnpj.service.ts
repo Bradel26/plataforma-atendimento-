@@ -70,7 +70,7 @@ export class FalhaNaConsulta extends AppError {
 export async function consultarCnpj(entrada: string): Promise<DadosPublicos> {
   const cnpj = apenasDigitos(entrada);
   if (!cnpjValido(cnpj)) {
-    throw new FalhaNaConsulta(400, `CNPJ ${formatarCnpj(entrada)} nao e valido — confira os digitos.`);
+    throw new FalhaNaConsulta(400, `CNPJ ${formatarCnpj(entrada)} não e válido — confira os digitos.`);
   }
 
   const controle = new AbortController();
@@ -91,8 +91,8 @@ export async function consultarCnpj(entrada: string): Promise<DadosPublicos> {
   } catch (e) {
     // Inclui o `abort` do tempo limite e qualquer falha de rede. 502, e nao 500:
     // o defeito nao e nosso, e a distincao importa para quem le o log.
-    const motivo = e instanceof Error && e.name === 'AbortError' ? 'demorou demais' : 'esta indisponivel';
-    throw new FalhaNaConsulta(502, `A consulta publica de CNPJ ${motivo}. Tente novamente em alguns minutos.`);
+    const motivo = e instanceof Error && e.name === 'AbortError' ? 'demorou demais' : 'está indisponível';
+    throw new FalhaNaConsulta(502, `A consulta pública de CNPJ ${motivo}. Tente novamente em alguns minutos.`);
   } finally {
     clearTimeout(relogio);
   }
@@ -101,10 +101,10 @@ export async function consultarCnpj(entrada: string): Promise<DadosPublicos> {
     throw new FalhaNaConsulta(404, `Nenhuma empresa encontrada para o CNPJ ${formatarCnpj(cnpj)}.`);
   }
   if (resposta.status === 429) {
-    throw new FalhaNaConsulta(429, 'A consulta publica de CNPJ atingiu o limite de uso. Tente novamente mais tarde.');
+    throw new FalhaNaConsulta(429, 'A consulta pública de CNPJ atingiu o limite de uso. Tente novamente mais tarde.');
   }
   if (!resposta.ok) {
-    throw new FalhaNaConsulta(502, `A consulta publica de CNPJ respondeu ${resposta.status}.`);
+    throw new FalhaNaConsulta(502, `A consulta pública de CNPJ respondeu ${resposta.status}.`);
   }
 
   const dados = mapearCnpj(await resposta.json().catch(() => null));
@@ -112,7 +112,7 @@ export async function consultarCnpj(entrada: string): Promise<DadosPublicos> {
     // Resposta 200 com corpo que nao reconhecemos. Escrever o que der para
     // aproveitar seria pior: metade dos campos viria vazia e ninguem saberia
     // que a leitura falhou.
-    throw new FalhaNaConsulta(502, 'A consulta publica respondeu num formato que nao reconhecemos.');
+    throw new FalhaNaConsulta(502, 'A consulta pública respondeu num formato que não reconhecemos.');
   }
   return dados;
 }
@@ -125,9 +125,9 @@ async function contaParaEnriquecer(id: string) {
       contatos: { select: { id: true, nome: true, papelNaConta: true, qualificacaoQsa: true } },
     },
   });
-  if (!conta) throw notFound('Cliente nao encontrado');
+  if (!conta) throw notFound('Cliente não encontrado');
   if (!conta.cnpj) {
-    throw badRequest('Este cliente nao tem CNPJ cadastrado. Informe o CNPJ para poder consultar o cadastro publico.');
+    throw badRequest('Este cliente não tem CNPJ cadastrado. Informe o CNPJ para poder consultar o cadastro público.');
   }
   return conta;
 }
@@ -221,7 +221,7 @@ export async function definirPapelNaConta(
   papelNaConta: 'SOCIO' | 'ADMINISTRADOR' | 'DECISOR' | 'TECNICO' | 'FINANCEIRO' | 'COMPRAS' | 'OUTRO' | null,
 ) {
   const contato = await prisma.contact.findFirst({ where: { id: contatoId }, select: { id: true, contaId: true } });
-  if (!contato) throw notFound('Contato nao encontrado');
+  if (!contato) throw notFound('Contato não encontrado');
   /*
    * Papel na conta exige conta.
    *
@@ -230,7 +230,7 @@ export async function definirPapelNaConta(
    * invisivel.
    */
   if (!contato.contaId) {
-    throw badRequest('Papel na conta so faz sentido para contato vinculado a um cliente');
+    throw badRequest('Papel na conta só faz sentido para contato vinculado a um cliente');
   }
 
   return prisma.contact.update({

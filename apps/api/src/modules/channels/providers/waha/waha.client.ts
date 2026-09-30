@@ -38,9 +38,9 @@ export class WahaErro extends Error {
   ) {
     super(
       tipo === 'tempo'
-        ? `o WhatsApp nao respondeu a tempo (${operacao})`
+        ? `o WhatsApp não respondeu a tempo (${operacao})`
         : tipo === 'rede'
-          ? `nao foi possivel falar com o servidor do WhatsApp (${operacao}${detalhe ? `: ${detalhe}` : ''})`
+          ? `não foi possível falar com o servidor do WhatsApp (${operacao}${detalhe ? `: ${detalhe}` : ''})`
           : `o servidor do WhatsApp recusou ${operacao} (HTTP ${status})`,
     );
     this.name = 'WahaErro';
@@ -85,22 +85,22 @@ export class WahaClient {
 
   /** `null` quando a sessao nao existe no WAHA. */
   async obterSessao(nome: string): Promise<SessaoWaha | null> {
-    const resposta = await this.chamar('consultar a sessao', `/api/sessions/${encodeURIComponent(nome)}`);
+    const resposta = await this.chamar('consultar a sessão', `/api/sessions/${encodeURIComponent(nome)}`);
     if (resposta.status === 404) return null;
-    if (!resposta.ok) throw new WahaErro('consultar a sessao', 'http', resposta.status);
+    if (!resposta.ok) throw new WahaErro('consultar a sessão', 'http', resposta.status);
     const corpo = (await WahaClient.json(resposta)) as SessaoWaha | null;
-    if (!corpo || typeof corpo.status !== 'string') throw new WahaErro('consultar a sessao', 'http', resposta.status);
+    if (!corpo || typeof corpo.status !== 'string') throw new WahaErro('consultar a sessão', 'http', resposta.status);
     return corpo;
   }
 
   /** Cria e ja inicia. Sessao que ja existe (422) nao e erro: quem chama le o estado depois. */
   async criarSessao(nome: string, config: ConfigSessaoWaha): Promise<void> {
-    const resposta = await this.chamar('criar a sessao', '/api/sessions', {
+    const resposta = await this.chamar('criar a sessão', '/api/sessions', {
       method: 'POST',
       corpo: { name: nome, start: true, config },
     });
     if (resposta.ok || resposta.status === 422) return;
-    throw new WahaErro('criar a sessao', 'http', resposta.status);
+    throw new WahaErro('criar a sessão', 'http', resposta.status);
   }
 
   /**
@@ -109,38 +109,38 @@ export class WahaClient {
    * O WAHA reinicia a sessao para aplicar (sem pedir QR de novo).
    */
   async atualizarSessao(nome: string, config: ConfigSessaoWaha): Promise<void> {
-    const resposta = await this.chamar('atualizar a sessao', `/api/sessions/${encodeURIComponent(nome)}`, {
+    const resposta = await this.chamar('atualizar a sessão', `/api/sessions/${encodeURIComponent(nome)}`, {
       method: 'PUT',
       corpo: { name: nome, config },
     });
-    if (!resposta.ok) throw new WahaErro('atualizar a sessao', 'http', resposta.status);
+    if (!resposta.ok) throw new WahaErro('atualizar a sessão', 'http', resposta.status);
   }
 
   async iniciarSessao(nome: string): Promise<void> {
-    const resposta = await this.chamar('iniciar a sessao', `/api/sessions/${encodeURIComponent(nome)}/start`, {
+    const resposta = await this.chamar('iniciar a sessão', `/api/sessions/${encodeURIComponent(nome)}/start`, {
       method: 'POST',
       corpo: {},
     });
     if (resposta.ok || resposta.status === 422) return;
-    throw new WahaErro('iniciar a sessao', 'http', resposta.status);
+    throw new WahaErro('iniciar a sessão', 'http', resposta.status);
   }
 
   async reiniciarSessao(nome: string): Promise<void> {
-    const resposta = await this.chamar('reiniciar a sessao', `/api/sessions/${encodeURIComponent(nome)}/restart`, {
+    const resposta = await this.chamar('reiniciar a sessão', `/api/sessions/${encodeURIComponent(nome)}/restart`, {
       method: 'POST',
       corpo: {},
     });
-    if (!resposta.ok) throw new WahaErro('reiniciar a sessao', 'http', resposta.status);
+    if (!resposta.ok) throw new WahaErro('reiniciar a sessão', 'http', resposta.status);
   }
 
   /** Desfaz o pareamento. Sessao inexistente (404) ja esta "deslogada". */
   async deslogarSessao(nome: string): Promise<void> {
-    const resposta = await this.chamar('desconectar a sessao', `/api/sessions/${encodeURIComponent(nome)}/logout`, {
+    const resposta = await this.chamar('desconectar a sessão', `/api/sessions/${encodeURIComponent(nome)}/logout`, {
       method: 'POST',
       corpo: {},
     });
     if (resposta.ok || resposta.status === 404) return;
-    throw new WahaErro('desconectar a sessao', 'http', resposta.status);
+    throw new WahaErro('desconectar a sessão', 'http', resposta.status);
   }
 
   /**

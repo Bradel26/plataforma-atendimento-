@@ -65,12 +65,12 @@ async function resolverFunilEsteira(funilId?: string, estagioId?: string) {
         include: comEstagios,
       });
 
-  if (!funil) throw badRequest('Nenhum funil de Esteira configurado para esta organizacao');
-  if (funil.tipo !== 'ESTEIRA') throw badRequest('O funil informado nao e do tipo Esteira');
-  if (funil.estagios.length === 0) throw badRequest('O funil nao tem estagios configurados');
+  if (!funil) throw badRequest('Nenhum funil de Esteira configurado para esta organização');
+  if (funil.tipo !== 'ESTEIRA') throw badRequest('O funil informado não e do tipo Esteira');
+  if (funil.estagios.length === 0) throw badRequest('O funil não tem estágios configurados');
 
   const estagio = estagioId ? funil.estagios.find((e) => e.id === estagioId) : funil.estagios[0];
-  if (!estagio) throw badRequest('Estagio nao pertence ao funil informado');
+  if (!estagio) throw badRequest('Estágio não pertence ao funil informado');
 
   return { funil, estagio };
 }
@@ -80,7 +80,7 @@ async function carregarVisivel(id: string) {
     where: apenasVisivel(id, await filtroDe(politicaCredenciamentos)),
     include: inclusao,
   });
-  if (!c) throw notFound('Credenciamento nao encontrado');
+  if (!c) throw notFound('Credenciamento não encontrado');
   return c;
 }
 
@@ -145,13 +145,13 @@ export async function criarCredenciamento(input: CriarCredenciamentoInput) {
   const contato = await prisma.contact.findFirst({
     where: apenasVisivel(input.contatoId, await filtroDe(politicaContatos)),
   });
-  if (!contato) throw notFound('Contato nao encontrado');
+  if (!contato) throw notFound('Contato não encontrado');
 
   if (input.contaId) {
     const conta = await prisma.account.findFirst({
       where: apenasVisivel(input.contaId, await filtroDe(politicaContas)),
     });
-    if (!conta) throw notFound('Conta nao encontrada');
+    if (!conta) throw notFound('Conta não encontrada');
   }
 
   const { funil, estagio } = await resolverFunilEsteira(input.funilId, input.estagioId);
@@ -163,7 +163,7 @@ export async function criarCredenciamento(input: CriarCredenciamentoInput) {
     where: { contatoId: contato.id, funilId: funil.id, situacaoExcecao: null },
     select: { id: true },
   });
-  if (aberto) throw badRequest('Este parceiro ja esta nesta esteira');
+  if (aberto) throw badRequest('Este parceiro já está nesta esteira');
 
   const criado = await prisma.credenciamento.create({
     data: {
@@ -189,8 +189,8 @@ export async function atualizarCredenciamento(id: string, input: AtualizarCreden
 
   if (mudouEstagio) {
     const estagio = await prisma.funnelStage.findUnique({ where: { id: input.estagioId } });
-    if (!estagio) throw notFound('Estagio nao encontrado');
-    if (estagio.funilId !== atual.funilId) throw badRequest('Estagio nao pertence ao funil do credenciamento');
+    if (!estagio) throw notFound('Estágio não encontrado');
+    if (estagio.funilId !== atual.funilId) throw badRequest('Estágio não pertence ao funil do credenciamento');
   }
 
   const agora = new Date();
@@ -230,7 +230,7 @@ async function iniciarCicloSemFalhar(id: string) {
   try {
     await iniciarCiclos(id);
   } catch (erro) {
-    console.error('[ciclo-parceiro] nao iniciou o ciclo', erro);
+    console.error('[ciclo-parceiro] não iniciou o ciclo', erro);
   }
 }
 

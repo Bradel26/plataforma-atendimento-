@@ -20,7 +20,7 @@ export type ResultadoDoEvento = 'processado' | 'duplicado' | 'ignorado';
  * "padrao" (mesmo padrao do webhook do WPPConnect).
  */
 export async function organizacaoDaSessao(sessaoExterna: string): Promise<string | null> {
-  return semOrganizacao('webhook de provider: resolver organizacao pela sessao', async () => {
+  return semOrganizacao('webhook de provider: resolver organização pela sessão', async () => {
     const config = await prismaSemIsolamento.channelConfig.findFirst({
       where: { canal: 'WHATSAPP', ponteSessao: sessaoExterna },
       select: { organizacaoId: true },
@@ -57,7 +57,7 @@ async function registrarEstadoDaSessao(
   if (!config) return 'ignorado';
 
   const status = statusDaLinha(situacao);
-  log.info('sessao', 'estado da sessao recebido', {
+  log.info('sessao', 'estado da sessão recebido', {
     ...contexto,
     canalConfigId: config.id,
     sessaoExterna,
@@ -114,7 +114,7 @@ export async function processarEventoDeCanal(
 
     case 'mensagem.propria':
       // Mensagem digitada no proprio celular: ainda nao espelhada no historico.
-      log.info('mensagem', 'mensagem enviada pelo celular (nao espelhada)', {
+      log.info('mensagem', 'mensagem enviada pelo celular (não espelhada)', {
         ...contexto,
         sessaoExterna: evento.sessaoExterna,
         idExterno: evento.idExterno,

@@ -35,7 +35,7 @@ const CONVERSA: ConversaResumo = {
 const PREVIA: Previa = {
   id: 'previa-1',
   numero: '5511977776666',
-  nome: 'Contato Nao Promovido',
+  nome: 'Contato Não Promovido',
   ultimaMensagem: 'oi, tudo bem?',
   ultimaMensagemEm: '2026-09-16T09:00:00.000Z',
   naoLidas: 1,
@@ -55,26 +55,26 @@ function renderizar(props: Partial<Parameters<typeof ListaConversas>[0]> = {}) {
   );
 }
 
-describe('ListaConversas — badge de Previa (Fase 11.6)', () => {
-  it('ChatPreview recebe a identificacao visual "Prévia"', () => {
+describe('ListaConversas — badge de Prévia (Fase 11.6)', () => {
+  it('ChatPreview recebe a identificação visual "Prévia"', () => {
     const html = renderizar({ previas: [PREVIA] });
     expect(html).toContain('Prévia');
-    expect(html).toContain('Contato Nao Promovido');
+    expect(html).toContain('Contato Não Promovido');
   });
 
-  it('Conversation formal NAO recebe o badge de previa', () => {
+  it('Conversation formal NÃO recebe o badge de prévia', () => {
     const html = renderizar({ conversas: [CONVERSA] });
     expect(html).not.toContain('Prévia');
     expect(html).toContain('Cliente Formal');
   });
 
-  it('lista mista: badge aparece so no item de previa, nunca no de conversa', () => {
+  it('lista mista: badge aparece só no item de prévia, nunca no de conversa', () => {
     const html = renderizar({ conversas: [CONVERSA], previas: [PREVIA] });
     const ocorrencias = html.split('Prévia').length - 1;
     expect(ocorrencias).toBe(1);
   });
 
-  it('nao muda nome, mensagem, horario nem contador de nao lidas da previa', () => {
+  it('não muda nome, mensagem, horário nem contador de não lidas da prévia', () => {
     const html = renderizar({ previas: [PREVIA] });
     expect(html).toContain(PREVIA.nome);
     expect(html).toContain(PREVIA.ultimaMensagem);
@@ -88,8 +88,8 @@ describe('ListaConversas — badge de Previa (Fase 11.6)', () => {
  * (prop). Prova que o caminho ponta-a-ponta (evento → estado → render) ainda
  * mostra o badge, sem precisar montar a pagina inteira.
  */
-describe('ListaConversas — realtime de previa (Fase 11.7)', () => {
-  it('previa recebida por evento (via upsertPrevia) aparece na lista com o badge', () => {
+describe('ListaConversas — realtime de prévia (Fase 11.7)', () => {
+  it('prévia recebida por evento (via upsertPrevia) aparece na lista com o badge', () => {
     const previasAposEvento = upsertPrevia([], PREVIA);
 
     const html = renderizar({ previas: previasAposEvento });
@@ -98,7 +98,7 @@ describe('ListaConversas — realtime de previa (Fase 11.7)', () => {
     expect(html).toContain(PREVIA.nome);
   });
 
-  it('atualizacao da mesma previa (segundo evento) nao duplica o cartao na lista renderizada', () => {
+  it('atualização da mesma prévia (segundo evento) não duplica o cartão na lista renderizada', () => {
     const primeiraVez = upsertPrevia([], PREVIA);
     const segundaVez = upsertPrevia(primeiraVez, { ...PREVIA, naoLidas: 7, ultimaMensagem: 'mensagem nova' });
 

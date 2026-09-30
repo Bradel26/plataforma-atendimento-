@@ -53,7 +53,7 @@ const servir = asyncHandler(async (req, res) => {
       .filter(Boolean)
       .join('/');
     const t = typeof req.query.t === 'string' ? req.query.t : undefined;
-    if (!assinaturaValida(chave, t)) throw unauthorized('Link do arquivo invalido ou expirado');
+    if (!assinaturaValida(chave, t)) throw unauthorized('Link do arquivo inválido ou expirado');
 
     // A organizacao sai da propria chave: sem isso a rota nao teria contexto e
     // toda consulta abaixo lancaria. Quem escolheu a chave foi a assinatura, nao
@@ -66,7 +66,7 @@ const servir = asyncHandler(async (req, res) => {
     if (header?.startsWith('Bearer ')) {
       try {
         const usuario = verifyAccessToken(header.slice('Bearer '.length).trim());
-        if (usuario.org !== organizacaoDoArquivo) throw notFound('Arquivo nao encontrado');
+        if (usuario.org !== organizacaoDoArquivo) throw notFound('Arquivo não encontrado');
       } catch (err) {
         // Token invalido nao impede o acesso por link assinado — ele so nao
         // acrescenta permissao. Mas o 404 de organizacao errada tem de subir.
@@ -78,10 +78,10 @@ const servir = asyncHandler(async (req, res) => {
 
     const caminho = caminhoDe(chave);
     const info = await stat(caminho).catch(() => null);
-    if (!info?.isFile()) throw notFound('Arquivo nao encontrado');
+    if (!info?.isFile()) throw notFound('Arquivo não encontrado');
 
     const registro = await registroDe(`/api/arquivos/${chave}`);
-    if (!registro) throw notFound('Arquivo nao encontrado');
+    if (!registro) throw notFound('Arquivo não encontrado');
 
     const tipo = registro.tipo ?? tipoPorChave(chave);
     const nome = registro.nome ?? basename(caminho);

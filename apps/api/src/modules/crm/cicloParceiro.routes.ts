@@ -59,7 +59,7 @@ cicloParceiroRoutes.put(
   asyncHandler(async (req, res) => {
     const chave = param(req, 'chave');
     if (!CHAVES_ETAPAS.includes(chave)) {
-      res.status(400).json({ error: 'Etapa de implantacao desconhecida' });
+      res.status(400).json({ error: 'Etapa de implantação desconhecida' });
       return;
     }
     res.json({ ciclo: await marcarEtapa(param(req, 'id'), chave, (req.body as z.infer<typeof etapaSchema>).concluida) });

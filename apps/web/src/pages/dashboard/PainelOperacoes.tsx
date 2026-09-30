@@ -28,8 +28,8 @@ export function PainelOperacoes({ desde }: { desde: string }) {
   if (!operacoes || operacoes.length === 0) return null;
 
   return (
-    <section aria-label="Parceiros por operacao" className="space-y-2">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Parceiros por operacao</h2>
+    <section aria-label="Parceiros por operação" className="space-y-2">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Parceiros por operação</h2>
       <div className={`grid gap-5 ${operacoes.length > 1 ? 'lg:grid-cols-2' : ''}`}>
         {operacoes.map((o) => (
           <Card key={o.funil.id} titulo={o.funil.nome} descricao={`${o.total} parceiro(s) cadastrados`}>
@@ -42,7 +42,7 @@ export function PainelOperacoes({ desde }: { desde: string }) {
                 estado={o.pendentes > 0 ? ESTADO.atencao : undefined}
               />
               <StatTile rotulo="Inativos" valor={o.inativos} estado={o.inativos > 0 ? ESTADO.neutro : undefined} />
-              <StatTile rotulo="Novos no periodo" valor={o.novosNoPeriodo} />
+              <StatTile rotulo="Novos no período" valor={o.novosNoPeriodo} />
               <StatTile
                 rotulo="Reprovados / cancelados"
                 valor={`${o.reprovados} / ${o.cancelados}`}

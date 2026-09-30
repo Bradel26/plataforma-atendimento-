@@ -48,7 +48,7 @@ function obterConfigOuFalhar(): ConfigWppConnect {
     throw new AppError(
       503,
       'CANAL_INDISPONIVEL',
-      'O WPPConnect nao esta configurado (defina WPP_CONNECT_URL e WPP_CONNECT_SECRET_KEY ou WPP_CONNECT_TOKEN)',
+      'O WPPConnect não está configurado (defina WPP_CONNECT_URL e WPP_CONNECT_SECRET_KEY ou WPP_CONNECT_TOKEN)',
     );
   }
   return cfg;
@@ -66,7 +66,7 @@ function configOuNulo(): ConfigWppConnect | null {
 function sessaoObrigatoria(config: ConfigDaPonte): string {
   const sessao = config.ponteSessao?.trim();
   if (!sessao) {
-    throw new AppError(503, 'CANAL_INDISPONIVEL', 'Falta a sessao do WPPConnect (ponteSessao) para este canal');
+    throw new AppError(503, 'CANAL_INDISPONIVEL', 'Falta a sessão do WPPConnect (ponteSessao) para este canal');
   }
   return sessao;
 }
@@ -76,7 +76,7 @@ async function gerarToken(cfg: ConfigWppConnect, sessao: string): Promise<string
     throw new AppError(
       503,
       'CANAL_INDISPONIVEL',
-      'O WPPConnect nao tem WPP_CONNECT_SECRET_KEY nem WPP_CONNECT_TOKEN configurado',
+      'O WPPConnect não tem WPP_CONNECT_SECRET_KEY nem WPP_CONNECT_TOKEN configurado',
     );
   }
 
@@ -90,7 +90,7 @@ async function gerarToken(cfg: ConfigWppConnect, sessao: string): Promise<string
     throw new AppError(
       502,
       'WPPCONNECT_INACESSIVEL',
-      `Nao foi possivel gerar o token do WPPConnect: ${err instanceof Error ? err.message : 'erro de rede'}`,
+      `Não foi possível gerar o token do WPPConnect: ${err instanceof Error ? err.message : 'erro de rede'}`,
     );
   }
 
@@ -154,7 +154,7 @@ async function chamarAutenticado(
       throw new AppError(
         502,
         'WPPCONNECT_INACESSIVEL',
-        `Nao foi possivel falar com o WPPConnect: ${err instanceof Error ? err.message : 'erro de rede'}`,
+        `Não foi possível falar com o WPPConnect: ${err instanceof Error ? err.message : 'erro de rede'}`,
       );
     }
   };
@@ -229,7 +229,7 @@ function destinoParaWpp(destino: string): { phone: string; isLid: boolean } {
     throw new AppError(
       400,
       'NUMERO_INVALIDO',
-      `Numero "${destino}" nao parece um telefone com DDD — corrija o cadastro do contato`,
+      `Número "${destino}" não parece um telefone com DDD — corrija o cadastro do contato`,
     );
   }
   return { phone: numero, isLid: false };
@@ -244,7 +244,7 @@ export async function enviarTextoWpp(config: ConfigDaPonte, destino: string, tex
 
   // Diagnostico do teste real (ETAPA 3/6): confirma que a requisicao saiu, qual
   // sessao levou e se foi tratada como LID, sem nunca imprimir o token/Authorization.
-  console.log(`[crm] wppconnect.client enviarTextoWpp sessao=${sessao} destino=${phone} isLid=${isLid}`);
+  console.log(`[crm] wppconnect.client enviarTextoWpp sessão=${sessao} destino=${phone} isLid=${isLid}`);
 
   const resposta = await chamarAutenticado(cfg, sessao, `/api/${encodeURIComponent(sessao)}/send-message`, {
     method: 'POST',
@@ -257,7 +257,7 @@ export async function enviarTextoWpp(config: ConfigDaPonte, destino: string, tex
   const dados = await lerCorpo(resposta);
 
   if (resposta.status === 404 && ehSessaoDesconectada(dados)) {
-    throw new AppError(503, 'CANAL_INDISPONIVEL', 'A sessao do WPPConnect nao esta conectada');
+    throw new AppError(503, 'CANAL_INDISPONIVEL', 'A sessão do WPPConnect não está conectada');
   }
   if (!resposta.ok) {
     throw new AppError(
@@ -302,7 +302,7 @@ export async function enviarArquivoWpp(
   const dados = await lerCorpo(resposta);
 
   if (resposta.status === 404 && ehSessaoDesconectada(dados)) {
-    throw new AppError(503, 'CANAL_INDISPONIVEL', 'A sessao do WPPConnect nao esta conectada');
+    throw new AppError(503, 'CANAL_INDISPONIVEL', 'A sessão do WPPConnect não está conectada');
   }
   if (!resposta.ok) {
     throw new AppError(
@@ -363,7 +363,7 @@ function iniciarSessao(cfg: ConfigWppConnect, sessao: string, webhook: string): 
 
   const promessa = (async () => {
     try {
-      console.log(`[crm] wppconnect.client start-session sessao=${sessao}`);
+      console.log(`[crm] wppconnect.client start-session sessão=${sessao}`);
       const resposta = await chamarAutenticado(cfg, sessao, `/api/${encodeURIComponent(sessao)}/start-session`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -394,7 +394,7 @@ function qrDeStatus(dados: CorpoWpp): QrDaPonte {
   return {
     qr,
     conectado,
-    motivo: qr || conectado ? null : `a sessao esta ${typeof dados.status === 'string' ? dados.status : 'sem QR no momento'}`,
+    motivo: qr || conectado ? null : `a sessão está ${typeof dados.status === 'string' ? dados.status : 'sem QR no momento'}`,
   };
 }
 
@@ -415,10 +415,10 @@ function qrDeStatus(dados: CorpoWpp): QrDaPonte {
  */
 export async function qrWpp(config: ConfigDaPonte): Promise<QrDaPonte> {
   const sessao = config.ponteSessao?.trim();
-  if (!sessao) return { qr: null, conectado: false, motivo: 'a sessao do WPPConnect ainda nao foi configurada' };
+  if (!sessao) return { qr: null, conectado: false, motivo: 'a sessão do WPPConnect ainda não foi configurada' };
 
   const cfg = configOuNulo();
-  if (!cfg) return { qr: null, conectado: false, motivo: 'o WPPConnect ainda nao foi configurado' };
+  if (!cfg) return { qr: null, conectado: false, motivo: 'o WPPConnect ainda não foi configurado' };
 
   try {
     const { resposta, dados } = await statusDaSessao(cfg, sessao);
@@ -430,7 +430,7 @@ export async function qrWpp(config: ConfigDaPonte): Promise<QrDaPonte> {
           qr: null,
           conectado: false,
           motivo:
-            'falta WPP_CONNECT_WEBHOOK_SECRET (ou PUBLIC_URL/WEB_ORIGIN) na API: sem webhook a sessao nao receberia mensagens',
+            'falta WPP_CONNECT_WEBHOOK_SECRET (ou PUBLIC_URL/WEB_ORIGIN) na API: sem webhook a sessão não receberia mensagens',
         };
       }
 
@@ -454,7 +454,7 @@ export async function qrWpp(config: ConfigDaPonte): Promise<QrDaPonte> {
     return {
       qr: null,
       conectado: false,
-      motivo: err instanceof Error ? err.message : 'nao foi possivel falar com o WPPConnect',
+      motivo: err instanceof Error ? err.message : 'não foi possível falar com o WPPConnect',
     };
   }
 }
@@ -468,10 +468,10 @@ export async function qrWpp(config: ConfigDaPonte): Promise<QrDaPonte> {
  */
 export async function estadoWpp(config: ConfigDaPonte): Promise<EstadoDaPonte> {
   const sessao = config.ponteSessao?.trim();
-  if (!sessao) return { situacao: 'DESCONHECIDO', detalhe: 'sessao do WPPConnect nao informada' };
+  if (!sessao) return { situacao: 'DESCONHECIDO', detalhe: 'sessão do WPPConnect não informada' };
 
   const cfg = configOuNulo();
-  if (!cfg) return { situacao: 'DESCONHECIDO', detalhe: 'WPPConnect nao configurado' };
+  if (!cfg) return { situacao: 'DESCONHECIDO', detalhe: 'WPPConnect não configurado' };
 
   try {
     const resposta = await chamarAutenticado(cfg, sessao, `/api/${encodeURIComponent(sessao)}/status-session`, {
@@ -490,7 +490,7 @@ export async function estadoWpp(config: ConfigDaPonte): Promise<EstadoDaPonte> {
   } catch (err) {
     return {
       situacao: 'DESCONHECIDO',
-      detalhe: err instanceof Error ? err.message : 'nao foi possivel falar com o WPPConnect',
+      detalhe: err instanceof Error ? err.message : 'não foi possível falar com o WPPConnect',
     };
   }
 }
@@ -513,7 +513,7 @@ export async function desconectarWpp(config: ConfigDaPonte): Promise<void> {
     throw new AppError(
       502,
       'DESCONEXAO_RECUSADA',
-      `O WPPConnect recusou a desconexao (${resposta.status}): ${
+      `O WPPConnect recusou a desconexão (${resposta.status}): ${
         typeof dados.message === 'string' ? dados.message : 'sem detalhe'
       }`,
     );

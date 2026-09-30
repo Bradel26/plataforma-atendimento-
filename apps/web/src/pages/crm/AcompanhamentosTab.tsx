@@ -61,8 +61,8 @@ function ListaDeParceiros({ itens, vazio }: { itens: ItemParceiro[]; vazio: stri
             <span className="shrink-0 text-xs text-slate-500">{p.operacao.nome}</span>
           </div>
           <p className="text-xs text-slate-500">
-            {p.etapa} ha {p.diasNaEtapa}d · ultima interacao {data(p.ultimaInteracaoEm)} ·{' '}
-            {p.responsavel?.nome ?? 'sem responsavel'}
+            {p.etapa} há {p.diasNaEtapa}d · última interação {data(p.ultimaInteracaoEm)} ·{' '}
+            {p.responsavel?.nome ?? 'sem responsável'}
             {p.motivo ? ` · ${p.motivo}` : ''}
             {p.contato.telefone ? ` · ${p.contato.telefone}` : ''}
           </p>
@@ -102,7 +102,7 @@ export function AcompanhamentosTab() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end gap-3">
-        <Field label="Sem interacao ha" hint="dias">
+        <Field label="Sem interação há" hint="dias">
           <Input
             type="number"
             min={1}
@@ -115,8 +115,8 @@ export function AcompanhamentosTab() {
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
-        <Card titulo="Aguardando retorno" descricao={`${dados.aguardandoRetorno.length} retorno(s) marcados e nao feitos`}>
-          <Regra>Mostra os retornos que voce ou a equipe agendaram e ainda nao fizeram. Os vencidos ficam marcados como atrasados.</Regra>
+        <Card titulo="Aguardando retorno" descricao={`${dados.aguardandoRetorno.length} retorno(s) marcados é não feitos`}>
+          <Regra>Mostra os retornos que você ou a equipe agendaram e ainda não fizeram. Os vencidos ficam marcados como atrasados.</Regra>
           {dados.aguardandoRetorno.length === 0 ? (
             <p className="text-sm text-slate-500">Nenhum retorno pendente.</p>
           ) : (
@@ -135,7 +135,7 @@ export function AcompanhamentosTab() {
                     <Badge tom={r.atrasado ? 'erro' : 'neutro'}>{r.atrasado ? 'atrasado' : data(r.prazo)}</Badge>
                   </div>
                   <p className="text-xs text-slate-500">
-                    {LABEL_TIPO_ATIVIDADE[r.tipo] ?? r.tipo} · {r.responsavel?.nome ?? 'sem responsavel'}
+                    {LABEL_TIPO_ATIVIDADE[r.tipo] ?? r.tipo} · {r.responsavel?.nome ?? 'sem responsável'}
                   </p>
                 </li>
               ))}
@@ -144,24 +144,24 @@ export function AcompanhamentosTab() {
         </Card>
 
         <Card
-          titulo="Aguardando documentacao"
-          descricao={`${dados.aguardandoDocumentacao.length} parceiro(s) na etapa de pendencia`}
+          titulo="Aguardando documentação"
+          descricao={`${dados.aguardandoDocumentacao.length} parceiro(s) na etapa de pendência`}
         >
-          <Regra>Parceiros parados na etapa de pendencia, esperando enviar documentos. Saem da lista quando avancam na esteira.</Regra>
-          <ListaDeParceiros itens={dados.aguardandoDocumentacao} vazio="Ninguem com pendencia de documentos." />
+          <Regra>Parceiros parados na etapa de pendência, esperando enviar documentos. Saem da lista quando avançam na esteira.</Regra>
+          <ListaDeParceiros itens={dados.aguardandoDocumentacao} vazio="Ninguém com pendência de documentos." />
         </Card>
 
-        <Card titulo="Precisam de contato" descricao="Na esteira sem responsavel ou sem nenhuma conversa">
-          <Regra>Parceiros em credenciamento que ainda nao tem responsavel ou nunca conversaram com a equipe. Defina um responsavel e inicie a conversa.</Regra>
-          <ListaDeParceiros itens={dados.precisamDeContato} vazio="Todos ja tem responsavel e conversa." />
+        <Card titulo="Precisam de contato" descricao="Na esteira sem responsável ou sem nenhuma conversa">
+          <Regra>Parceiros em credenciamento que ainda não tem responsável ou nunca conversaram com a equipe. Defina um responsável e inicie a conversa.</Regra>
+          <ListaDeParceiros itens={dados.precisamDeContato} vazio="Todos já tem responsável e conversa." />
         </Card>
 
-        <Card titulo={`Sem interacao ha ${dados.diasSemInteracao}+ dias`} descricao="Ultima mensagem antiga, ainda na esteira">
-          <Regra>Parceiros em credenciamento que pararam de responder. O prazo e o numero de dias no campo acima.</Regra>
+        <Card titulo={`Sem interação há ${dados.diasSemInteracao}+ dias`} descricao="Última mensagem antiga, ainda na esteira">
+          <Regra>Parceiros em credenciamento que pararam de responder. O prazo e o número de dias no campo acima.</Regra>
           <ListaDeParceiros itens={dados.semInteracao} vazio="Nenhum parceiro esquecido." />
         </Card>
 
-        <Card titulo="Precisam de reativacao" descricao="Parceiros inativados">
+        <Card titulo="Precisam de reativação" descricao="Parceiros inativados">
           <Regra>Parceiros marcados como inativos na esteira, com o motivo. Use para tentar retomar o contato.</Regra>
           <ListaDeParceiros itens={dados.reativacao} vazio="Nenhum parceiro inativado." />
         </Card>

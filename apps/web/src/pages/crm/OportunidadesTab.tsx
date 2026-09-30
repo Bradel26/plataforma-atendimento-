@@ -281,7 +281,7 @@ export function OportunidadesTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
       await Promise.all([carregarFunis(), carregar()]);
       setErro(null);
     } catch (e) {
-      setErro(e instanceof ApiError ? e.message : 'Falha ao salvar a exigencia da etapa');
+      setErro(e instanceof ApiError ? e.message : 'Falha ao salvar a exigência da etapa');
     } finally {
       setSalvandoEtapa(null);
     }
@@ -426,7 +426,7 @@ export function OportunidadesTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
         <div className="grid gap-3 sm:grid-cols-3 sm:items-end">
           <Field label="Funil">
             <Select value={funilId} onChange={(e) => setFunilId(e.target.value)}>
-              <option value="">Padrao (primeiro ativo)</option>
+              <option value="">Padrão (primeiro ativo)</option>
               {funis.map((f) => (
                 <option key={f.id} value={f.id}>{f.nome}</option>
               ))}
@@ -437,14 +437,14 @@ export function OportunidadesTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
             <p className="text-sm font-semibold text-slate-800">{moeda(emAberto)}</p>
           </div>
           <div className="rounded-lg bg-slate-50 px-3 py-2">
-            <p className="text-xs text-slate-500">Previsao ponderada</p>
+            <p className="text-xs text-slate-500">Previsão ponderada</p>
             <p className="text-sm font-semibold" style={{ color: 'var(--brand-accent)' }}>{moeda(previsao)}</p>
           </div>
         </div>
         <div className="mt-3">
-          <Field label="Busca" hint="Filtra os cartoes ja carregados — titulo ou conta">
+          <Field label="Busca" hint="Filtra os cartões já carregados — título ou conta">
             <Input
-              placeholder="Titulo ou conta"
+              placeholder="Título ou conta"
               value={buscaCartao}
               onChange={(e) => setBuscaCartao(e.target.value)}
             />
@@ -554,7 +554,7 @@ export function OportunidadesTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
       {temPerfil('ADMIN', 'SUPERVISOR') && funilAtual && (
         <Card
           titulo="Processo do funil"
-          descricao="Tarefa que cada etapa exige antes de o negocio avancar. Em branco = etapa sem exigencia."
+          descricao="Tarefa que cada etapa exige antes de o negócio avançar. Em branco = etapa sem exigência."
         >
           <ul className="space-y-2">
             {funilAtual.estagios.map((e) => {
@@ -566,8 +566,8 @@ export function OportunidadesTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
                     {e.ordem}. {e.nome}
                   </p>
                   <Input
-                    aria-label={`Tarefa obrigatoria da etapa ${e.nome}`}
-                    placeholder="Sem exigencia"
+                    aria-label={`Tarefa obrigatória da etapa ${e.nome}`}
+                    placeholder="Sem exigência"
                     value={valor}
                     onChange={(ev) => setExigencia({ ...exigencia, [e.id]: ev.target.value })}
                   />
@@ -583,16 +583,16 @@ export function OportunidadesTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
             })}
           </ul>
           <p className="mt-3 text-xs text-slate-500">
-            A tarefa e criada quando o negocio entra na etapa, com o responsavel da oportunidade, e o cartao nao
-            avanca enquanto ela estiver aberta. Voltar o cartao para tras continua livre. Desligar a exigencia nao
-            apaga tarefa ja criada — ela foi combinada com alguem.
+            A tarefa e criada quando o negócio entra na etapa, com o responsável da oportunidade, e o cartão não
+            avanca enquanto ela estiver aberta. Voltar o cartão para tras continua livre. Desligar a exigência não
+            apaga tarefa já criada — ela foi combinada com alguém.
           </p>
         </Card>
       )}
 
-      <Card titulo="Nova jornada" descricao="Arraste os cartoes entre os estagios do funil">
+      <Card titulo="Nova jornada" descricao="Arraste os cartões entre os estágios do funil">
         <form onSubmit={criar} className="grid gap-3 sm:grid-cols-4 sm:items-end">
-          <Field label="Titulo">
+          <Field label="Título">
             <Input required value={nova.titulo} onChange={(e) => setNova({ ...nova, titulo: e.target.value })} />
           </Field>
           <Field label="Conta">

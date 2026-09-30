@@ -147,7 +147,7 @@ export function EtiquetasTab() {
                   <th scope="col" className="py-2 text-right">Contatos</th>
                   <th scope="col" className="py-2 text-right">Clientes</th>
                   <th scope="col" className="py-2 text-right">Conversas</th>
-                  <th scope="col" className="py-2 text-right">Acoes</th>
+                  <th scope="col" className="py-2 text-right">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -225,8 +225,8 @@ export function EtiquetasTab() {
               {tags.some((t) => t.tag === novoNome.trim().toLocaleLowerCase('pt-BR')) &&
                 novoNome.trim().toLocaleLowerCase('pt-BR') !== alvo.tag && (
                   <Alerta>
-                    "{novoNome.trim().toLocaleLowerCase('pt-BR')}" ja existe — as duas serao
-                    <strong> fundidas</strong> numa so.
+                    "{novoNome.trim().toLocaleLowerCase('pt-BR')}" já existe — as duas serão
+                    <strong> fundidas</strong> numa só.
                   </Alerta>
                 )}
               <div className="flex gap-2">
@@ -252,7 +252,7 @@ export function EtiquetasTab() {
                 {tags.find((t) => t.tag === alvo.tag)?.contas ?? 0} cliente(s) e{' '}
                 {tags.find((t) => t.tag === alvo.tag)?.conversas ?? 0} conversa(s)
               </strong>
-              . Nao ha como desfazer.
+              . Não há como desfazer.
             </p>
             <div className="mt-3 flex gap-2">
               <Button variante="perigo" onClick={() => void remover()} disabled={ocupado}>
@@ -269,17 +269,17 @@ export function EtiquetasTab() {
           <Card titulo="Como funciona">
             <ul className="space-y-2 text-sm text-slate-600 dark:text-slate-400">
               <li>
-                Etiqueta e escrita a mao na ficha do contato ou do cliente — nao ha cadastro previo.
+                Etiqueta e escrita a mão na ficha do contato ou do cliente — não há cadastro previo.
               </li>
               <li>
-                Maiusculas, espaco sobrando e acento duplicado sao normalizados: <code>Revenda</code>{' '}
-                e <code>revenda</code> sao a mesma etiqueta.
+                Maiúsculas, espaço sobrando e acento duplicado são normalizados: <code>Revenda</code>{' '}
+                e <code>revenda</code> são a mesma etiqueta.
               </li>
               <li>
-                <strong>Renomear para uma etiqueta que ja existe funde as duas.</strong> E assim que
+                <strong>Renomear para uma etiqueta que já existe funde as duas.</strong> é assim que
                 se conserta <code>revenda</code> e <code>revendas</code>.
               </li>
-              <li>Renomear e remover valem para a organizacao inteira, inclusive registros que voce nao ve.</li>
+              <li>Renomear e remover valem para a organização inteira, inclusive registros que você não vê.</li>
             </ul>
           </Card>
         )}

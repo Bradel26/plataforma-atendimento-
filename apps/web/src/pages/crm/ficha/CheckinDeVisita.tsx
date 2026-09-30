@@ -83,7 +83,7 @@ export function CheckinDeVisita({ atividade, aoMudar, aoErrar }: Props) {
   if (atividade.checkoutEm) {
     return (
       <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-        <Badge tom="sucesso">Visita concluida</Badge>
+        <Badge tom="sucesso">Visita concluída</Badge>
         <span>
           {hora(atividade.checkinEm)} &rarr; {hora(atividade.checkoutEm)}
           {minutos !== null && ` · ${minutos} min`}
@@ -101,7 +101,7 @@ export function CheckinDeVisita({ atividade, aoMudar, aoErrar }: Props) {
           // Dizer que nao houve localizacao e melhor que omitir: quem le o
           // registro depois precisa saber que o dado nao existe, e nao supor que
           // ninguem clicou.
-          <span className="text-slate-500">sem localizacao</span>
+          <span className="text-slate-500">sem localização</span>
         )}
       </div>
     );

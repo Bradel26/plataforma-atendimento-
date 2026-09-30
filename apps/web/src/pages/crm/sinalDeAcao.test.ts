@@ -32,22 +32,22 @@ const op = (campos: Partial<Oportunidade>): Oportunidade =>
   }) as Oportunidade;
 
 describe('sinalDeAcao', () => {
-  it('nao avisa nada quando ha tarefa aberta com prazo no futuro', () => {
+  it('não avisa nada quando há tarefa aberta com prazo no futuro', () => {
     const s = sinalDeAcao(op({ tarefasAbertas: 1, proximoPrazo: new Date(AGORA + dia).toISOString() }), AGORA);
     expect(s).toBeNull();
   });
 
-  it('avisa "sem proxima acao" quando nao ha nenhuma tarefa com prazo aberta', () => {
+  it('avisa "sem próxima ação" quando não há nenhuma tarefa com prazo aberta', () => {
     const s = sinalDeAcao(op({ tarefasAbertas: 0, proximoPrazo: null }), AGORA);
-    expect(s).toEqual({ texto: 'Sem proxima acao', tom: 'neutro' });
+    expect(s).toEqual({ texto: 'Sem próxima ação', tom: 'neutro' });
   });
 
-  it('avisa atraso quando o prazo mais proximo ja passou', () => {
+  it('avisa atraso quando o prazo mais próximo já passou', () => {
     const s = sinalDeAcao(op({ tarefasAbertas: 2, proximoPrazo: new Date(AGORA - dia).toISOString() }), AGORA);
     expect(s).toEqual({ texto: 'Tarefa atrasada', tom: 'alerta' });
   });
 
-  it('o atraso ganha do resto: cartao com tarefa atrasada e outras em dia mostra o atraso', () => {
+  it('o atraso ganha do resto: cartão com tarefa atrasada e outras em dia mostra o atraso', () => {
     // `proximoPrazo` e o MENOR prazo aberto — se ele passou, ha atraso, mesmo
     // que as outras tarefas estejam em dia. Se a precedencia fosse a inversa, um
     // cartao com uma tarefa atrasada e cinco em dia pareceria saudavel.
@@ -55,7 +55,7 @@ describe('sinalDeAcao', () => {
     expect(s?.tom).toBe('alerta');
   });
 
-  it('prazo exatamente agora nao e atraso', () => {
+  it('prazo exatamente agora não e atraso', () => {
     // Fronteira: o prazo e o instante ate quando vale fazer. Marcar atraso no
     // milissegundo do vencimento poria cartao em vermelho durante a reuniao em
     // que a tarefa esta sendo cumprida.
@@ -63,14 +63,14 @@ describe('sinalDeAcao', () => {
     expect(s).toBeNull();
   });
 
-  it('cala quando a API nao mandou o campo, em vez de inventar "sem proxima acao"', () => {
+  it('cala quando a API não mandou o campo, em vez de inventar "sem próxima ação"', () => {
     // `undefined` != 0. Um cartao vindo de resposta antiga (ou de tela que monta
     // a oportunidade a mao) nao sabe se ha tarefa — e afirmar que nao ha treina
     // o vendedor a ignorar o aviso onde ele esta certo.
     expect(sinalDeAcao(op({}), AGORA)).toBeNull();
   });
 
-  it('tarefa aberta sem prazo nenhum ainda conta como proximo passo', () => {
+  it('tarefa aberta sem prazo nenhum ainda conta como próximo passo', () => {
     // A API so conta tarefa COM prazo, entao `tarefasAbertas > 0` com
     // `proximoPrazo` nulo nao deveria acontecer. Se acontecer, o sinal cala em
     // vez de gritar atraso — nao ha prazo para estar atrasado.
@@ -79,7 +79,7 @@ describe('sinalDeAcao', () => {
   });
 });
 
-describe('tarefa obrigatoria da etapa (item 3.1)', () => {
+describe('tarefa obrigatória da etapa (item 3.1)', () => {
   it('avisa quando a etapa exige tarefa em aberto', () => {
     expect(sinalDeAcao(op({ tarefaDaEtapaPendente: ['Visita tecnica'] }), AGORA)).toEqual({
       texto: 'Etapa exige tarefa',
@@ -87,7 +87,7 @@ describe('tarefa obrigatoria da etapa (item 3.1)', () => {
     });
   });
 
-  it('vence "sem proxima acao" — a tarefa da etapa nao tem prazo e nao conta como tarefa aberta', () => {
+  it('vence "sem próxima ação" — a tarefa da etapa não tem prazo é não conta como tarefa aberta', () => {
     /*
      * O caso que a ordem existe para resolver: `tarefasAbertas` conta so tarefa
      * com prazo, e a tarefa da etapa nasce sem prazo. Se "sem proxima acao"
@@ -99,7 +99,7 @@ describe('tarefa obrigatoria da etapa (item 3.1)', () => {
     });
   });
 
-  it('perde para a tarefa atrasada — atraso e o unico caso em que alguem descumpriu algo', () => {
+  it('perde para a tarefa atrasada — atraso e o único caso em que alguém descumpriu algo', () => {
     const ontem = new Date(AGORA - dia).toISOString();
     expect(
       sinalDeAcao(
@@ -109,7 +109,7 @@ describe('tarefa obrigatoria da etapa (item 3.1)', () => {
     ).toEqual({ texto: 'Tarefa atrasada', tom: 'alerta' });
   });
 
-  it('lista vazia nao avisa nada', () => {
+  it('lista vazia não avisa nada', () => {
     expect(sinalDeAcao(op({ tarefasAbertas: 2, tarefaDaEtapaPendente: [] }), AGORA)).toBeNull();
   });
 });

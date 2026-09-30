@@ -195,11 +195,11 @@ async function prepararGravacao(
 ) {
   if (input.filaId) {
     const fila = await prisma.queue.findUnique({ where: { id: input.filaId } });
-    if (!fila) throw notFound('Fila nao encontrada');
+    if (!fila) throw notFound('Fila não encontrada');
   }
   if (input.donoId) {
     const dono = await prisma.user.findUnique({ where: { id: input.donoId } });
-    if (!dono) throw notFound('Usuario nao encontrado');
+    if (!dono) throw notFound('Usuário não encontrado');
   }
 
   const futuro = { ...atual, ...input };
@@ -269,7 +269,7 @@ async function prepararGravacao(
       select: { id: true },
     });
     if (conflito) {
-      throw badRequest(`Ja existe uma linha com a sessao "${futuro.ponteSessao}" nesta organizacao`);
+      throw badRequest(`Já existe uma linha com a sessão "${futuro.ponteSessao}" nesta organização`);
     }
   }
 
@@ -284,24 +284,24 @@ async function prepararGravacao(
     // WPPConnect: endereco e credenciais sao da API (`wppconnect.config.ts`),
     // nao da linha. So a sessao e da linha — e ela foi garantida logo acima.
     if (futuro.ativo && !futuro.ponteSessao) {
-      throw badRequest('Informe o nome da sessao desta linha');
+      throw badRequest('Informe o nome da sessão desta linha');
     }
   } else if (canal === 'WHATSAPP' && futuro.modo === 'NAO_OFICIAL') {
     if (futuro.ativo && !(futuro.ponteUrl && futuro.ponteToken)) {
-      throw badRequest('Para ativar o modo nao oficial informe o endereco e o token da ponte');
+      throw badRequest('Para ativar o modo não oficial informe o endereço e o token da ponte');
     }
     if (futuro.ativo && !futuro.ponteSegredo) {
       // Sem segredo a rota de entrada recusa tudo: ativar assim daria um canal
       // que envia e nunca recebe, e o sintoma ("o cliente respondeu e nao
       // apareceu") e dificil de ligar a esta causa.
-      throw badRequest('Informe o segredo da ponte: sem ele a plataforma nao aceita mensagem recebida');
+      throw badRequest('Informe o segredo da ponte: sem ele a plataforma não aceita mensagem recebida');
     }
     if (futuro.ativo && futuro.donoId && !futuro.ponteSessao) {
       // Sem nome de sessao uma linha PESSOAL endereca a mesma sessao padrao da
       // ponte que a linha compartilhada usa — o vendedor pareia o proprio
       // celular no numero da empresa, ve/derruba o QR e o estado dela.
       throw badRequest(
-        'Informe o nome da sessao desta linha: sem ele ela seria confundida com a linha compartilhada',
+        'Informe o nome da sessão desta linha: sem ele ela seria confundida com a linha compartilhada',
       );
     }
   } else if (futuro.ativo && !(futuro.accessToken && futuro.appSecret && futuro.verifyToken)) {
@@ -310,7 +310,7 @@ async function prepararGravacao(
 
   if (input.modo !== undefined && input.modo !== null && canal !== 'WHATSAPP') {
     // O CHECK do banco tambem barra, mas a mensagem dele nao ajuda ninguem.
-    throw badRequest('Modo oficial/nao oficial existe so no WhatsApp');
+    throw badRequest('Modo oficial/não oficial existe só no WhatsApp');
   }
 
   // Cifra so o que veio nesta requisicao; campo ausente nao e reescrito, e
@@ -351,7 +351,7 @@ async function comColisaoDeSessaoTratada<T>(sessao: string | null | undefined, e
       (textoDoAlvo.includes('ponte_sessao') || textoDoAlvo.includes('ponteSessao'));
     if (colidiuNaSessao) {
       throw conflict(
-        `Ja existe uma linha usando a sessao "${sessao}" — pode ser de outra organizacao. Escolha outro nome de sessao.`,
+        `Já existe uma linha usando a sessão "${sessao}" — pode ser de outra organização. Escolha outro nome de sessão.`,
       );
     }
     throw erro;
@@ -394,13 +394,13 @@ export async function criarNumero(canal: CanalExterno, input: SalvarNumeroInput)
 
   const canais = await listarCanais();
   const criado = canais.find((c) => c.canal === canal && c.dono?.id === input.donoId);
-  if (!criado) throw notFound('Numero nao encontrado apos criacao');
+  if (!criado) throw notFound('Número não encontrado após criação');
   return criado;
 }
 
 async function carregarNumeroOuFalhar(id: string) {
   const registro = await prisma.channelConfig.findUnique({ where: { id } });
-  if (!registro) throw notFound('Numero nao encontrado');
+  if (!registro) throw notFound('Número não encontrado');
   return registro;
 }
 
@@ -516,13 +516,13 @@ async function infraDaPonteDisponivel(): Promise<boolean> {
  */
 export async function conectarMinhaLinhaWhatsapp(usuarioId: string) {
   // TEMP-DEBUG (auditoria WhatsApp — remover apos investigacao)
-  console.log(`[crm] conectarMinhaLinhaWhatsapp usuario autenticado donoId=${usuarioId}`);
+  console.log(`[crm] conectarMinhaLinhaWhatsapp usuário autenticado donoId=${usuarioId}`);
   const existente = await minhaLinhaWhatsapp(usuarioId);
   if (existente) return existente;
 
   if (!(await infraDaPonteDisponivel())) {
     throw serviceUnavailable(
-      'A conexao com o WhatsApp esta temporariamente indisponivel. Tente novamente em alguns minutos.',
+      'A conexão com o WhatsApp esta temporariamente indisponível. Tente novamente em alguns minutos.',
     );
   }
 
@@ -535,7 +535,7 @@ export async function conectarMinhaLinhaWhatsapp(usuarioId: string) {
   }
 
   const criada = await minhaLinhaWhatsapp(usuarioId);
-  if (!criada) throw notFound('Linha pessoal nao encontrada logo apos a criacao');
+  if (!criada) throw notFound('Linha pessoal não encontrada logo após a criação');
   return criada;
 }
 
@@ -640,7 +640,7 @@ export async function organizacaoDoWebhook(
   canal: Channel,
   identificador: string | null,
 ): Promise<string | null> {
-  return semOrganizacao('webhook: o id externo no corpo e que revela a organizacao', async () => {
+  return semOrganizacao('webhook: o id externo no corpo e que revela a organização', async () => {
     if (identificador) {
       const porId = await prismaSemIsolamento.channelConfig.findFirst({
         where: {
@@ -665,7 +665,7 @@ export async function organizacaoDoWebhook(
     if (ativos.length === 1) return ativos[0]!.organizacaoId;
     if (ativos.length > 1) {
       console.warn(
-        `[webhook] ${canal}: ${ativos.length}+ organizacoes com o canal ativo e nenhum id externo no corpo — mensagem descartada`,
+        `[webhook] ${canal}: ${ativos.length}+ organizações com o canal ativo e nenhum id externo no corpo — mensagem descartada`,
       );
     }
     return null;

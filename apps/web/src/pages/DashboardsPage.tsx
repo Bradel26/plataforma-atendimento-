@@ -21,10 +21,10 @@ import {
 } from '../lib/types';
 
 const JANELAS = [
-  { valor: '1', label: 'Ultima hora' },
-  { valor: '24', label: 'Ultimas 24 horas' },
-  { valor: '168', label: 'Ultimos 7 dias' },
-  { valor: '720', label: 'Ultimos 30 dias' },
+  { valor: '1', label: 'Última hora' },
+  { valor: '24', label: 'Últimas 24 horas' },
+  { valor: '168', label: 'Últimos 7 dias' },
+  { valor: '720', label: 'Últimos 30 dias' },
 ] as const;
 
 /** Abaixo disto a operacao esta perdendo chamada — o numero vira estado, nao dado. */
@@ -142,7 +142,7 @@ export function DashboardsPage() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <Field label="Periodo">
+        <Field label="Período">
           <Select value={horas} onChange={(e) => setHoras(e.target.value)} className="w-52">
             {JANELAS.map((j) => (
               <option key={j.valor} value={j.valor}>{j.label}</option>
@@ -170,7 +170,7 @@ export function DashboardsPage() {
       */}
       {participaDoComercial && (
         <Card
-          titulo="Minha meta do mes"
+          titulo="Minha meta do mês"
           acao={
             minhaMeta?.definida ? (
               <Badge tom={TOM_SITUACAO_META[minhaMeta.situacao]}>{LABEL_SITUACAO_META[minhaMeta.situacao]}</Badge>
@@ -180,7 +180,7 @@ export function DashboardsPage() {
           {minhaMeta === null ? (
             <p className="text-sm text-slate-500">Carregando...</p>
           ) : !minhaMeta.definida ? (
-            <p className="text-sm text-slate-500">Ninguem definiu uma meta para voce neste mes.</p>
+            <p className="text-sm text-slate-500">Ninguém definiu uma meta para você neste mês.</p>
           ) : (
             <div className="space-y-3">
               <BarraDeMeta percentual={minhaMeta.percentual} situacao={minhaMeta.situacao} />
@@ -194,12 +194,12 @@ export function DashboardsPage() {
                   <dd className="text-slate-800">{moeda(minhaMeta.meta)}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-slate-500">Projecao</dt>
+                  <dt className="text-xs text-slate-500">Projeção</dt>
                   {/* Nula em mes futuro (nada a extrapolar ainda). */}
                   <dd className="text-slate-800">{minhaMeta.projecao === null ? '—' : moeda(minhaMeta.projecao)}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-slate-500">Variacao</dt>
+                  <dt className="text-xs text-slate-500">Variação</dt>
                   <dd
                     className={
                       minhaMeta.variacao === null
@@ -218,7 +218,7 @@ export function DashboardsPage() {
         </Card>
       )}
 
-      <h2 className="sr-only">Indicadores gerais do periodo</h2>
+      <h2 className="sr-only">Indicadores gerais do período</h2>
       {carregando ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6" aria-busy="true">
           <span className="sr-only">Carregando indicadores...</span>
@@ -236,8 +236,8 @@ export function DashboardsPage() {
             estado={dados && dados.conversas.emEspera > 0 ? ESTADO.atencao : undefined}
           />
           <StatTile rotulo="Em atendimento" valor={dados?.conversas.emAtendimento ?? '—'} detalhe="conversas ativas" />
-          <StatTile rotulo="TME" valor={duracao(dados?.tempos.tmeSegundos ?? null)} detalhe="tempo medio de espera" />
-          <StatTile rotulo="TMA" valor={duracao(dados?.tempos.tmaSegundos ?? null)} detalhe="tempo medio de atendimento" />
+          <StatTile rotulo="TME" valor={duracao(dados?.tempos.tmeSegundos ?? null)} detalhe="tempo médio de espera" />
+          <StatTile rotulo="TMA" valor={duracao(dados?.tempos.tmaSegundos ?? null)} detalhe="tempo médio de atendimento" />
           <StatTile
             rotulo="CSAT"
             valor={dados && dados.satisfacao.csat !== null ? `${dados.satisfacao.csat}/5` : '—'}
@@ -252,7 +252,7 @@ export function DashboardsPage() {
         </div>
       )}
 
-      <h2 className="sr-only">Distribuicao por canal, agente, protocolo e chamada</h2>
+      <h2 className="sr-only">Distribuição por canal, agente, protocolo e chamada</h2>
       {carregando ? (
         <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-4" aria-busy="true">
           {Array.from({ length: 4 }, (_, i) => (
@@ -261,8 +261,8 @@ export function DashboardsPage() {
         </div>
       ) : (
         <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-4">
-          <Card titulo="Conversas por canal" descricao={`${dados?.conversas.novasNoPeriodo ?? 0} nova(s) no periodo`}>
-            <BarList itens={canais} vazio="Nenhuma conversa no periodo" />
+          <Card titulo="Conversas por canal" descricao={`${dados?.conversas.novasNoPeriodo ?? 0} nova(s) no período`}>
+            <BarList itens={canais} vazio="Nenhuma conversa no período" />
           </Card>
           <Card titulo="Agentes por status" descricao={`${dados?.agentes.total ?? 0} agente(s) ativo(s)`}>
             <BarList itens={agentes} vazio="Nenhum agente cadastrado" />
@@ -270,8 +270,8 @@ export function DashboardsPage() {
           <Card titulo="Protocolos por status" descricao="Chamados abertos e encerrados">
             <BarList itens={protocolos} vazio="Nenhum chamado registrado" />
           </Card>
-          <Card titulo="Chamadas por direcao" descricao={`${dados?.voz.total ?? 0} chamada(s) no periodo`}>
-            <BarList itens={chamadas} vazio="Nenhuma chamada no periodo" />
+          <Card titulo="Chamadas por direcao" descricao={`${dados?.voz.total ?? 0} chamada(s) no período`}>
+            <BarList itens={chamadas} vazio="Nenhuma chamada no período" />
           </Card>
         </div>
       )}
@@ -300,8 +300,8 @@ export function DashboardsPage() {
             titulo="Atendimentos por assunto"
             descricao={
               assuntos
-                ? `${assuntos.total} atendimento(s) no periodo · ${assuntos.semEtiqueta} sem etiqueta`
-                : 'Etiquetas das conversas no periodo'
+                ? `${assuntos.total} atendimento(s) no período · ${assuntos.semEtiqueta} sem etiqueta`
+                : 'Etiquetas das conversas no período'
             }
           >
             <BarList
@@ -310,7 +310,7 @@ export function DashboardsPage() {
                 valor: a.conversas,
                 cor: SERIES[0],
               }))}
-              vazio="Nenhuma conversa etiquetada no periodo. Etiquete no painel de atendimento."
+              vazio="Nenhuma conversa etiquetada no período. Etiquete no painel de atendimento."
             />
             {/*
               A cobertura fica escrita, e nao so no descricao acima: um relatorio de
@@ -320,12 +320,12 @@ export function DashboardsPage() {
             {assuntos && assuntos.total > 0 && assuntos.semEtiqueta > 0 && (
               <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
                 {Math.round(((assuntos.total - assuntos.semEtiqueta) / assuntos.total) * 100)}% dos
-                atendimentos do periodo estao classificados. As barras descrevem apenas essa parte.
+                atendimentos do período estão classificados. As barras descrevem apenas essa parte.
               </p>
             )}
           </Card>
 
-          <Card titulo="Tempo medio por assunto" descricao="Da atribuicao ao encerramento, das conversas finalizadas">
+          <Card titulo="Tempo médio por assunto" descricao="Da atribuição ao encerramento, das conversas finalizadas">
             <BarList
               itens={(assuntos?.assuntos ?? [])
                 .filter((a) => a.tmaSegundos !== null)
@@ -343,7 +343,7 @@ export function DashboardsPage() {
                   cor: SERIES[0],
                 }))}
               unidade="min"
-              vazio="Nenhum atendimento etiquetado foi finalizado no periodo"
+              vazio="Nenhum atendimento etiquetado foi finalizado no período"
             />
           </Card>
         </div>
@@ -358,9 +358,9 @@ export function DashboardsPage() {
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <StatTile rotulo="Atribuidas" valor={dados?.conversas.atribuidas ?? '—'} detalhe="com agente definido" />
+          <StatTile rotulo="Atribuídas" valor={dados?.conversas.atribuidas ?? '—'} detalhe="com agente definido" />
           <StatTile rotulo="Finalizadas" valor={dados?.conversas.finalizadas ?? '—'} detalhe="no total" />
-          <StatTile rotulo="Mensagens" valor={dados?.conversas.mensagensNoPeriodo ?? '—'} detalhe="trocadas no periodo" />
+          <StatTile rotulo="Mensagens" valor={dados?.conversas.mensagensNoPeriodo ?? '—'} detalhe="trocadas no período" />
           <StatTile
             rotulo="NPS"
             valor={dados?.satisfacao.nps ?? '—'}
@@ -372,14 +372,14 @@ export function DashboardsPage() {
             detalhe={`alvo ${TAXA_ATENDIMENTO_ALVO}% — ${dados?.voz.atendidas ?? 0} atendida(s)`}
             estado={estadoDaTaxa(dados?.voz.taxaAtendimento ?? null)}
           />
-          <StatTile rotulo="TMA de voz" valor={duracao(dados?.voz.tma ?? null)} detalhe="tempo medio falado" />
+          <StatTile rotulo="TMA de voz" valor={duracao(dados?.voz.tma ?? null)} detalhe="tempo médio falado" />
           <StatTile
             rotulo="Chamadas perdidas"
             valor={dados?.voz.naoAtendidas ?? '—'}
-            detalhe="nao atendidas ou ocupadas"
+            detalhe="não atendidas ou ocupadas"
             estado={dados && dados.voz.naoAtendidas > 0 ? ESTADO.grave : undefined}
           />
-          <StatTile rotulo="Chamadas entrantes" valor={dados?.voz.entrantes ?? '—'} detalhe="recebidas no periodo" />
+          <StatTile rotulo="Chamadas entrantes" valor={dados?.voz.entrantes ?? '—'} detalhe="recebidas no período" />
         </div>
       )}
     </div>

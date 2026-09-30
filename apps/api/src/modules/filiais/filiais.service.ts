@@ -28,7 +28,7 @@ export async function listarFiliais() {
 
 export async function criarFilial(input: z.infer<typeof criarFilialSchema>) {
   const existente = await prisma.filial.findFirst({ where: { nome: input.nome } });
-  if (existente) throw conflict('Ja existe uma filial com este nome');
+  if (existente) throw conflict('Já existe uma filial com este nome');
 
   const filial = await prisma.filial.create({ data: input });
   return serialize(filial);
@@ -36,11 +36,11 @@ export async function criarFilial(input: z.infer<typeof criarFilialSchema>) {
 
 export async function atualizarFilial(id: string, input: z.infer<typeof atualizarFilialSchema>) {
   const atual = await prisma.filial.findUnique({ where: { id } });
-  if (!atual) throw notFound('Filial nao encontrada');
+  if (!atual) throw notFound('Filial não encontrada');
 
   if (input.nome && input.nome !== atual.nome) {
     const nomeEmUso = await prisma.filial.findFirst({ where: { nome: input.nome } });
-    if (nomeEmUso) throw conflict('Ja existe uma filial com este nome');
+    if (nomeEmUso) throw conflict('Já existe uma filial com este nome');
   }
 
   const filial = await prisma.filial.update({ where: { id }, data: input });
@@ -55,12 +55,12 @@ export async function atualizarFilial(id: string, input: z.infer<typeof atualiza
  */
 export async function exigirFilialDaOrganizacao(filialId: string) {
   const filial = await prisma.filial.findFirst({ where: { id: filialId } });
-  if (!filial) throw notFound('Filial nao encontrada');
+  if (!filial) throw notFound('Filial não encontrada');
 }
 
 export async function removerFilial(id: string) {
   const atual = await prisma.filial.findUnique({ where: { id } });
-  if (!atual) throw notFound('Filial nao encontrada');
+  if (!atual) throw notFound('Filial não encontrada');
   // SetNull nas contas e usuarios: remover a filial nao apaga quem estava
   // classificado nela, so tira a classificacao.
   await prisma.filial.delete({ where: { id } });

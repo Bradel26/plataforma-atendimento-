@@ -140,7 +140,7 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoExcluir }: FichaPr
   const excluir = (nome: string) => {
     confirmar({
       titulo: `Excluir ${nome}?`,
-      descricao: 'Nao pode ser desfeito. Conversas e mensagens deste contato tambem sao apagadas.',
+      descricao: 'Não pode ser desfeito. Conversas e mensagens deste contato também são apagadas.',
       variante: 'perigo',
       rotuloConfirmar: 'Excluir',
       aoConfirmar: async () => {
@@ -206,7 +206,7 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoExcluir }: FichaPr
       const { conversa } = await api.post<{ conversa: { id: string } }>('/conversas', { contatoId });
       navigate(`/atendimento?conversa=${conversa.id}`);
     } catch (e) {
-      setErro(e instanceof ApiError ? e.message : 'Nao foi possivel iniciar a conversa');
+      setErro(e instanceof ApiError ? e.message : 'Não foi possível iniciar a conversa');
       setIniciando(false);
     }
   };
@@ -231,8 +231,8 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoExcluir }: FichaPr
     return (
       <Card titulo="Ficha do contato">
         <EmptyState
-          titulo="Contato nao encontrado"
-          descricao="O endereco aponta para um registro que nao existe ou que voce nao pode ver."
+          titulo="Contato não encontrado"
+          descricao="O endereço aponta para um registro que não existe ou que você não pode ver."
         />
       </Card>
     );
@@ -344,7 +344,7 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoExcluir }: FichaPr
                 </Field>
               </div>
             </div>
-            <Field label="Observacoes">
+            <Field label="Observações">
               <Textarea
                 value={edicao.observacoes}
                 onChange={(e) => setEdicao({ ...edicao, observacoes: e.target.value })}

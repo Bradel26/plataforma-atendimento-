@@ -93,7 +93,7 @@ export function useConversas(visao: VisaoInbox, tags: readonly string[] = [], me
         setCursor(proximo);
         setErro(null);
       } catch {
-        setErro('Nao foi possivel carregar as conversas');
+        setErro('Não foi possível carregar as conversas');
       } finally {
         setCarregando(false);
       }
@@ -119,7 +119,7 @@ export function useConversas(visao: VisaoInbox, tags: readonly string[] = [], me
       });
       setCursor(proximo);
     } catch {
-      setErro('Nao foi possivel carregar mais conversas');
+      setErro('Não foi possível carregar mais conversas');
     }
   }, [cursor, queryTags]);
 

@@ -123,15 +123,15 @@ export function EditorDaOportunidade({ oportunidade: o, aoSalvar, aoCancelar }: 
       {erro && <Alerta>{erro}</Alerta>}
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Titulo">
+        <Field label="Título">
           <Input value={form.titulo} onChange={(e) => setForm({ ...form, titulo: e.target.value })} />
         </Field>
-        <Field label="Responsavel">
+        <Field label="Responsável">
           <Select
             value={form.responsavelId}
             onChange={(e) => setForm({ ...form, responsavelId: e.target.value })}
           >
-            <option value="">Sem responsavel</option>
+            <option value="">Sem responsável</option>
             {usuarios.map((u) => (
               <option key={u.id} value={u.id}>{u.nome}</option>
             ))}
@@ -139,7 +139,7 @@ export function EditorDaOportunidade({ oportunidade: o, aoSalvar, aoCancelar }: 
         </Field>
         <Field
           label="Valor informado"
-          hint="So vale quando a proposta nao tem itens — havendo item, o item manda"
+          hint="Só vale quando a proposta não tem itens — havendo item, o item manda"
         >
           <Input
             type="number"
@@ -147,14 +147,14 @@ export function EditorDaOportunidade({ oportunidade: o, aoSalvar, aoCancelar }: 
             onChange={(e) => setForm({ ...form, valor: e.target.value })}
           />
         </Field>
-        <Field label="Previsao de fechamento">
+        <Field label="Previsão de fechamento">
           <Input
             type="date"
             value={form.previsaoFechamento}
             onChange={(e) => setForm({ ...form, previsaoFechamento: e.target.value })}
           />
         </Field>
-        <Field label="Meses de recorrencia" hint="Horizonte que o valor total considera">
+        <Field label="Meses de recorrência" hint="Horizonte que o valor total considera">
           <Input
             type="number"
             value={form.mesesRecorrencia}
@@ -163,7 +163,7 @@ export function EditorDaOportunidade({ oportunidade: o, aoSalvar, aoCancelar }: 
         </Field>
         <Field
           label="Temperatura"
-          hint="Sua leitura da negociacao. Em branco = sem leitura; nao e a probabilidade da etapa"
+          hint="Sua leitura da negociação. Em branco = sem leitura; não e a probabilidade da etapa"
         >
           <Select
             value={form.temperatura}
@@ -175,12 +175,12 @@ export function EditorDaOportunidade({ oportunidade: o, aoSalvar, aoCancelar }: 
             <option value="QUENTE">Quente</option>
           </Select>
         </Field>
-        <Field label="Origem" hint="Por onde o negocio chegou. Em branco = nao registrada">
+        <Field label="Origem" hint="Por onde o negócio chegou. Em branco = não registrada">
           <Select
             value={form.canalOrigem}
             onChange={(e) => setForm({ ...form, canalOrigem: e.target.value as typeof form.canalOrigem })}
           >
-            <option value="">Nao registrada</option>
+            <option value="">Não registrada</option>
             {(Object.keys(LABEL_CANAL_ORIGEM) as Canal[]).map((c) => (
               <option key={c} value={c}>{LABEL_CANAL_ORIGEM[c]}</option>
             ))}
@@ -189,13 +189,13 @@ export function EditorDaOportunidade({ oportunidade: o, aoSalvar, aoCancelar }: 
         <Field label="Prazo de entrega" hint="Como sai na proposta impressa">
           <Input
             value={form.prazoEntrega}
-            placeholder="15 dias uteis apos aprovacao"
+            placeholder="15 dias uteis após aprovação"
             onChange={(e) => setForm({ ...form, prazoEntrega: e.target.value })}
           />
         </Field>
       </div>
 
-      <Field label="Condicao de pagamento" hint="Texto livre: e a frase que o cliente vai ler">
+      <Field label="Condição de pagamento" hint="Texto livre: e a frase que o cliente vai ler">
         <Input
           value={form.condicaoPagamento}
           placeholder="30/60/90 dias"

@@ -80,7 +80,7 @@ const erroSemContexto = () =>
   new AppError(
     500,
     'SEM_CONTEXTO_ORGANIZACAO',
-    'Consulta ao banco sem organizacao ativa. Abra o contexto com comOrganizacao, ou declare a excecao com semOrganizacao.',
+    'Consulta ao banco sem organização ativa. Abra o contexto com comOrganizacao, ou declare a exceção com semOrganizacao.',
   );
 
 /** Poe `organizacaoId` em cada objeto de `data`, sem apagar valor explicito. */
@@ -94,7 +94,7 @@ function marcarData(data: unknown, organizacaoId: string): unknown {
     throw new AppError(
       403,
       'ORGANIZACAO_CRUZADA',
-      'Tentativa de gravar em outra organizacao.',
+      'Tentativa de gravar em outra organização.',
     );
   }
   return { ...(data as Record<string, unknown>), organizacaoId };
@@ -105,7 +105,7 @@ function conferirData(data: unknown, organizacaoId: string) {
   if (data && typeof data === 'object' && !Array.isArray(data)) {
     const atual = (data as Record<string, unknown>).organizacaoId;
     if (typeof atual === 'string' && atual && atual !== organizacaoId) {
-      throw new AppError(403, 'ORGANIZACAO_CRUZADA', 'Tentativa de gravar em outra organizacao.');
+      throw new AppError(403, 'ORGANIZACAO_CRUZADA', 'Tentativa de gravar em outra organização.');
     }
   }
   return data;

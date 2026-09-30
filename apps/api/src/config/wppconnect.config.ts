@@ -34,7 +34,7 @@ export function obterConfigWppConnect(): ConfigWppConnect | null {
   if (!url) return null;
   if (!secretKey && !token) {
     throw new Error(
-      'Configuracao do WPPConnect incompleta: defina WPP_CONNECT_SECRET_KEY (para gerar token por sessao) ' +
+      'Configuração do WPPConnect incompleta: defina WPP_CONNECT_SECRET_KEY (para gerar token por sessão) ' +
         'ou WPP_CONNECT_TOKEN (token fixo), junto com WPP_CONNECT_URL.',
     );
   }

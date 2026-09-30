@@ -46,7 +46,7 @@ export function decifrar(valor: string): string {
   } catch {
     // Chave trocada ou registro corrompido. Devolver vazio faz o canal responder
     // "nao configurado" em vez de tentar autenticar com lixo na Graph API.
-    console.error('[crypto] nao foi possivel decifrar um segredo de canal — confira SECRETS_KEY');
+    console.error('[crypto] não foi possível decifrar um segredo de canal — confira SECRETS_KEY');
     return '';
   }
 }

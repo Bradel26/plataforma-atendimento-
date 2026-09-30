@@ -58,7 +58,7 @@ export function CamposCustomizadosCampos({ campos, valores, aoMudar }: Props) {
                 >
                   <option value="">—</option>
                   <option value="true">Sim</option>
-                  <option value="false">Nao</option>
+                  <option value="false">Não</option>
                 </Select>
               ) : campo.tipo === 'SELECAO' ? (
                 <Select

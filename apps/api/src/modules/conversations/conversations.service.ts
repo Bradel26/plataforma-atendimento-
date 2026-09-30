@@ -157,7 +157,7 @@ export async function listarPrevias(solicitante: Solicitante) {
 
 /** Motivo pelo qual um contato sem telefone nao pode receber conversa de WhatsApp, ou nulo se pode. Pura, sem banco. */
 export function motivoSemTelefone(contato: { telefone: string | null }): string | null {
-  if (!contato.telefone) return 'Contato sem telefone cadastrado — nao e possivel iniciar conversa por WhatsApp';
+  if (!contato.telefone) return 'Contato sem telefone cadastrado — não é possível iniciar conversa por WhatsApp';
   return null;
 }
 
@@ -195,7 +195,7 @@ export async function iniciarConversa(solicitante: Solicitante, contatoId: strin
   const contato = await prisma.contact.findFirst({
     where: apenasVisivel(contatoId, await filtroDe(politicaContatos)),
   });
-  if (!contato) throw notFound('Contato nao encontrado');
+  if (!contato) throw notFound('Contato não encontrado');
 
   const motivo = motivoSemTelefone(contato);
   if (motivo) throw badRequest(motivo);
@@ -229,7 +229,7 @@ export async function iniciarConversa(solicitante: Solicitante, contatoId: strin
         },
         { credenciaisPorLinha: getWhatsAppProvider().credenciaisPorLinha },
       )
-    : 'Canal WhatsApp nao configurado';
+    : 'Canal WhatsApp não configurado';
   if (impedimento) throw new AppError(503, 'CANAL_INDISPONIVEL', impedimento);
 
   const decidido = decidirDestino(config);
@@ -278,7 +278,7 @@ async function carregarOuFalhar(id: string) {
     where: apenasVisivel(id, await filtroDe(politicaConversas)),
     include: inclusaoDetalhe,
   });
-  if (!conversa) throw notFound('Conversa nao encontrada');
+  if (!conversa) throw notFound('Conversa não encontrada');
   return conversa;
 }
 
@@ -355,9 +355,9 @@ async function registrarEventoSistema(conversaId: string, texto: string) {
 
 export async function assumirConversa(solicitante: Solicitante, id: string) {
   const conversa = await carregarOuFalhar(id);
-  if (conversa.status === 'FINALIZADO') throw badRequest('Conversa ja finalizada');
+  if (conversa.status === 'FINALIZADO') throw badRequest('Conversa já finalizada');
   if (conversa.agenteId && conversa.agenteId !== solicitante.sub) {
-    throw badRequest('Conversa ja atribuida a outro agente');
+    throw badRequest('Conversa já atribuída a outro agente');
   }
 
   await prisma.conversation.update({
@@ -376,7 +376,7 @@ export async function enviarMensagem(
   interno = false,
 ) {
   const conversa = await carregarOuFalhar(id);
-  if (conversa.status === 'FINALIZADO') throw badRequest('Conversa finalizada — nao aceita novas mensagens');
+  if (conversa.status === 'FINALIZADO') throw badRequest('Conversa finalizada — não aceita novas mensagens');
 
   // Responder sem ter assumido atribui a conversa ao agente automaticamente.
   const assumir = conversa.agenteId ? {} : { agenteId: solicitante.sub, atribuidoEm: new Date() };
@@ -440,7 +440,7 @@ export async function enviarArquivo(
   interno = false,
 ) {
   const conversa = await carregarOuFalhar(id);
-  if (conversa.status === 'FINALIZADO') throw badRequest('Conversa finalizada — nao aceita novas mensagens');
+  if (conversa.status === 'FINALIZADO') throw badRequest('Conversa finalizada — não aceita novas mensagens');
 
   const envio =
     !interno && exigeEnvioExterno(conversa.canal)
@@ -493,16 +493,16 @@ function tipoAnexoDe(mime: string): AttachmentType {
 
 export async function transferirConversa(solicitante: Solicitante, id: string, input: TransferirInput) {
   const conversa = await carregarOuFalhar(id);
-  if (conversa.status === 'FINALIZADO') throw badRequest('Conversa ja finalizada');
+  if (conversa.status === 'FINALIZADO') throw badRequest('Conversa já finalizada');
 
   const sufixo = input.motivo ? ` Motivo: ${input.motivo}` : '';
 
   if (input.agenteId) {
     const destino = await prisma.user.findUnique({ where: { id: input.agenteId } });
-    if (!destino) throw notFound('Agente de destino nao encontrado');
+    if (!destino) throw notFound('Agente de destino não encontrado');
     if (!destino.ativo) throw badRequest('Agente de destino esta desativado');
-    if (destino.perfil === 'ADMIN') throw badRequest('Administradores nao recebem atendimento');
-    if (destino.id === conversa.agenteId) throw badRequest('A conversa ja esta com este agente');
+    if (destino.perfil === 'ADMIN') throw badRequest('Administradores não recebem atendimento');
+    if (destino.id === conversa.agenteId) throw badRequest('A conversa já está com este agente');
 
     await prisma.conversation.update({
       where: { id },
@@ -511,8 +511,8 @@ export async function transferirConversa(solicitante: Solicitante, id: string, i
     await registrarEventoSistema(id, `${solicitante.nome} transferiu o atendimento para ${destino.nome}.${sufixo}`);
   } else {
     const fila = await prisma.queue.findUnique({ where: { id: input.filaId! } });
-    if (!fila) throw notFound('Fila de destino nao encontrada');
-    if (!fila.ativa) throw badRequest('Fila de destino esta inativa');
+    if (!fila) throw notFound('Fila de destino não encontrada');
+    if (!fila.ativa) throw badRequest('Fila de destino está inativa');
 
     await prisma.conversation.update({
       where: { id },
@@ -526,7 +526,7 @@ export async function transferirConversa(solicitante: Solicitante, id: string, i
 
 export async function finalizarConversa(solicitante: Solicitante, id: string) {
   const conversa = await carregarOuFalhar(id);
-  if (conversa.status === 'FINALIZADO') throw badRequest('Conversa ja finalizada');
+  if (conversa.status === 'FINALIZADO') throw badRequest('Conversa já finalizada');
 
   await prisma.conversation.update({
     where: { id },
@@ -543,8 +543,8 @@ export async function finalizarConversa(solicitante: Solicitante, id: string) {
     // Falha que pode passar (rede, canal ainda sem configuracao) vai para a
     // fila; recusa definitiva fica registrada na hora e para ali.
     const texto = convite.permanente
-      ? `Pesquisa de satisfacao nao enviada: ${convite.motivo}`
-      : `Pesquisa de satisfacao nao enviada (${convite.motivo}). Nova tentativa automatica em instantes.`;
+      ? `Pesquisa de satisfação não enviada: ${convite.motivo}`
+      : `Pesquisa de satisfação não enviada (${convite.motivo}). Nova tentativa automática em instantes.`;
     await registrarEventoSistema(id, texto);
     if (!convite.permanente) {
       await enfileirar(TIPO_CONVITE_PESQUISA, { conversaId: id }, { atrasoMs: 5_000 });

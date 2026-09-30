@@ -28,7 +28,7 @@ type Aberta = { campanha: Campanha; itens: CampanhaItem[]; resultado?: Resultado
 /** Mesma substituicao do servidor (`renderizar`), com um parceiro de exemplo. */
 const previa = (mensagem: string) =>
   mensagem
-    .replace(/\{\{\s*nome\s*\}\}/gi, 'Joao Silva')
+    .replace(/\{\{\s*nome\s*\}\}/gi, 'João Silva')
     .replace(/\{\{\s*email\s*\}\}/gi, 'joao@empresa.com.br')
     .replace(/\{\{\s*telefone\s*\}\}/gi, '(91) 98888-7777');
 
@@ -44,7 +44,7 @@ const GRUPOS = [
   { id: 'andamento', titulo: 'Em andamento' },
   { id: 'agendada', titulo: 'Agendadas' },
   { id: 'rascunho', titulo: 'Rascunhos' },
-  { id: 'concluida', titulo: 'Concluidas' },
+  { id: 'concluida', titulo: 'Concluídas' },
 ] as const;
 
 const dataHora = (iso: string) =>
@@ -126,7 +126,7 @@ export function CampanhasPage() {
       await carregar();
       if (idParaReabrir) await abrir(idParaReabrir);
     } catch (e) {
-      setErro(e instanceof ApiError ? e.message : 'Falha na operacao');
+      setErro(e instanceof ApiError ? e.message : 'Falha na operação');
     } finally {
       setOcupado(false);
     }
@@ -219,7 +219,7 @@ export function CampanhasPage() {
               )}
             </Card>
     
-            <Card titulo="Nova campanha" descricao="Depois de criar, escolha o publico e programe o envio">
+            <Card titulo="Nova campanha" descricao="Depois de criar, escolha o público e programe o envio">
               <form onSubmit={criar} className="space-y-3">
                 <Field label="Nome da campanha">
                   <Input
@@ -247,7 +247,7 @@ export function CampanhasPage() {
                 </Field>
                 {nova.mensagem.trim() && (
                   <div>
-                    <p className="text-xs font-medium text-slate-500">Pre-visualizacao</p>
+                    <p className="text-xs font-medium text-slate-500">Pré-visualização</p>
                     <p className="mt-1 whitespace-pre-wrap rounded-lg bg-emerald-50 p-3 text-sm text-slate-800">
                       {previa(nova.mensagem)}
                     </p>
@@ -282,7 +282,7 @@ export function CampanhasPage() {
                   </div>
                 )}
     
-                <p className="text-xs font-medium text-slate-500">Pre-visualizacao da mensagem</p>
+                <p className="text-xs font-medium text-slate-500">Pré-visualização da mensagem</p>
                 <p className="mt-1 whitespace-pre-wrap rounded-lg bg-emerald-50 p-3 text-sm text-slate-800">
                   {previa(c.mensagem)}
                 </p>
@@ -317,7 +317,7 @@ export function CampanhasPage() {
                         variante="neutro"
                         disabled={ocupado}
                         onClick={() => {
-                          if (!window.confirm('Cancelar a campanha? O que ainda nao saiu nao sera enviado.')) return;
+                          if (!window.confirm('Cancelar a campanha? O que ainda não saiu não será enviado.')) return;
                           void agir(() => api.post(`/campanhas/${c.id}/cancelar`), c.id);
                         }}
                       >
@@ -363,18 +363,18 @@ export function CampanhasPage() {
                       </div>
                     )}
                     {c.total === 0 && (
-                      <p className="text-xs text-slate-500">Escolha o publico abaixo antes de enviar ou agendar.</p>
+                      <p className="text-xs text-slate-500">Escolha o público abaixo antes de enviar ou agendar.</p>
                     )}
                   </div>
                 )}
               </Card>
     
-              <Card titulo="Resultado da campanha" descricao={`${c.total} parceiro(s) no publico`}>
+              <Card titulo="Resultado da campanha" descricao={`${c.total} parceiro(s) no público`}>
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
                   <StatTile rotulo="Enviadas" valor={c.contagens.ENVIADO} estado={c.contagens.ENVIADO ? ESTADO.bom : undefined} />
                   <StatTile rotulo="Na fila" valor={c.contagens.PENDENTE} />
                   <StatTile
-                    rotulo="Nao entregues"
+                    rotulo="Não entregues"
                     valor={c.contagens.IGNORADO}
                     detalhe="sem telefone ou cancelada"
                     estado={c.contagens.IGNORADO ? ESTADO.atencao : undefined}
@@ -420,7 +420,7 @@ export function CampanhasPage() {
           ) : (
             <Card titulo="Detalhe da campanha">
               <p className="text-sm text-slate-500">
-                Selecione uma campanha para escolher o publico, programar o envio e acompanhar o resultado.
+                Selecione uma campanha para escolher o público, programar o envio e acompanhar o resultado.
               </p>
             </Card>
           )}

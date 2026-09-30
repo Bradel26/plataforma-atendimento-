@@ -23,5 +23,5 @@ export const redis = new Redis(env.REDIS_URL, {
 if (prefixo) console.log(`[redis] chaves com prefixo "${prefixo}:"`);
 
 redis.on('error', (err) => {
-  console.error('[redis] erro de conexao:', err.message);
+  console.error('[redis] erro de conexão:', err.message);
 });

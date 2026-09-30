@@ -59,7 +59,7 @@ export function impedimentoDeEnvio(
    */
   opcoes: { credenciaisPorLinha?: boolean } = {},
 ): string | null {
-  if (!c.ativo) return 'O canal WhatsApp esta inativo';
+  if (!c.ativo) return 'O canal WhatsApp está inativo';
 
   if (modoEfetivo(modo) === 'OFICIAL') {
     if (!c.accessToken) return 'Falta o token de acesso da Cloud API';
@@ -68,12 +68,12 @@ export function impedimentoDeEnvio(
   }
 
   if (opcoes.credenciaisPorLinha === false) {
-    if (!c.ponteSessao) return 'Falta a sessao do WhatsApp desta linha';
+    if (!c.ponteSessao) return 'Falta a sessão do WhatsApp desta linha';
     return null;
   }
 
-  if (!c.ponteUrl) return 'Falta o endereco da ponte nao oficial';
-  if (!c.ponteToken) return 'Falta o token de autenticacao na ponte';
+  if (!c.ponteUrl) return 'Falta o endereço da ponte não oficial';
+  if (!c.ponteToken) return 'Falta o token de autenticação na ponte';
   return null;
 }
 
@@ -189,5 +189,5 @@ export function enderecosDaPonte(base: string, sessao: string | null | undefined
 
 /** O aviso que a tela mostra. Uma frase, sem rodeio e sem sermao. */
 export const AVISO_NAO_OFICIAL =
-  'O modo nao oficial se conecta como WhatsApp Web e viola os termos de uso do WhatsApp: ' +
-  'o numero pode ser bloqueado sem aviso. Use um numero que a operacao possa perder.';
+  'O modo não oficial se conecta como WhatsApp Web e viola os termos de uso do WhatsApp: ' +
+  'o número pode ser bloqueado sem aviso. Use um número que a operação possa perder.';

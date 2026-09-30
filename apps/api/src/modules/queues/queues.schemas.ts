@@ -17,4 +17,4 @@ export const updateQueueSchema = z
   })
   .refine((data) => Object.keys(data).length > 0, { message: 'Informe ao menos um campo' });
 
-export const vincularAgenteSchema = z.object({ usuarioId: z.string().uuid('usuarioId invalido') });
+export const vincularAgenteSchema = z.object({ usuarioId: z.string().uuid('usuarioId inválido') });

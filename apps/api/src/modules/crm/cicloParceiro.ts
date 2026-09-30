@@ -32,8 +32,8 @@ export type StatusCiclo = (typeof STATUS_CICLO)[number];
 /** Etapas de implantacao que o consultor marca como concluidas. */
 export const ETAPAS_IMPLANTACAO = [
   { chave: 'TREINAMENTO', rotulo: 'Treinamento' },
-  { chave: 'ORIENTACOES_INICIAIS', rotulo: 'Orientacoes iniciais' },
-  { chave: 'LIBERACAO_ACESSO', rotulo: 'Liberacao de acesso' },
+  { chave: 'ORIENTACOES_INICIAIS', rotulo: 'Orientações iniciais' },
+  { chave: 'LIBERACAO_ACESSO', rotulo: 'Liberação de acesso' },
   { chave: 'CADASTRO_PLATAFORMA', rotulo: 'Cadastro em plataforma' },
   { chave: 'RECEBIMENTO_MATERIAIS', rotulo: 'Recebimento de materiais' },
 ] as const;
@@ -89,12 +89,12 @@ export function decidirAutomatico(f: FatosDoCiclo): Decisao | null {
             : 'NOVO_PARCEIRO';
       if (alvo === f.status) return null;
       if (alvo === 'ATIVO') {
-        return { para: 'ATIVO', regra: 'IMPLANTACAO_CONCLUIDA', motivo: 'Implantacao concluida' };
+        return { para: 'ATIVO', regra: 'IMPLANTACAO_CONCLUIDA', motivo: 'Implantação concluída' };
       }
       if (alvo === 'EM_IMPLANTACAO') {
-        return { para: 'EM_IMPLANTACAO', regra: 'IMPLANTACAO_INICIADA', motivo: 'Inicio da implantacao' };
+        return { para: 'EM_IMPLANTACAO', regra: 'IMPLANTACAO_INICIADA', motivo: 'Início da implantação' };
       }
-      return { para: 'NOVO_PARCEIRO', regra: 'IMPLANTACAO_REABERTA', motivo: 'Nenhuma etapa de implantacao concluida' };
+      return { para: 'NOVO_PARCEIRO', regra: 'IMPLANTACAO_REABERTA', motivo: 'Nenhuma etapa de implantação concluída' };
     }
 
     case 'ATIVO':
@@ -104,10 +104,10 @@ export function decidirAutomatico(f: FatosDoCiclo): Decisao | null {
         f.ultimaInteracaoEm && f.ultimaInteracaoEm > f.statusDesde ? f.ultimaInteracaoEm : f.statusDesde;
       const dias = diasEntre(referencia, f.agora);
       if (dias > DIAS_SEM_ACOMPANHAMENTO) {
-        return { para: 'SEM_ACOMPANHAMENTO', regra: 'SEM_INTERACAO_30D', motivo: `${dias} dias sem interacao registrada` };
+        return { para: 'SEM_ACOMPANHAMENTO', regra: 'SEM_INTERACAO_30D', motivo: `${dias} dias sem interação registrada` };
       }
       if (f.status === 'REATIVADO' && diasEntre(f.statusDesde, f.agora) >= DIAS_REATIVADO) {
-        return { para: 'ATIVO', regra: 'REATIVACAO_CONCLUIDA', motivo: `${DIAS_REATIVADO} dias de acompanhamento apos a reativacao` };
+        return { para: 'ATIVO', regra: 'REATIVACAO_CONCLUIDA', motivo: `${DIAS_REATIVADO} dias de acompanhamento após a reativação` };
       }
       return null;
     }
@@ -115,7 +115,7 @@ export function decidirAutomatico(f: FatosDoCiclo): Decisao | null {
     case 'SEM_ACOMPANHAMENTO':
       // Voltou a ser acompanhado: houve interacao depois de o alerta ser levantado.
       if (f.ultimaInteracaoEm && f.ultimaInteracaoEm > f.statusDesde) {
-        return { para: 'ATIVO', regra: 'INTERACAO_REGISTRADA', motivo: 'Nova interacao registrada com o parceiro' };
+        return { para: 'ATIVO', regra: 'INTERACAO_REGISTRADA', motivo: 'Nova interação registrada com o parceiro' };
       }
       return null;
 
@@ -136,13 +136,13 @@ export const EXIGEM_MOTIVO: readonly StatusCiclo[] = ['EM_RISCO', 'INATIVO'];
  * O resto (novo, implantacao, ativo, sem acompanhamento) vem dos fatos.
  */
 export function validarMudancaManual(de: StatusCiclo, para: StatusCiclo, motivo: string | undefined): string | null {
-  if (para === de) return 'O parceiro ja esta neste status';
+  if (para === de) return 'O parceiro já está neste status';
   if (para !== 'EM_RISCO' && para !== 'INATIVO' && para !== 'REATIVADO') {
-    return 'Este status e definido automaticamente pelo acompanhamento e pela implantacao';
+    return 'Este status e definido automaticamente pelo acompanhamento e pela implantação';
   }
-  if (para === 'EM_RISCO' && de === 'INATIVO') return 'Parceiro inativo so pode ser reativado';
+  if (para === 'EM_RISCO' && de === 'INATIVO') return 'Parceiro inativo só pode ser reativado';
   if (para === 'REATIVADO' && de !== 'EM_RISCO' && de !== 'INATIVO') {
-    return 'So parceiro em risco ou inativo pode ser reativado';
+    return 'Só parceiro em risco ou inativo pode ser reativado';
   }
   if (EXIGEM_MOTIVO.includes(para) && !motivo?.trim()) return 'Informe o motivo';
   return null;

@@ -42,7 +42,7 @@ const DIA = 24 * 60 * 60 * 1000;
  */
 export function diasDaSemana(inicio: string, offsetMinutos: number): DiaDaAgenda[] {
   const [ano, mes, dia] = inicio.split('-').map(Number);
-  if (!ano || !mes || !dia) throw new Error(`Data invalida: ${inicio}`);
+  if (!ano || !mes || !dia) throw new Error(`Data inválida: ${inicio}`);
 
   // Meia-noite local do primeiro dia, expressa em UTC.
   const base = Date.UTC(ano, mes - 1, dia) + offsetMinutos * 60 * 1000;

@@ -96,21 +96,21 @@ const pct = (v: number | null) => (v === null ? '—' : `${(v * 100).toFixed(1)}
  * nao a distingue.
  */
 function Variacao({ valor, inverter = false }: { valor: number | null; inverter?: boolean }) {
-  if (valor === null) return <span className="text-xs text-slate-500">sem base de comparacao</span>;
+  if (valor === null) return <span className="text-xs text-slate-500">sem base de comparação</span>;
   const subiu = valor > 0;
   const bom = inverter ? !subiu : subiu;
   const cor = valor === 0 ? undefined : bom ? ESTADO.bom : ESTADO.atencao;
   return (
     <span className="text-xs font-medium tabular-nums" style={{ color: cor }}>
       {subiu ? '+' : ''}
-      {(valor * 100).toFixed(1)}% vs periodo anterior
+      {(valor * 100).toFixed(1)}% vs período anterior
     </span>
   );
 }
 
 /** Motivo de perda em texto legivel. O enum e do banco; a tela fala português. */
 const MOTIVO: Record<string, string> = {
-  PRECO: 'Preco',
+  PRECO: 'Preço',
   SEM_INTERESSE: 'Sem interesse',
   CONCORRENTE: 'Concorrente',
   SEM_BUDGET: 'Sem budget',
@@ -170,7 +170,7 @@ export function ComercialTab() {
         <div className="grid gap-3 sm:grid-cols-2 sm:items-end">
           <Field label="Funil">
             <Select value={funilId} onChange={(e) => setFunilId(e.target.value)}>
-              <option value="">Padrao (primeiro ativo)</option>
+              <option value="">Padrão (primeiro ativo)</option>
               {funis.map((f) => (
                 <option key={f.id} value={f.id}>{f.nome}</option>
               ))}
@@ -193,7 +193,7 @@ export function ComercialTab() {
       {risco && (
         <Card
           titulo="Credenciamentos em Risco"
-          descricao={`Foto do momento — ${risco.abertas.total} aberto(s). Um cartao pode entrar em mais de um balde.`}
+          descricao={`Foto do momento — ${risco.abertas.total} aberto(s). Um cartão pode entrar em mais de um balde.`}
         >
           <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
             <StatTile
@@ -208,12 +208,12 @@ export function ComercialTab() {
               detalhe={moeda(risco.vencendo.valor)}
             />
             <StatTile
-              rotulo="Sem previsao"
+              rotulo="Sem previsão"
               valor={risco.semPrevisao.total}
               detalhe={moeda(risco.semPrevisao.valor)}
             />
             <StatTile
-              rotulo="Sem proxima acao"
+              rotulo="Sem próxima ação"
               valor={risco.semProximaAcao.total}
               detalhe={moeda(risco.semProximaAcao.valor)}
               estado={risco.semProximaAcao.total > 0 ? ESTADO.atencao : undefined}
@@ -230,9 +230,9 @@ export function ComercialTab() {
             />
           </div>
           <p className="mt-3 text-xs text-slate-500">
-            &quot;Sem proxima acao&quot; usa a mesma regra do cartao do funil: conta apenas tarefa com prazo em
-            aberto. Nota sem prazo e registro do que aconteceu, nao proximo passo. &quot;Aguardando parceiro&quot;
-            e &quot;aguardando equipe&quot; contam pela etapa atual (Pendencia e Aprovacao).
+            &quot;Sem próxima ação&quot; usa a mesma regra do cartão do funil: conta apenas tarefa com prazo em
+            aberto. Nota sem prazo e registro do que aconteceu, não próximo passo. &quot;Aguardando parceiro&quot;
+            e &quot;aguardando equipe&quot; contam pela etapa atual (Pendência e Aprovação).
           </p>
         </Card>
       )}
@@ -240,26 +240,26 @@ export function ComercialTab() {
       {/* 1.4 — indicadores. Fluxo do periodo separado da foto do momento, porque
           previsao ponderada nao tem periodo anterior com que se comparar. */}
       {ind && (
-        <Card titulo="Indicadores do periodo" descricao={`Comparados com os ${dias} dias anteriores`}>
+        <Card titulo="Indicadores do período" descricao={`Comparados com os ${dias} dias anteriores`}>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <div>
-              <StatTile rotulo="Credenciamentos concluidos" valor={ind.atual.ganhas} />
+              <StatTile rotulo="Credenciamentos concluídos" valor={ind.atual.ganhas} />
               <div className="mt-1 px-4"><Variacao valor={ind.variacao.ganhas} /></div>
             </div>
             <div>
-              <StatTile rotulo="Desistencias" valor={ind.atual.perdidas} />
+              <StatTile rotulo="Desistências" valor={ind.atual.perdidas} />
               {/* Perda subindo e ruim: a cor inverte. */}
               <div className="mt-1 px-4"><Variacao valor={ind.variacao.perdidas} inverter /></div>
             </div>
             <div>
-              <StatTile rotulo="Taxa de conversao" valor={pct(ind.atual.taxaConversao)} detalhe="das decididas no periodo" />
+              <StatTile rotulo="Taxa de conversão" valor={pct(ind.atual.taxaConversao)} detalhe="das decididas no período" />
               <div className="mt-1 px-4"><Variacao valor={ind.variacao.taxaConversao} /></div>
             </div>
             <div>
               <StatTile
-                rotulo="Lead Time medio"
+                rotulo="Lead Time médio"
                 valor={ind.atual.cicloMedioDias === null ? '—' : `${ind.atual.cicloMedioDias.toFixed(1)} d`}
-                detalhe="abertura ate credenciado"
+                detalhe="abertura até credenciado"
               />
               {/* Ciclo mais longo e pior: inverte tambem. */}
               <div className="mt-1 px-4"><Variacao valor={ind.variacao.cicloMedioDias} inverter /></div>
@@ -268,7 +268,7 @@ export function ComercialTab() {
 
           <div className="mt-4 border-t border-slate-200 pt-4">
             <p className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-500">
-              Foto do momento — sem comparacao com periodo anterior
+              Foto do momento — sem comparação com período anterior
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
               <StatTile rotulo="Parceiros em andamento" valor={ind.agora.abertas} />
@@ -287,23 +287,23 @@ export function ComercialTab() {
           escalas diferentes e uma linha em cima da barra mente. */}
       {funil && (
         <>
-          <Card titulo="Conversao etapa a etapa" descricao={`Passagens registradas nos ultimos ${dias} dias`}>
+          <Card titulo="Conversão etapa a etapa" descricao={`Passagens registradas nos últimos ${dias} dias`}>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[42rem] text-sm">
                 <caption className="sr-only">
-                  Entrada, avanco, retrocesso, fechamento e tempo medio por etapa do funil
+                  Entrada, avanço, retrocesso, fechamento e tempo médio por etapa do funil
                 </caption>
                 <thead>
                   <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
                     <th scope="col" className="py-2 pr-3">Etapa</th>
                     <th scope="col" className="py-2 pr-3 text-right">Entrou</th>
-                    <th scope="col" className="py-2 pr-3 text-right">Avancou</th>
+                    <th scope="col" className="py-2 pr-3 text-right">Avançou</th>
                     <th scope="col" className="py-2 pr-3 text-right">Voltou</th>
-                    <th scope="col" className="py-2 pr-3 text-right">Avanco</th>
+                    <th scope="col" className="py-2 pr-3 text-right">Avanço</th>
                     <th scope="col" className="py-2 pr-3 text-right">Ganhas</th>
                     <th scope="col" className="py-2 pr-3 text-right">Perdidas</th>
                     <th scope="col" className="py-2 pr-3 text-right">Abertas hoje</th>
-                    <th scope="col" className="py-2 text-right">Tempo medio</th>
+                    <th scope="col" className="py-2 text-right">Tempo médio</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -328,19 +328,19 @@ export function ComercialTab() {
               </table>
             </div>
             <p className="mt-3 text-xs text-slate-500">
-              &quot;Entrou&quot; e &quot;avancou&quot; sao fluxos da janela e nao se fecham entre si: um cartao pode
-              ter entrado antes dela e saido dentro. &quot;Abertas hoje&quot; e foto do momento. Travessao significa
-              que nao houve o que medir — nao zero.
+              &quot;Entrou&quot; e &quot;avançou&quot; são fluxos da janela é não se fecham entre si: um cartão pode
+              ter entrado antes dela e saido dentro. &quot;Abertas hoje&quot; e foto do momento. Travessão significa
+              que não houve o que medir — não zero.
             </p>
           </Card>
 
-          <Card titulo="Tempo medio por etapa" descricao="Media das saidas da janela, em tempo até passar de etapa">
+          <Card titulo="Tempo médio por etapa" descricao="Média das saídas da janela, em tempo até passar de etapa">
             <BarList
               itens={funil.estagios
                 .filter((e) => e.tempoMedioSegundos !== null)
                 .map((e) => ({ rotulo: e.nome, valor: Math.round(e.tempoMedioSegundos! / 3600), cor: SERIES[0] }))}
               unidade="h"
-              vazio="Nenhuma passagem de etapa concluida na janela"
+              vazio="Nenhuma passagem de etapa concluída na janela"
             />
           </Card>
         </>
@@ -351,7 +351,7 @@ export function ComercialTab() {
           perde poucas grandes. */}
       {perdas && (
         <Card
-          titulo="Motivos de desistencia"
+          titulo="Motivos de desistência"
           descricao={`${perdas.total} perda(s) na janela — ${moeda(perdas.valor)} deixados na mesa`}
         >
           <BarList
@@ -370,7 +370,7 @@ export function ComercialTab() {
                   [...perdas.motivos].sort((a, b) => b.valor - a.valor)[0]!.motivo}
               </strong>{' '}
               ({moeda([...perdas.motivos].sort((a, b) => b.valor - a.valor)[0]!.valor)}) — o motivo que mais
-              aparece e o que mais custa raramente sao o mesmo.
+              aparece e o que mais custa raramente são o mesmo.
             </p>
           )}
         </Card>

@@ -43,7 +43,7 @@ const COLUNAS_CONTATO = ['nome', 'email', 'telefone', 'conta', 'canal_origem', '
 
 export const MODELO_CONTATOS_CSV = gerarCsv([...COLUNAS_CONTATO], [
   {
-    nome: 'Joao Souza',
+    nome: 'João Souza',
     email: 'joao@empresa.com',
     telefone: '11988880000',
     conta: 'Empresa Exemplo',
@@ -128,7 +128,7 @@ export async function importarLeads(texto: string, dryRun: boolean): Promise<Res
   if (!colunas.includes('nome')) {
     throw badRequest(`O CSV precisa da coluna "nome". Colunas recebidas: ${colunas.join(', ') || 'nenhuma'}`);
   }
-  if (linhas.length > 2000) throw badRequest('Importe no maximo 2000 linhas por vez');
+  if (linhas.length > 2000) throw badRequest('Importe no máximo 2000 linhas por vez');
 
   const resultado: ResultadoImportacao = { total: linhas.length, criados: 0, ignorados: 0, erros: [] };
 
@@ -162,7 +162,7 @@ async function importarLinha(linha: LinhaCsv, dryRun: boolean) {
     : null;
 
   if (fase === 'PERDIDO' && !motivoPerda) {
-    throw new Error('Fase PERDIDO exige motivo_perda valido');
+    throw new Error('Fase PERDIDO exige motivo_perda válido');
   }
 
   // Toda validacao que depende do banco acontece ANTES do corte de dryRun —
@@ -171,7 +171,7 @@ async function importarLinha(linha: LinhaCsv, dryRun: boolean) {
   const responsavel = emailResponsavel
     ? await prisma.user.findFirst({ where: { email: emailResponsavel } })
     : null;
-  if (emailResponsavel && !responsavel) throw new Error(`Responsavel nao encontrado: ${emailResponsavel}`);
+  if (emailResponsavel && !responsavel) throw new Error(`Responsável não encontrado: ${emailResponsavel}`);
 
   if (dryRun) return;
 
@@ -238,7 +238,7 @@ async function executarImportacao(
   if (!colunas.includes(colunaObrigatoria)) {
     throw badRequest(`O CSV precisa da coluna "${colunaObrigatoria}". Colunas recebidas: ${colunas.join(', ') || 'nenhuma'}`);
   }
-  if (linhas.length > 2000) throw badRequest('Importe no maximo 2000 linhas por vez');
+  if (linhas.length > 2000) throw badRequest('Importe no máximo 2000 linhas por vez');
 
   const resultado: ResultadoImportacao = { total: linhas.length, criados: 0, ignorados: 0, erros: [] };
 
@@ -277,11 +277,11 @@ export async function importarContatos(texto: string, dryRun: boolean): Promise<
       : telefone
         ? await prisma.contact.findFirst({ where: { telefone } })
         : null;
-    if (existente) throw new Error(`Contato ja existe (${email || telefone})`);
+    if (existente) throw new Error(`Contato já existe (${email || telefone})`);
 
     const nomeConta = normalizar(linha.conta ?? '');
     const conta = nomeConta ? await prisma.account.findFirst({ where: { nome: nomeConta } }) : null;
-    if (nomeConta && !conta) throw new Error(`Conta nao encontrada: ${nomeConta}`);
+    if (nomeConta && !conta) throw new Error(`Conta não encontrada: ${nomeConta}`);
 
     if (dry) return;
 
@@ -317,7 +317,7 @@ export async function importarContas(texto: string, dryRun: boolean): Promise<Re
     const existente = await prisma.account.findFirst({
       where: cnpjDigitos ? { OR: [{ nome }, { cnpj: cnpjDigitos }] } : { nome },
     });
-    if (existente) throw new Error(`Conta ja existe (${existente.nome})`);
+    if (existente) throw new Error(`Conta já existe (${existente.nome})`);
 
     if (dry) return;
 
@@ -344,7 +344,7 @@ export async function importarContas(texto: string, dryRun: boolean): Promise<Re
 export async function importarOportunidades(texto: string, dryRun: boolean): Promise<ResultadoImportacao> {
   return executarImportacao(texto, 'titulo', async (linha, dry) => {
     const titulo = normalizar(linha.titulo ?? '');
-    if (titulo.length < 2) throw new Error('Coluna "titulo" vazia ou muito curta');
+    if (titulo.length < 2) throw new Error('Coluna "título" vazia ou muito curta');
 
     const nomeFunil = normalizar(linha.funil ?? '');
     const funil = nomeFunil
@@ -354,19 +354,19 @@ export async function importarOportunidades(texto: string, dryRun: boolean): Pro
           orderBy: { criadoEm: 'asc' },
           include: { estagios: { orderBy: { ordem: 'asc' } } },
         });
-    if (!funil) throw new Error(nomeFunil ? `Funil nao encontrado: ${nomeFunil}` : 'Nenhum funil configurado');
-    if (funil.estagios.length === 0) throw new Error('O funil nao tem estagios configurados');
+    if (!funil) throw new Error(nomeFunil ? `Funil não encontrado: ${nomeFunil}` : 'Nenhum funil configurado');
+    if (funil.estagios.length === 0) throw new Error('O funil não tem estágios configurados');
 
     const nomeEstagio = normalizar(linha.estagio ?? '');
     const estagio = nomeEstagio ? funil.estagios.find((e) => e.nome === nomeEstagio) : funil.estagios[0];
-    if (!estagio) throw new Error(nomeEstagio ? `Estagio nao encontrado no funil "${funil.nome}": ${nomeEstagio}` : 'Funil sem estagios');
+    if (!estagio) throw new Error(nomeEstagio ? `Estágio não encontrado no funil "${funil.nome}": ${nomeEstagio}` : 'Funil sem estágios');
 
     const emailResponsavel = normalizar(linha.responsavel_email ?? '').toLowerCase();
     const responsavel = emailResponsavel ? await prisma.user.findFirst({ where: { email: emailResponsavel } }) : null;
-    if (emailResponsavel && !responsavel) throw new Error(`Responsavel nao encontrado: ${emailResponsavel}`);
+    if (emailResponsavel && !responsavel) throw new Error(`Responsável não encontrado: ${emailResponsavel}`);
 
     const nomeConta = normalizar(linha.conta ?? '');
-    if (!nomeConta) throw new Error('Coluna "conta" e obrigatoria');
+    if (!nomeConta) throw new Error('Coluna "conta" é obrigatória');
 
     if (dry) return;
 

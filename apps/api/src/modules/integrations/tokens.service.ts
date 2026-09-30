@@ -68,7 +68,7 @@ export async function criarToken(input: { nome: string; escopo?: EscopoIntegraca
 /** Revoga sem apagar: o registro e a trilha de que aquele token existiu. */
 export async function revogarToken(id: string) {
   const token = await prisma.integrationToken.findUnique({ where: { id } });
-  if (!token) throw notFound('Token nao encontrado');
+  if (!token) throw notFound('Token não encontrado');
 
   return resumir(
     await prisma.integrationToken.update({
@@ -99,7 +99,7 @@ export async function resolverToken(valor: string, escopo: EscopoIntegracao) {
   // limpar. Falha aqui nao pode derrubar a requisicao que estava autenticada.
   prisma.integrationToken
     .update({ where: { id: token.id }, data: { ultimoUsoEm: new Date() } })
-    .catch((erro) => console.warn('[integracao] nao foi possivel marcar ultimo uso:', erro));
+    .catch((erro) => console.warn('[integração] não foi possível marcar último uso:', erro));
 
   return token;
 }

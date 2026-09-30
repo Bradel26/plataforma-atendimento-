@@ -50,7 +50,7 @@ async function serialize(c: CampanhaDb) {
 
 async function carregar(id: string) {
   const campanha = await prisma.campaign.findUnique({ where: { id }, include: inclusao });
-  if (!campanha) throw notFound('Campanha nao encontrada');
+  if (!campanha) throw notFound('Campanha não encontrada');
   return campanha;
 }
 
@@ -103,11 +103,11 @@ async function resultadoDaCampanha(campanhaId: string) {
  */
 export async function agendarCampanha(id: string, agendadaPara: Date | null) {
   const campanha = await carregar(id);
-  if (campanha.status === 'CONCLUIDA') throw badRequest('Campanha concluida nao pode ser agendada');
-  if (campanha.status === 'ATIVA') throw badRequest('Campanha ja esta em envio — pause antes de agendar');
+  if (campanha.status === 'CONCLUIDA') throw badRequest('Campanha concluída não pode ser agendada');
+  if (campanha.status === 'ATIVA') throw badRequest('Campanha já está em envio — pause antes de agendar');
   if (agendadaPara) {
     if (agendadaPara.getTime() <= Date.now()) throw badRequest('Escolha uma data e hora no futuro');
-    if (campanha._count.itens === 0) throw badRequest('Adicione o publico antes de agendar');
+    if (campanha._count.itens === 0) throw badRequest('Adicione o público antes de agendar');
   }
   await prisma.campaign.update({ where: { id }, data: { agendadaPara } });
   return serialize(await carregar(id));
@@ -122,7 +122,7 @@ export async function agendarCampanha(id: string, agendadaPara: Date | null) {
  */
 export async function cancelarCampanha(id: string) {
   const campanha = await carregar(id);
-  if (campanha.status === 'CONCLUIDA') throw badRequest('Campanha ja concluida');
+  if (campanha.status === 'CONCLUIDA') throw badRequest('Campanha já concluída');
   await prisma.$transaction([
     prisma.campaign.update({
       where: { id },
@@ -153,10 +153,10 @@ export async function criarCampanha(input: {
 /** Adiciona contatos. Repetir a operacao nao duplica o item (unique por campanha+contato). */
 export async function adicionarContatos(id: string, contatoIds: string[]) {
   const campanha = await carregar(id);
-  if (campanha.status === 'CONCLUIDA') throw badRequest('Campanha concluida nao aceita novos contatos');
+  if (campanha.status === 'CONCLUIDA') throw badRequest('Campanha concluída não aceita novos contatos');
 
   const existem = await prisma.contact.findMany({ where: { id: { in: contatoIds } }, select: { id: true } });
-  if (existem.length === 0) throw notFound('Nenhum contato valido informado');
+  if (existem.length === 0) throw notFound('Nenhum contato válido informado');
 
   await prisma.campaignItem.createMany({
     data: existem.map((c) => ({ campanhaId: id, contatoId: c.id })),
@@ -216,11 +216,11 @@ export async function dispararCampanha(id: string, limite = 500) {
   if (campanha.status !== 'ATIVA') throw badRequest('Ative a campanha antes de disparar');
 
   if (campanha.canal === 'VOZ') {
-    throw badRequest('Campanha de voz exige integracao de telefonia (PABX/SIP), ainda nao disponivel');
+    throw badRequest('Campanha de voz exige integração de telefonia (PABX/SIP), ainda não disponível');
   }
   if (!exigeEnvioExterno(campanha.canal)) {
     throw badRequest(
-      `Canal ${campanha.canal} nao suporta contato ativo — o cliente precisa iniciar a conversa`,
+      `Canal ${campanha.canal} não suporta contato ativo — o cliente precisa iniciar a conversa`,
     );
   }
 

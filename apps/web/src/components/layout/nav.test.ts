@@ -11,7 +11,7 @@ import { NAV, itemDaRota, perfisDaSubrota, subrotaDaRota } from './nav';
  * e nenhum teste reclamaria. Estes casos amarram as duas.
  */
 describe('navegacao', () => {
-  it('a rota do modulo resolve para o proprio modulo', () => {
+  it('a rota do modulo resolve para o próprio modulo', () => {
     expect(itemDaRota('/crm')?.rota).toBe('/crm');
     expect(itemDaRota('/configuracoes')?.rota).toBe('/configuracoes');
   });
@@ -66,7 +66,7 @@ describe('navegacao', () => {
     }
   });
 
-  it('a rota de registro sem id nao e rota de registro', () => {
+  it('a rota de registro sem id não e rota de registro', () => {
     // `/contatos` sozinho nao existe: nao ha registro para abrir, e cair no CRM
     // faria a lista aparecer numa URL que ninguem gera.
     expect(itemDaRota('/contatos')).toBeUndefined();
@@ -74,7 +74,7 @@ describe('navegacao', () => {
     expect(itemDaRota('/oportunidades')).toBeUndefined();
   });
 
-  it('rota desconhecida nao resolve para modulo nenhum', () => {
+  it('rota desconhecida não resolve para modulo nenhum', () => {
     expect(itemDaRota('/inventado')).toBeUndefined();
     // Prefixo parecido nao conta: era o defeito do `startsWith` solto, que
     // marcava `/configuracoes` como ativa em qualquer coisa comecando igual.

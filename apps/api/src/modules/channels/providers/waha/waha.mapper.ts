@@ -89,8 +89,8 @@ function telefoneDoRemetente(chatId: string, p: MensagemWaha): string | null {
 /** Texto para mensagem sem legenda cujo anexo ainda nao e trazido (ver abaixo). */
 function descricaoDoAnexo(mime: string | null): string {
   if (mime?.startsWith('image/')) return '[Imagem recebida]';
-  if (mime?.startsWith('audio/')) return '[Audio recebido]';
-  if (mime?.startsWith('video/')) return '[Video recebido]';
+  if (mime?.startsWith('audio/')) return '[Áudio recebido]';
+  if (mime?.startsWith('video/')) return '[Vídeo recebido]';
   return '[Arquivo recebido]';
 }
 
@@ -108,7 +108,7 @@ function mensagemRecebida(sessao: string, p: MensagemWaha): EventoDeCanal {
    */
   const corpo = texto(p.body);
   const temAnexo = p.hasMedia === true;
-  if (!corpo && !temAnexo) return { tipo: 'ignorado', motivo: 'mensagem sem conteudo' };
+  if (!corpo && !temAnexo) return { tipo: 'ignorado', motivo: 'mensagem sem conteúdo' };
   const conteudo = corpo ?? descricaoDoAnexo(texto(p.media?.mimetype));
 
   const mensagem: MensagemNormalizada = {
@@ -138,18 +138,18 @@ function mensagemRecebida(sessao: string, p: MensagemWaha): EventoDeCanal {
  * a mensagem que o proprio CRM enviou, e nao ha o que fazer com o eco ainda.
  */
 export function interpretarEventoWaha(corpo: unknown): EventoDeCanal[] {
-  if (!corpo || typeof corpo !== 'object') return [{ tipo: 'ignorado', motivo: 'corpo nao e objeto' }];
+  if (!corpo || typeof corpo !== 'object') return [{ tipo: 'ignorado', motivo: 'corpo não e objeto' }];
   const envelope = corpo as EventoWaha;
   const evento = texto(envelope.event);
   const sessao = texto(envelope.session);
-  if (!evento || !sessao) return [{ tipo: 'ignorado', motivo: 'evento sem nome ou sessao' }];
+  if (!evento || !sessao) return [{ tipo: 'ignorado', motivo: 'evento sem nome ou sessão' }];
 
   const payload = (envelope.payload && typeof envelope.payload === 'object' ? envelope.payload : {}) as
     MensagemWaha & StatusWaha;
 
   if (evento === 'session.status') {
     const situacao = situacaoDaSessaoWaha(payload.status, envelope.me);
-    if (situacao.estado === 'DESCONHECIDO') return [{ tipo: 'ignorado', motivo: 'status de sessao desconhecido' }];
+    if (situacao.estado === 'DESCONHECIDO') return [{ tipo: 'ignorado', motivo: 'status de sessão desconhecido' }];
     return [{ tipo: 'sessao.estado', sessaoExterna: sessao, situacao }];
   }
 
@@ -158,7 +158,7 @@ export function interpretarEventoWaha(corpo: unknown): EventoDeCanal[] {
       const idExterno = texto(payload.id);
       return idExterno
         ? [{ tipo: 'mensagem.propria', sessaoExterna: sessao, idExterno }]
-        : [{ tipo: 'ignorado', motivo: 'mensagem propria sem id' }];
+        : [{ tipo: 'ignorado', motivo: 'mensagem própria sem id' }];
     }
     return [mensagemRecebida(sessao, payload)];
   }
@@ -170,7 +170,7 @@ export function interpretarEventoWaha(corpo: unknown): EventoDeCanal[] {
     return [{ tipo: 'mensagem.status', sessaoExterna: sessao, idExterno, status }];
   }
 
-  return [{ tipo: 'ignorado', motivo: `evento ${evento} nao tratado` }];
+  return [{ tipo: 'ignorado', motivo: `evento ${evento} não tratado` }];
 }
 
 /**

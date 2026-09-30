@@ -55,7 +55,7 @@ export async function enviarParaCanal(
   canalConfigId: string | null = null,
 ): Promise<Resultado> {
   if (!exigeEnvioExterno(canal)) return { idExterno: null };
-  if (!enderecoExterno) throw badRequest('Conversa sem endereco externo — nao e possivel responder');
+  if (!enderecoExterno) throw badRequest('Conversa sem endereço externo — não é possível responder');
 
   const config = await configParaEnvio(canal, canalConfigId);
 
@@ -91,7 +91,7 @@ export async function enviarParaCanal(
   }
 
   if (!config?.ativo || !config.accessToken) {
-    throw new AppError(503, 'CANAL_INDISPONIVEL', `Canal ${canal} nao esta configurado ou esta inativo`);
+    throw new AppError(503, 'CANAL_INDISPONIVEL', `Canal ${canal} não está configurado ou está inativo`);
   }
 
   const { url, corpo } =
@@ -130,7 +130,7 @@ export async function enviarParaCanal(
     throw new AppError(
       502,
       'CANAL_INACESSIVEL',
-      `Nao foi possivel falar com a Graph API: ${err instanceof Error ? err.message : 'erro de rede'}`,
+      `Não foi possível falar com a Graph API: ${err instanceof Error ? err.message : 'erro de rede'}`,
     );
   }
 
@@ -178,7 +178,7 @@ export async function enviarArquivoParaCanal(
   canalConfigId: string | null = null,
 ): Promise<Resultado> {
   if (!exigeEnvioExterno(canal)) return { idExterno: null };
-  if (!enderecoExterno) throw badRequest('Conversa sem endereco externo — nao e possivel responder');
+  if (!enderecoExterno) throw badRequest('Conversa sem endereço externo — não é possível responder');
 
   const config = await configParaEnvio(canal, canalConfigId);
 
@@ -203,7 +203,7 @@ export async function enviarArquivoParaCanal(
   }
 
   if (!config?.ativo || !config.accessToken) {
-    throw new AppError(503, 'CANAL_INDISPONIVEL', `Canal ${canal} nao esta configurado ou esta inativo`);
+    throw new AppError(503, 'CANAL_INDISPONIVEL', `Canal ${canal} não está configurado ou está inativo`);
   }
 
   const tipo = tipoGraph(arquivo.tipo);
@@ -231,7 +231,7 @@ export async function enviarArquivoParaCanal(
   throw new AppError(
     501,
     'ANEXO_NAO_SUPORTADO',
-    'O Instagram Direct so aceita anexo por URL publica; publique a plataforma num dominio acessivel para habilitar',
+    'O Instagram Direct só aceita anexo por URL pública; publique a plataforma num dominio acessível para habilitar',
   );
 }
 
@@ -253,7 +253,7 @@ async function subirMidiaWhatsApp(
     throw new AppError(
       502,
       'CANAL_INACESSIVEL',
-      `Nao foi possivel falar com a Graph API: ${err instanceof Error ? err.message : 'erro de rede'}`,
+      `Não foi possível falar com a Graph API: ${err instanceof Error ? err.message : 'erro de rede'}`,
     );
   });
 
@@ -287,7 +287,7 @@ async function enviarMultipartMessenger(
     throw new AppError(
       502,
       'CANAL_INACESSIVEL',
-      `Nao foi possivel falar com a Graph API: ${err instanceof Error ? err.message : 'erro de rede'}`,
+      `Não foi possível falar com a Graph API: ${err instanceof Error ? err.message : 'erro de rede'}`,
     );
   });
 

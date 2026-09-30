@@ -67,7 +67,7 @@ export async function listarRegistros(limite = 50) {
     acao: r.acao,
     contatoId: r.contatoId,
     detalhe: r.detalhe,
-    autor: r.autor?.nome ?? 'Expurgo automatico',
+    autor: r.autor?.nome ?? 'Expurgo automático',
     criadoEm: r.criadoEm,
   }));
 }
@@ -99,7 +99,7 @@ export async function exportarTitular(contatoId: string, autorId: string) {
       itensCampanha: { include: { campanha: { select: { nome: true } } } },
     },
   });
-  if (!contato) throw notFound('Contato nao encontrado');
+  if (!contato) throw notFound('Contato não encontrado');
 
   await registrar(
     'EXPORTACAO',
@@ -177,7 +177,7 @@ export async function anonimizarTitular(
   opcoes: { autorId?: string | null; motivo?: string } = {},
 ) {
   const contato = await prisma.contact.findUnique({ where: { id: contatoId } });
-  if (!contato) throw notFound('Contato nao encontrado');
+  if (!contato) throw notFound('Contato não encontrado');
 
   const conversas = await prisma.conversation.findMany({ where: { contatoId }, select: { id: true } });
   const protocolos = await prisma.ticket.findMany({ where: { contatoId }, select: { id: true } });
@@ -272,7 +272,7 @@ export async function reaplicarAnonimizacoes(opcoes: { simulacao?: boolean } = {
   const falhas: string[] = [];
   for (const contato of pendentes) {
     try {
-      await anonimizarTitular(contato.id, { motivo: 'reaplicacao apos restauracao de backup' });
+      await anonimizarTitular(contato.id, { motivo: 'reaplicacao após restauração de backup' });
       reaplicados++;
     } catch {
       falhas.push(contato.id);

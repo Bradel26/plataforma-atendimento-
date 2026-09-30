@@ -187,7 +187,7 @@ export function AgendaDaSemana() {
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile rotulo="Retornos de hoje" valor={deHoje.length} estado={deHoje.length ? ESTADO.info : undefined} />
         <StatTile rotulo="Retornos atrasados" valor={atrasadas} estado={atrasadas ? ESTADO.grave : undefined} />
-        <StatTile rotulo="Proximos retornos" valor={proximos.length} detalhe="no resto desta semana" />
+        <StatTile rotulo="Próximos retornos" valor={proximos.length} detalhe="no resto desta semana" />
         <StatTile rotulo="Atividades pendentes" valor={pendentes} detalhe={`${agenda.semPrazo.length} sem data`} />
       </div>
 
@@ -219,7 +219,7 @@ export function AgendaDaSemana() {
             <ul className="mt-1 divide-y divide-amber-100">{agenda.atrasadas.slice(0, 8).map(linha)}</ul>
             {agenda.atrasadas.length > 8 && (
               <p className="mt-1 text-xs text-amber-700">
-                e mais {agenda.atrasadas.length - 8} atrasada(s) &mdash; o numero do cabecalho conta
+                e mais {agenda.atrasadas.length - 8} atrasada(s) &mdash; o número do cabeçalho conta
                 todas.
               </p>
             )}
@@ -267,8 +267,8 @@ export function AgendaDaSemana() {
               {agenda.semPrazo.length} pendente(s) sem data
             </p>
             <p className="text-xs text-slate-500">
-              Nao cabem em nenhum dia. A tarefa que a etapa do funil exige nasce sem prazo de
-              proposito &mdash; um prazo inventado viraria atraso sem ninguem ter combinado data.
+              Não cabem em nenhum dia. A tarefa que a etapa do funil exige nasce sem prazo de
+              proposito &mdash; um prazo inventado viraria atraso sem ninguém ter combinado data.
             </p>
             {/* Mostra as primeiras e diz quantas faltam.
                 A base de dev tem quase 200 pendentes sem data: despejar todas aqui
@@ -277,7 +277,7 @@ export function AgendaDaSemana() {
             <ul className="mt-1 divide-y divide-slate-100">{agenda.semPrazo.slice(0, 8).map(linha)}</ul>
             {agenda.semPrazo.length > 8 && (
               <p className="mt-1 text-xs text-slate-500">
-                e mais {agenda.semPrazo.length - 8} sem data &mdash; a lista completa esta em
+                e mais {agenda.semPrazo.length - 8} sem data &mdash; a lista completa está em
                 Jornadas e nas fichas.
               </p>
             )}

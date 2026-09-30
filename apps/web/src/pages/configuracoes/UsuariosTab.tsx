@@ -22,7 +22,7 @@ export function UsuariosTab() {
   };
 
   useEffect(() => {
-    void carregar().catch((e) => setErro(e instanceof ApiError ? e.message : 'Falha ao carregar usuarios'));
+    void carregar().catch((e) => setErro(e instanceof ApiError ? e.message : 'Falha ao carregar usuários'));
     void api
       .get<{ filiais: Filial[] }>('/filiais')
       .then(({ filiais: lista }) => setFiliais(lista))
@@ -47,10 +47,10 @@ export function UsuariosTab() {
     try {
       await api.post('/usuarios', form);
       setForm(FORM_VAZIO);
-      setOk('Usuario criado com sucesso.');
+      setOk('Usuário criado com sucesso.');
       await carregar();
     } catch (err) {
-      setErro(err instanceof ApiError ? err.message : 'Falha ao criar usuario');
+      setErro(err instanceof ApiError ? err.message : 'Falha ao criar usuário');
     } finally {
       setEnviando(false);
     }
@@ -63,7 +63,7 @@ export function UsuariosTab() {
       else await api.patch(`/usuarios/${usuario.id}`, { ativo: true });
       await carregar();
     } catch (err) {
-      setErro(err instanceof ApiError ? err.message : 'Falha ao atualizar usuario');
+      setErro(err instanceof ApiError ? err.message : 'Falha ao atualizar usuário');
     }
   };
 
@@ -105,7 +105,7 @@ export function UsuariosTab() {
         {erro && <div className="mb-4"><Alerta>{erro}</Alerta></div>}
         {ok && <div className="mb-4"><Alerta tipo="sucesso">{ok}</Alerta></div>}
         {usuarios.length === 0 ? (
-          <EmptyState titulo="Nenhum usuario" descricao="Cadastre o primeiro usuario no formulario ao lado." />
+          <EmptyState titulo="Nenhum usuário" descricao="Cadastre o primeiro usuário no formulário ao lado." />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
@@ -116,7 +116,7 @@ export function UsuariosTab() {
                   <th className="pb-2 font-medium">Perfil</th>
                   <th className="pb-2 font-medium">Filial</th>
                   <th className="pb-2 font-medium">Status</th>
-                  <th className="pb-2 font-medium">Situacao</th>
+                  <th className="pb-2 font-medium">Situação</th>
                   <th className="pb-2" />
                 </tr>
               </thead>
@@ -176,7 +176,7 @@ export function UsuariosTab() {
         )}
       </Card>
 
-      <Card titulo="Novo usuario" descricao="Apenas administradores">
+      <Card titulo="Novo usuário" descricao="Apenas administradores">
         <form onSubmit={criar} className="space-y-4">
           <Field label="Nome">
             <Input required value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} />

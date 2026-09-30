@@ -32,7 +32,7 @@ export function AvaliacaoPage() {
     fetch(`/api/avaliacao/${token}`)
       .then(async (res) => {
         const dados = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(dados?.error?.message ?? 'Pesquisa nao encontrada');
+        if (!res.ok) throw new Error(dados?.error?.message ?? 'Pesquisa não encontrada');
         setPesquisa(dados.pesquisa);
         if (dados.pesquisa.respondida) setEnviado(true);
       })
@@ -74,7 +74,7 @@ export function AvaliacaoPage() {
           <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{erro}</p>
         ) : enviado ? (
           <div className="mt-4">
-            <h1 className="text-xl font-semibold text-slate-900">Obrigado pela sua avaliacao!</h1>
+            <h1 className="text-xl font-semibold text-slate-900">Obrigado pela sua avaliação!</h1>
             <p className="mt-2 text-sm text-slate-600">
               Sua resposta foi registrada e ajuda a melhorar nosso atendimento.
             </p>
@@ -84,11 +84,11 @@ export function AvaliacaoPage() {
             <h1 className="mt-4 text-xl font-semibold text-slate-900">Como foi seu atendimento?</h1>
             <p className="mt-1 text-sm text-slate-600">
               {pesquisa?.atendente
-                ? `Voce foi atendido por ${pesquisa.atendente}.`
-                : 'Conte como foi sua experiencia.'}{' '}
+                ? `Você foi atendido por ${pesquisa.atendente}.`
+                : 'Conte como foi sua experiência.'}{' '}
               {pesquisa?.tipo === 'NPS'
                 ? 'De 0 a 10, quanto recomendaria nosso atendimento?'
-                : 'De 1 a 5, qual sua satisfacao?'}
+                : 'De 1 a 5, qual sua satisfação?'}
             </p>
 
             <div className="mt-5 flex flex-wrap gap-2">
@@ -130,7 +130,7 @@ export function AvaliacaoPage() {
               className="mt-5 w-full rounded-lg px-4 py-2.5 text-sm font-medium texto-sobre-cor-fixa disabled:opacity-50"
               style={{ backgroundColor: 'var(--brand-primary)' }}
             >
-              {enviando ? 'Enviando...' : 'Enviar avaliacao'}
+              {enviando ? 'Enviando...' : 'Enviar avaliação'}
             </button>
           </>
         )}

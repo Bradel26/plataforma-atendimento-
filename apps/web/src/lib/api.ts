@@ -49,7 +49,7 @@ async function parse<T>(res: Response): Promise<T> {
   const corpo = texto ? JSON.parse(texto) : {};
   if (!res.ok) {
     const erro = corpo?.error ?? {};
-    throw new ApiError(res.status, erro.code ?? 'ERRO', erro.message ?? 'Falha na requisicao', erro.details);
+    throw new ApiError(res.status, erro.code ?? 'ERRO', erro.message ?? 'Falha na requisição', erro.details);
   }
   return corpo as T;
 }

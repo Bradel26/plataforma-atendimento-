@@ -56,13 +56,13 @@ export function MotivoPerdaDialog({
       onClick={aoCancelar}
     >
       <div
-        className="anim-entrada-dialogo w-full max-w-sm rounded-xl border border-slate-200 bg-white p-5 shadow-xl"
+        className="anim-entrada-diálogo w-full max-w-sm rounded-xl border border-slate-200 bg-white p-5 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 id="motivo-perda-titulo" className="text-sm font-semibold text-slate-800">
           Motivo da perda
         </h2>
-        <p className="mt-1.5 text-sm text-slate-500">Por que este negocio nao avancou.</p>
+        <p className="mt-1.5 text-sm text-slate-500">Por que este negócio não avançou.</p>
         <div className="mt-3">
           <Select
             aria-label="Motivo da perda"

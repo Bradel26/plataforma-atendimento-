@@ -195,14 +195,14 @@ export function PainelContato({
 
       <div className="grid grid-cols-2 gap-2 border-b border-slate-100 p-4">
         <Indicador rotulo="Jornadas" valor={String(i.oportunidadesAbertas)} detalhe="em aberto" />
-        <Indicador rotulo="Ja comprou" valor={String(i.oportunidadesGanhas)} detalhe="ganha(s)" />
+        <Indicador rotulo="Já comprou" valor={String(i.oportunidadesGanhas)} detalhe="ganha(s)" />
         <Indicador rotulo="Protocolos" valor={String(i.protocolosAbertos)} detalhe="abertos" />
         <Indicador rotulo="Tarefas" valor={String(i.atividadesAbertas)} detalhe="em aberto" />
       </div>
 
       {atividadesAbertas.length > 0 && (
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
-          <p className="mb-2 text-xs font-medium text-slate-500">Proximas acoes</p>
+          <p className="mb-2 text-xs font-medium text-slate-500">Próximas ações</p>
           <ul className="space-y-2">
             {atividadesAbertas.map((a) => {
               const atrasada = Boolean(a.prazo && new Date(a.prazo).getTime() < agora);

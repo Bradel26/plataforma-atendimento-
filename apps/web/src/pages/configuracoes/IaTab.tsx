@@ -116,7 +116,7 @@ export function IaTab() {
       // Se o valor visivel na tela e justamente o revogado, para de mostrar.
       if (novoToken?.startsWith(token.prefixo)) setNovoToken(null);
       await carregarTokens();
-      setOk(`Token "${token.nome}" revogado. Deixa de funcionar na proxima chamada.`);
+      setOk(`Token "${token.nome}" revogado. Deixa de funcionar na próxima chamada.`);
     } catch (e) {
       setErro(e instanceof ApiError ? e.message : 'Falha ao revogar');
     }
@@ -206,8 +206,8 @@ export function IaTab() {
               label="Segredo de assinatura"
               hint={
                 estado?.assinado
-                  ? 'Ja existe um segredo gravado. Deixe vazio para manter; preencha para trocar.'
-                  : 'O mesmo valor configurado como webhook_secret no canal do WhatsBot. Minimo 16 caracteres.'
+                  ? 'Já existe um segredo gravado. Deixe vazio para manter; preencha para trocar.'
+                  : 'O mesmo valor configurado como webhook_secret no canal do WhatsBot. Mínimo 16 caracteres.'
               }
             >
               <Input
@@ -246,16 +246,16 @@ export function IaTab() {
         <p className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
           Com a IA ligada e entregando, o <strong>Chatbot</strong> por palavras-chave cala neste canal
           — dois bots respondendo a mesma mensagem e pior que nenhum. Fora da janela do canal, o
-          agente nao manda texto livre: so template aprovado, enviado pela propria plataforma.
+          agente não manda texto livre: só template aprovado, enviado pela própria plataforma.
         </p>
       </Card>
 
       <Card
-        titulo="Tokens de integracao"
-        descricao="Como o motor de IA entra na plataforma. Um token por integracao, revogavel um a um."
+        titulo="Tokens de integração"
+        descricao="Como o motor de IA entra na plataforma. Um token por integração, revogável um a um."
       >
         <div className="flex flex-wrap items-end gap-3">
-          <Field label="Nome da integracao">
+          <Field label="Nome da integração">
             <Input
               value={nome}
               onChange={(e) => setNome(e.target.value)}
@@ -271,7 +271,7 @@ export function IaTab() {
         {novoToken && (
           <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3">
             <p className="text-xs font-medium text-amber-700">
-              Copie agora. Este valor nao aparece de novo — se perder, revogue e crie outro.
+              Copie agora. Este valor não aparece de novo — se perder, revogue e crie outro.
             </p>
             {/* `readOnly` e nao texto solto: o campo permite selecionar tudo com
                 um clique, e o valor nao pode ser editado por engano antes de
@@ -287,7 +287,7 @@ export function IaTab() {
               onClick={() => setNovoToken(null)}
               className="mt-2 text-xs font-medium text-amber-700 hover:underline"
             >
-              Ja copiei, esconder
+              Já copiei, esconder
             </button>
           </div>
         )}
@@ -301,7 +301,7 @@ export function IaTab() {
           ) : visiveis.length === 0 ? (
             <EmptyState
               titulo="Nenhum token ativo"
-              descricao="Todos os tokens desta instalacao foram revogados. Crie um novo para religar a ponte."
+              descricao="Todos os tokens desta instalação foram revogados. Crie um novo para religar a ponte."
             />
           ) : (
             <ul className="divide-y divide-slate-100">

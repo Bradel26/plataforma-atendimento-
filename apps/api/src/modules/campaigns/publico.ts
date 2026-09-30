@@ -183,7 +183,7 @@ export function descreverFiltro(f: FiltroDePublico): string {
   if (f.funilIds?.length) partes.push(`operacoes: ${f.funilIds.length}`);
   if (f.estagioIds?.length) partes.push(`etapas: ${f.estagioIds.length}`);
   if (f.responsavelId !== undefined) {
-    partes.push(f.responsavelId === null ? 'sem responsavel' : `responsavel: ${f.responsavelId}`);
+    partes.push(f.responsavelId === null ? 'sem responsável' : `responsável: ${f.responsavelId}`);
   }
   return partes.length === 0 ? 'sem filtro' : partes.join(' · ');
 }

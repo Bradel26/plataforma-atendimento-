@@ -117,7 +117,7 @@ export async function iniciarCiclos(credenciamentoId?: string) {
             create: {
               paraStatus: 'NOVO_PARCEIRO',
               regra: 'CREDENCIAMENTO_CONCLUIDO',
-              motivo: 'Credenciamento concluido',
+              motivo: 'Credenciamento concluído',
               criadoEm: c.estagioDesde,
             },
           },
@@ -255,7 +255,7 @@ async function carregarCredenciamentoVisivel(credenciamentoId: string) {
     where: apenasVisivel(credenciamentoId, await filtroDe(politicaCredenciamentos)),
     select: { id: true },
   });
-  if (!c) throw notFound('Credenciamento nao encontrado');
+  if (!c) throw notFound('Credenciamento não encontrado');
 }
 
 export async function obterCiclo(credenciamentoId: string) {
@@ -305,11 +305,11 @@ export async function obterCiclo(credenciamentoId: string) {
 }
 
 export async function marcarEtapa(credenciamentoId: string, chave: string, concluida: boolean) {
-  if (!CHAVES_ETAPAS.includes(chave)) throw badRequest('Etapa de implantacao desconhecida');
+  if (!CHAVES_ETAPAS.includes(chave)) throw badRequest('Etapa de implantação desconhecida');
   await carregarCredenciamentoVisivel(credenciamentoId);
   await iniciarCiclos(credenciamentoId);
   const ciclo = await prisma.cicloParceiro.findFirst({ where: { credenciamentoId }, select: { id: true } });
-  if (!ciclo) throw badRequest('O parceiro ainda nao chegou ao estagio Ativo da esteira');
+  if (!ciclo) throw badRequest('O parceiro ainda não chegou ao estágio Ativo da esteira');
 
   if (concluida) {
     await prisma.cicloParceiroEtapa.upsert({
@@ -330,7 +330,7 @@ export async function mudarStatusManual(
   await carregarCredenciamentoVisivel(credenciamentoId);
   await iniciarCiclos(credenciamentoId);
   const ciclo = await prisma.cicloParceiro.findFirst({ where: { credenciamentoId } });
-  if (!ciclo) throw badRequest('O parceiro ainda nao chegou ao estagio Ativo da esteira');
+  if (!ciclo) throw badRequest('O parceiro ainda não chegou ao estágio Ativo da esteira');
 
   const erro = validarMudancaManual(ciclo.status, input.status, input.motivo);
   if (erro) throw badRequest(erro);

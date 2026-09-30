@@ -21,7 +21,7 @@ export function BarraDeSelecao({
   return (
     <div
       role="toolbar"
-      aria-label="Acoes em lote"
+      aria-label="Ações em lote"
       className="anim-entrada-suave mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-[var(--brand-primary)]/30 bg-[var(--brand-primary)]/5 px-3 py-2 text-sm"
     >
       <span className="font-medium text-slate-700">
@@ -33,7 +33,7 @@ export function BarraDeSelecao({
         onClick={aoLimpar}
         className="anel-de-foco ml-auto rounded px-1 text-xs text-slate-500 underline-offset-2 hover:text-slate-700 hover:underline"
       >
-        Limpar selecao
+        Limpar seleção
       </button>
     </div>
   );

@@ -17,7 +17,7 @@ import {
  */
 const pessoa = (over: Partial<ContatoDoPublico> = {}): ContatoDoPublico => ({
   id: 'c1',
-  nome: 'Alguem',
+  nome: 'Alguém',
   email: 'alguem@exemplo.com',
   telefone: '+5511900000000',
   anonimizadoEm: null,
@@ -34,7 +34,7 @@ describe('montarPublico', () => {
     expect(p.semEndereco.map((c) => c.id)).toEqual(['b']);
   });
 
-  it('nao soma quem nao recebe no numero do publico', () => {
+  it('não soma quem não recebe no número do público', () => {
     // O defeito que este modulo existe para evitar: "publico: 2" e depois uma
     // falha no relatorio. `totalFiltrado` fica disponivel a parte.
     const p = montarPublico([pessoa({ id: 'a' }), pessoa({ id: 'b', telefone: null })], 'WHATSAPP');
@@ -48,7 +48,7 @@ describe('montarPublico', () => {
     expect(p.semEndereco).toHaveLength(1);
   });
 
-  it('cobra e-mail, e nao telefone, na campanha de e-mail', () => {
+  it('cobra e-mail, é não telefone, na campanha de e-mail', () => {
     const p = montarPublico(
       [pessoa({ id: 'a', email: null }), pessoa({ id: 'b', telefone: null })],
       'EMAIL',
@@ -63,7 +63,7 @@ describe('montarPublico', () => {
     expect(p.anonimizados).toHaveLength(1);
   });
 
-  it('anonimizado sai ANTES da conta de endereco, e nao vira "cadastro a completar"', () => {
+  it('anonimizado sai ANTES da conta de endereço, é não vira "cadastro a completar"', () => {
     // Se caisse em `semEndereco`, a tela convidaria a "completar o cadastro" de
     // quem pediu para ser esquecido.
     const p = montarPublico([pessoa({ anonimizadoEm: new Date(), telefone: null })], 'WHATSAPP');
@@ -71,7 +71,7 @@ describe('montarPublico', () => {
     expect(p.anonimizados).toHaveLength(1);
   });
 
-  it('as tres listas particionam o filtrado: ninguem se perde nem conta duas vezes', () => {
+  it('as três listas particionam o filtrado: ninguém se perde nem conta duas vezes', () => {
     const p = montarPublico(
       [
         pessoa({ id: 'a' }),
@@ -83,7 +83,7 @@ describe('montarPublico', () => {
     expect(p.alcancaveis.length + p.semEndereco.length + p.anonimizados.length).toBe(p.totalFiltrado);
   });
 
-  it('canal que nao alcanca ninguem nao monta publico alcancavel', () => {
+  it('canal que não alcanca ninguém não monta público alcançável', () => {
     // Webchat e redes sociais nao tem endereco proprio no cadastro: e o cliente
     // que precisa escrever primeiro.
     const p = montarPublico([pessoa(), pessoa({ id: 'b' })], 'WEBCHAT');
@@ -92,13 +92,13 @@ describe('montarPublico', () => {
     expect(p.campoExigido).toBeNull();
   });
 
-  it('lista vazia nao inventa numero', () => {
+  it('lista vazia não inventa número', () => {
     const p = montarPublico([], 'WHATSAPP');
     expect(p).toMatchObject({ totalFiltrado: 0, campoExigido: 'telefone' });
     expect(p.alcancaveis).toEqual([]);
   });
 
-  it('todo canal tem regra declarada — canal novo nao entra em silencio', () => {
+  it('todo canal tem regra declarada — canal novo não entra em silencio', () => {
     for (const [canal, campo] of Object.entries(CAMPO_DO_CANAL)) {
       expect([null, 'telefone', 'email'], `canal ${canal}`).toContain(campo);
     }
@@ -113,15 +113,15 @@ describe('filtroVazio', () => {
     expect(filtroVazio({})).toBe(true);
   });
 
-  it('lista vazia tambem e vazio: nao seleciona a base inteira', () => {
+  it('lista vazia também e vazio: não seleciona a base inteira', () => {
     expect(filtroVazio({ ciclo: [], tags: [], origem: [], papel: [] })).toBe(true);
   });
 
-  it('um degrau ja e filtro', () => {
+  it('um degrau já e filtro', () => {
     expect(filtroVazio({ ciclo: ['CLIENTE'] })).toBe(false);
   });
 
-  it('"sem responsavel" e um filtro de verdade, e nao ausencia de filtro', () => {
+  it('"sem responsável" e um filtro de verdade, é não ausência de filtro', () => {
     // `null` explicito e a carteira aberta — uma pergunta legitima. Se contasse
     // como vazio, o pedido seria recusado sem motivo.
     expect(filtroVazio({ responsavelId: null })).toBe(false);
@@ -143,8 +143,8 @@ describe('descreverFiltro', () => {
     expect(descreverFiltro({})).toBe('sem filtro');
   });
 
-  it('distingue "sem responsavel" de um responsavel especifico', () => {
-    expect(descreverFiltro({ responsavelId: null })).toContain('sem responsavel');
-    expect(descreverFiltro({ responsavelId: 'u1' })).toContain('responsavel: u1');
+  it('distingue "sem responsável" de um responsável especifico', () => {
+    expect(descreverFiltro({ responsavelId: null })).toContain('sem responsável');
+    expect(descreverFiltro({ responsavelId: 'u1' })).toContain('responsável: u1');
   });
 });

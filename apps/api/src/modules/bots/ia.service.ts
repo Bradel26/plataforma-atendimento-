@@ -58,7 +58,7 @@ export async function resolverCanal(canalId: string): Promise<Channel> {
 
   const config = await prisma.channelConfig.findUnique({ where: { id: bruto } });
   if (!config) {
-    throw notFound(`Canal ${bruto} nao encontrado — informe o nome (ex.: WHATSAPP) ou o id da configuracao`);
+    throw notFound(`Canal ${bruto} não encontrado — informe o nome (ex.: WHATSAPP) ou o id da configuração`);
   }
   return config.canal;
 }
@@ -72,7 +72,7 @@ export async function resolverCanal(canalId: string): Promise<Channel> {
  */
 async function conversaParaResposta(canal: Channel, contatoId: string) {
   const contato = await prisma.contact.findUnique({ where: { id: contatoId } });
-  if (!contato) throw notFound('Contato nao encontrado');
+  if (!contato) throw notFound('Contato não encontrado');
 
   const conversa = await prisma.conversation.findFirst({
     where: { contatoId, canal, status: { not: 'FINALIZADO' } },
@@ -83,7 +83,7 @@ async function conversaParaResposta(canal: Channel, contatoId: string) {
     throw new AppError(
       409,
       'SEM_CONVERSA_ABERTA',
-      `Nao ha conversa aberta com este contato no canal ${canal}. A IA responde a atendimento em curso; ` +
+      `Não há conversa aberta com este contato no canal ${canal}. A IA responde a atendimento em curso; ` +
         'para iniciar contato, use campanha.',
     );
   }
@@ -92,7 +92,7 @@ async function conversaParaResposta(canal: Channel, contatoId: string) {
     throw new AppError(
       409,
       'ATENDIMENTO_HUMANO',
-      'Um atendente assumiu esta conversa — a IA nao responde em cima do humano.',
+      'Um atendente assumiu esta conversa — a IA não responde em cima do humano.',
     );
   }
 
@@ -117,8 +117,8 @@ async function garantirJanela(conversa: Conversation) {
   throw new AppError(
     409,
     'JANELA_FECHADA',
-    `Fora da janela de ${horas}h — a ultima mensagem do cliente foi ha ${Math.floor(decorridas)}h. ` +
-      'Fora dela o canal so aceita template aprovado, que e enviado pela propria plataforma.',
+    `Fora da janela de ${horas}h — a última mensagem do cliente foi há ${Math.floor(decorridas)}h. ` +
+      'Fora dela o canal só aceita template aprovado, que e enviado pela própria plataforma.',
   );
 }
 
@@ -202,7 +202,7 @@ async function baixarParaEnvio(url: string, nome: string | null) {
   try {
     destino = new URL(url);
   } catch {
-    throw badRequest('anexo.url invalida');
+    throw badRequest('anexo.url inválida');
   }
   if (destino.protocol !== 'https:' && destino.protocol !== 'http:') {
     throw badRequest('anexo.url precisa ser http ou https');
@@ -216,14 +216,14 @@ async function baixarParaEnvio(url: string, nome: string | null) {
       throw new AppError(
         502,
         'ANEXO_INACESSIVEL',
-        `Nao foi possivel baixar o anexo: ${err instanceof Error ? err.message : 'erro de rede'}`,
+        `Não foi possível baixar o anexo: ${err instanceof Error ? err.message : 'erro de rede'}`,
       );
     },
   );
   if (!resposta.ok) throw new AppError(502, 'ANEXO_INACESSIVEL', `O anexo respondeu HTTP ${resposta.status}`);
 
   const tipo = (resposta.headers.get('content-type') ?? '').split(';')[0]!.trim().toLowerCase();
-  if (!tipoAceito(tipo)) throw badRequest(`Tipo de anexo nao aceito: ${tipo || 'desconhecido'}`);
+  if (!tipoAceito(tipo)) throw badRequest(`Tipo de anexo não aceito: ${tipo || 'desconhecido'}`);
 
   const buffer = Buffer.from(await resposta.arrayBuffer());
   if (buffer.length > limiteBytes) throw badRequest(`Anexo acima do limite de ${env.UPLOAD_MAX_MB} MB`);
@@ -459,7 +459,7 @@ export async function estadoDaIa(canal: Channel) {
  */
 export async function estadoDaIaDoNumero(id: string) {
   const config = await obterConfigPorId(id);
-  if (!config) throw notFound('Numero nao encontrado');
+  if (!config) throw notFound('Número não encontrado');
   return estadoDeConfig(config.canal, config);
 }
 
@@ -504,7 +504,7 @@ export async function salvarIaDoNumero(
   input: { iaAtiva?: boolean; iaUrlWebhook?: string | null; iaSegredo?: string | null },
 ) {
   const atual = await obterConfigPorId(id);
-  if (!atual) throw notFound('Numero nao encontrado');
+  if (!atual) throw notFound('Número não encontrado');
 
   const futuro = { ...atual, ...input };
   if (futuro.iaAtiva && !(futuro.iaUrlWebhook && futuro.iaSegredo)) {

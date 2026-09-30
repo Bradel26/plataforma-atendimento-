@@ -19,7 +19,7 @@ export const criarCampoCustomizadoSchema = z
     ordem: z.number().int().default(0),
   })
   .refine((d) => d.tipo !== 'SELECAO' || (d.opcoes && d.opcoes.length >= 2), {
-    message: 'Campo do tipo SELECAO exige ao menos 2 opcoes',
+    message: 'Campo do tipo SELEÇÃO exige ao menos 2 opções',
     path: ['opcoes'],
   });
 

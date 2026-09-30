@@ -49,7 +49,7 @@ produtosInstaladosRoutes.get(
       where: apenasVisivel(id, await filtroDe(politicaProdutosDoCliente)),
       include: inclusaoProdutoDoCliente,
     });
-    if (!produto) throw notFound('Produto nao encontrado');
+    if (!produto) throw notFound('Produto não encontrado');
     res.json({ produto: toProdutoDoCliente(produto) });
   }),
 );
@@ -63,7 +63,7 @@ produtosInstaladosRoutes.post(
     // nao serve aqui: ela pula a consulta para quem ve tudo (ADMIN/SUPERVISOR), e um
     // contaId inexistente so apareceria como violacao de FK no banco (500).
     const conta = await prisma.account.findFirst({ where: apenasVisivel(contaId, await filtroDe(politicaContas)) });
-    if (!conta) throw notFound('Conta nao encontrada');
+    if (!conta) throw notFound('Conta não encontrada');
 
     const produto = await prisma.produtoDoCliente.create({
       data: {
@@ -96,7 +96,7 @@ produtosInstaladosRoutes.patch(
     const atual = await prisma.produtoDoCliente.findFirst({
       where: apenasVisivel(id, await filtroDe(politicaProdutosDoCliente)),
     });
-    if (!atual) throw notFound('Produto nao encontrado');
+    if (!atual) throw notFound('Produto não encontrado');
 
     const produto = await prisma.produtoDoCliente.update({
       where: { id },
@@ -115,7 +115,7 @@ produtosInstaladosRoutes.delete(
     const atual = await prisma.produtoDoCliente.findFirst({
       where: apenasVisivel(id, await filtroDe(politicaProdutosDoCliente)),
     });
-    if (!atual) throw notFound('Produto nao encontrado');
+    if (!atual) throw notFound('Produto não encontrado');
     await prisma.produtoDoCliente.delete({ where: { id } });
     res.status(204).end();
   }),
@@ -129,7 +129,7 @@ produtosInstaladosRoutes.post(
     const produtoAtual = await prisma.produtoDoCliente.findFirst({
       where: apenasVisivel(id, await filtroDe(politicaProdutosDoCliente)),
     });
-    if (!produtoAtual) throw notFound('Produto nao encontrado');
+    if (!produtoAtual) throw notFound('Produto não encontrado');
 
     const { dataInicio, ...dados } = req.body as z.infer<typeof criarComponenteSchema>;
     const produto = await prisma.produtoDoCliente.update({
@@ -154,10 +154,10 @@ produtosInstaladosRoutes.patch(
     const produtoAtual = await prisma.produtoDoCliente.findFirst({
       where: apenasVisivel(id, await filtroDe(politicaProdutosDoCliente)),
     });
-    if (!produtoAtual) throw notFound('Produto nao encontrado');
+    if (!produtoAtual) throw notFound('Produto não encontrado');
 
     const componente = await prisma.componenteGarantia.findFirst({ where: { id: componenteId, produtoDoClienteId: id } });
-    if (!componente) throw notFound('Componente de garantia nao encontrado');
+    if (!componente) throw notFound('Componente de garantia não encontrado');
 
     await prisma.componenteGarantia.update({ where: { id: componenteId }, data: req.body });
     const produto = await prisma.produtoDoCliente.findFirst({
@@ -176,10 +176,10 @@ produtosInstaladosRoutes.delete(
     const produtoAtual = await prisma.produtoDoCliente.findFirst({
       where: apenasVisivel(id, await filtroDe(politicaProdutosDoCliente)),
     });
-    if (!produtoAtual) throw notFound('Produto nao encontrado');
+    if (!produtoAtual) throw notFound('Produto não encontrado');
 
     const componente = await prisma.componenteGarantia.findFirst({ where: { id: componenteId, produtoDoClienteId: id } });
-    if (!componente) throw notFound('Componente de garantia nao encontrado');
+    if (!componente) throw notFound('Componente de garantia não encontrado');
 
     await prisma.componenteGarantia.delete({ where: { id: componenteId } });
     const produto = await prisma.produtoDoCliente.findFirst({

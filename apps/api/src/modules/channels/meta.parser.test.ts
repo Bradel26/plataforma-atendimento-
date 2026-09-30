@@ -38,7 +38,7 @@ describe('webhook do WhatsApp', () => {
   });
 
   /** A Cloud API manda so o media id; quem troca pelo binario e o inbound. */
-  it('leva o media id e a legenda da imagem', () => {
+  it('leva o média id e a legenda da imagem', () => {
     const [msg] = normalizarWebhook(
       whatsapp({
         id: 'wamid.2',
@@ -51,11 +51,11 @@ describe('webhook do WhatsApp', () => {
     expect(msg).toMatchObject({ tipoAnexo: 'IMAGEM', conteudo: 'Olha o erro', anexoIdExterno: 'media-99' });
   });
 
-  it('usa marcador quando o anexo nao tem legenda', () => {
+  it('usa marcador quando o anexo não tem legenda', () => {
     const [msg] = normalizarWebhook(
       whatsapp({ id: 'wamid.3', from: '5511977776666', timestamp: '1', type: 'audio', audio: { id: 'a-1' } }) as never,
     );
-    expect(msg).toMatchObject({ tipoAnexo: 'AUDIO', conteudo: '[audio recebido]', anexoIdExterno: 'a-1' });
+    expect(msg).toMatchObject({ tipoAnexo: 'AUDIO', conteudo: '[áudio recebido]', anexoIdExterno: 'a-1' });
   });
 
   it('guarda o nome original do documento', () => {
@@ -95,7 +95,7 @@ describe('webhook do Messenger e Instagram', () => {
     expect(normalizarWebhook(messaging('page') as never)[0]?.canal).toBe('FACEBOOK');
   });
 
-  it('leva a URL temporaria do anexo para o inbound baixar', () => {
+  it('leva a URL temporária do anexo para o inbound baixar', () => {
     const [msg] = normalizarWebhook(messaging('page') as never);
     expect(msg).toMatchObject({ tipoAnexo: 'IMAGEM', anexoUrl: 'https://cdn.meta/x.jpg', anexoIdExterno: null });
   });

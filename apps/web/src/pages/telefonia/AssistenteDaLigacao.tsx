@@ -43,7 +43,7 @@ export function AssistenteDaLigacao({ chamadaId }: { chamadaId: string }) {
       setAnalise(r.analise);
       setErro(null);
     } catch (e) {
-      setErro(e instanceof ApiError ? e.message : 'Falha ao carregar a analise da ligacao');
+      setErro(e instanceof ApiError ? e.message : 'Falha ao carregar a análise da ligação');
     }
   }, [chamadaId]);
 
@@ -80,14 +80,14 @@ export function AssistenteDaLigacao({ chamadaId }: { chamadaId: string }) {
       );
       setAnalise(r.analise);
     } catch (e) {
-      setErro(e instanceof ApiError ? e.message : 'Falha ao descartar a sugestao');
+      setErro(e instanceof ApiError ? e.message : 'Falha ao descartar a sugestão');
     } finally {
       setOcupado(null);
     }
   };
 
   if (erro) return <Alerta>{erro}</Alerta>;
-  if (!analise) return <p className="text-sm text-slate-500">Carregando a analise...</p>;
+  if (!analise) return <p className="text-sm text-slate-500">Carregando a análise...</p>;
 
   /*
    * O estado vazio honesto, pelo mesmo raciocinio do medidor de IA (item 6.8).
@@ -100,12 +100,12 @@ export function AssistenteDaLigacao({ chamadaId }: { chamadaId: string }) {
     return (
       <div className="rounded-lg border border-dashed border-slate-300 px-4 py-3">
         <p className="text-sm text-slate-600">
-          Nenhum motor analisou esta ligacao. A plataforma guarda a gravacao e o registro; a
-          transcricao, o resumo e o sentimento vem de um motor externo pela ponte de integracao.
+          Nenhum motor analisou esta ligação. A plataforma guarda a gravação e o registro; a
+          transcrição, o resumo e o sentimento vem de um motor externo pela ponte de integração.
         </p>
         <p className="mt-1 text-xs text-slate-500">
-          Enquanto isso, o sentimento fica vazio em vez de "neutro" &mdash; ausencia de analise nao
-          e uma ligacao morna.
+          Enquanto isso, o sentimento fica vazio em vez de "neutro" &mdash; ausência de análise não
+          e uma ligação morna.
         </p>
       </div>
     );
@@ -122,11 +122,11 @@ export function AssistenteDaLigacao({ chamadaId }: { chamadaId: string }) {
         {analise.sentimento ? (
           <Badge tom={TOM[analise.sentimento]}>{LABEL_SENTIMENTO[analise.sentimento]}</Badge>
         ) : (
-          <span className="text-xs text-slate-500">Sentimento nao lido pelo motor</span>
+          <span className="text-xs text-slate-500">Sentimento não lido pelo motor</span>
         )}
         {analise.analisadoPor && (
           <span className="text-xs text-slate-500">
-            analise de <strong className="font-medium text-slate-600">{analise.analisadoPor}</strong>
+            análise de <strong className="font-medium text-slate-600">{analise.analisadoPor}</strong>
           </span>
         )}
       </div>
@@ -137,18 +137,18 @@ export function AssistenteDaLigacao({ chamadaId }: { chamadaId: string }) {
           <p className="mt-0.5 text-sm text-slate-800">{analise.resumo}</p>
         </div>
       ) : (
-        <p className="text-xs text-slate-500">O motor nao mandou resumo desta ligacao.</p>
+        <p className="text-xs text-slate-500">O motor não mandou resumo desta ligação.</p>
       )}
 
       <div>
         <p className="text-xs font-medium text-slate-500">
-          Proximas acoes {pendentes.length > 0 && `(${pendentes.length} em aberto)`}
+          Próximas ações {pendentes.length > 0 && `(${pendentes.length} em aberto)`}
         </p>
         {analise.acoes.length === 0 ? (
           // Analisada e sem sugestao e resultado legitimo, e a frase diz isso —
           // "nenhuma acao" aqui nao significa "o motor falhou".
           <p className="mt-0.5 text-sm text-slate-600">
-            O motor ouviu a ligacao e nao sugeriu nenhuma proxima acao.
+            O motor ouviu a ligação é não sugeriu nenhuma próxima ação.
           </p>
         ) : (
           <ul className="mt-1 space-y-1.5">
@@ -196,7 +196,7 @@ export function AssistenteDaLigacao({ chamadaId }: { chamadaId: string }) {
             onClick={() => setVerTranscricao((v) => !v)}
             className="text-xs text-slate-600 underline-offset-2 hover:underline"
           >
-            {verTranscricao ? 'Esconder transcricao' : 'Ver transcricao'}
+            {verTranscricao ? 'Esconder transcrição' : 'Ver transcrição'}
           </button>
           {/* Fechada por padrao: transcricao de tres minutos empurraria o resumo
               e as acoes para fora da tela, e sao eles que decidem o que fazer. */}

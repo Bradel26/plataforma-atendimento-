@@ -43,7 +43,7 @@ export function CicloDoParceiro({ contatoId }: { contatoId: string }) {
     <>
     <Card
       titulo="Ciclo do parceiro"
-      descricao={creds.length === 0 ? 'Ainda nao entrou em nenhuma esteira' : 'Etapa atual em cada operacao'}
+      descricao={creds.length === 0 ? 'Ainda não entrou em nenhuma esteira' : 'Etapa atual em cada operação'}
       acao={
         <Link to="/esteira" className="text-sm text-[var(--brand-primary)] hover:underline">
           Abrir esteira
@@ -51,7 +51,7 @@ export function CicloDoParceiro({ contatoId }: { contatoId: string }) {
       }
     >
       {creds.length === 0 ? (
-        <p className="text-sm text-slate-500">Ainda nao esta em nenhuma esteira. Envie para uma operacao abaixo.</p>
+        <p className="text-sm text-slate-500">Ainda não está em nenhuma esteira. Envie para uma operação abaixo.</p>
       ) : (
         <div className="space-y-4">
           {creds.map((c) => {

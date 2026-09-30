@@ -25,7 +25,7 @@ export async function login({ email, senha }: LoginInput) {
     throw new AppError(
       409,
       'ORGANIZACAO_AMBIGUA',
-      'Este e-mail existe em mais de uma organizacao. Informe qual delas.',
+      'Este e-mail existe em mais de uma organização. Informe qual delas.',
     );
   }
 
@@ -41,9 +41,9 @@ export async function login({ email, senha }: LoginInput) {
     await registrarFalha(email);
     throw CREDENCIAIS_INVALIDAS;
   }
-  if (!user.ativo) throw new AppError(403, 'USER_INACTIVE', 'Usuario desativado — procure um administrador');
+  if (!user.ativo) throw new AppError(403, 'USER_INACTIVE', 'Usuário desativado — procure um administrador');
   if (user.senhaPendente) {
-    throw new AppError(403, 'PASSWORD_CHANGE_REQUIRED', 'Altere sua senha temporaria para continuar');
+    throw new AppError(403, 'PASSWORD_CHANGE_REQUIRED', 'Altere sua senha temporária para continuar');
   }
 
   await limparFalhas(email);
@@ -73,15 +73,15 @@ export async function alterarSenhaInicial({ email, senhaAtual, novaSenha }: Alte
   await garantirNaoBloqueado(email);
   const candidatos = await prisma.user.findMany({ where: { email: email.toLowerCase() }, take: 2 });
   if (candidatos.length > 1) {
-    throw new AppError(409, 'ORGANIZACAO_AMBIGUA', 'Este e-mail existe em mais de uma organizacao.');
+    throw new AppError(409, 'ORGANIZACAO_AMBIGUA', 'Este e-mail existe em mais de uma organização.');
   }
   const user = candidatos[0];
   if (!user || !(await verifyPassword(senhaAtual, user.senhaHash))) {
     await registrarFalha(email);
     throw CREDENCIAIS_INVALIDAS;
   }
-  if (!user.ativo) throw new AppError(403, 'USER_INACTIVE', 'Usuario desativado — procure um administrador');
-  if (!user.senhaPendente) throw new AppError(409, 'PASSWORD_CHANGE_NOT_REQUIRED', 'A senha desta conta ja foi alterada.');
+  if (!user.ativo) throw new AppError(403, 'USER_INACTIVE', 'Usuário desativado — procure um administrador');
+  if (!user.senhaPendente) throw new AppError(409, 'PASSWORD_CHANGE_NOT_REQUIRED', 'A senha desta conta já foi alterada.');
 
   await prisma.user.update({
     where: { id: user.id },
@@ -93,7 +93,7 @@ export async function alterarSenhaInicial({ email, senhaAtual, novaSenha }: Alte
 /** Emite um novo par de tokens a partir de um refresh token ja validado. */
 export async function sessionForUserId(userId: string) {
   const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user || !user.ativo) throw unauthorized('Sessao invalida, faca login novamente');
+  if (!user || !user.ativo) throw unauthorized('Sessão inválida, faca login novamente');
   return buildSession(user);
 }
 

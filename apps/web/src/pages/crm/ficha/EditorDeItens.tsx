@@ -152,15 +152,15 @@ export function EditorDeItens({
 
       <div className="overflow-x-auto">
         <table className="w-full min-w-[52rem] text-sm">
-          <caption className="sr-only">Itens da proposta, editaveis</caption>
+          <caption className="sr-only">Itens da proposta, editáveis</caption>
           <thead>
             <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
               <th scope="col" className="pb-2 pr-2">Produto</th>
               <th scope="col" className="pb-2 pr-2 text-right">Qtd.</th>
-              <th scope="col" className="pb-2 pr-2 text-right">Preco</th>
+              <th scope="col" className="pb-2 pr-2 text-right">Preço</th>
               <th scope="col" className="pb-2 pr-2 text-right">Acresc.</th>
               <th scope="col" className="pb-2 pr-2 text-right">Desc.</th>
-              <th scope="col" className="pb-2 pr-2">Cobranca</th>
+              <th scope="col" className="pb-2 pr-2">Cobrança</th>
               <th scope="col" className="pb-2 pr-2 text-right">Custo un.</th>
               <th scope="col" className="pb-2 pr-2 text-right">Total</th>
               <th scope="col" className="pb-2"><span className="sr-only">Remover</span></th>
@@ -196,16 +196,16 @@ export function EditorDeItens({
                   </td>
                   <td className="py-1.5 pr-2">
                     <Input
-                      aria-label="Preco unitario"
+                      aria-label="Preço unitário"
                       className="w-24 text-right"
-                      placeholder="catalogo"
+                      placeholder="catálogo"
                       value={l.precoUnitario}
                       onChange={(e) => mexer(l.chave, 'precoUnitario', e.target.value)}
                     />
                   </td>
                   <td className="py-1.5 pr-2">
                     <Input
-                      aria-label="Acrescimo"
+                      aria-label="Acréscimo"
                       className="w-20 text-right"
                       value={l.acrescimo}
                       onChange={(e) => mexer(l.chave, 'acrescimo', e.target.value)}
@@ -221,17 +221,17 @@ export function EditorDeItens({
                   </td>
                   <td className="py-1.5 pr-2">
                     <Select
-                      aria-label="Cobranca"
+                      aria-label="Cobrança"
                       value={l.recorrencia}
                       onChange={(e) => mexer(l.chave, 'recorrencia', e.target.value)}
                     >
                       <option value="UNICO">Uma vez</option>
-                      <option value="MENSAL">Por mes</option>
+                      <option value="MENSAL">Por mês</option>
                     </Select>
                   </td>
                   <td className="py-1.5 pr-2">
                     <Input
-                      aria-label="Custo unitario"
+                      aria-label="Custo unitário"
                       className="w-24 text-right"
                       placeholder="—"
                       value={l.custoUnitario}
@@ -244,7 +244,7 @@ export function EditorDeItens({
                     }`}
                   >
                     {moeda(liquido)}
-                    {l.recorrencia === 'MENSAL' && <span className="block text-xs font-normal text-slate-500">/mes</span>}
+                    {l.recorrencia === 'MENSAL' && <span className="block text-xs font-normal text-slate-500">/mês</span>}
                   </td>
                   <td className="py-1.5 text-right">
                     <button
@@ -264,7 +264,7 @@ export function EditorDeItens({
 
       <div className="grid gap-3 sm:grid-cols-2 sm:items-end">
         <Field
-          label="Meses de recorrencia"
+          label="Meses de recorrência"
           hint="Por quantos meses a parte mensal entra no valor total"
         >
           <Input
@@ -290,7 +290,7 @@ export function EditorDeItens({
             Uma vez <strong className="font-semibold tabular-nums text-slate-800">{moeda(unico)}</strong>
             {mensal !== 0 && (
               <>
-                {' '}· por mes <strong className="font-semibold tabular-nums text-slate-800">{moeda(mensal)}</strong>
+                {' '}· por mês <strong className="font-semibold tabular-nums text-slate-800">{moeda(mensal)}</strong>
               </>
             )}
           </p>

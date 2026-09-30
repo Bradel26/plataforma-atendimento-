@@ -59,7 +59,7 @@ export function EnviarParaCredenciamento({ contatos, contaId, operacoes, aoEnvia
             </Select>
           </Field>
         )}
-        <Field label="Operacao">
+        <Field label="Operação">
           <Select value={funilId} onChange={(e) => setFunilId(e.target.value)}>
             <option value="">Selecione...</option>
             {operacoes.map((o) => (

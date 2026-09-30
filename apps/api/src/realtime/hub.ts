@@ -64,7 +64,7 @@ function emitir(evento: string, payload: unknown, destinos: Destinos) {
 function organizacaoDoContexto(): string | null {
   const ctx = contextoAtual();
   if (!ctx || ctx.irrestrito || !ctx.organizacaoId) {
-    console.warn('[realtime] evento descartado: sem organizacao no contexto');
+    console.warn('[realtime] evento descartado: sem organização no contexto');
     return null;
   }
   return ctx.organizacaoId;

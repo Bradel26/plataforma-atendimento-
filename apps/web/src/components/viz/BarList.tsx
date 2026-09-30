@@ -16,7 +16,7 @@ type Item = { rotulo: string; valor: number; cor?: string };
  */
 export function BarList({
   itens,
-  vazio = 'Sem dados no periodo',
+  vazio = 'Sem dados no período',
   unidade,
 }: {
   itens: Item[];
@@ -40,7 +40,7 @@ export function BarList({
     <div>
       {comoTabela ? (
         <table className="w-full text-sm" id={idTabela}>
-          <caption className="sr-only">Valores por categoria, com participacao no total</caption>
+          <caption className="sr-only">Valores por categoria, com participação no total</caption>
           <thead>
             <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
               <th scope="col" className="py-1.5 pr-4 font-medium">Categoria</th>
@@ -100,7 +100,7 @@ export function BarList({
         aria-controls={comoTabela ? idTabela : undefined}
         className="mt-3 text-xs text-slate-500 underline decoration-dotted underline-offset-2 transition hover:text-slate-700"
       >
-        {comoTabela ? 'Ver como grafico' : 'Ver como tabela'}
+        {comoTabela ? 'Ver como gráfico' : 'Ver como tabela'}
       </button>
     </div>
   );

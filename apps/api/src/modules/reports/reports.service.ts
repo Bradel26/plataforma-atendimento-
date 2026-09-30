@@ -82,7 +82,7 @@ export async function relatorioAtendimentos(periodo: Periodo): Promise<Relatorio
       { chave: 'mensagens', rotulo: 'Mensagens' },
       { chave: 'tme', rotulo: 'TME' },
       { chave: 'tma', rotulo: 'TMA' },
-      { chave: 'satisfacao', rotulo: 'Satisfacao' },
+      { chave: 'satisfacao', rotulo: 'Satisfação' },
     ],
     linhas: registros.map((r) => ({
       agente: r.nome,
@@ -155,14 +155,14 @@ export async function relatorioProtocolos(periodo: Periodo): Promise<Relatorio> 
   const agora = new Date();
 
   return {
-    titulo: 'Protocolos abertos no periodo',
+    titulo: 'Protocolos abertos no período',
     periodo,
     colunas: [
-      { chave: 'numero', rotulo: 'Numero' },
-      { chave: 'titulo', rotulo: 'Titulo' },
+      { chave: 'numero', rotulo: 'Número' },
+      { chave: 'titulo', rotulo: 'Título' },
       { chave: 'status', rotulo: 'Status' },
       { chave: 'prioridade', rotulo: 'Prioridade' },
-      { chave: 'responsavel', rotulo: 'Responsavel' },
+      { chave: 'responsavel', rotulo: 'Responsável' },
       { chave: 'sla', rotulo: 'SLA' },
       { chave: 'resolucao', rotulo: 'Tempo de resolucao' },
     ],
@@ -202,7 +202,7 @@ export async function relatorioJornada(periodo: Periodo): Promise<Relatorio> {
     periodo,
     colunas: [
       { chave: 'agente', rotulo: 'Agente' },
-      { chave: 'disponivel', rotulo: 'Disponivel' },
+      { chave: 'disponivel', rotulo: 'Disponível' },
       { chave: 'atendimento', rotulo: 'Em atendimento' },
       { chave: 'pausa', rotulo: 'Pausa' },
       { chave: 'trabalhado', rotulo: 'Jornada produtiva' },
@@ -241,7 +241,7 @@ export async function relatorioFunil(periodo: Periodo): Promise<Relatorio> {
     colunas: [
       { chave: 'fase', rotulo: 'Fase' },
       { chave: 'leads', rotulo: 'Leads' },
-      { chave: 'participacao', rotulo: 'Participacao' },
+      { chave: 'participacao', rotulo: 'Participação' },
       { chave: 'valor', rotulo: 'Valor estimado' },
     ],
     linhas: grupos.map((g) => ({

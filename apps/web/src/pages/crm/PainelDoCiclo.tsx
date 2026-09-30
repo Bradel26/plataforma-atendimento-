@@ -136,8 +136,8 @@ export function PainelDoCiclo({ credenciamentoId, aoMudar }: { credenciamentoId:
     return (
       <Card titulo="Ciclo de vida">
         <EmptyState
-          titulo="O ciclo ainda nao comecou"
-          descricao="Ele comeca quando o credenciamento chega ao estagio Ativo da esteira."
+          titulo="O ciclo ainda não começou"
+          descricao="Ele comeca quando o credenciamento chega ao estágio Ativo da esteira."
         />
       </Card>
     );
@@ -156,11 +156,11 @@ export function PainelDoCiclo({ credenciamentoId, aoMudar }: { credenciamentoId:
         {erro && <Alerta>{erro}</Alerta>}
 
         {ciclo.status === 'SEM_ACOMPANHAMENTO' && (
-          <Alerta tipo="aviso">Parceiro ha {ciclo.diasSemInteracao} dias sem acompanhamento.</Alerta>
+          <Alerta tipo="aviso">Parceiro há {ciclo.diasSemInteracao} dias sem acompanhamento.</Alerta>
         )}
         {ciclo.implantacaoAtrasada && (
           <Alerta tipo="aviso">
-            Credenciado ha {ciclo.diasComoParceiro} dias e nenhuma etapa da implantacao foi concluida.
+            Credenciado há {ciclo.diasComoParceiro} dias e nenhuma etapa da implantação foi concluída.
           </Alerta>
         )}
 
@@ -168,12 +168,12 @@ export function PainelDoCiclo({ credenciamentoId, aoMudar }: { credenciamentoId:
           <div>
             <dt className="text-xs text-slate-500">Parceiro desde</dt>
             <dd className="text-slate-800">
-              {dataBr(ciclo.credenciadoEm)} <span className="text-slate-500">· ha {ciclo.diasComoParceiro} dias</span>
+              {dataBr(ciclo.credenciadoEm)} <span className="text-slate-500">· há {ciclo.diasComoParceiro} dias</span>
             </dd>
           </div>
           <div>
-            <dt className="text-xs text-slate-500">Consultor responsavel</dt>
-            <dd className="text-slate-800">{ciclo.responsavel?.nome ?? 'Sem responsavel'}</dd>
+            <dt className="text-xs text-slate-500">Consultor responsável</dt>
+            <dd className="text-slate-800">{ciclo.responsavel?.nome ?? 'Sem responsável'}</dd>
           </div>
           <div>
             <dt className="text-xs text-slate-500">No status atual</dt>
@@ -183,12 +183,12 @@ export function PainelDoCiclo({ credenciamentoId, aoMudar }: { credenciamentoId:
             </dd>
           </div>
           <div>
-            <dt className="text-xs text-slate-500">Ultima interacao</dt>
+            <dt className="text-xs text-slate-500">Última interação</dt>
             <dd className="text-slate-800">
               {ciclo.ultimaInteracaoEm ? (
                 <>
                   {dataBr(ciclo.ultimaInteracaoEm)}
-                  <span className="text-slate-500"> · ha {ciclo.diasSemInteracao} dias</span>
+                  <span className="text-slate-500"> · há {ciclo.diasSemInteracao} dias</span>
                 </>
               ) : (
                 'Nenhuma registrada'
@@ -200,7 +200,7 @@ export function PainelDoCiclo({ credenciamentoId, aoMudar }: { credenciamentoId:
         <section aria-labelledby={`impl-${ciclo.id}`}>
           <div className="mb-2 flex items-center justify-between">
             <h3 id={`impl-${ciclo.id}`} className="text-sm font-medium text-slate-700">
-              Implantacao
+              Implantação
             </h3>
             <span className="text-xs text-slate-500">
               {feitas} de {ciclo.etapas.length} etapas
@@ -226,7 +226,7 @@ export function PainelDoCiclo({ credenciamentoId, aoMudar }: { credenciamentoId:
                     {e.rotulo}
                     {e.concluida && e.concluidaEm && (
                       <span className="block text-xs text-slate-500">
-                        Concluida em {dataBr(e.concluidaEm)}
+                        Concluída em {dataBr(e.concluidaEm)}
                         {e.concluidaPor ? ` por ${e.concluidaPor}` : ''}
                       </span>
                     )}
@@ -236,7 +236,7 @@ export function PainelDoCiclo({ credenciamentoId, aoMudar }: { credenciamentoId:
             ))}
           </ul>
           <p className="mt-2 text-xs text-slate-500">
-            A primeira etapa concluida coloca o parceiro em implantacao; com todas concluidas ele passa a Ativo.
+            A primeira etapa concluída coloca o parceiro em implantação; com todas concluídas ele passa a Ativo.
           </p>
         </section>
 
@@ -265,7 +265,7 @@ export function PainelDoCiclo({ credenciamentoId, aoMudar }: { credenciamentoId:
                   <Input value={outroMotivo} maxLength={300} onChange={(e) => setOutroMotivo(e.target.value)} />
                 </Field>
               )}
-              <Field label="Observacao" hint="Opcional. Fica registrada no historico.">
+              <Field label="Observação" hint="Opcional. Fica registrada no histórico.">
                 <Textarea rows={2} maxLength={1000} value={observacao} onChange={(e) => setObservacao(e.target.value)} />
               </Field>
               <div className="flex gap-2">
@@ -304,7 +304,7 @@ export function PainelDoCiclo({ credenciamentoId, aoMudar }: { credenciamentoId:
             onClick={() => setVerHistorico((v) => !v)}
             className="text-sm text-[var(--brand-primary)] hover:underline"
           >
-            {verHistorico ? 'Ocultar historico do ciclo de vida' : 'Ver historico do ciclo de vida'}
+            {verHistorico ? 'Ocultar histórico do ciclo de vida' : 'Ver histórico do ciclo de vida'}
           </button>
           {verHistorico && (
             <ol className="mt-3 space-y-3 border-l border-slate-200 pl-4">
@@ -322,14 +322,14 @@ export function PainelDoCiclo({ credenciamentoId, aoMudar }: { credenciamentoId:
                       </>
                     ) : (
                       <>
-                        {h.motivo ?? 'Inicio'} <span aria-hidden="true">→</span> <SeloCiclo status={h.paraStatus} />
+                        {h.motivo ?? 'Início'} <span aria-hidden="true">→</span> <SeloCiclo status={h.paraStatus} />
                       </>
                     )}
                   </p>
                   {h.deStatus && h.motivo && <p className="text-xs text-slate-600">{h.motivo}</p>}
                   {h.observacao && <p className="text-xs text-slate-500">Obs.: {h.observacao}</p>}
                   <p className="text-xs text-slate-400">
-                    {h.regra === 'MANUAL' ? `Manual · ${h.usuario?.nome ?? 'usuario removido'}` : 'Automatico'}
+                    {h.regra === 'MANUAL' ? `Manual · ${h.usuario?.nome ?? 'usuário removido'}` : 'Automático'}
                   </p>
                 </li>
               ))}

@@ -11,8 +11,8 @@ const TIPO_ANEXO: Record<string, MensagemNormalizada['tipoAnexo']> = {
 /** Texto legivel para tipos sem corpo textual (usado no painel do agente). */
 const RESUMO_ANEXO: Record<string, string> = {
   IMAGEM: '[imagem recebida]',
-  AUDIO: '[audio recebido]',
-  VIDEO: '[video recebido]',
+  AUDIO: '[áudio recebido]',
+  VIDEO: '[vídeo recebido]',
   ARQUIVO: '[arquivo recebido]',
 };
 

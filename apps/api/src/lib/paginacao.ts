@@ -20,7 +20,7 @@ export function decodificarCursor(cursor: string | undefined): Cursor | null {
 
   const [iso, id] = Buffer.from(cursor, 'base64url').toString('utf8').split('|');
   const valor = iso ? new Date(iso) : new Date(Number.NaN);
-  if (!id || Number.isNaN(valor.getTime())) throw badRequest('Cursor invalido');
+  if (!id || Number.isNaN(valor.getTime())) throw badRequest('Cursor inválido');
   return { valor, id };
 }
 

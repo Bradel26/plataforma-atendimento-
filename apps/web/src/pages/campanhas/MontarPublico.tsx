@@ -125,7 +125,7 @@ export function MontarPublico({
       const r = await api.post<{ publico: Previa }>('/campanhas/publico/previa', { ...filtro, canal });
       setPrevia(r.publico);
     } catch (e) {
-      setErro(e instanceof ApiError ? e.message : 'Falha ao calcular o publico');
+      setErro(e instanceof ApiError ? e.message : 'Falha ao calcular o público');
     } finally {
       setOcupado(false);
     }
@@ -141,12 +141,12 @@ export function MontarPublico({
       const { adicionados, jaEstavam } = r.resultado;
       setAviso(
         `${adicionados} contato(s) adicionado(s)` +
-          (jaEstavam > 0 ? ` · ${jaEstavam} ja estavam na campanha` : ''),
+          (jaEstavam > 0 ? ` · ${jaEstavam} já estavam na campanha` : ''),
       );
       setPrevia(null);
       aoAplicar();
     } catch (e) {
-      setErro(e instanceof ApiError ? e.message : 'Falha ao gravar o publico');
+      setErro(e instanceof ApiError ? e.message : 'Falha ao gravar o público');
     } finally {
       setOcupado(false);
     }
@@ -154,8 +154,8 @@ export function MontarPublico({
 
   return (
     <Card
-      titulo="Publico da campanha"
-      descricao="Escolha quem recebe. A previa nao grava nada; os filtros se somam (E)."
+      titulo="Público da campanha"
+      descricao="Escolha quem recebe. A prévia não grava nada; os filtros se somam (E)."
     >
       {erro && <Alerta>{erro}</Alerta>}
       {aviso && <Alerta tipo="sucesso">{aviso}</Alerta>}
@@ -177,7 +177,7 @@ export function MontarPublico({
             </div>
             {operacoes.length > 1 && (
               <div>
-                <p className="text-xs font-medium text-slate-500">Operacao</p>
+                <p className="text-xs font-medium text-slate-500">Operação</p>
                 <div className="mt-1 flex flex-wrap gap-1.5">
                   {operacoes.map((o) => (
                     <Chip
@@ -205,7 +205,7 @@ export function MontarPublico({
                   ))}
                 </Select>
               </Field>
-              <Field label="Estado / regiao">
+              <Field label="Estado / região">
                 <Select
                   value=""
                   onChange={(e) => e.target.value && mudar({ ...filtro, uf: alternar(filtro.uf, e.target.value) })}
@@ -356,13 +356,13 @@ export function MontarPublico({
 
         <div className="flex flex-wrap items-center gap-2">
           <Button variante="neutro" onClick={() => void verPrevia()} disabled={ocupado || !temFiltro}>
-            {ocupado ? 'Calculando...' : 'Ver publico'}
+            {ocupado ? 'Calculando...' : 'Ver público'}
           </Button>
           {!temFiltro && (
             // O motivo aparece antes do clique. Botao que responde 400 depois de
             // clicado ensina a nao clicar.
             <span className="text-xs text-slate-500">
-              Escolha ao menos um filtro &mdash; sem filtro o publico seria a base inteira.
+              Escolha ao menos um filtro &mdash; sem filtro o público seria a base inteira.
             </span>
           )}
         </div>
@@ -373,7 +373,7 @@ export function MontarPublico({
           <div className="flex flex-wrap items-baseline gap-2">
             <span className="text-2xl font-semibold text-slate-800">{previa.total}</span>
             <span className="text-sm text-slate-600">
-              contato(s) que {previa.campoExigido === null ? 'poderiam receber' : 'vao receber'}
+              contato(s) que {previa.campoExigido === null ? 'poderiam receber' : 'vão receber'}
             </span>
             <Badge tom="neutro">{previa.descricao}</Badge>
           </div>
@@ -416,7 +416,7 @@ export function MontarPublico({
       )}
 
       <p className="mt-3 text-xs text-slate-500">
-        O filtro por estado usa a UF do cadastro do parceiro: quem nao tem UF preenchida nao entra.
+        O filtro por estado usa a UF do cadastro do parceiro: quem não tem UF preenchida não entra.
       </p>
     </Card>
   );

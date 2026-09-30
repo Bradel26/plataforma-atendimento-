@@ -53,7 +53,7 @@ function textoDoValor(ind: Indicador, item: Item) {
   const fmt = (v: number | null) => (v === null ? '—' : ind.unidade === 'pct' ? `${v}%` : String(v));
   if (item.alvo === null) return `${fmt(item.realizado)} · sem meta`;
   return ind.sentido === 'menor'
-    ? `${fmt(item.realizado)} · maximo ${fmt(item.alvo)}`
+    ? `${fmt(item.realizado)} · máximo ${fmt(item.alvo)}`
     : `${fmt(item.realizado)} / ${fmt(item.alvo)}`;
 }
 
@@ -73,7 +73,7 @@ function LinhasDeMeta({ indicadores, itens }: { indicadores: Indicador[]; itens:
             </div>
             <div className="flex flex-col items-start gap-1 sm:items-end">
               <span className="text-sm font-semibold text-slate-800">
-                {semDados ? 'sem dados no periodo' : textoDoValor(ind, item)}
+                {semDados ? 'sem dados no período' : textoDoValor(ind, item)}
               </span>
               {item.alvo !== null && !semDados && (
                 <div className="flex items-center gap-2">
@@ -160,7 +160,7 @@ function EditorDeAlvos({
           </Field>
         ))}
       </div>
-      <p className="text-xs text-slate-500">Deixe em branco o indicador que nao tem meta neste mes.</p>
+      <p className="text-xs text-slate-500">Deixe em branco o indicador que não tem meta neste mês.</p>
       <div className="flex gap-2">
         <Button onClick={() => void salvar()} disabled={salvando}>
           {salvando ? 'Salvando...' : 'Salvar metas'}
@@ -212,7 +212,7 @@ export function MetasOperacionais({ visaoGeral, podeEditar }: { visaoGeral: bool
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <Field label="Mes">
+        <Field label="Mês">
           <Input type="month" value={mes} onChange={(e) => e.target.value && setMes(e.target.value)} className="w-44" />
         </Field>
         {podeEditar && semCard.length > 0 && (
@@ -286,8 +286,8 @@ export function MetasOperacionais({ visaoGeral, podeEditar }: { visaoGeral: bool
         <Card>
           <p className="text-sm text-slate-500">
             {podeEditar
-              ? 'Nenhum consultor com meta ou movimento neste mes. Escolha um consultor acima para definir as metas.'
-              : 'Nenhuma meta definida para voce neste mes.'}
+              ? 'Nenhum consultor com meta ou movimento neste mês. Escolha um consultor acima para definir as metas.'
+              : 'Nenhuma meta definida para você neste mês.'}
           </p>
         </Card>
       )}

@@ -49,7 +49,7 @@ export function LoginPage() {
         setErro(null);
         return;
       }
-      setErro(err instanceof ApiError ? err.message : 'Nao foi possivel conectar a API');
+      setErro(err instanceof ApiError ? err.message : 'Não foi possível conectar a API');
     } finally {
       setEnviando(false);
     }
@@ -67,7 +67,7 @@ export function LoginPage() {
       await api.post('/auth/alterar-senha-inicial', { email, senhaAtual: senha, novaSenha });
       await entrar(email, novaSenha);
     } catch (err) {
-      setErro(err instanceof ApiError ? err.message : 'Nao foi possivel alterar a senha');
+      setErro(err instanceof ApiError ? err.message : 'Não foi possível alterar a senha');
     } finally {
       setEnviando(false);
     }
@@ -76,7 +76,7 @@ export function LoginPage() {
   return (
     <div className="relative flex h-full items-center overflow-hidden bg-[#050b18]">
       <style>{`
-        @keyframes girar-orbita { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes girar-órbita { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         @keyframes cintilar { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
       `}</style>
 
@@ -232,7 +232,7 @@ export function LoginPage() {
       </div>
 
       {/* Cor literal pelo mesmo motivo do IconeDecorativo: cena sempre escura. */}
-      <p className="absolute bottom-6 left-8 z-10 text-xs text-[#94a3b8]">Versao 0.1.0 - MVP Fase 1</p>
+      <p className="absolute bottom-6 left-8 z-10 text-xs text-[#94a3b8]">Versão 0.1.0 - MVP Fase 1</p>
 
       {/* card flutuante — coluna direita (~32%), centralizado nela em vez de so encostado.
           `border-[rgba(255,255,255,0.1)]`/`bg-slate-950/70`, nao `border-white/10`: o cartao

@@ -246,7 +246,7 @@ export async function exigirVinculosVisiveis(dados: {
 
   for (const [valor, buscar] of conferencias) {
     if (!valor) continue;
-    if (!(await buscar())) throw notFound('Registro vinculado nao encontrado');
+    if (!(await buscar())) throw notFound('Registro vinculado não encontrado');
   }
 }
 
@@ -265,5 +265,5 @@ export async function exigirVinculosVisiveis(dados: {
 export async function exigirUsuarioDaOrganizacao(usuarioId?: string | null): Promise<void> {
   if (!usuarioId) return;
   const existe = await prisma.user.findFirst({ where: { id: usuarioId }, select: { id: true } });
-  if (!existe) throw notFound('Usuario nao encontrado');
+  if (!existe) throw notFound('Usuário não encontrado');
 }

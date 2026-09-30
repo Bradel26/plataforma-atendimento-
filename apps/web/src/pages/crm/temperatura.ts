@@ -44,8 +44,8 @@ export const LABEL_CANAL_ORIGEM: Record<Canal, string> = {
   FACEBOOK: 'Facebook',
   EMAIL: 'E-mail',
   VOZ: 'Telefone',
-  PROSPECCAO_ATIVA: 'Prospeccao ativa',
-  INDICACAO: 'Indicacao',
+  PROSPECCAO_ATIVA: 'Prospecção ativa',
+  INDICACAO: 'Indicação',
 };
 
 /**
@@ -63,8 +63,8 @@ export function etiquetasDoCartao(o: Pick<Oportunidade, 'temperatura' | 'canalOr
       texto: LABEL_TEMPERATURA[o.temperatura],
       tom: o.temperatura === 'QUENTE' ? 'marca' : 'neutro',
       titulo:
-        'Temperatura: a leitura de quem esta na negociacao. Nao e a probabilidade da etapa — ' +
-        'quando as duas discordam, a discordancia e a informacao.',
+        'Temperatura: a leitura de quem está na negociação. Não e a probabilidade da etapa — ' +
+        'quando as duas discordam, a discordância e a informação.',
     });
   }
 
@@ -72,7 +72,7 @@ export function etiquetasDoCartao(o: Pick<Oportunidade, 'temperatura' | 'canalOr
     etiquetas.push({
       texto: LABEL_CANAL_ORIGEM[o.canalOrigem],
       tom: 'neutro',
-      titulo: 'Origem: por onde este negocio chegou.',
+      titulo: 'Origem: por onde este negócio chegou.',
     });
   }
 

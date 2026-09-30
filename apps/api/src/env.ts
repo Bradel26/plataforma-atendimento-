@@ -105,7 +105,7 @@ if (isProd) {
 
   if (problemas.length > 0) {
     console.error(
-      `Configuracao insegura para producao:\n${problemas.map((p) => `  - ${p}`).join('\n')}\n\n` +
+      `Configuração insegura para produção:\n${problemas.map((p) => `  - ${p}`).join('\n')}\n\n` +
         'Gere segredos com: openssl rand -hex 32',
     );
     process.exit(1);

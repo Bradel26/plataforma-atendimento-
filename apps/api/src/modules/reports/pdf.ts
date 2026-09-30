@@ -31,7 +31,7 @@ export function gerarPdf(relatorio: Relatorio, nomeMarca: string, corPrimaria: s
         .fontSize(9)
         .font('Helvetica')
         .text(
-          `Periodo: ${dataBr(relatorio.periodo.desde)} a ${dataBr(relatorio.periodo.ate)}  ·  Gerado em ${new Date().toLocaleString('pt-BR')}`,
+          `Período: ${dataBr(relatorio.periodo.desde)} a ${dataBr(relatorio.periodo.ate)}  ·  Gerado em ${new Date().toLocaleString('pt-BR')}`,
           MARGEM,
           doc.y + 2,
         );
@@ -69,7 +69,7 @@ export function gerarPdf(relatorio: Relatorio, nomeMarca: string, corPrimaria: s
     desenharLinha(relatorio.colunas.map((c) => c.rotulo), { negrito: true, fundo: corPrimaria });
 
     if (relatorio.linhas.length === 0) {
-      doc.moveDown(1).fillColor('#64748b').fontSize(10).text('Nenhum dado no periodo selecionado.', MARGEM);
+      doc.moveDown(1).fillColor('#64748b').fontSize(10).text('Nenhum dado no período selecionado.', MARGEM);
     }
 
     relatorio.linhas.forEach((linha, indice) => {

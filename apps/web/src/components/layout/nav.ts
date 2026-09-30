@@ -11,7 +11,6 @@ import {
   IconGestao,
   IconMonitoramento,
   IconRelatorios,
-  IconTelefonia,
 } from './icons';
 
 export type NavItem = {
@@ -99,12 +98,12 @@ export const NAV: NavItem[] = [
     fase: 5,
   },
   { rota: '/monitoramento', label: 'Monitoramento', icone: IconMonitoramento, perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR'], fase: 3 },
-  { rota: '/gestao', label: 'Area da Gestao', icone: IconGestao, perfis: ['ADMIN', 'SUPERVISOR'], fase: 3 },
+  { rota: '/gestao', label: 'Área da Gestão', icone: IconGestao, perfis: ['ADMIN', 'SUPERVISOR'], fase: 3 },
   // GESTOR e COMERCIAL entram aqui pelo mesmo motivo que entravam na aba Leads
   // do CRM antes dela mudar de casa: leitura/trabalho do proprio funil.
   { rota: '/campanhas', label: 'Campanhas', icone: IconCampanhas, perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'], fase: 4 },
   { rota: '/relatorios', label: 'Desempenho Operacional', icone: IconRelatorios, perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR'], fase: 3 },
-  { rota: '/telefonia', label: 'Telefonia', icone: IconTelefonia, perfis: ['ADMIN', 'SUPERVISOR', 'AGENTE'], fase: 4 },
+  // Telefonia fora do menu: a empresa nao tem operadora/PABX. A tela e a API de voz continuam no codigo para quando houver.
   {
     rota: '/crm',
     label: 'CRM',
@@ -124,7 +123,7 @@ export const NAV: NavItem[] = [
       { rota: '/oportunidades/:id', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'] },
     ],
   },
-  { rota: '/configuracoes', label: 'Configuracoes', icone: IconConfiguracoes, perfis: ['ADMIN'], fase: 0 },
+  { rota: '/configuracoes', label: 'Configurações', icone: IconConfiguracoes, perfis: ['ADMIN'], fase: 0 },
   // Visivel a todo perfil, de proposito: problema de sistema afeta
   // qualquer pessoa que usa a plataforma, nao so quem administra.
   {

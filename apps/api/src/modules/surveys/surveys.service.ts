@@ -35,7 +35,7 @@ async function textoConvite(tipo: 'CSAT' | 'NPS', token: string) {
   const branding = await prisma.branding.findUnique({ where: { id: 'default' } });
   const faixa = FAIXA[tipo];
   return [
-    `Seu atendimento foi encerrado. Como voce avalia de ${faixa.min} a ${faixa.max}?`,
+    `Seu atendimento foi encerrado. Como você avalia de ${faixa.min} a ${faixa.max}?`,
     `Leva menos de um minuto: ${linkPesquisa(token)}`,
     branding?.appName ? `Obrigado! — ${branding.appName}` : 'Obrigado!',
   ].join('\n');
@@ -73,21 +73,21 @@ export async function entregarPesquisa(
 ): Promise<{ entregue: boolean; motivo?: string; permanente?: boolean }> {
   const anotarFalha = opcoes.anotarFalha ?? true;
   const pesquisa = await prisma.survey.findUnique({ where: { conversaId } });
-  if (!pesquisa) return { entregue: false, motivo: 'Pesquisa nao encontrada' };
+  if (!pesquisa) return { entregue: false, motivo: 'Pesquisa não encontrada' };
   if (pesquisa.entregueEm) return { entregue: true };
 
   const conversa = await prisma.conversation.findUnique({
     where: { id: conversaId },
     select: { canal: true, enderecoExterno: true, filaId: true, agenteId: true, canalConfigId: true },
   });
-  if (!conversa) return { entregue: false, motivo: 'Conversa nao encontrada' };
+  if (!conversa) return { entregue: false, motivo: 'Conversa não encontrada' };
 
   const destinos = { filaId: conversa.filaId, agenteId: conversa.agenteId };
 
   if (!CANAIS_COM_RETORNO.includes(conversa.canal)) {
-    const motivo = `o canal ${conversa.canal} nao tem caminho de volta para o cliente`;
+    const motivo = `o canal ${conversa.canal} não tem caminho de volta para o cliente`;
     if (anotarFalha) {
-      await registrarMensagem(conversaId, `Pesquisa de satisfacao nao enviada: ${motivo}.`, null, destinos);
+      await registrarMensagem(conversaId, `Pesquisa de satisfação não enviada: ${motivo}.`, null, destinos);
     }
     // Nao adianta tentar de novo: o canal nao vai passar a ter caminho de volta.
     return { entregue: false, motivo, permanente: true };
@@ -106,7 +106,7 @@ export async function entregarPesquisa(
   } catch (err) {
     const motivo = err instanceof Error ? err.message : 'erro desconhecido';
     if (anotarFalha) {
-      await registrarMensagem(conversaId, `Pesquisa de satisfacao nao enviada: ${motivo}`, null, destinos);
+      await registrarMensagem(conversaId, `Pesquisa de satisfação não enviada: ${motivo}`, null, destinos);
     }
     /**
      * Recusa da Meta e definitiva (token invalido, cliente fora da janela de 24h):
@@ -137,7 +137,7 @@ export async function obterPorToken(token: string) {
       },
     },
   });
-  if (!pesquisa) throw notFound('Pesquisa nao encontrada');
+  if (!pesquisa) throw notFound('Pesquisa não encontrada');
 
   return {
     tipo: pesquisa.tipo,
@@ -154,8 +154,8 @@ export async function obterPorToken(token: string) {
 
 export async function responder(token: string, nota: number, comentario?: string) {
   const pesquisa = await prisma.survey.findUnique({ where: { token } });
-  if (!pesquisa) throw notFound('Pesquisa nao encontrada');
-  if (pesquisa.respondidoEm) throw badRequest('Esta pesquisa ja foi respondida');
+  if (!pesquisa) throw notFound('Pesquisa não encontrada');
+  if (pesquisa.respondidoEm) throw badRequest('Esta pesquisa já foi respondida');
 
   const faixa = FAIXA[pesquisa.tipo];
   if (!Number.isInteger(nota) || nota < faixa.min || nota > faixa.max) {
@@ -167,7 +167,7 @@ export async function responder(token: string, nota: number, comentario?: string
     data: { nota, comentario: comentario?.trim() || null, respondidoEm: new Date() },
   });
 
-  return { agradecimento: 'Obrigado pela sua avaliacao!' };
+  return { agradecimento: 'Obrigado pela sua avaliação!' };
 }
 
 /** Resultados para a Area da Gestao. */

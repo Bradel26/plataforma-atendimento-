@@ -34,7 +34,7 @@ integracoesRoutes.post(
     res.status(201).json({
       token,
       valor,
-      aviso: 'Copie agora. Este valor nao e mostrado de novo — se perder, revogue e crie outro.',
+      aviso: 'Copie agora. Este valor não e mostrado de novo — se perder, revogue e crie outro.',
     });
   }),
 );

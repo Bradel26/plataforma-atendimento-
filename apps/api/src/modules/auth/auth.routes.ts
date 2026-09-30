@@ -30,7 +30,7 @@ authRoutes.post(
   asyncHandler(async (req, res) => {
     // Irrestrito de proposito: e o e-mail que descobre a organizacao.
     const { accessToken, refreshToken, usuario } = await semOrganizacao(
-      'login: resolve o usuario pelo e-mail antes de saber a organizacao',
+      'login: resolve o usuário pelo e-mail antes de saber a organização',
       () => login(req.body),
     );
     res.cookie(REFRESH_COOKIE, refreshToken, refreshCookieOptions);
@@ -43,7 +43,7 @@ authRoutes.post(
   limitar({ nome: 'login', janelaSegundos: 300, maximo: 30 }),
   validateBody(alterarSenhaInicialSchema),
   asyncHandler(async (req, res) => {
-    await semOrganizacao('troca de senha temporaria antes do login', () => alterarSenhaInicial(req.body));
+    await semOrganizacao('troca de senha temporária antes do login', () => alterarSenhaInicial(req.body));
     res.status(204).end();
   }),
 );
@@ -96,7 +96,7 @@ authRoutes.get(
   requireAuth,
   asyncHandler(async (req, res) => {
     const user = await prisma.user.findUnique({ where: { id: req.user!.sub } });
-    if (!user) throw notFound('Usuario nao encontrado');
+    if (!user) throw notFound('Usuário não encontrado');
     res.json({ usuario: toPublicUser(user) });
   }),
 );

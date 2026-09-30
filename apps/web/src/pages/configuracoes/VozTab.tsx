@@ -41,7 +41,7 @@ export function VozTab() {
         guardarGravacao: c.guardarGravacao,
       });
     } catch (e) {
-      setErro(e instanceof ApiError ? e.message : 'Falha ao carregar a configuracao de voz');
+      setErro(e instanceof ApiError ? e.message : 'Falha ao carregar a configuração de voz');
     }
   }, []);
 
@@ -66,7 +66,7 @@ export function VozTab() {
       });
       setConfig(novo);
       setForm((f) => ({ ...f, authToken: '' }));
-      setOk('Configuracao de voz salva.');
+      setOk('Configuração de voz salva.');
     } catch (e) {
       setErro(e instanceof ApiError ? e.message : 'Falha ao salvar');
     } finally {
@@ -78,7 +78,7 @@ export function VozTab() {
     <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
       <Card
         titulo="Provedor de voz"
-        descricao="A plataforma nao fala SIP: ela fala com um provedor por HTTP"
+        descricao="A plataforma não fala SIP: ela fala com um provedor por HTTP"
         acao={<Badge tom={config?.ativo ? 'sucesso' : 'neutro'}>{config?.ativo ? 'ativo' : 'inativo'}</Badge>}
       >
         {erro && <div className="mb-4"><Alerta>{erro}</Alerta></div>}
@@ -98,7 +98,7 @@ export function VozTab() {
           </Field>
 
           <Field
-            label="Token de autenticacao"
+            label="Token de autenticação"
             hint={config?.authTokenMascarado ? `Atual: ${config.authTokenMascarado} — deixe vazio para manter` : 'Nunca e devolvido em claro pela API'}
           >
             <Input
@@ -109,11 +109,11 @@ export function VozTab() {
             />
           </Field>
 
-          <Field label="Numero de saida" hint="Formato internacional, ex.: +551140028922">
+          <Field label="Número de saída" hint="Formato internacional, ex.: +551140028922">
             <Input value={form.numeroPadrao} onChange={(e) => setForm({ ...form, numeroPadrao: e.target.value })} />
           </Field>
 
-          <Field label="URL publica de webhook" hint="Precisa ser HTTPS: e por ela que o provedor reporta os eventos">
+          <Field label="URL pública de webhook" hint="Precisa ser HTTPS: e por ela que o provedor reporta os eventos">
             <Input
               type="url"
               placeholder="https://seu-dominio/api/webhooks/voz"
@@ -139,9 +139,9 @@ export function VozTab() {
               onChange={(e) => setForm({ ...form, guardarGravacao: e.target.checked })}
             />
             <span>
-              Guardar a gravacao no storage da plataforma
+              Guardar a gravação no storage da plataforma
               <span className="block text-xs text-slate-500">
-                A URL do provedor exige credencial e expira; sem copia, a gravacao se perde.
+                A URL do provedor exige credencial e expira; sem copia, a gravação se perde.
               </span>
             </span>
           </label>
@@ -157,10 +157,10 @@ export function VozTab() {
         </div>
       </Card>
 
-      <Card titulo="No painel do provedor" descricao="Aponte estas duas URLs na configuracao do numero">
+      <Card titulo="No painel do provedor" descricao="Aponte estas duas URLs na configuração do número">
         <ol className="space-y-3 text-xs text-slate-600">
           <li>
-            <p className="font-medium text-slate-700">Instrucoes da chamada (Voice URL)</p>
+            <p className="font-medium text-slate-700">Instruções da chamada (Voice URL)</p>
             <code className="mt-1 block overflow-x-auto rounded bg-slate-100 px-2 py-1">
               {(form.urlWebhook || 'https://seu-dominio/api/webhooks/voz') + '/instrucoes'}
             </code>
@@ -174,12 +174,12 @@ export function VozTab() {
         </ol>
 
         <p className="mt-4 text-xs text-slate-500">
-          Toda requisicao do provedor e conferida pela assinatura dele. Sem assinatura valida, a
-          plataforma responde 401 e nao registra nada.
+          Toda requisição do provedor e conferida pela assinatura dele. Sem assinatura valida, a
+          plataforma responde 401 é não registra nada.
         </p>
         <p className="mt-2 text-xs text-slate-500">
           Softphone no navegador, ramais, URA e monitoria (escuta/sussurro) precisam do SDK e do
-          console do provedor — nao estao implementados. Ver "Voz" no SCOPE.md.
+          console do provedor — não estão implementados. Ver "Voz" no SCOPE.md.
         </p>
       </Card>
     </div>

@@ -22,22 +22,22 @@ const IMPORTACOES = [
   {
     recurso: 'leads',
     label: 'Leads',
-    colunas: 'nome (obrigatoria), email, telefone, conta, fase, tipo, canal_origem, responsavel_email, prazo, valor_estimado, motivo_perda, observacoes',
+    colunas: 'nome (obrigatória), email, telefone, conta, fase, tipo, canal_origem, responsável_email, prazo, valor_estimado, motivo_perda, observações',
   },
   {
     recurso: 'contatos',
     label: 'Contatos',
-    colunas: 'nome (obrigatoria), email, telefone, conta, canal_origem, observacoes',
+    colunas: 'nome (obrigatória), email, telefone, conta, canal_origem, observações',
   },
   {
     recurso: 'contas',
     label: 'Contas',
-    colunas: 'nome (obrigatoria), cnpj, segmento, site, telefone, email, observacoes',
+    colunas: 'nome (obrigatória), cnpj, segmento, site, telefone, email, observações',
   },
   {
     recurso: 'oportunidades',
     label: 'Jornadas',
-    colunas: 'titulo (obrigatoria), conta (obrigatoria), funil, estagio, valor, responsavel_email, previsao_fechamento, canal_origem',
+    colunas: 'título (obrigatória), conta (obrigatória), funil, estágio, valor, responsável_email, previsão_fechamento, canal_origem',
   },
 ] as const;
 
@@ -187,8 +187,8 @@ export function DadosTab() {
             </Button>
           </div>
 
-          {previa && <Resumo dados={previa} titulo="Previa da validacao (nada foi gravado)" />}
-          {importado && <Resumo dados={importado} titulo="Importacao concluida" />}
+          {previa && <Resumo dados={previa} titulo="Prévia da validação (nada foi gravado)" />}
+          {importado && <Resumo dados={importado} titulo="Importação concluída" />}
         </div>
       </Card>
     </div>

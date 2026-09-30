@@ -33,7 +33,7 @@ export function RelatoriosPage() {
       const { relatorio: r } = await api.get<{ relatorio: Relatorio }>(`/relatorios/${nome}?${parametros()}`);
       setRelatorio(r);
     } catch (e) {
-      setErro(e instanceof ApiError ? e.message : 'Falha ao gerar o relatorio');
+      setErro(e instanceof ApiError ? e.message : 'Falha ao gerar o relatório');
     } finally {
       setCarregando(false);
     }
@@ -56,7 +56,7 @@ export function RelatoriosPage() {
     <div className="space-y-5">
       <Card titulo="Filtros">
         <div className="grid gap-3 sm:grid-cols-4 sm:items-end">
-          <Field label="Relatorio">
+          <Field label="Relatório">
             <Select value={nome} onChange={(e) => setNome(e.target.value)}>
               {opcoes.map((o) => (
                 <option key={o.nome} value={o.nome}>{o.titulo}</option>
@@ -66,7 +66,7 @@ export function RelatoriosPage() {
           <Field label="De">
             <Input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} />
           </Field>
-          <Field label="Ate">
+          <Field label="Até">
             <Input type="date" value={ate} onChange={(e) => setAte(e.target.value)} />
           </Field>
           <div className="flex gap-2">
@@ -79,7 +79,7 @@ export function RelatoriosPage() {
       {erro && <Alerta>{erro}</Alerta>}
 
       <Card
-        titulo={relatorio?.titulo ?? 'Relatorio'}
+        titulo={relatorio?.titulo ?? 'Relatório'}
         descricao={
           relatorio
             ? `${new Date(relatorio.periodo.desde).toLocaleDateString('pt-BR')} a ${new Date(relatorio.periodo.ate).toLocaleDateString('pt-BR')} · ${relatorio.linhas.length} linha(s)`
@@ -89,7 +89,7 @@ export function RelatoriosPage() {
         {carregando ? (
           <p className="text-sm text-slate-500">Gerando...</p>
         ) : !relatorio || relatorio.linhas.length === 0 ? (
-          <p className="text-sm text-slate-500">Nenhum dado no periodo selecionado.</p>
+          <p className="text-sm text-slate-500">Nenhum dado no período selecionado.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">

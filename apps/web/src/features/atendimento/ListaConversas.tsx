@@ -31,7 +31,7 @@ function horaCurta(iso: string) {
 function previa(conversa: ConversaResumo) {
   const m = conversa.ultimaMensagem;
   if (!m) return 'Sem mensagens';
-  const prefixo = m.autor === 'AGENTE' ? 'Voce: ' : m.autor === 'SISTEMA' ? '' : '';
+  const prefixo = m.autor === 'AGENTE' ? 'Você: ' : m.autor === 'SISTEMA' ? '' : '';
   return `${prefixo}${m.conteudo}`;
 }
 

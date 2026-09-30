@@ -49,7 +49,7 @@ export function ehAvanco(deOrdem: number, paraOrdem: number): boolean {
 export function bloqueioDeEtapa(titulosPendentes: string[], nomeDaEtapa: string): string | null {
   if (titulosPendentes.length === 0) return null;
   const lista = titulosPendentes.join('; ');
-  return `A etapa "${nomeDaEtapa}" exige concluir antes de avancar: ${lista}.`;
+  return `A etapa "${nomeDaEtapa}" exige concluir antes de avançar: ${lista}.`;
 }
 
 /**

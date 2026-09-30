@@ -70,7 +70,7 @@ export async function obterLead(id: string) {
     where: apenasVisivel(id, await filtroDe(politicaLeads)),
     include: inclusaoLead,
   });
-  if (!lead) throw notFound('Lead nao encontrado');
+  if (!lead) throw notFound('Lead não encontrado');
   return { ...toLead(lead), camposCustomizados: await valoresDoRegistro('LEAD', lead.id) };
 }
 
@@ -80,17 +80,17 @@ export async function criarLead(input: CriarLeadInput) {
   const contato = await prisma.contact.findFirst({
     where: apenasVisivel(input.contatoId, await filtroDe(politicaContatos)),
   });
-  if (!contato) throw notFound('Contato nao encontrado');
+  if (!contato) throw notFound('Contato não encontrado');
 
   if (input.contaId) {
     const conta = await prisma.account.findFirst({
       where: apenasVisivel(input.contaId, await filtroDe(politicaContas)),
     });
-    if (!conta) throw notFound('Conta nao encontrada');
+    if (!conta) throw notFound('Conta não encontrada');
   }
   if (input.responsavelId) {
     const responsavel = await prisma.user.findUnique({ where: { id: input.responsavelId } });
-    if (!responsavel) throw notFound('Responsavel nao encontrado');
+    if (!responsavel) throw notFound('Responsável não encontrado');
   }
 
   // Valida e checa unicidade dos campos customizados ANTES de criar o lead:
@@ -112,7 +112,7 @@ export async function criarLead(input: CriarLeadInput) {
 
 export async function atualizarLead(id: string, input: AtualizarLeadInput) {
   const atual = await prisma.lead.findFirst({ where: apenasVisivel(id, await filtroDe(politicaLeads)) });
-  if (!atual) throw notFound('Lead nao encontrado');
+  if (!atual) throw notFound('Lead não encontrado');
   // O schema de atualizacao aceita `contaId`, e o `input` vai inteiro para o
   // `update`: sem isto, daria para mover o lead para o cliente de outra carteira.
   await exigirVinculosVisiveis(input);
@@ -126,7 +126,7 @@ export async function atualizarLead(id: string, input: AtualizarLeadInput) {
   // Rejeita apenas quando o cliente ENVIA um motivo para fase nao-PERDIDO.
   // Reabrir um lead perdido e valido: o motivo antigo e limpo abaixo.
   if (faseFinal !== 'PERDIDO' && input.motivoPerda) {
-    throw badRequest('Motivo de perda so se aplica a leads na fase PERDIDO');
+    throw badRequest('Motivo de perda só se aplica a leads na fase PERDIDO');
   }
 
   // fechadoEm acompanha a entrada e a saida das fases terminais.
@@ -152,7 +152,7 @@ export async function atualizarLead(id: string, input: AtualizarLeadInput) {
 
 export async function excluirLead(id: string) {
   const atual = await prisma.lead.findFirst({ where: apenasVisivel(id, await filtroDe(politicaLeads)) });
-  if (!atual) throw notFound('Lead nao encontrado');
+  if (!atual) throw notFound('Lead não encontrado');
   await prisma.lead.delete({ where: { id } });
 }
 

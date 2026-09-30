@@ -20,7 +20,7 @@ export const webhooksRoutes = Router();
 const canalDaRota = (valor: string): CanalExterno => {
   const canal = valor.toUpperCase();
   if (!(CANAIS_EXTERNOS as readonly string[]).includes(canal)) {
-    throw notFound(`Canal "${valor}" nao suportado. Disponiveis: ${CANAIS_EXTERNOS.join(', ').toLowerCase()}`);
+    throw notFound(`Canal "${valor}" não suportado. Disponíveis: ${CANAIS_EXTERNOS.join(', ').toLowerCase()}`);
   }
   return canal as CanalExterno;
 };
@@ -46,7 +46,7 @@ webhooksRoutes.get(
       res.type('text/plain').send(String(challenge ?? ''));
       return;
     }
-    res.status(403).json({ error: { code: 'VERIFICACAO_FALHOU', message: 'hub.verify_token invalido' } });
+    res.status(403).json({ error: { code: 'VERIFICACAO_FALHOU', message: 'hub.verify_token inválido' } });
   }),
 );
 
@@ -126,7 +126,7 @@ async function processarEntrada(
     const assinatura = req.header('x-hub-signature-256');
 
     if (!assinaturaValida(corpoBruto, assinatura, config.appSecret)) {
-      res.status(401).json({ error: { code: 'ASSINATURA_INVALIDA', message: 'X-Hub-Signature-256 invalida' } });
+      res.status(401).json({ error: { code: 'ASSINATURA_INVALIDA', message: 'X-Hub-Signature-256 inválida' } });
       return;
     }
 
@@ -134,7 +134,7 @@ async function processarEntrada(
     try {
       payload = JSON.parse(corpoBruto.toString('utf8')) as MetaWebhook;
     } catch {
-      res.status(400).json({ error: { code: 'JSON_INVALIDO', message: 'Corpo nao e JSON' } });
+      res.status(400).json({ error: { code: 'JSON_INVALIDO', message: 'Corpo não e JSON' } });
       return;
     }
 

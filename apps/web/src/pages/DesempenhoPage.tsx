@@ -72,7 +72,7 @@ export function DesempenhoPage() {
           <Field label="De">
             <Input type="date" value={f.desde} onChange={(e) => setF({ ...f, desde: e.target.value })} />
           </Field>
-          <Field label="Ate">
+          <Field label="Até">
             <Input type="date" value={f.ate} onChange={(e) => setF({ ...f, ate: e.target.value })} />
           </Field>
           <Field label="Consultor">
@@ -91,7 +91,7 @@ export function DesempenhoPage() {
               ))}
             </Select>
           </Field>
-          <Field label="Operacao">
+          <Field label="Operação">
             <Select value={f.funilId} onChange={(e) => setF({ ...f, funilId: e.target.value, estagioId: '' })}>
               <option value="">Todas</option>
               {operacoes.map((o) => (
@@ -113,13 +113,13 @@ export function DesempenhoPage() {
       {erro && <Alerta>{erro}</Alerta>}
 
       <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <StatTile rotulo="1a resposta" valor={duracao(i?.primeiraRespostaSegundos ?? null)} detalhe="media ate o 1o retorno" />
+        <StatTile rotulo="1a resposta" valor={duracao(i?.primeiraRespostaSegundos ?? null)} detalhe="média até o 1o retorno" />
         <StatTile
           rotulo="Tempo de atendimento"
           valor={duracao(i?.tempoMedioAtendimentoSegundos ?? null)}
-          detalhe="da atribuicao ao fim"
+          detalhe="da atribuição ao fim"
         />
-        <StatTile rotulo="Tempo de analise" valor={dias(i?.tempoMedioAnaliseDias ?? null)} detalhe="etapas de analise/aprovacao" />
+        <StatTile rotulo="Tempo de análise" valor={dias(i?.tempoMedioAnaliseDias ?? null)} detalhe="etapas de análise/aprovação" />
         <StatTile
           rotulo="Tempo de credenciamento"
           valor={dias(i?.tempoMedioCredenciamentoDias ?? null)}
@@ -138,9 +138,9 @@ export function DesempenhoPage() {
         />
       </div>
 
-      <Card titulo="Performance por consultor" descricao="Quem esta sendo mais agil e quem esta demorando mais">
+      <Card titulo="Performance por consultor" descricao="Quem está sendo mais agil e quem está demorando mais">
         {!dados || dados.consultores.length === 0 ? (
-          <p className="text-sm text-slate-500">Nenhum atendimento no periodo.</p>
+          <p className="text-sm text-slate-500">Nenhum atendimento no período.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
@@ -149,7 +149,7 @@ export function DesempenhoPage() {
                   <th className="pb-2 pr-3 font-medium">Consultor</th>
                   <th className="pb-2 pr-3 font-medium">Atendimentos</th>
                   <th className="pb-2 pr-3 font-medium">1a resposta</th>
-                  <th className="pb-2 pr-3 font-medium">Tempo medio</th>
+                  <th className="pb-2 pr-3 font-medium">Tempo médio</th>
                   <th className="pb-2 pr-3 font-medium">Credenciados</th>
                   <th className="pb-2 pr-3 font-medium">Tempo de cred.</th>
                   <th className="pb-2 pr-3 font-medium">SLA cumprido</th>
@@ -178,7 +178,7 @@ export function DesempenhoPage() {
       </Card>
 
       <div className="grid gap-5 lg:grid-cols-2">
-        <Card titulo="Tempo medio por etapa" descricao="Cadastro → Analise → Pendencia → Aprovacao → Credenciado → Ativo">
+        <Card titulo="Tempo médio por etapa" descricao="Cadastro → Análise → Pendência → Aprovação → Credenciado → Ativo">
           <BarList
             itens={(dados?.tempoMedioPorEtapa ?? []).map((e) => ({
               rotulo: e.etapa,
@@ -186,11 +186,11 @@ export function DesempenhoPage() {
               cor: SERIES[0],
             }))}
             unidade="dias"
-            vazio="Nenhuma passagem de etapa no periodo"
+            vazio="Nenhuma passagem de etapa no período"
           />
         </Card>
 
-        <Card titulo="Evolucao do tempo de credenciamento" descricao="Periodo atual comparado aos tres anteriores de mesmo tamanho">
+        <Card titulo="Evolução do tempo de credenciamento" descricao="Período atual comparado aos três anteriores de mesmo tamanho">
           {!dados ? (
             <p className="text-sm text-slate-500">Carregando...</p>
           ) : (
@@ -225,13 +225,13 @@ export function DesempenhoPage() {
               })}
             </ol>
           )}
-          <p className="mt-2 text-xs text-slate-500">Verde: mais rapido que o periodo anterior. Vermelho: mais lento.</p>
+          <p className="mt-2 text-xs text-slate-500">Verde: mais rápido que o período anterior. Vermelho: mais lento.</p>
         </Card>
       </div>
 
       {/* Os relatorios tabulares antigos continuam, para quem exporta CSV/PDF. */}
       <details className="rounded-xl border border-slate-200 bg-white p-4">
-        <summary className="cursor-pointer text-sm font-medium text-slate-700">Exportar relatorios (CSV/PDF)</summary>
+        <summary className="cursor-pointer text-sm font-medium text-slate-700">Exportar relatórios (CSV/PDF)</summary>
         <div className="mt-4">
           <RelatoriosPage />
         </div>

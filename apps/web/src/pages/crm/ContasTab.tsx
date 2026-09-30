@@ -206,9 +206,9 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
         p.contatosParaClassificar.length === 0;
       // "Nada a preencher" e um resultado, nao uma falha: o cadastro ja esta
       // completo. Sem essa frase, a tela pareceria nao ter respondido.
-      if (nada) setAvisoCnpj('O cadastro publico nao traz nada que esteja faltando aqui.');
+      if (nada) setAvisoCnpj('O cadastro público não traz nada que esteja faltando aqui.');
     } catch (e) {
-      setErro(e instanceof ApiError ? e.message : 'Falha ao consultar o cadastro publico');
+      setErro(e instanceof ApiError ? e.message : 'Falha ao consultar o cadastro público');
     } finally {
       setConsultando(false);
     }
@@ -221,11 +221,11 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
     try {
       await api.post(`/contas/${ficha.conta.id}/enriquecimento`);
       setPrevia(null);
-      setAvisoCnpj('Cadastro publico aplicado no que estava em branco.');
+      setAvisoCnpj('Cadastro público aplicado no que estava em branco.');
       await abrir(ficha.conta.id);
       await carregar();
     } catch (e) {
-      setErro(e instanceof ApiError ? e.message : 'Falha ao aplicar o cadastro publico');
+      setErro(e instanceof ApiError ? e.message : 'Falha ao aplicar o cadastro público');
     } finally {
       setAplicando(false);
     }
@@ -398,7 +398,7 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
     const ids = [...selecionados];
     confirmar({
       titulo: `Excluir ${ids.length} empresa${ids.length === 1 ? '' : 's'}?`,
-      descricao: 'Nao pode ser desfeito. Contatos vinculados perdem o vinculo, nao sao excluidos.',
+      descricao: 'Não pode ser desfeito. Contatos vinculados perdem o vínculo, não são excluidos.',
       variante: 'perigo',
       rotuloConfirmar: 'Excluir',
       aoConfirmar: async () => {
@@ -522,7 +522,7 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
             descricao={
               tags.length > 0 || busca.trim()
                 ? 'Nenhum cliente com esse filtro. Desligue uma etiqueta ou limpe a busca.'
-                : 'Cadastre a primeira empresa no formulario abaixo.'
+                : 'Cadastre a primeira empresa no formulário abaixo.'
             }
             acao={
               tags.length === 0 && !busca.trim() ? (
@@ -538,7 +538,7 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
               <input
                 ref={selecionarTodosRef}
                 type="checkbox"
-                aria-label="Selecionar todas as empresas visiveis"
+                aria-label="Selecionar todas as empresas visíveis"
                 checked={selecionados.size > 0 && selecionados.size === contas.length}
                 onChange={(e) => alternarTodos(e.target.checked)}
               />
@@ -721,7 +721,7 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
               transforma "varinha magica" em decisao. */}
           {ficha.conta.cnpj && (
             <Card
-              titulo="Cadastro publico (CNPJ)"
+              titulo="Cadastro público (CNPJ)"
               descricao={
                 ficha.conta.enriquecidoEm
                   ? `Consultado em ${new Date(ficha.conta.enriquecidoEm).toLocaleString('pt-BR')}`
@@ -730,11 +730,11 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
             >
               <div className="flex flex-wrap gap-2">
                 <Button variante="neutro" onClick={() => void consultarCnpj()} disabled={consultando}>
-                  {consultando ? 'Consultando...' : 'Consultar cadastro publico'}
+                  {consultando ? 'Consultando...' : 'Consultar cadastro público'}
                 </Button>
                 {previa && (
                   <Button onClick={() => void aplicarCnpj()} disabled={aplicando}>
-                    {aplicando ? 'Aplicando...' : 'Aplicar o que esta em branco'}
+                    {aplicando ? 'Aplicando...' : 'Aplicar o que está em branco'}
                   </Button>
                 )}
               </div>
@@ -745,11 +745,11 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
                 <div className="mt-4 space-y-4 text-sm">
                   <dl className="grid gap-3 sm:grid-cols-2">
                     <div>
-                      <dt className="text-xs text-slate-500">Razao social</dt>
+                      <dt className="text-xs text-slate-500">Razão social</dt>
                       <dd className="text-slate-800">{previa.dados.razaoSocial ?? '—'}</dd>
                     </div>
                     <div>
-                      <dt className="text-xs text-slate-500">Situacao cadastral</dt>
+                      <dt className="text-xs text-slate-500">Situação cadastral</dt>
                       <dd className="text-slate-800">{previa.dados.situacaoCadastral ?? '—'}</dd>
                     </div>
                     <div className="sm:col-span-2">
@@ -774,7 +774,7 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
                   {previa.plano.contatosParaCriar.length > 0 && (
                     <div>
                       <p className="text-xs font-medium text-slate-500">
-                        Vai criar {previa.plano.contatosParaCriar.length} contato(s) do quadro societario
+                        Vai criar {previa.plano.contatosParaCriar.length} contato(s) do quadro societário
                       </p>
                       <ul className="mt-1 space-y-0.5">
                         {previa.plano.contatosParaCriar.map((c) => (
@@ -794,11 +794,11 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
                       do cadastro publico e frequentemente o do contador. */}
                   {previa.plano.conflitos.length > 0 && (
                     <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-                      <p className="text-xs font-medium text-amber-800">Divergencias &mdash; nao serao sobrescritas</p>
+                      <p className="text-xs font-medium text-amber-800">Divergências &mdash; não serão sobrescritas</p>
                       <ul className="mt-1 space-y-0.5 text-amber-900">
                         {previa.plano.conflitos.map((c) => (
                           <li key={c.campo}>
-                            {c.campo}: aqui <strong>{c.atual}</strong>, no cadastro publico{' '}
+                            {c.campo}: aqui <strong>{c.atual}</strong>, no cadastro público{' '}
                             <strong>{c.publico}</strong>
                           </li>
                         ))}
@@ -940,8 +940,8 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
               dois chegam aqui iguais, e e assim que deve ser. */}
           {selecionadoId ? (
             <EmptyState
-              titulo="Cliente nao encontrado"
-              descricao="O endereco aponta para um registro que nao existe ou que voce nao pode ver."
+              titulo="Cliente não encontrado"
+              descricao="O endereço aponta para um registro que não existe ou que você não pode ver."
             />
           ) : (
             <EmptyState

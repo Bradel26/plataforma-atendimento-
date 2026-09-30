@@ -58,7 +58,7 @@ export function FilasTab() {
               <li key={fila.id} className="flex items-start justify-between gap-4 py-3">
                 <div className="min-w-0">
                   <p className="font-medium text-slate-800">{fila.nome}</p>
-                  <p className="truncate text-xs text-slate-500">{fila.descricao ?? 'Sem descricao'}</p>
+                  <p className="truncate text-xs text-slate-500">{fila.descricao ?? 'Sem descrição'}</p>
                   <p className="mt-1.5 text-xs text-slate-500">
                     {fila.agentes.length === 0
                       ? 'Nenhum agente vinculado'
@@ -80,10 +80,10 @@ export function FilasTab() {
           <Field label="Nome">
             <Input required value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} />
           </Field>
-          <Field label="Descricao">
+          <Field label="Descrição">
             <Input value={form.descricao} onChange={(e) => setForm({ ...form, descricao: e.target.value })} />
           </Field>
-          <Field label="Canal padrao" hint="Somente Webchat esta disponivel na Fase 1">
+          <Field label="Canal padrão" hint="Somente Webchat está disponível na Fase 1">
             <Select
               value={form.canalPadrao}
               onChange={(e) => setForm({ ...form, canalPadrao: e.target.value as Canal })}

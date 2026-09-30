@@ -12,10 +12,10 @@ const ENTIDADES: Array<{ valor: EntidadeCampoCustomizado; label: string }> = [
 
 const TIPOS: Array<{ valor: TipoCampoCustomizado; label: string }> = [
   { valor: 'TEXTO', label: 'Texto' },
-  { valor: 'NUMERO', label: 'Numero' },
+  { valor: 'NUMERO', label: 'Número' },
   { valor: 'DATA', label: 'Data' },
-  { valor: 'BOOLEANO', label: 'Sim/Nao' },
-  { valor: 'SELECAO', label: 'Selecao (lista de opcoes)' },
+  { valor: 'BOOLEANO', label: 'Sim/Não' },
+  { valor: 'SELECAO', label: 'Seleção (lista de opções)' },
 ];
 
 const FORM_VAZIO = {
@@ -82,7 +82,7 @@ export function CamposCustomizadosTab() {
   const remover = (campo: CampoCustomizadoDef) => {
     confirmar({
       titulo: `Remover o campo "${campo.nome}"?`,
-      descricao: 'Os valores ja gravados nele se perdem junto.',
+      descricao: 'Os valores já gravados nele se perdem junto.',
       variante: 'perigo',
       rotuloConfirmar: 'Remover',
       aoConfirmar: async () => {
@@ -101,7 +101,7 @@ export function CamposCustomizadosTab() {
     <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
       <Card
         titulo="Campos customizados"
-        descricao="So classificacao extra por entidade — nao afeta relatorio nem visibilidade"
+        descricao="Só classificação extra por entidade — não afeta relatório nem visibilidade"
       >
         <div className="mb-4 flex gap-1 border-b border-slate-200">
           {ENTIDADES.map((e) => (
@@ -125,7 +125,7 @@ export function CamposCustomizadosTab() {
         {campos.length === 0 ? (
           <EmptyState
             titulo="Nenhum campo customizado"
-            descricao="Crie o primeiro campo desta entidade no formulario ao lado."
+            descricao="Crie o primeiro campo desta entidade no formulário ao lado."
           />
         ) : (
           <ul className="divide-y divide-slate-100">
@@ -138,8 +138,8 @@ export function CamposCustomizadosTab() {
                   </p>
                   <div className="mt-1 flex flex-wrap gap-1.5">
                     <Badge tom="neutro">{TIPOS.find((t) => t.valor === campo.tipo)?.label ?? campo.tipo}</Badge>
-                    {campo.obrigatorio && <Badge tom="alerta">Obrigatorio</Badge>}
-                    {campo.valorUnico && <Badge tom="marca">Valor unico</Badge>}
+                    {campo.obrigatorio && <Badge tom="alerta">Obrigatório</Badge>}
+                    {campo.valorUnico && <Badge tom="marca">Valor único</Badge>}
                     {campo.tipo === 'SELECAO' && campo.opcoes.length > 0 && (
                       <span className="text-xs text-slate-500">{campo.opcoes.join(', ')}</span>
                     )}
@@ -176,16 +176,16 @@ export function CamposCustomizadosTab() {
             </Select>
           </Field>
           {form.tipo === 'SELECAO' && (
-            <Field label="Opcoes" hint="Separadas por virgula, ao menos 2">
+            <Field label="Opções" hint="Separadas por virgula, ao menos 2">
               <Input
                 required
-                placeholder="Pequeno, Medio, Grande"
+                placeholder="Pequeno, Médio, Grande"
                 value={form.opcoes}
                 onChange={(e) => setForm({ ...form, opcoes: e.target.value })}
               />
             </Field>
           )}
-          <Field label="Secao" hint="Agrupamento livre na tela, opcional">
+          <Field label="Seção" hint="Agrupamento livre na tela, opcional">
             <Input value={form.secao} onChange={(e) => setForm({ ...form, secao: e.target.value })} />
           </Field>
           <label className="flex items-center gap-2 text-sm text-slate-600">
@@ -194,7 +194,7 @@ export function CamposCustomizadosTab() {
               checked={form.obrigatorio}
               onChange={(e) => setForm({ ...form, obrigatorio: e.target.checked })}
             />
-            Obrigatorio ao criar um registro novo
+            Obrigatório ao criar um registro novo
           </label>
           <label className="flex items-center gap-2 text-sm text-slate-600">
             <input
@@ -202,7 +202,7 @@ export function CamposCustomizadosTab() {
               checked={form.valorUnico}
               onChange={(e) => setForm({ ...form, valorUnico: e.target.checked })}
             />
-            Valor unico (nao aceita repetir entre registros)
+            Valor único (não aceita repetir entre registros)
           </label>
           <Button type="submit" disabled={enviando} className="w-full">
             {enviando ? 'Salvando...' : 'Criar campo'}

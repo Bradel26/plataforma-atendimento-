@@ -172,7 +172,7 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
     setDuplicado(null);
     const falta = camposFaltando(novo);
     if (falta.length > 0) {
-      setErro(`Preencha os campos obrigatorios: ${falta.join(', ')}.`);
+      setErro(`Preencha os campos obrigatórios: ${falta.join(', ')}.`);
       return;
     }
     setSalvando(true);
@@ -207,8 +207,8 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
       aoAbrir(contato.id);
       if (possivelDuplicado) {
         setDuplicado(
-          `Ja existe "${possivelDuplicado.nome}" com este e-mail ou telefone. ` +
-            'O cadastro foi feito de qualquer forma — confira se nao sao a mesma pessoa.',
+          `Já existe "${possivelDuplicado.nome}" com este e-mail ou telefone. ` +
+            'O cadastro foi feito de qualquer forma — confira se não são a mesma pessoa.',
         );
       }
     } catch (e) {
@@ -469,7 +469,7 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
               descricao={
                 tags.length > 0 || ciclos.length > 0 || busca.trim() || uf || ddd
                   ? 'Nenhum contato com esse filtro. Desligue uma etiqueta, um degrau do ciclo de vida, ou limpe a busca/UF/DDD.'
-                  : 'Contatos nascem sozinhos quando alguem fala pela primeira vez. Use Novo contato para cadastrar a mao.'
+                  : 'Contatos nascem sozinhos quando alguém fala pela primeira vez. Use Novo contato para cadastrar a mão.'
               }
               acao={
                 // So quando a base esta vazia de verdade: com filtro ativo, a
@@ -487,7 +487,7 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
                 <input
                   ref={selecionarTodosRef}
                   type="checkbox"
-                  aria-label="Selecionar todos os contatos visiveis"
+                  aria-label="Selecionar todos os contatos visíveis"
                   checked={selecionados.size > 0 && selecionados.size === contatos.length}
                   onChange={(e) => alternarTodos(e.target.checked)}
                 />
@@ -518,8 +518,8 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
                         {[c.telefone ?? c.email ?? 'Sem contato', c.uf].filter(Boolean).join(' · ')}
                       </p>
                       <p className="text-xs text-slate-500">
-                        {c.responsavel ? c.responsavel.nome : 'sem responsavel'}
-                        {c.ultimaInteracaoEm ? ` · ultima interacao ${dataCurta(c.ultimaInteracaoEm)}` : ''}
+                        {c.responsavel ? c.responsavel.nome : 'sem responsável'}
+                        {c.ultimaInteracaoEm ? ` · última interação ${dataCurta(c.ultimaInteracaoEm)}` : ''}
                       </p>
                       {c.proximoRetorno && (
                         <p
@@ -527,7 +527,7 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
                             new Date(c.proximoRetorno.prazo) < new Date() ? 'text-red-700' : 'text-[var(--brand-primary)]'
                           }`}
                         >
-                          Proximo retorno {dataCurta(c.proximoRetorno.prazo)} · {c.proximoRetorno.titulo}
+                          Próximo retorno {dataCurta(c.proximoRetorno.prazo)} · {c.proximoRetorno.titulo}
                         </p>
                       )}
                       {typeof c.totalConversas === 'number' && (

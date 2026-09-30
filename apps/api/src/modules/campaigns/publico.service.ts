@@ -92,7 +92,7 @@ async function filtroDaEsteira(f: FiltroDePublico): Promise<Prisma.Credenciament
 async function resolverPublico(filtro: FiltroDePublico, canal: Channel) {
   if (filtroVazio(filtro)) {
     throw badRequest(
-      'Escolha ao menos um filtro. Sem filtro o publico seria a base inteira, e a mensagem nao volta atras.',
+      'Escolha ao menos um filtro. Sem filtro o público seria a base inteira, e a mensagem não volta atras.',
     );
   }
 
@@ -164,8 +164,8 @@ export async function aplicarPublico(campanhaId: string, filtro: FiltroDePublico
   if (publico.alcancaveis.length === 0) {
     throw badRequest(
       publico.campoExigido === null
-        ? `Campanha de ${canal} nao alcanca contato que nao escreveu primeiro — o cliente precisa iniciar a conversa`
-        : `Nenhum contato do filtro tem ${publico.campoExigido} — publico vazio`,
+        ? `Campanha de ${canal} não alcanca contato que não escreveu primeiro — o cliente precisa iniciar a conversa`
+        : `Nenhum contato do filtro tem ${publico.campoExigido} — público vazio`,
     );
   }
 

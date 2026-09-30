@@ -32,7 +32,7 @@ const ESCRITA = requireRole('ADMIN', 'SUPERVISOR');
  */
 const mesSchema = z
   .string()
-  .regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Informe o mes no formato AAAA-MM')
+  .regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Informe o mês no formato AAAA-MM')
   .transform((v) => new Date(`${v}-01T00:00:00Z`));
 
 const escopoSchema = z.enum(['INDIVIDUAL', 'EQUIPE']);
@@ -89,7 +89,7 @@ metasRoutes.put(
       escopo: escopoSchema,
       valores: z
         .array(z.object({ mes: mesSchema, valor: z.number().nonnegative().max(1_000_000_000) }))
-        .min(1, 'Informe ao menos um mes')
+        .min(1, 'Informe ao menos um mês')
         // Teto de 36, o mesmo de `mesesEntre`: rampa maior que tres anos e quase
         // sempre erro de digitacao na data.
         .max(36, 'A rampa cabe em 36 meses'),

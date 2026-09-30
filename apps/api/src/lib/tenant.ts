@@ -95,14 +95,14 @@ export function organizacaoAtual(): string {
     throw new AppError(
       500,
       'SEM_CONTEXTO_ORGANIZACAO',
-      'Operacao sem organizacao ativa. Abra o contexto com comOrganizacao, ou declare a excecao com semOrganizacao.',
+      'Operação sem organização ativa. Abra o contexto com comOrganizacao, ou declare a exceção com semOrganizacao.',
     );
   }
   if (ctx.irrestrito) {
     throw new AppError(
       500,
       'CONTEXTO_IRRESTRITO',
-      `Operacao exige organizacao mas o contexto e irrestrito (${ctx.motivo ?? 'sem motivo'}).`,
+      `Operação exige organização mas o contexto e irrestrito (${ctx.motivo ?? 'sem motivo'}).`,
     );
   }
   return ctx.organizacaoId;
@@ -115,7 +115,7 @@ export function organizacaoAtualOuNula(): string | null {
     throw new AppError(
       500,
       'SEM_CONTEXTO_ORGANIZACAO',
-      'Operacao sem organizacao ativa. Abra o contexto com comOrganizacao, ou declare a excecao com semOrganizacao.',
+      'Operação sem organização ativa. Abra o contexto com comOrganizacao, ou declare a exceção com semOrganizacao.',
     );
   }
   return ctx.irrestrito ? null : ctx.organizacaoId;
@@ -134,7 +134,7 @@ export function usuarioAtual(): UsuarioDoContexto {
     throw new AppError(
       500,
       'SEM_USUARIO_NO_CONTEXTO',
-      'Operacao exige o usuario da requisicao. Politica de visibilidade nao se aplica a webhook nem a trabalho da fila.',
+      'Operação exige o usuário da requisição. Política de visibilidade não se aplica a webhook nem a trabalho da fila.',
     );
   }
   return ctx.usuario;

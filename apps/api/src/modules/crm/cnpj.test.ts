@@ -45,7 +45,7 @@ describe('formatarCnpj', () => {
     expect(formatarCnpj('19131243000197')).toBe('19.131.243/0001-97');
   });
 
-  it('devolve o que recebeu quando nao da para formatar', () => {
+  it('devolve o que recebeu quando não da para formatar', () => {
     // A mensagem de erro mostra o que a pessoa digitou. Formatar a forca um
     // numero incompleto mostraria algo que ela nao escreveu.
     expect(formatarCnpj('123')).toBe('123');
@@ -58,16 +58,16 @@ describe('mapearCnpj', () => {
     razao_social: 'OPEN KNOWLEDGE BRASIL',
     nome_fantasia: 'REDE PELO CONHECIMENTO LIVRE',
     descricao_situacao_cadastral: 'ATIVA',
-    cnae_fiscal_descricao: 'Atividades de organizacoes associativas',
+    cnae_fiscal_descricao: 'Atividades de organizações associativas',
     ddd_telefone_1: '(11) 5555-5555',
     email: 'contato@exemplo.org',
     qsa: [
       { nome_socio: 'Maria Silva', qualificacao_socio: '49-Socio-Administrador', cnpj_cpf_do_socio: '***123**' },
-      { nome_socio: 'Joao Souza', qualificacao_socio: '22-Socio' },
+      { nome_socio: 'João Souza', qualificacao_socio: '22-Socio' },
     ],
   };
 
-  it('le o formato de uma fonte publica real', () => {
+  it('le o formato de uma fonte pública real', () => {
     const d = mapearCnpj(payload)!;
     expect(d.cnpj).toBe('19131243000197');
     expect(d.razaoSocial).toBe('OPEN KNOWLEDGE BRASIL');
@@ -76,23 +76,23 @@ describe('mapearCnpj', () => {
     expect(d.socios).toHaveLength(2);
   });
 
-  it('descarta o CPF do socio', () => {
+  it('descarta o CPF do sócio', () => {
     // Nao ha uso para ele no CRM, e guardar dado pessoal que ninguem vai usar so
     // aumenta o que a plataforma tem de proteger.
     const d = mapearCnpj(payload)!;
     expect(JSON.stringify(d)).not.toContain('123');
   });
 
-  it('aceita os nomes alternativos da outra fonte publica', () => {
+  it('aceita os nomes alternativos da outra fonte pública', () => {
     const d = mapearCnpj({
       cnpj: '19131243000197',
-      nome: 'RAZAO PELA OUTRA FONTE',
+      nome: 'RAZÃO PELA OUTRA FONTE',
       fantasia: 'FANTASIA',
       situacao: 'ATIVA',
       atividade_principal: [{ text: 'Comercio de ar-condicionado' }],
       qsa: [{ nome: 'Ana', qualificacao: 'Administrador' }],
     })!;
-    expect(d.razaoSocial).toBe('RAZAO PELA OUTRA FONTE');
+    expect(d.razaoSocial).toBe('RAZÃO PELA OUTRA FONTE');
     expect(d.atividadePrincipal).toBe('Comercio de ar-condicionado');
     expect(d.socios[0]?.nome).toBe('Ana');
   });
@@ -105,25 +105,25 @@ describe('mapearCnpj', () => {
     expect(mapearCnpj('texto')).toBeNull();
   });
 
-  it('socio sem nome e ignorado, e nao vira contato em branco', () => {
+  it('sócio sem nome e ignorado, é não vira contato em branco', () => {
     const d = mapearCnpj({ cnpj: '19131243000197', qsa: [{ qualificacao_socio: '49' }, { nome_socio: '  ' }] })!;
     expect(d.socios).toEqual([]);
   });
 
-  it('campo em branco vira nulo, nao string vazia', () => {
+  it('campo em branco vira nulo, não string vazia', () => {
     const d = mapearCnpj({ cnpj: '19131243000197', razao_social: '   ', email: '' })!;
     expect(d.razaoSocial).toBeNull();
     expect(d.email).toBeNull();
   });
 
-  it('qsa que nao e lista nao quebra a leitura', () => {
+  it('qsa que não e lista não quebra a leitura', () => {
     const d = mapearCnpj({ cnpj: '19131243000197', qsa: 'nada disso' })!;
     expect(d.socios).toEqual([]);
   });
 });
 
 describe('classificarQualificacao', () => {
-  it('socio-administrador vira ADMINISTRADOR', () => {
+  it('sócio-administrador vira ADMINISTRADOR', () => {
     // A ordem das checagens importa: e as duas coisas, e vale mais registrar quem
     // assina. Com a ordem invertida, SOCIO casaria primeiro e a informacao mais
     // util se perderia.
@@ -131,12 +131,12 @@ describe('classificarQualificacao', () => {
     expect(classificarQualificacao('10-Diretor')).toBe('ADMINISTRADOR');
   });
 
-  it('socio comum vira SOCIO', () => {
+  it('sócio comum vira SÓCIO', () => {
     expect(classificarQualificacao('22-Socio')).toBe('SOCIO');
     expect(classificarQualificacao('Sócio')).toBe('SOCIO');
   });
 
-  it('qualificacao desconhecida vira SOCIO, nao OUTRO', () => {
+  it('qualificação desconhecida vira SÓCIO, não OUTRO', () => {
     // Quem esta no quadro societario e socio por definicao, mesmo que o codigo
     // seja de um tipo que a lista nao preveja.
     expect(classificarQualificacao('93-Codigo-Que-Nao-Conhecemos')).toBe('SOCIO');
@@ -149,7 +149,7 @@ describe('nomeComparavel', () => {
     expect(nomeComparavel('José da Silva-Souza')).toBe(nomeComparavel('JOSE DA SILVA SOUZA'));
   });
 
-  it('ignora espaco duplo', () => {
+  it('ignora espaço duplo', () => {
     expect(nomeComparavel('Ana   Maria')).toBe('ana maria');
   });
 });
@@ -166,7 +166,7 @@ describe('planoDeEnriquecimento', () => {
 
   const dados: DadosPublicos = {
     cnpj: '19131243000197',
-    razaoSocial: 'RAZAO SOCIAL LTDA',
+    razaoSocial: 'RAZÃO SOCIAL LTDA',
     nomeFantasia: 'FANTASIA',
     situacaoCadastral: 'ATIVA',
     atividadePrincipal: 'Comercio de ar-condicionado',
@@ -175,14 +175,14 @@ describe('planoDeEnriquecimento', () => {
     socios: [{ nome: 'Maria Silva', qualificacao: '49-Socio-Administrador' }],
   };
 
-  it('preenche o que esta em branco', () => {
+  it('preenche o que está em branco', () => {
     const p = planoDeEnriquecimento(vazia, dados, []);
-    expect(p.camposParaPreencher.razaoSocial).toBe('RAZAO SOCIAL LTDA');
+    expect(p.camposParaPreencher.razaoSocial).toBe('RAZÃO SOCIAL LTDA');
     expect(p.camposParaPreencher.telefone).toBe('6233334444');
     expect(p.conflitos).toEqual([]);
   });
 
-  it('NAO sobrescreve o que alguem digitou — reporta como conflito', () => {
+  it('NÃO sobrescreve o que alguém digitou — reporta como conflito', () => {
     /*
      * A decisao inteira do recurso. Se o vendedor digitou um telefone e a Receita
      * traz outro, o dele e provavelmente o celular de quem atende, e o cadastro
@@ -190,16 +190,16 @@ describe('planoDeEnriquecimento', () => {
      * util dos dois — e a pessoa que perdeu nao saberia por que.
      */
     const p = planoDeEnriquecimento(
-      { ...vazia, telefone: '62999998888', razaoSocial: 'OUTRA RAZAO LTDA' },
+      { ...vazia, telefone: '62999998888', razaoSocial: 'OUTRA RAZÃO LTDA' },
       dados,
       [],
     );
     expect(p.camposParaPreencher.telefone).toBeUndefined();
     expect(p.camposParaPreencher.razaoSocial).toBeUndefined();
-    expect(p.conflitos.map((c) => c.campo).sort()).toEqual(['Razao social', 'Telefone']);
+    expect(p.conflitos.map((c) => c.campo).sort()).toEqual(['Razão social', 'Telefone']);
   });
 
-  it('valor igual com acento ou caixa diferente nao e conflito', () => {
+  it('valor igual com acento ou caixa diferente não e conflito', () => {
     // "Razao Social Ltda" e "RAZAO SOCIAL LTDA" sao a mesma coisa, e acusar
     // conflito ali treinaria quem le a ignorar a lista de conflitos.
     const p = planoDeEnriquecimento({ ...vazia, razaoSocial: 'Razão Social Ltda' }, dados, []);
@@ -207,7 +207,7 @@ describe('planoDeEnriquecimento', () => {
     expect(p.camposParaPreencher.razaoSocial).toBeUndefined();
   });
 
-  it('situacao cadastral e atividade sao sempre atualizadas', () => {
+  it('situação cadastral e atividade são sempre atualizadas', () => {
     /*
      * Elas nao sao dado do cliente: sao o estado do registro publico HOJE. Uma
      * empresa que estava ATIVA e foi BAIXADA tem de aparecer como BAIXADA —
@@ -222,14 +222,14 @@ describe('planoDeEnriquecimento', () => {
     expect(p.conflitos.find((c) => c.campo === 'Situacao')).toBeUndefined();
   });
 
-  it('socio que nao existe entra como contato novo', () => {
+  it('sócio que não existe entra como contato novo', () => {
     const p = planoDeEnriquecimento(vazia, dados, []);
     expect(p.contatosParaCriar).toEqual([
       { nome: 'Maria Silva', papelNaConta: 'ADMINISTRADOR', qualificacaoQsa: '49-Socio-Administrador' },
     ]);
   });
 
-  it('socio que ja existe pelo nome nao e duplicado', () => {
+  it('sócio que já existe pelo nome não e duplicado', () => {
     // Casar por nome comparavel e o que impede "MARIA SILVA" e "Maria Silva" de
     // virarem duas pessoas na mesma empresa.
     const p = planoDeEnriquecimento(vazia, dados, [
@@ -240,7 +240,7 @@ describe('planoDeEnriquecimento', () => {
     expect(p.contatosParaClassificar[0]?.papelNaConta).toBe('ADMINISTRADOR');
   });
 
-  it('papel definido a mao NAO e reclassificado pelo quadro societario', () => {
+  it('papel definido a mão NÃO e reclassificado pelo quadro societário', () => {
     /*
      * Alguem marcou aquela pessoa como DECISOR porque descobriu na conversa. O
      * quadro societario dizer que ela e socia nao torna a outra informacao falsa,
@@ -254,7 +254,7 @@ describe('planoDeEnriquecimento', () => {
     expect(p.contatosParaClassificar[0]?.qualificacaoQsa).toBe('49-Socio-Administrador');
   });
 
-  it('contato ja completo nao entra em lista nenhuma', () => {
+  it('contato já completo não entra em lista nenhuma', () => {
     const p = planoDeEnriquecimento(vazia, dados, [
       { id: 'c1', nome: 'Maria Silva', papelNaConta: 'DECISOR', qualificacaoQsa: '49-Socio-Administrador' },
     ]);
@@ -262,11 +262,11 @@ describe('planoDeEnriquecimento', () => {
     expect(p.contatosParaCriar).toEqual([]);
   });
 
-  it('planoVazio reconhece que nao ha o que fazer', () => {
+  it('planoVazio reconhece que não há o que fazer', () => {
     const nada = planoDeEnriquecimento(
       {
         nome: 'Cliente',
-        razaoSocial: 'RAZAO SOCIAL LTDA',
+        razaoSocial: 'RAZÃO SOCIAL LTDA',
         telefone: '6233334444',
         email: 'contato@exemplo.com',
         situacaoCadastral: 'ATIVA',

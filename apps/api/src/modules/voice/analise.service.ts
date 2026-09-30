@@ -48,7 +48,7 @@ export async function registrarAnalise(chave: string, entrada: EntradaDaAnalise)
     where: { OR: [{ id: chave }, { idExterno: chave }] },
     select: { id: true, encerradoEm: true },
   });
-  if (!chamada) throw notFound('Chamada nao encontrada');
+  if (!chamada) throw notFound('Chamada não encontrada');
 
   const analisadoEm = entrada.analisadoEm ?? new Date();
 
@@ -61,8 +61,8 @@ export async function registrarAnalise(chave: string, entrada: EntradaDaAnalise)
   if (analisePrematura(chamada.encerradoEm, analisadoEm)) {
     throw badRequest(
       chamada.encerradoEm === null
-        ? 'A chamada ainda nao encerrou — nao ha audio completo para analisar'
-        : 'A analise e anterior ao fim da ligacao',
+        ? 'A chamada ainda não encerrou — não há áudio completo para analisar'
+        : 'A análise e anterior ao fim da ligação',
     );
   }
 
@@ -145,7 +145,7 @@ export async function analiseDaChamada(id: string) {
     where: { OR: [{ id }, { idExterno: id }] },
     include: { ...inclusaoDeAcoes, contato: { select: { id: true, nome: true } } },
   });
-  if (!c) throw notFound('Chamada nao encontrada');
+  if (!c) throw notFound('Chamada não encontrada');
 
   const temVinculo = c.contatoId !== null;
 
@@ -192,7 +192,7 @@ export async function acaoViraTarefa(chamadaId: string, acaoId: string, usuarioI
     where: { id: acaoId, chamada: { id: chamadaId } },
     include: { chamada: { select: { id: true, contatoId: true, agenteId: true } } },
   });
-  if (!acao) throw notFound('Sugestao nao encontrada');
+  if (!acao) throw notFound('Sugestão não encontrada');
 
   const impedimento = impedimentoDaTarefa(acao, acao.chamada.contatoId !== null);
   if (impedimento) throw badRequest(impedimento);
@@ -204,7 +204,7 @@ export async function acaoViraTarefa(chamadaId: string, acaoId: string, usuarioI
         titulo: acao.texto,
         // A descricao diz de onde veio. Tarefa sem procedencia faz quem a recebe
         // perguntar "quem pediu isso?", e a resposta e uma ligacao especifica.
-        descricao: 'Proxima acao sugerida pela analise da ligacao',
+        descricao: 'Próxima ação sugerida pela análise da ligação',
         contatoId: acao.chamada.contatoId,
         // Responsavel e quem atendeu, quando se sabe: a acao e continuacao da
         // conversa que ele teve. Sem agente, fica com quem clicou.
@@ -234,9 +234,9 @@ export async function descartarAcao(chamadaId: string, acaoId: string, usuarioId
     where: { id: acaoId, chamada: { id: chamadaId } },
     select: { id: true, atividadeId: true, descartadoEm: true },
   });
-  if (!acao) throw notFound('Sugestao nao encontrada');
-  if (acao.atividadeId) throw badRequest('Esta sugestao ja virou tarefa');
-  if (acao.descartadoEm) throw badRequest('Esta sugestao ja foi descartada');
+  if (!acao) throw notFound('Sugestão não encontrada');
+  if (acao.atividadeId) throw badRequest('Esta sugestão já virou tarefa');
+  if (acao.descartadoEm) throw badRequest('Esta sugestão já foi descartada');
 
   await prisma.callSuggestedAction.update({
     where: { id: acao.id },

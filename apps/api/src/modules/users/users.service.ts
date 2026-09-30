@@ -26,7 +26,7 @@ export async function listUsers(query: ListUsersQuery) {
 
 export async function getUser(id: string) {
   const user = await prisma.user.findUnique({ where: { id } });
-  if (!user) throw notFound('Usuario nao encontrado');
+  if (!user) throw notFound('Usuário não encontrado');
   return toPublicUser(user);
 }
 
@@ -35,7 +35,7 @@ export async function createUser(input: CreateUserInput) {
   // pergunta certa e "ja existe nesta organizacao?" — que e o que o filtro da
   // extensao faz aqui.
   const existente = await prisma.user.findFirst({ where: { email: input.email } });
-  if (existente) throw conflict('Ja existe um usuario com este email');
+  if (existente) throw conflict('Já existe um usuário com este email');
 
   const user = await prisma.user.create({
     data: {
@@ -51,11 +51,11 @@ export async function createUser(input: CreateUserInput) {
 
 export async function updateUser(id: string, input: UpdateUserInput) {
   const atual = await prisma.user.findUnique({ where: { id } });
-  if (!atual) throw notFound('Usuario nao encontrado');
+  if (!atual) throw notFound('Usuário não encontrado');
 
   if (input.email && input.email !== atual.email) {
     const emailEmUso = await prisma.user.findFirst({ where: { email: input.email } });
-    if (emailEmUso) throw conflict('Ja existe um usuario com este email');
+    if (emailEmUso) throw conflict('Já existe um usuário com este email');
   }
 
   /*
@@ -67,7 +67,7 @@ export async function updateUser(id: string, input: UpdateUserInput) {
    * verdade no dia em que a arvore recursiva existir.
    */
   if (input.gestorId) {
-    if (input.gestorId === id) throw conflict('Um usuario nao pode ser gestor de si mesmo');
+    if (input.gestorId === id) throw conflict('Um usuário não pode ser gestor de si mesmo');
     await exigirUsuarioDaOrganizacao(input.gestorId);
   }
 
@@ -84,7 +84,7 @@ export async function updateUser(id: string, input: UpdateUserInput) {
 /** Desativacao logica — preserva o historico de atendimento do agente. */
 export async function deactivateUser(id: string) {
   const atual = await prisma.user.findUnique({ where: { id } });
-  if (!atual) throw notFound('Usuario nao encontrado');
+  if (!atual) throw notFound('Usuário não encontrado');
 
   const user = await prisma.user.update({
     where: { id },
@@ -96,13 +96,13 @@ export async function deactivateUser(id: string) {
 /** Exclui definitivamente a conta selecionada; historicos com autoria opcional ficam preservados. */
 export async function deleteUserPermanently(id: string) {
   const atual = await prisma.user.findUnique({ where: { id } });
-  if (!atual) throw notFound('Usuario nao encontrado');
+  if (!atual) throw notFound('Usuário não encontrado');
 
   if (atual.perfil === 'ADMIN' && atual.ativo) {
     const outrosAdministradores = await prisma.user.count({
       where: { perfil: 'ADMIN', ativo: true, id: { not: id } },
     });
-    if (outrosAdministradores === 0) throw conflict('Nao e possivel excluir o ultimo administrador ativo');
+    if (outrosAdministradores === 0) throw conflict('Não é possível excluir o último administrador ativo');
   }
 
   await prisma.user.delete({ where: { id } });

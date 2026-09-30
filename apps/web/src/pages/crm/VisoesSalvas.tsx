@@ -70,7 +70,7 @@ export function VisoesSalvas<F extends Record<string, unknown>>({
       await carregar();
       setAtivaId(visao.id);
     } catch (e) {
-      setErro(e instanceof ApiError ? e.message : 'Falha ao salvar a visao');
+      setErro(e instanceof ApiError ? e.message : 'Falha ao salvar a visão');
     } finally {
       setSalvando(false);
     }
@@ -78,7 +78,7 @@ export function VisoesSalvas<F extends Record<string, unknown>>({
 
   const remover = (visao: VisaoSalva<F>) => {
     confirmar({
-      titulo: `Remover a visao "${visao.nome}"?`,
+      titulo: `Remover a visão "${visao.nome}"?`,
       variante: 'perigo',
       rotuloConfirmar: 'Remover',
       aoConfirmar: async () => {
@@ -88,7 +88,7 @@ export function VisoesSalvas<F extends Record<string, unknown>>({
           if (ativaId === visao.id) aplicar(null);
           await carregar();
         } catch (e) {
-          setErro(e instanceof ApiError ? e.message : 'Falha ao remover a visao');
+          setErro(e instanceof ApiError ? e.message : 'Falha ao remover a visão');
         }
       },
     });
@@ -123,7 +123,7 @@ export function VisoesSalvas<F extends Record<string, unknown>>({
               </button>
               <button
                 type="button"
-                aria-label={`Remover visao ${v.nome}`}
+                aria-label={`Remover visão ${v.nome}`}
                 onClick={() => void remover(v)}
                 className="ml-0.5 hidden text-xs text-slate-400 hover:text-red-600 group-hover:inline"
               >
@@ -137,14 +137,14 @@ export function VisoesSalvas<F extends Record<string, unknown>>({
       {erro && <Alerta>{erro}</Alerta>}
 
       {filtroVazio ? (
-        <p className="text-xs text-slate-500">Preencha algum filtro para poder salva-lo como visao.</p>
+        <p className="text-xs text-slate-500">Preencha algum filtro para poder salva-lo como visão.</p>
       ) : (
         <form onSubmit={salvar} className="flex flex-wrap items-end gap-2">
           <Field label="Salvar filtro atual como">
             <Input
               value={nome}
               onChange={(e) => setNome(e.target.value)}
-              placeholder="Nome da visao"
+              placeholder="Nome da visão"
               maxLength={60}
               required
               className="w-48"
@@ -164,7 +164,7 @@ export function VisoesSalvas<F extends Record<string, unknown>>({
             ))}
           </div>
           <Button type="submit" variante="neutro" disabled={salvando || nome.trim().length < 2}>
-            {salvando ? 'Salvando...' : 'Salvar visao'}
+            {salvando ? 'Salvando...' : 'Salvar visão'}
           </Button>
         </form>
       )}

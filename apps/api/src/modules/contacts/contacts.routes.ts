@@ -69,7 +69,7 @@ const criarSchema = z.object({
   canalOrigem: z.enum(['WEBCHAT', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'EMAIL', 'VOZ', 'PROSPECCAO_ATIVA', 'INDICACAO']).default('WEBCHAT'),
   observacoes: z.string().trim().max(2000).nullable().optional(),
   /** Estado (UF) e cidade do parceiro: base do "por estado/regiao" e do publico de campanha. */
-  uf: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/, 'UF invalida').nullable().optional(),
+  uf: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/, 'UF inválida').nullable().optional(),
   cidade: z.string().trim().max(80).nullable().optional(),
   tags: z.array(z.string().trim().min(1).max(TAMANHO_MAXIMO)).max(MAXIMO_POR_REGISTRO).default([]),
   contaId: z.string().uuid().nullable().optional(),
@@ -105,7 +105,7 @@ const atualizarSchema = z
     telefone: z.string().trim().min(8).max(20).nullable().optional(),
     observacoes: z.string().trim().max(2000).nullable().optional(),
     /** Estado (UF) e cidade do parceiro: base do "por estado/regiao" e do publico de campanha. */
-    uf: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/, 'UF invalida').nullable().optional(),
+    uf: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/, 'UF inválida').nullable().optional(),
     cidade: z.string().trim().max(80).nullable().optional(),
     tags: z.array(z.string().trim().min(1).max(TAMANHO_MAXIMO)).max(MAXIMO_POR_REGISTRO).optional(),
     /**
@@ -252,7 +252,7 @@ contactsRoutes.get(
     const contato = await prisma.contact.findFirst({
       where: apenasVisivel(id, await filtroDe(politicaContatos)),
     });
-    if (!contato) throw notFound('Contato nao encontrado');
+    if (!contato) throw notFound('Contato não encontrado');
 
     // As conversas tambem passam pela politica delas: contato pode estar visivel
     // por um protocolo, e nesse caso as conversas dele nao sao do agente.
@@ -303,7 +303,7 @@ contactsRoutes.post(
       } else {
         // CNPJ ja usado por conta que o usuario nao enxerga: a criacao bateria na unicidade.
         if (cnpj && (await prisma.account.findFirst({ where: { cnpj }, select: { id: true } }))) {
-          throw badRequest('Ja existe uma empresa com este CNPJ fora da sua carteira');
+          throw badRequest('Já existe uma empresa com este CNPJ fora da sua carteira');
         }
         const conta = await prisma.account.create({
           data: { nome: empresa.nome, cnpj },
@@ -336,7 +336,7 @@ contactsRoutes.post(
         where: apenasVisivel(dados.contaId, await filtroDe(politicaContas)),
         select: { id: true, responsavelId: true },
       });
-      if (!conta) throw notFound('Conta nao encontrada');
+      if (!conta) throw notFound('Conta não encontrada');
       if (!('responsavelId' in dados)) herdado = conta.responsavelId;
     }
 
@@ -401,7 +401,7 @@ contactsRoutes.patch(
       where: apenasVisivel(id, await filtroDe(politicaContatos)),
       select: { id: true },
     });
-    if (!existe) throw notFound('Contato nao encontrado');
+    if (!existe) throw notFound('Contato não encontrado');
     await exigirUsuarioDaOrganizacao((req.body as { responsavelId?: string | null }).responsavelId);
 
     /*
@@ -433,7 +433,7 @@ contactsRoutes.delete(
       where: apenasVisivel(id, await filtroDe(politicaContatos)),
       select: { id: true },
     });
-    if (!existe) throw notFound('Contato nao encontrado');
+    if (!existe) throw notFound('Contato não encontrado');
     await prisma.contact.delete({ where: { id } });
     res.status(204).end();
   }),

@@ -5,7 +5,7 @@ const status = z.enum(['OFFLINE', 'DISPONIVEL', 'EM_ATENDIMENTO', 'PAUSA']);
 
 export const createUserSchema = z.object({
   nome: z.string().min(2, 'Nome muito curto').max(120),
-  email: z.string().email('Informe um email valido').transform((v) => v.toLowerCase()),
+  email: z.string().email('Informe um email válido').transform((v) => v.toLowerCase()),
   senha: z.string().min(8, 'A senha deve ter ao menos 8 caracteres'),
   perfil: perfil.default('AGENTE'),
 });

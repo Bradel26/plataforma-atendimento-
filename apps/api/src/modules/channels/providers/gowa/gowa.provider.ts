@@ -48,14 +48,14 @@ export class GowaProvider implements ChannelProvider {
   private cliente(): GowaClient {
     const cfg = obterConfigGowa();
     if (!cfg) {
-      throw new AppError(503, 'CANAL_INDISPONIVEL', 'O WhatsApp nao esta configurado nesta instalacao (GOWA_BASE_URL)');
+      throw new AppError(503, 'CANAL_INDISPONIVEL', 'O WhatsApp não está configurado nesta instalação (GOWA_BASE_URL)');
     }
     return new GowaClient(cfg.url);
   }
 
   private static deviceId(sessao: SessaoResolvida): string {
     const id = sessao.sessaoExterna?.trim();
-    if (!id) throw new AppError(503, 'CANAL_INDISPONIVEL', 'Falta a sessao do WhatsApp desta linha');
+    if (!id) throw new AppError(503, 'CANAL_INDISPONIVEL', 'Falta a sessão do WhatsApp desta linha');
     return id;
   }
 
@@ -70,8 +70,8 @@ export class GowaProvider implements ChannelProvider {
 
   private static motivoSessaoNaoPermitida(sessao: SessaoResolvida): string {
     const fixa = obterSessaoFixaGowa();
-    if (!fixa) return 'esta instalacao do GOWA nao tem GOWA_SESSAO configurada';
-    return `esta instalacao do GOWA so atende a linha "${fixa}"; a linha pedida ("${sessao.sessaoExterna ?? 'sem sessao'}") precisa de outra instalacao`;
+    if (!fixa) return 'esta instalação do GOWA não tem GOWA_SESSÃO configurada';
+    return `esta instalação do GOWA só atende a linha "${fixa}"; a linha pedida ("${sessao.sessaoExterna ?? 'sem sessão'}") precisa de outra instalação`;
   }
 
   private static erroSessaoNaoPermitida(sessao: SessaoResolvida): AppError {
@@ -102,7 +102,7 @@ export class GowaProvider implements ChannelProvider {
       // 404: device nao existe no GOWA; 422: device existe mas nao esta conectado
       // (mesma leitura que o WahaProvider ja faz para a sessao do WAHA).
       if (err.status === 404 || err.status === 422) {
-        return new AppError(503, 'CANAL_INDISPONIVEL', 'O WhatsApp desta linha nao esta conectado');
+        return new AppError(503, 'CANAL_INDISPONIVEL', 'O WhatsApp desta linha não está conectado');
       }
       return new AppError(502, 'ENVIO_RECUSADO', err.message);
     }
@@ -119,7 +119,7 @@ export class GowaProvider implements ChannelProvider {
     if (!GowaProvider.sessaoPermitida(sessao)) throw GowaProvider.erroSessaoNaoPermitida(sessao);
     const deviceId = GowaProvider.deviceId(sessao);
     const phone = numeroDoDestino(destino);
-    if (!phone) throw new AppError(400, 'DESTINO_INVALIDO', 'O contato nao tem um numero de WhatsApp valido');
+    if (!phone) throw new AppError(400, 'DESTINO_INVALIDO', 'O contato não tem um número de WhatsApp válido');
 
     const inicio = Date.now();
     try {
@@ -138,7 +138,7 @@ export class GowaProvider implements ChannelProvider {
     if (!GowaProvider.sessaoPermitida(sessao)) throw GowaProvider.erroSessaoNaoPermitida(sessao);
     const deviceId = GowaProvider.deviceId(sessao);
     const phone = numeroDoDestino(destino);
-    if (!phone) throw new AppError(400, 'DESTINO_INVALIDO', 'O contato nao tem um numero de WhatsApp valido');
+    if (!phone) throw new AppError(400, 'DESTINO_INVALIDO', 'O contato não tem um número de WhatsApp válido');
 
     const familia = midia.tipo.split('/')[0];
     const endpoint: EndpointDeMidiaGowa = familia === 'image' ? 'image' : familia === 'video' ? 'video' : familia === 'audio' ? 'audio' : 'file';
@@ -187,7 +187,7 @@ export class GowaProvider implements ChannelProvider {
   private esquecerSeSumiu(deviceId: string, status: StatusResultadoGowa): void {
     if (status.tipo === 'inexistente' && this.garantidos.has(deviceId)) {
       this.garantidos.delete(deviceId);
-      log.warn('sessao', 'device sumiu do GOWA, sera recriado no proximo pedido', { provider: PROVIDER, sessaoExterna: deviceId });
+      log.warn('sessao', 'device sumiu do GOWA, será recriado no próximo pedido', { provider: PROVIDER, sessaoExterna: deviceId });
     }
   }
 
@@ -197,7 +197,7 @@ export class GowaProvider implements ChannelProvider {
         return { estado: 'DESCONHECIDO', detalhe: GowaProvider.motivoSessaoNaoPermitida(sessao), telefone: null };
       }
       if (!obterSegredoWebhookGowa()) {
-        return { estado: 'DESCONHECIDO', detalhe: 'falta GOWA_WEBHOOK_SECRET nesta instalacao: a sessao nao receberia mensagens', telefone: null };
+        return { estado: 'DESCONHECIDO', detalhe: 'falta GOWA_WEBHOOK_SECRET nesta instalação: a sessão não receberia mensagens', telefone: null };
       }
       const cliente = this.cliente();
       const deviceId = await this.garantirDevice(sessao, cliente);
@@ -208,13 +208,13 @@ export class GowaProvider implements ChannelProvider {
 
     qr: async (sessao: SessaoResolvida): Promise<QrOuEstado> => {
       if (!sessao.sessaoExterna?.trim()) {
-        return { qr: null, conectado: false, motivo: 'a sessao do WhatsApp desta linha ainda nao foi configurada' };
+        return { qr: null, conectado: false, motivo: 'a sessão do WhatsApp desta linha ainda não foi configurada' };
       }
       if (!GowaProvider.sessaoPermitida(sessao)) {
         return { qr: null, conectado: false, motivo: GowaProvider.motivoSessaoNaoPermitida(sessao) };
       }
       if (!obterSegredoWebhookGowa()) {
-        return { qr: null, conectado: false, motivo: 'falta GOWA_WEBHOOK_SECRET nesta instalacao: a sessao nao receberia mensagens' };
+        return { qr: null, conectado: false, motivo: 'falta GOWA_WEBHOOK_SECRET nesta instalação: a sessão não receberia mensagens' };
       }
       try {
         const cliente = this.cliente();
@@ -229,28 +229,28 @@ export class GowaProvider implements ChannelProvider {
           case 'CONECTANDO':
             // Pareada, socket caiu: reconecta em vez de pedir QR novo (perderia o pareamento a toa).
             await cliente.reconectar(deviceId);
-            return { qr: null, conectado: false, motivo: 'reconectando a sessao ja pareada' };
+            return { qr: null, conectado: false, motivo: 'reconectando a sessão já pareada' };
           case 'AGUARDANDO_QR': {
             const qr = await cliente.obterQrCode(deviceId);
-            return { qr, conectado: false, motivo: qr ? null : 'o QR ainda nao foi gerado' };
+            return { qr, conectado: false, motivo: qr ? null : 'o QR ainda não foi gerado' };
           }
           case 'DESCONECTADO':
             // O device sumiu do GOWA (ja tirado do cache acima) — o proximo pedido recria.
             return { qr: null, conectado: false, motivo: 'o dispositivo do WhatsApp sumiu do servidor; tentando recriar' };
           default:
-            return { qr: null, conectado: false, motivo: 'nao foi possivel falar com o WhatsApp' };
+            return { qr: null, conectado: false, motivo: 'não foi possível falar com o WhatsApp' };
         }
       } catch (err) {
-        log.warn('sessao', 'nao foi possivel obter o QR', GowaProvider.camposDeLog(sessao, {
+        log.warn('sessao', 'não foi possível obter o QR', GowaProvider.camposDeLog(sessao, {
           motivo: err instanceof Error ? err.message : 'erro desconhecido',
         }));
-        return { qr: null, conectado: false, motivo: err instanceof Error ? err.message : 'nao foi possivel falar com o WhatsApp' };
+        return { qr: null, conectado: false, motivo: err instanceof Error ? err.message : 'não foi possível falar com o WhatsApp' };
       }
     },
 
     estado: async (sessao: SessaoResolvida): Promise<SituacaoSessao> => {
       const deviceId = sessao.sessaoExterna?.trim();
-      if (!deviceId) return { estado: 'DESCONHECIDO', detalhe: 'sessao nao informada', telefone: null };
+      if (!deviceId) return { estado: 'DESCONHECIDO', detalhe: 'sessão não informada', telefone: null };
       try {
         const status = await this.cliente().obterStatus(deviceId);
         this.esquecerSeSumiu(deviceId, status);
@@ -269,7 +269,7 @@ export class GowaProvider implements ChannelProvider {
         if (err instanceof AppError) throw err;
         throw new AppError(502, 'DESCONEXAO_RECUSADA', err instanceof Error ? err.message : 'erro desconhecido');
       }
-      log.info('sessao', 'sessao desconectada a pedido', GowaProvider.camposDeLog(sessao));
+      log.info('sessao', 'sessão desconectada a pedido', GowaProvider.camposDeLog(sessao));
     },
 
     reiniciar: async (sessao: SessaoResolvida): Promise<void> => {
@@ -281,7 +281,7 @@ export class GowaProvider implements ChannelProvider {
         if (err instanceof AppError) throw err;
         throw new AppError(502, 'CANAL_INACESSIVEL', err instanceof Error ? err.message : 'erro desconhecido');
       }
-      log.info('sessao', 'sessao reiniciada a pedido', GowaProvider.camposDeLog(sessao));
+      log.info('sessao', 'sessão reiniciada a pedido', GowaProvider.camposDeLog(sessao));
     },
   };
 
@@ -293,8 +293,8 @@ export class GowaProvider implements ChannelProvider {
       // vem de GOWA_SESSAO, fixada na instalacao, nunca do payload.
       const sessaoFixa = obterSessaoFixaGowa();
       if (!sessaoFixa) {
-        log.warn('webhook', 'GOWA_SESSAO nao configurada: evento descartado (nao ha como saber a organizacao)', { provider: PROVIDER });
-        return [{ tipo: 'ignorado' as const, motivo: 'GOWA_SESSAO nao configurada nesta instalacao' }];
+        log.warn('webhook', 'GOWA_SESSÃO não configurada: evento descartado (não há como saber a organização)', { provider: PROVIDER });
+        return [{ tipo: 'ignorado' as const, motivo: 'GOWA_SESSÃO não configurada nesta instalação' }];
       }
       return interpretarEventoGowa(corpo, sessaoFixa);
     },

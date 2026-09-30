@@ -79,7 +79,7 @@ describe('impedimentoDeEnvio', () => {
     const opcoes = { credenciaisPorLinha: false };
 
     expect(impedimentoDeEnvio('NAO_OFICIAL', { ...semPonte, ponteSessao: 'vendedor-abc' }, opcoes)).toBeNull();
-    expect(impedimentoDeEnvio('NAO_OFICIAL', { ...semPonte, ponteSessao: null }, opcoes)).toContain('sessao');
+    expect(impedimentoDeEnvio('NAO_OFICIAL', { ...semPonte, ponteSessao: null }, opcoes)).toContain('sessão');
     expect(impedimentoDeEnvio('NAO_OFICIAL', { ...semPonte, ativo: false, ponteSessao: 'x' }, opcoes)).toContain(
       'inativo',
     );

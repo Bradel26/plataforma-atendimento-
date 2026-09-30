@@ -72,10 +72,10 @@ function Tabela({
             <th className="py-1.5 pr-3 font-medium">Progresso</th>
             <th className="py-1.5 pr-3 text-right font-medium">Realizado</th>
             <th className="py-1.5 pr-3 text-right font-medium">Meta</th>
-            <th className="py-1.5 pr-3 text-right font-medium">Projecao</th>
+            <th className="py-1.5 pr-3 text-right font-medium">Projeção</th>
             <th className="py-1.5 pr-3 text-right font-medium">Falta/dia</th>
-            <th className="py-1.5 font-medium">Situacao</th>
-            {aoRemover && <th className="py-1.5 pl-3 font-medium sr-only">Acao</th>}
+            <th className="py-1.5 font-medium">Situação</th>
+            {aoRemover && <th className="py-1.5 pl-3 font-medium sr-only">Ação</th>}
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
@@ -203,12 +203,12 @@ function MetasComerciais() {
         .map((r) => ({ mes: r.mes.slice(0, 7), valor: Number(r.valor) }));
 
       if (valores.length === 0) {
-        setAviso('Preencha ao menos um mes. Mes em branco significa "sem meta", e nao meta zero.');
+        setAviso('Preencha ao menos um mês. Mês em branco significa "sem meta", é não meta zero.');
         return;
       }
 
       await api.put('/metas/rampa', { usuarioId: alvo, escopo, valores });
-      setAviso(`${valores.length} mes(es) gravado(s).`);
+      setAviso(`${valores.length} mês(es) gravado(s).`);
       await carregar();
     } catch (e) {
       setErro(e instanceof ApiError ? e.message : 'Falha ao gravar a rampa');
@@ -222,9 +222,9 @@ function MetasComerciais() {
 
   return (
     <div className="space-y-4">
-      <Card titulo="Metas" descricao="Venda fechada no mes, contra o que foi combinado">
+      <Card titulo="Metas" descricao="Venda fechada no mês, contra o que foi combinado">
         <div className="grid gap-3 sm:grid-cols-3 sm:items-end">
-          <Field label="Mes">
+          <Field label="Mês">
             <Input type="month" value={mes} onChange={(e) => setMes(e.target.value)} />
           </Field>
         </div>
@@ -233,7 +233,7 @@ function MetasComerciais() {
       {erro && <Alerta>{erro}</Alerta>}
 
       {painel === null ? (
-        <Card titulo="Painel do mes">
+        <Card titulo="Painel do mês">
           <p className="text-sm text-slate-500">Carregando...</p>
         </Card>
       ) : (
@@ -243,18 +243,18 @@ function MetasComerciais() {
             descricao={
               painel.individuais.length > 0
                 ? `${painel.individuais.length} pessoa(s) com meta em ${nomeDoMes(painel.mes)}`
-                : 'Nenhuma meta individual definida neste mes'
+                : 'Nenhuma meta individual definida neste mês'
             }
           >
             {painel.individuais.length === 0 ? (
               <p className="text-sm text-slate-500">
-                Nenhuma meta para {nomeDoMes(painel.mes)}. O que foi vendido continua no funil — meta ausente nao
+                Nenhuma meta para {nomeDoMes(painel.mes)}. O que foi vendido continua no funil — meta ausente não
                 esconde venda.
               </p>
             ) : (
               <Tabela
                 linhas={painel.individuais}
-                titulo="Metas individuais do mes"
+                titulo="Metas individuais do mês"
                 aoRemover={podeEditar ? (l) => void remover(l) : undefined}
               />
             )}
@@ -263,22 +263,22 @@ function MetasComerciais() {
           {painel.equipes.length > 0 && (
             <Card
               titulo="Metas de equipe"
-              descricao="A meta do gestor cobre a equipe dele — nao e a soma das individuais"
+              descricao="A meta do gestor cobre a equipe dele — não e a soma das individuais"
             >
               <Tabela
                 linhas={painel.equipes}
-                titulo="Metas de equipe do mes"
+                titulo="Metas de equipe do mês"
                 aoRemover={podeEditar ? (l) => void remover(l) : undefined}
               />
               <p className="mt-3 text-xs text-slate-500">
-                A equipe inclui o proprio gestor. Somar esta tabela com a de cima contaria a venda dele duas vezes —
+                A equipe inclui o próprio gestor. Somar esta tabela com a de cima contaria a venda dele duas vezes —
                 por isso as duas ficam separadas.
               </p>
             </Card>
           )}
 
           {painel.semMeta.length > 0 && (
-            <Card titulo="Vendeu sem meta definida" descricao="Aparece aqui para o total nao discordar do funil">
+            <Card titulo="Vendeu sem meta definida" descricao="Aparece aqui para o total não discordar do funil">
               <ul className="divide-y divide-slate-100 text-sm">
                 {painel.semMeta.map((u) => (
                   <li key={u.usuarioId} className="flex items-center justify-between py-2">
@@ -295,7 +295,7 @@ function MetasComerciais() {
       {podeEditar && (
         <Card
           titulo="Rampa mensal"
-          descricao="Meta diferente por mes. Dezembro nao e junho, e uma meta anual dividida por doze descreve mal o ano"
+          descricao="Meta diferente por mês. Dezembro não e junho, e uma meta anual dividida por doze descreve mal o ano"
         >
           <div className="grid gap-3 sm:grid-cols-4 sm:items-end">
             <Field label="Escopo">
@@ -322,7 +322,7 @@ function MetasComerciais() {
             <Field label="De">
               <Input type="month" value={de} onChange={(e) => setDe(e.target.value)} />
             </Field>
-            <Field label="Ate">
+            <Field label="Até">
               <Input type="month" value={ate} onChange={(e) => setAte(e.target.value)} />
             </Field>
           </div>
@@ -359,8 +359,8 @@ function MetasComerciais() {
                 {salvando ? 'Gravando...' : 'Gravar rampa'}
               </Button>
               <p className="text-xs text-slate-500">
-                Mes em branco fica <strong>sem meta</strong> — nao vira meta zero. Meses fora do intervalo escolhido
-                nao sao tocados.
+                Mês em branco fica <strong>sem meta</strong> — não vira meta zero. Meses fora do intervalo escolhido
+                não são tocados.
               </p>
             </div>
           )}
@@ -389,7 +389,7 @@ export function MetasTab() {
     <div className="space-y-5">
       <div className="flex gap-2 text-sm" role="tablist" aria-label="Tipo de meta">
         {([
-          ['operacao', 'Operacao (credenciamento)'],
+          ['operacao', 'Operação (credenciamento)'],
           ['comercial', 'Comercial (vendas)'],
         ] as const).map(([id, rotulo]) => (
           <button

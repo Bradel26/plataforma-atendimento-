@@ -4,8 +4,8 @@ import { useBranding } from '../../features/branding/BrandingProvider';
 import { ApiError } from '../../lib/api';
 
 const CAMPOS_COR = [
-  { chave: 'corPrimaria', label: 'Cor primaria', hint: 'Botoes e item ativo do menu' },
-  { chave: 'corSecundaria', label: 'Cor secundaria', hint: 'Fundo do menu lateral' },
+  { chave: 'corPrimaria', label: 'Cor primária', hint: 'Botões e item ativo do menu' },
+  { chave: 'corSecundaria', label: 'Cor secundária', hint: 'Fundo do menu lateral' },
   { chave: 'corDestaque', label: 'Cor de destaque', hint: 'Indicadores positivos' },
 ] as const;
 
@@ -42,12 +42,12 @@ export function WhiteLabelTab() {
 
   return (
     <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
-      <Card titulo="White Label" descricao="Identidade visual da instancia">
+      <Card titulo="White Label" descricao="Identidade visual da instância">
         <form onSubmit={submeter} className="space-y-4">
           {erro && <Alerta>{erro}</Alerta>}
           {ok && <Alerta tipo="sucesso">Tema atualizado.</Alerta>}
 
-          <Field label="Nome da aplicacao">
+          <Field label="Nome da aplicação">
             <Input required value={form.appName} onChange={(e) => setForm({ ...form, appName: e.target.value })} />
           </Field>
 
@@ -82,7 +82,7 @@ export function WhiteLabelTab() {
         </form>
       </Card>
 
-      <Card titulo="Previa">
+      <Card titulo="Prévia">
         <div className="overflow-hidden rounded-lg border border-slate-200">
           <div className="flex">
             <div className="w-16 space-y-1.5 p-2" style={{ backgroundColor: form.corSecundaria }}>
@@ -98,7 +98,7 @@ export function WhiteLabelTab() {
           </div>
         </div>
         <p className="mt-3 text-xs text-slate-500">
-          As cores sao salvas no banco e aplicadas para todos os usuarios da instancia.
+          As cores são salvas no banco e aplicadas para todos os usuários da instância.
         </p>
       </Card>
     </div>

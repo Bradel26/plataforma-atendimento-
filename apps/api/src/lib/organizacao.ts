@@ -21,13 +21,13 @@ import { ORGANIZACAO_INICIAL, semOrganizacao } from './tenant';
 export async function organizacaoPorSlug(slug: string | undefined): Promise<string> {
   if (!slug) return ORGANIZACAO_INICIAL;
 
-  const org = await semOrganizacao('rota publica: resolve a organizacao pelo slug', () =>
+  const org = await semOrganizacao('rota pública: resolve a organização pelo slug', () =>
     prismaSemIsolamento.organizacao.findFirst({
       where: { slug, ativa: true },
       select: { id: true },
     }),
   );
-  if (!org) throw notFound('Organizacao nao encontrada');
+  if (!org) throw notFound('Organização não encontrada');
   return org.id;
 }
 

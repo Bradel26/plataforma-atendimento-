@@ -52,7 +52,7 @@ function verificarSegredo(req: Request, res: Response, next: NextFunction) {
 
   const recebido = typeof req.query.secret === 'string' ? req.query.secret : null;
   if (!segredoValido(recebido, segredo)) {
-    res.status(401).json({ error: { code: 'SEGREDO_INVALIDO', message: 'Segredo do webhook invalido' } });
+    res.status(401).json({ error: { code: 'SEGREDO_INVALIDO', message: 'Segredo do webhook inválido' } });
     return;
   }
 
@@ -66,7 +66,7 @@ function verificarSegredo(req: Request, res: Response, next: NextFunction) {
  * desconhecida e recusada, nunca cai numa organizacao "padrao".
  */
 async function organizacaoDaSessao(sessao: string): Promise<string | null> {
-  return semOrganizacao('webhook do wppconnect: resolver organizacao pela sessao', async () => {
+  return semOrganizacao('webhook do wppconnect: resolver organização pela sessão', async () => {
     const config = await prismaSemIsolamento.channelConfig.findFirst({
       where: { canal: 'WHATSAPP', ponteSessao: sessao },
       select: { organizacaoId: true },
@@ -96,7 +96,7 @@ wppconnectWebhookRoutes.post(
       res.status(404).json({
         error: {
           code: 'SESSAO_DESCONHECIDA',
-          message: `Nenhum canal WhatsApp cadastrado para a sessao "${sessaoBruta}"`,
+          message: `Nenhum canal WhatsApp cadastrado para a sessão "${sessaoBruta}"`,
         },
       });
       return;

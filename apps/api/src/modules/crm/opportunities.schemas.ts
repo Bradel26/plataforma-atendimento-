@@ -121,7 +121,7 @@ export const criarFunilSchema = z.object({
         probabilidade: z.number().int().min(0).max(100).default(0),
       }),
     )
-    .min(2, 'Um funil precisa de ao menos 2 estagios')
+    .min(2, 'Um funil precisa de ao menos 2 estágios')
     .max(12),
 });
 

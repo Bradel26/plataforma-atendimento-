@@ -246,8 +246,8 @@ export async function lerAlvos(usuarioId: string, mes: Date) {
  */
 export async function gravarAlvos(usuarioId: string, mes: Date, alvos: Partial<Record<IndicadorChave, number | null>>) {
   const usuario = await prisma.user.findFirst({ where: { id: usuarioId }, select: { id: true, perfil: true } });
-  if (!usuario) throw notFound('Usuario nao encontrado');
-  if (usuario.perfil !== 'COMERCIAL') throw badRequest('Meta operacional so existe para usuarios do perfil Comercial');
+  if (!usuario) throw notFound('Usuário não encontrado');
+  if (usuario.perfil !== 'COMERCIAL') throw badRequest('Meta operacional só existe para usuários do perfil Comercial');
 
   const organizacaoId = organizacaoAtual();
   const competenciaDoMes = competencia(mes);

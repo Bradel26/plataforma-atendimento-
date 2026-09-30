@@ -17,7 +17,7 @@ describe('getWhatsAppProvider', () => {
     else process.env.WHATSAPP_PROVIDER = ORIGINAL;
   });
 
-  it('WHATSAPP_PROVIDER=baileys devolve uma instancia de BaileysProvider', async () => {
+  it('WHATSAPP_PROVIDER=baileys devolve uma instância de BaileysProvider', async () => {
     process.env.WHATSAPP_PROVIDER = 'baileys';
     const { getWhatsAppProvider } = await import('./whatsapp-provider.factory');
     const { BaileysProvider } = await import('./providers/baileys.provider');
@@ -25,7 +25,7 @@ describe('getWhatsAppProvider', () => {
     expect(getWhatsAppProvider()).toBeInstanceOf(BaileysProvider);
   });
 
-  it('WHATSAPP_PROVIDER=wppconnect devolve uma instancia de WPPConnectProvider', async () => {
+  it('WHATSAPP_PROVIDER=wppconnect devolve uma instância de WPPConnectProvider', async () => {
     process.env.WHATSAPP_PROVIDER = 'wppconnect';
     const { getWhatsAppProvider } = await import('./whatsapp-provider.factory');
     const { WPPConnectProvider } = await import('./providers/wppconnect.provider');
@@ -62,21 +62,21 @@ describe('getWhatsAppProvider', () => {
     expect(getWhatsAppProvider()).toBeInstanceOf(WPPConnectProvider);
   });
 
-  it('variavel ausente mantem o comportamento atual (Baileys)', async () => {
+  it('variavel ausente mantém o comportamento atual (Baileys)', async () => {
     const { getWhatsAppProvider } = await import('./whatsapp-provider.factory');
     const { BaileysProvider } = await import('./providers/baileys.provider');
 
     expect(getWhatsAppProvider()).toBeInstanceOf(BaileysProvider);
   });
 
-  it('valor invalido falha com erro de configuracao claro, sem escolher um padrao silencioso', async () => {
+  it('valor inválido falha com erro de configuração claro, sem escolher um padrão silencioso', async () => {
     process.env.WHATSAPP_PROVIDER = 'evolution-api';
     const { getWhatsAppProvider } = await import('./whatsapp-provider.factory');
 
-    expect(() => getWhatsAppProvider()).toThrow(/WHATSAPP_PROVIDER invalido.*evolution-api/s);
+    expect(() => getWhatsAppProvider()).toThrow(/WHATSAPP_PROVIDER inválido.*evolution-api/s);
   });
 
-  it('nunca hardcoda sessao: a fabrica nao recebe (nem precisa de) nome de sessao', async () => {
+  it('nunca hardcoda sessão: a fabrica não recebe (nem precisa de) nome de sessão', async () => {
     process.env.WHATSAPP_PROVIDER = 'wppconnect';
     const { getWhatsAppProvider } = await import('./whatsapp-provider.factory');
 

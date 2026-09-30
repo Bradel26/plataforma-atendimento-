@@ -48,7 +48,7 @@ async function chamar(url: string, token: string, corpo: FormData | Record<strin
     throw new AppError(
       502,
       'PONTE_INACESSIVEL',
-      `Nao foi possivel falar com a ponte do WhatsApp: ${
+      `Não foi possível falar com a ponte do WhatsApp: ${
         err instanceof Error ? err.message : 'erro de rede'
       }. Confira se a ponte esta de pe e se a sessao esta conectada.`,
     );
@@ -93,7 +93,7 @@ function credenciais(config: ConfigDaPonte) {
     throw new AppError(
       503,
       'CANAL_INDISPONIVEL',
-      'O WhatsApp esta no modo nao oficial, mas a ponte nao esta configurada',
+      'O WhatsApp está no modo não oficial, mas a ponte não está configurada',
     );
   }
   return {
@@ -117,7 +117,7 @@ export async function enviarTextoPelaPonte(
     throw new AppError(
       400,
       'NUMERO_INVALIDO',
-      `Numero "${destino}" nao parece um telefone com DDD — corrija o cadastro do contato`,
+      `Número "${destino}" não parece um telefone com DDD — corrija o cadastro do contato`,
     );
   }
 
@@ -144,7 +144,7 @@ export async function enviarArquivoPelaPonte(
     throw new AppError(
       400,
       'NUMERO_INVALIDO',
-      `Numero "${destino}" nao parece um telefone com DDD — corrija o cadastro do contato`,
+      `Número "${destino}" não parece um telefone com DDD — corrija o cadastro do contato`,
     );
   }
 
@@ -177,7 +177,7 @@ export type QrDaPonte = {
  */
 export async function qrDaPonte(config: ConfigDaPonte): Promise<QrDaPonte> {
   if (!config.ponteUrl || !config.ponteToken) {
-    return { qr: null, conectado: false, motivo: 'a ponte ainda nao foi configurada' };
+    return { qr: null, conectado: false, motivo: 'a ponte ainda não foi configurada' };
   }
 
   const { enderecos, token } = credenciais(config);
@@ -192,7 +192,7 @@ export async function qrDaPonte(config: ConfigDaPonte): Promise<QrDaPonte> {
       return {
         qr: null,
         conectado: false,
-        motivo: 'esta ponte nao expoe QR Code — pareie o numero pelo painel dela',
+        motivo: 'esta ponte não expoe QR Code — pareie o número pelo painel dela',
       };
     }
     if (!resposta.ok) {
@@ -214,13 +214,13 @@ export async function qrDaPonte(config: ConfigDaPonte): Promise<QrDaPonte> {
     return {
       qr,
       conectado,
-      motivo: qr || conectado ? null : `a sessao esta ${String(corpo?.status ?? 'sem QR no momento')}`,
+      motivo: qr || conectado ? null : `a sessão está ${String(corpo?.status ?? 'sem QR no momento')}`,
     };
   } catch (err) {
     return {
       qr: null,
       conectado: false,
-      motivo: err instanceof Error ? err.message : 'nao foi possivel falar com a ponte',
+      motivo: err instanceof Error ? err.message : 'não foi possível falar com a ponte',
     };
   }
 }
@@ -246,7 +246,7 @@ export async function desconectarPonte(config: ConfigDaPonte): Promise<void> {
     throw new AppError(
       502,
       'PONTE_INACESSIVEL',
-      `Nao foi possivel falar com a ponte: ${err instanceof Error ? err.message : 'erro de rede'}`,
+      `Não foi possível falar com a ponte: ${err instanceof Error ? err.message : 'erro de rede'}`,
     );
   }
 
@@ -254,11 +254,11 @@ export async function desconectarPonte(config: ConfigDaPonte): Promise<void> {
     throw new AppError(
       501,
       'PONTE_SEM_DESCONEXAO',
-      'Esta ponte nao suporta desconectar por aqui — use o painel dela',
+      'Esta ponte não suporta desconectar por aqui — use o painel dela',
     );
   }
   if (!resposta.ok) {
-    throw new AppError(502, 'DESCONEXAO_RECUSADA', `A ponte recusou a desconexao (${resposta.status})`);
+    throw new AppError(502, 'DESCONEXAO_RECUSADA', `A ponte recusou a desconexão (${resposta.status})`);
   }
 }
 
@@ -272,7 +272,7 @@ export async function desconectarPonte(config: ConfigDaPonte): Promise<void> {
  */
 export async function estadoDaPonte(config: ConfigDaPonte): Promise<EstadoDaPonte> {
   if (!config.ponteUrl || !config.ponteToken) {
-    return { situacao: 'DESCONHECIDO', detalhe: 'ponte nao configurada' };
+    return { situacao: 'DESCONHECIDO', detalhe: 'ponte não configurada' };
   }
 
   const { enderecos, token } = credenciais(config);
@@ -289,7 +289,7 @@ export async function estadoDaPonte(config: ConfigDaPonte): Promise<EstadoDaPont
   } catch (err) {
     return {
       situacao: 'DESCONHECIDO',
-      detalhe: err instanceof Error ? err.message : 'nao foi possivel falar com a ponte',
+      detalhe: err instanceof Error ? err.message : 'não foi possível falar com a ponte',
     };
   }
 }

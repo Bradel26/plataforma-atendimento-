@@ -47,7 +47,7 @@ export function MonitoramentoPage() {
   return (
     <div className="space-y-5">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatTile rotulo="Disponiveis" valor={porStatus('DISPONIVEL')} estado={COR_STATUS_AGENTE.DISPONIVEL} />
+        <StatTile rotulo="Disponíveis" valor={porStatus('DISPONIVEL')} estado={COR_STATUS_AGENTE.DISPONIVEL} />
         <StatTile rotulo="Em atendimento" valor={porStatus('EM_ATENDIMENTO')} estado={COR_STATUS_AGENTE.EM_ATENDIMENTO} />
         <StatTile rotulo="Em pausa" valor={porStatus('PAUSA')} estado={COR_STATUS_AGENTE.PAUSA} />
         <StatTile rotulo="Offline" valor={porStatus('OFFLINE')} estado={COR_STATUS_AGENTE.OFFLINE} />
@@ -57,7 +57,7 @@ export function MonitoramentoPage() {
           operacao aguenta receber mais parceiros agora. */}
       <p className="text-sm text-slate-600">
         <span className="font-semibold text-slate-800">{online} consultor(es) online</span> ·{' '}
-        {porStatus('EM_ATENDIMENTO')} em atendimento · {porStatus('DISPONIVEL')} disponivel(is) · {porStatus('PAUSA')}{' '}
+        {porStatus('EM_ATENDIMENTO')} em atendimento · {porStatus('DISPONIVEL')} disponível(is) · {porStatus('PAUSA')}{' '}
         em pausa
         {aguardando > 0 && (
           <span className="text-amber-700"> · {aguardando} conversa(s) aguardando resposta</span>
@@ -83,7 +83,7 @@ export function MonitoramentoPage() {
                   <th className="pb-2 font-medium">Ativos</th>
                   <th className="pb-2 font-medium">Aguardando resposta</th>
                   <th className="pb-2 font-medium">Mais antigo</th>
-                  <th className="pb-2 font-medium">Ultima atividade</th>
+                  <th className="pb-2 font-medium">Última atividade</th>
                   <th className="pb-2 font-medium">Protocolos</th>
                   <th className="pb-2 font-medium">Filas</th>
                 </tr>

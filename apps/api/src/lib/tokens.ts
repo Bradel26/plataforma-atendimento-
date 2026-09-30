@@ -39,15 +39,15 @@ export function verifyAccessToken(token: string): AccessPayload {
   try {
     payload = jwt.verify(token, env.JWT_ACCESS_SECRET) as AccessPayload & { tipo?: string };
   } catch {
-    throw unauthorized('Token de acesso invalido ou expirado');
+    throw unauthorized('Token de acesso inválido ou expirado');
   }
   // Token de visitante do webchat nao vale como credencial de usuario interno.
   if (payload.tipo === WEBCHAT_TIPO || !payload.perfil) {
-    throw unauthorized('Token de acesso invalido ou expirado');
+    throw unauthorized('Token de acesso inválido ou expirado');
   }
   // Token sem organizacao e de antes do isolamento: nao ha como abrir contexto,
   // e aceitar sem contexto e exatamente o que nao pode acontecer.
-  if (!payload.org) throw unauthorized('Token de acesso invalido ou expirado');
+  if (!payload.org) throw unauthorized('Token de acesso inválido ou expirado');
   return payload;
 }
 
@@ -75,10 +75,10 @@ export function verifyWebchatToken(token: string): WebchatPayload {
   try {
     payload = jwt.verify(token, env.JWT_ACCESS_SECRET) as WebchatPayload;
   } catch {
-    throw unauthorized('Sessao do webchat invalida ou expirada');
+    throw unauthorized('Sessão do webchat inválida ou expirada');
   }
-  if (payload.tipo !== WEBCHAT_TIPO) throw unauthorized('Sessao do webchat invalida');
-  if (!payload.org) throw unauthorized('Sessao do webchat invalida');
+  if (payload.tipo !== WEBCHAT_TIPO) throw unauthorized('Sessão do webchat inválida');
+  if (!payload.org) throw unauthorized('Sessão do webchat inválida');
   return payload;
 }
 
@@ -95,7 +95,7 @@ export async function issueRefreshToken(userId: string, organizacaoId: string): 
   try {
     await redis.set(refreshKey(jti), `${organizacaoId}:${userId}`, 'EX', REFRESH_TTL_SECONDS);
   } catch {
-    console.warn(`[auth] issueRefreshToken: Redis indisponivel, sessao criada sem registro — renovacao futura desta sessao nao sera possivel`);
+    console.warn(`[auth] issueRefreshToken: Redis indisponível, sessão criada sem registro — renovação futura desta sessão não será possível`);
   }
   return jwt.sign({ sub: userId, jti } satisfies RefreshPayload, env.JWT_REFRESH_SECRET, {
     expiresIn: `${env.JWT_REFRESH_TTL_DAYS}d`,
@@ -112,26 +112,26 @@ export async function issueRefreshToken(userId: string, organizacaoId: string): 
 export async function consumeRefreshToken(
   token: string | undefined,
 ): Promise<{ userId: string; organizacaoId: string }> {
-  if (!token) throw new AppError(401, 'SEM_SESSAO', 'Nenhuma sessao para renovar');
+  if (!token) throw new AppError(401, 'SEM_SESSAO', 'Nenhuma sessão para renovar');
 
   let payload: RefreshPayload;
   try {
     payload = jwt.verify(token, env.JWT_REFRESH_SECRET) as RefreshPayload;
   } catch {
-    throw unauthorized('Sessao expirada, faca login novamente');
+    throw unauthorized('Sessão expirada, faca login novamente');
   }
 
   // GETDEL: le e apaga num passo. Ler e depois apagar abriria uma janela em que
   // duas renovacoes simultaneas leriam o mesmo jti — token de uso unico usado
   // duas vezes.
   const valor = await redis.getdel(refreshKey(payload.jti));
-  if (!valor) throw unauthorized('Sessao expirada, faca login novamente');
+  if (!valor) throw unauthorized('Sessão expirada, faca login novamente');
 
   // Valor no formato `<organizacao>:<usuario>`. Sessao gravada antes do
   // isolamento nao tem organizacao e e recusada: um login a mais, uma vez.
   const [organizacaoId, userId] = valor.split(':');
   if (!organizacaoId || !userId || userId !== payload.sub) {
-    throw unauthorized('Sessao expirada, faca login novamente');
+    throw unauthorized('Sessão expirada, faca login novamente');
   }
 
   return { userId, organizacaoId };

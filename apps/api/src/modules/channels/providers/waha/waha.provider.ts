@@ -56,14 +56,14 @@ export class WahaProvider implements ChannelProvider {
       throw new AppError(503, 'CANAL_INDISPONIVEL', err instanceof Error ? err.message : 'WAHA mal configurado');
     }
     if (!cfg) {
-      throw new AppError(503, 'CANAL_INDISPONIVEL', 'O WhatsApp nao esta configurado nesta instalacao (WAHA_BASE_URL)');
+      throw new AppError(503, 'CANAL_INDISPONIVEL', 'O WhatsApp não está configurado nesta instalação (WAHA_BASE_URL)');
     }
     return new WahaClient(cfg.url, cfg.apiKey);
   }
 
   private static nomeDaSessao(sessao: SessaoResolvida): string {
     const nome = sessao.sessaoExterna?.trim();
-    if (!nome) throw new AppError(503, 'CANAL_INDISPONIVEL', 'Falta a sessao do WhatsApp desta linha');
+    if (!nome) throw new AppError(503, 'CANAL_INDISPONIVEL', 'Falta a sessão do WhatsApp desta linha');
     return nome;
   }
 
@@ -74,7 +74,7 @@ export class WahaProvider implements ChannelProvider {
       throw new AppError(
         503,
         'CANAL_INDISPONIVEL',
-        'Falta WAHA_WEBHOOK_SECRET (ou PUBLIC_URL/WEB_ORIGIN) na API: sem webhook a sessao nao receberia mensagens',
+        'Falta WAHA_WEBHOOK_SECRET (ou PUBLIC_URL/WEB_ORIGIN) na API: sem webhook a sessão não receberia mensagens',
       );
     }
     return {
@@ -94,7 +94,7 @@ export class WahaProvider implements ChannelProvider {
       if (err.tipo !== 'http') return new AppError(502, 'CANAL_INACESSIVEL', err.message);
       // 404: sessao nao existe; 422: sessao existe mas nao esta WORKING.
       if (err.status === 404 || err.status === 422) {
-        return new AppError(503, 'CANAL_INDISPONIVEL', 'O WhatsApp desta linha nao esta conectado');
+        return new AppError(503, 'CANAL_INDISPONIVEL', 'O WhatsApp desta linha não está conectado');
       }
       if (err.status === 401 || err.status === 403) {
         return new AppError(503, 'CANAL_INDISPONIVEL', 'O servidor do WhatsApp recusou a chave da API (WAHA_API_KEY)');
@@ -113,7 +113,7 @@ export class WahaProvider implements ChannelProvider {
   async enviarTexto(sessao: SessaoResolvida, destino: string, texto: string): Promise<ResultadoEnvio> {
     const nome = WahaProvider.nomeDaSessao(sessao);
     const chatId = chatIdDoDestino(destino);
-    if (!chatId) throw new AppError(400, 'DESTINO_INVALIDO', 'O contato nao tem um numero de WhatsApp valido');
+    if (!chatId) throw new AppError(400, 'DESTINO_INVALIDO', 'O contato não tem um número de WhatsApp válido');
 
     const inicio = Date.now();
     try {
@@ -131,7 +131,7 @@ export class WahaProvider implements ChannelProvider {
   async enviarMidia(sessao: SessaoResolvida, destino: string, midia: InputMidia): Promise<ResultadoEnvio> {
     const nome = WahaProvider.nomeDaSessao(sessao);
     const chatId = chatIdDoDestino(destino);
-    if (!chatId) throw new AppError(400, 'DESTINO_INVALIDO', 'O contato nao tem um numero de WhatsApp valido');
+    if (!chatId) throw new AppError(400, 'DESTINO_INVALIDO', 'O contato não tem um número de WhatsApp válido');
 
     const familia = midia.tipo.split('/')[0];
     const endpoint: EndpointDeMidia =
@@ -177,13 +177,13 @@ export class WahaProvider implements ChannelProvider {
     if (!atual) {
       await cliente.criarSessao(nome, config);
       this.convergidas.add(nome);
-      log.info('sessao', 'sessao criada no WAHA', WahaProvider.camposDeLog(sessao));
+      log.info('sessao', 'sessão criada no WAHA', WahaProvider.camposDeLog(sessao));
       atual = await cliente.obterSessao(nome);
     } else if (!this.convergidas.has(nome)) {
       this.convergidas.add(nome);
       if (!WahaProvider.webhookConfere(atual, config.webhooks[0]!.url)) {
         await cliente.atualizarSessao(nome, config);
-        log.info('sessao', 'webhook da sessao corrigido (a sessao reinicia)', WahaProvider.camposDeLog(sessao));
+        log.info('sessao', 'webhook da sessão corrigido (a sessão reinicia)', WahaProvider.camposDeLog(sessao));
         atual = await cliente.obterSessao(nome);
       }
     }
@@ -191,11 +191,11 @@ export class WahaProvider implements ChannelProvider {
     const status = atual?.status?.toUpperCase();
     if (status === 'STOPPED') {
       await cliente.iniciarSessao(nome);
-      log.info('sessao', 'sessao parada foi iniciada', WahaProvider.camposDeLog(sessao));
+      log.info('sessao', 'sessão parada foi iniciada', WahaProvider.camposDeLog(sessao));
       atual = await cliente.obterSessao(nome);
     } else if (status === 'FAILED') {
       await cliente.reiniciarSessao(nome);
-      log.warn('sessao', 'sessao em FAILED foi reiniciada', WahaProvider.camposDeLog(sessao));
+      log.warn('sessao', 'sessão em FAILED foi reiniciada', WahaProvider.camposDeLog(sessao));
       atual = await cliente.obterSessao(nome);
     }
 
@@ -216,7 +216,7 @@ export class WahaProvider implements ChannelProvider {
 
     qr: async (sessao: SessaoResolvida): Promise<QrOuEstado> => {
       if (!sessao.sessaoExterna?.trim()) {
-        return { qr: null, conectado: false, motivo: 'a sessao do WhatsApp desta linha ainda nao foi configurada' };
+        return { qr: null, conectado: false, motivo: 'a sessão do WhatsApp desta linha ainda não foi configurada' };
       }
       try {
         const situacao = await this.garantirDePeUmaVez(sessao);
@@ -225,29 +225,29 @@ export class WahaProvider implements ChannelProvider {
             return { qr: null, conectado: true, motivo: null };
           case 'AGUARDANDO_QR': {
             const qr = await this.cliente().obterQr(sessao.sessaoExterna.trim());
-            return { qr, conectado: false, motivo: qr ? null : 'o QR ainda nao foi gerado' };
+            return { qr, conectado: false, motivo: qr ? null : 'o QR ainda não foi gerado' };
           }
           case 'CONECTANDO':
-            return { qr: null, conectado: false, motivo: 'a conexao esta iniciando, o QR aparece em instantes' };
+            return { qr: null, conectado: false, motivo: 'a conexão esta iniciando, o QR aparece em instantes' };
           case 'FALHOU':
-            return { qr: null, conectado: false, motivo: 'a sessao falhou e esta sendo reiniciada' };
+            return { qr: null, conectado: false, motivo: 'a sessão falhou e está sendo reiniciada' };
           default:
-            return { qr: null, conectado: false, motivo: `a sessao esta ${situacao.detalhe ?? 'em estado desconhecido'}` };
+            return { qr: null, conectado: false, motivo: `a sessão está ${situacao.detalhe ?? 'em estado desconhecido'}` };
         }
       } catch (err) {
-        log.warn('sessao', 'nao foi possivel obter o QR', WahaProvider.camposDeLog(sessao, {
+        log.warn('sessao', 'não foi possível obter o QR', WahaProvider.camposDeLog(sessao, {
           motivo: err instanceof Error ? err.message : 'erro desconhecido',
         }));
-        return { qr: null, conectado: false, motivo: err instanceof Error ? err.message : 'nao foi possivel falar com o WhatsApp' };
+        return { qr: null, conectado: false, motivo: err instanceof Error ? err.message : 'não foi possível falar com o WhatsApp' };
       }
     },
 
     estado: async (sessao: SessaoResolvida): Promise<SituacaoSessao> => {
       const nome = sessao.sessaoExterna?.trim();
-      if (!nome) return { estado: 'DESCONHECIDO', detalhe: 'sessao nao informada', telefone: null };
+      if (!nome) return { estado: 'DESCONHECIDO', detalhe: 'sessão não informada', telefone: null };
       try {
         const atual = await this.cliente().obterSessao(nome);
-        if (!atual) return { estado: 'DESCONECTADO', detalhe: 'sessao ainda nao criada', telefone: null };
+        if (!atual) return { estado: 'DESCONECTADO', detalhe: 'sessão ainda não criada', telefone: null };
         return situacaoDaSessaoWaha(atual.status, atual.me);
       } catch (err) {
         return { estado: 'DESCONHECIDO', detalhe: err instanceof Error ? err.message : 'erro desconhecido', telefone: null };
@@ -262,7 +262,7 @@ export class WahaProvider implements ChannelProvider {
         if (err instanceof AppError) throw err;
         throw new AppError(502, 'DESCONEXAO_RECUSADA', err instanceof Error ? err.message : 'erro desconhecido');
       }
-      log.info('sessao', 'sessao desconectada a pedido', WahaProvider.camposDeLog(sessao));
+      log.info('sessao', 'sessão desconectada a pedido', WahaProvider.camposDeLog(sessao));
     },
 
     reiniciar: async (sessao: SessaoResolvida): Promise<void> => {
@@ -273,7 +273,7 @@ export class WahaProvider implements ChannelProvider {
         if (err instanceof AppError) throw err;
         throw new AppError(502, 'CANAL_INACESSIVEL', err instanceof Error ? err.message : 'erro desconhecido');
       }
-      log.info('sessao', 'sessao reiniciada a pedido', WahaProvider.camposDeLog(sessao));
+      log.info('sessao', 'sessão reiniciada a pedido', WahaProvider.camposDeLog(sessao));
     },
   };
 

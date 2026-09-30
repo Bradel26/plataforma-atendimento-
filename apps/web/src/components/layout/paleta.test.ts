@@ -9,7 +9,7 @@ import { comandosDeNavegacao, montarPaleta, moverSelecao } from './paleta';
  */
 
 describe('comandosDeNavegacao', () => {
-  it('o agente nao recebe comando para tela que nao e dele', () => {
+  it('o agente não recebe comando para tela que não e dele', () => {
     const rotas = comandosDeNavegacao('AGENTE', '').map((c) => c.rota);
     expect(rotas).toContain('/atendimento');
     expect(rotas).toContain('/crm');
@@ -40,7 +40,7 @@ describe('comandosDeNavegacao', () => {
     expect(comandosDeNavegacao('ADMIN', 'CRM').map((c) => c.rota)).toEqual(['/crm']);
   });
 
-  it('termo que nao casa com tela nenhuma devolve vazio', () => {
+  it('termo que não casa com tela nenhuma devolve vazio', () => {
     expect(comandosDeNavegacao('ADMIN', 'zzzz')).toEqual([]);
   });
 });
@@ -62,7 +62,7 @@ describe('montarPaleta', () => {
     expect(itens[0]?.tipo).toBe('NAVEGAR');
   });
 
-  it('sem termo, so os comandos aparecem', () => {
+  it('sem termo, só os comandos aparecem', () => {
     // A busca de registro so responde a partir de duas letras, entao com o campo
     // vazio nao existe registro para mostrar.
     const itens = montarPaleta('ADMIN', '', []);
@@ -83,7 +83,7 @@ describe('moverSelecao', () => {
     expect(moverSelecao(3, 5, -1)).toBe(2);
   });
 
-  it('nao circula nas pontas', () => {
+  it('não circula nas pontas', () => {
     /*
      * Circular do fim para o comeco faz a selecao pular para longe do olhar, e a
      * tecla que a pessoa usa para voltar e a seta de cima — nao mais uma para
@@ -93,7 +93,7 @@ describe('moverSelecao', () => {
     expect(moverSelecao(0, 5, -1)).toBe(0);
   });
 
-  it('lista vazia devolve zero, e nao -1', () => {
+  it('lista vazia devolve zero, é não -1', () => {
     // O indice destaca a linha; -1 destacaria a ultima.
     expect(moverSelecao(0, 0, 1)).toBe(0);
     expect(moverSelecao(3, 0, -1)).toBe(0);

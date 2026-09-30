@@ -22,7 +22,7 @@ export async function baixarAnexo(
   dados: Pick<MensagemNormalizada, 'tipoAnexo' | 'anexoUrl' | 'anexoIdExterno' | 'anexoNome'>,
 ): Promise<{ url: string | null; motivo?: string }> {
   if (dados.tipoAnexo === 'TEXTO') return { url: null };
-  if (!dados.anexoIdExterno && !dados.anexoUrl) return { url: null, motivo: 'mensagem sem anexo localizavel' };
+  if (!dados.anexoIdExterno && !dados.anexoUrl) return { url: null, motivo: 'mensagem sem anexo localizável' };
 
   try {
     const config = await obterConfig(canal);
@@ -44,7 +44,7 @@ export async function baixarAnexo(
 
     const tipo = origem.tipo ?? resposta.headers.get('content-type') ?? '';
     if (!tipoAceito(tipo.split(';')[0]!.trim().toLowerCase())) {
-      return { url: null, motivo: `tipo nao aceito: ${tipo || 'desconhecido'}` };
+      return { url: null, motivo: `tipo não aceito: ${tipo || 'desconhecido'}` };
     }
 
     const buffer = Buffer.from(await resposta.arrayBuffer());

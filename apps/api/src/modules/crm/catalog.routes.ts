@@ -74,7 +74,7 @@ productsRoutes.post(
   validateBody(produtoSchema),
   asyncHandler(async (req, res) => {
     const existente = await prisma.product.findFirst({ where: { sku: req.body.sku } });
-    if (existente) throw conflict('Ja existe um produto com este SKU');
+    if (existente) throw conflict('Já existe um produto com este SKU');
     res.status(201).json({ produto: await prisma.product.create({ data: req.body }) });
   }),
 );
@@ -86,11 +86,11 @@ productsRoutes.patch(
   asyncHandler(async (req, res) => {
     const id = param(req, 'id');
     const atual = await prisma.product.findUnique({ where: { id } });
-    if (!atual) throw notFound('Produto nao encontrado');
+    if (!atual) throw notFound('Produto não encontrado');
 
     if (req.body.sku && req.body.sku !== atual.sku) {
       const emUso = await prisma.product.findFirst({ where: { sku: req.body.sku } });
-      if (emUso) throw conflict('Ja existe um produto com este SKU');
+      if (emUso) throw conflict('Já existe um produto com este SKU');
     }
     res.json({ produto: await prisma.product.update({ where: { id }, data: req.body }) });
   }),
@@ -119,7 +119,7 @@ catalogsRoutes.post(
   validateBody(catalogoSchema),
   asyncHandler(async (req, res) => {
     const existente = await prisma.priceCatalog.findFirst({ where: { nome: req.body.nome } });
-    if (existente) throw conflict('Ja existe um catalogo com este nome');
+    if (existente) throw conflict('Já existe um catálogo com este nome');
     res.status(201).json({ catalogo: await prisma.priceCatalog.create({ data: req.body }) });
   }),
 );
@@ -135,8 +135,8 @@ catalogsRoutes.put(
       prisma.priceCatalog.findUnique({ where: { id: catalogoId } }),
       prisma.product.findUnique({ where: { id: req.body.produtoId } }),
     ]);
-    if (!catalogo) throw notFound('Catalogo nao encontrado');
-    if (!produto) throw notFound('Produto nao encontrado');
+    if (!catalogo) throw notFound('Catálogo não encontrado');
+    if (!produto) throw notFound('Produto não encontrado');
 
     const item = await prisma.catalogItem.upsert({
       where: { catalogoId_produtoId: { catalogoId, produtoId: produto.id } },

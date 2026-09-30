@@ -21,7 +21,7 @@ export function agendarCampanhas() {
   const rodar = async () => {
     try {
       const agora = new Date();
-      const vencidas = await semOrganizacao('campanhas agendadas: percorre todas as organizacoes', () =>
+      const vencidas = await semOrganizacao('campanhas agendadas: percorre todas as organizações', () =>
         prismaSemIsolamento.campaign.findMany({
           where: { agendadaPara: { lte: agora }, status: { in: ['RASCUNHO', 'PAUSADA'] } },
           select: { id: true, organizacaoId: true },
@@ -39,7 +39,7 @@ export function agendarCampanhas() {
         }).catch((err) => registrarErro(`[campanhas] disparo agendado falhou (${c.id}):`, err));
       }
     } catch (err) {
-      registrarErro('[campanhas] verificacao de agendadas falhou:', err);
+      registrarErro('[campanhas] verificação de agendadas falhou:', err);
     }
   };
 

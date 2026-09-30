@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const SITUACOES_EXCECAO = ['REPROVADO', 'CANCELADO', 'INATIVADO'] as const;
 
 export const criarCredenciamentoSchema = z.object({
-  contatoId: z.string().uuid('Informe um contato valido'),
+  contatoId: z.string().uuid('Informe um contato válido'),
   contaId: z.string().uuid().nullable().optional(),
   funilId: z.string().uuid().optional(),
   estagioId: z.string().uuid().optional(),
@@ -21,7 +21,7 @@ export const atualizarCredenciamentoSchema = z
   })
   .refine((d) => Object.keys(d).length > 0, { message: 'Informe ao menos um campo' })
   .refine((d) => d.situacaoExcecao === undefined || d.situacaoExcecao === null || Boolean(d.motivoExcecao?.trim()), {
-    message: 'Informe o motivo da excecao',
+    message: 'Informe o motivo da exceção',
     path: ['motivoExcecao'],
   });
 
@@ -29,7 +29,7 @@ const uf = z
   .string()
   .trim()
   .toUpperCase()
-  .regex(/^[A-Z]{2}$/, 'UF invalida');
+  .regex(/^[A-Z]{2}$/, 'UF inválida');
 
 /** Filtros comuns da lista e do kanban. */
 export const filtrosEsteiraSchema = z.object({

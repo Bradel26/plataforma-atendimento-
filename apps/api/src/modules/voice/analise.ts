@@ -90,10 +90,10 @@ export function impedimentoDaTarefa(
   temVinculo: boolean,
 ): string | null {
   const estado = estadoDaAcao(acao);
-  if (estado === 'VIROU_TAREFA') return 'Esta sugestao ja virou tarefa';
-  if (estado === 'DESCARTADA') return 'Esta sugestao foi descartada';
+  if (estado === 'VIROU_TAREFA') return 'Esta sugestão já virou tarefa';
+  if (estado === 'DESCARTADA') return 'Esta sugestão foi descartada';
   if (!temVinculo) {
-    return 'A chamada nao esta ligada a nenhum contato — vincule o contato para criar a tarefa';
+    return 'A chamada não está ligada a nenhum contato — vincule o contato para criar a tarefa';
   }
   return null;
 }

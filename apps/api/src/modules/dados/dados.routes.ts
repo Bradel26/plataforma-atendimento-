@@ -44,7 +44,7 @@ const IMPORTACOES: Record<string, { modelo: string; importar: (csv: string, dryR
 
 const importarSchema = z.object({
   /** Conteudo do arquivo CSV como texto. */
-  csv: z.string().min(1, 'Envie o conteudo do CSV'),
+  csv: z.string().min(1, 'Envie o conteúdo do CSV'),
   /** Valida sem gravar nada — util para conferir a planilha antes. */
   dryRun: z.boolean().default(false),
 });
@@ -53,7 +53,7 @@ const importarSchema = z.object({
 dadosRoutes.get('/modelos/:recurso.csv', (req, res) => {
   const recurso = req.params.recurso ?? '';
   const item = IMPORTACOES[recurso];
-  if (!item) throw notFound(`Modelo de importacao "${recurso}" nao existe. Disponiveis: ${Object.keys(IMPORTACOES).join(', ')}`);
+  if (!item) throw notFound(`Modelo de importação "${recurso}" não existe. Disponíveis: ${Object.keys(IMPORTACOES).join(', ')}`);
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="modelo-${recurso}.csv"`);
   res.send(item.modelo);
@@ -66,7 +66,7 @@ dadosRoutes.get(
     const recurso = req.params.recurso ?? '';
     const exportar = EXPORTACOES[recurso];
     if (!exportar) {
-      throw notFound(`Exportacao "${recurso}" nao existe. Disponiveis: ${Object.keys(EXPORTACOES).join(', ')}`);
+      throw notFound(`Exportação "${recurso}" não existe. Disponíveis: ${Object.keys(EXPORTACOES).join(', ')}`);
     }
 
     const data = new Date().toISOString().slice(0, 10);
@@ -83,7 +83,7 @@ dadosRoutes.post(
   asyncHandler(async (req, res) => {
     const recurso = req.params.recurso ?? '';
     const item = IMPORTACOES[recurso];
-    if (!item) throw notFound(`Importacao "${recurso}" nao existe. Disponiveis: ${Object.keys(IMPORTACOES).join(', ')}`);
+    if (!item) throw notFound(`Importação "${recurso}" não existe. Disponíveis: ${Object.keys(IMPORTACOES).join(', ')}`);
     if (req.body.csv.length > 2_000_000) throw badRequest('Arquivo muito grande (limite de 2 MB)');
     res.json({ resultado: await item.importar(req.body.csv, req.body.dryRun) });
   }),

@@ -54,7 +54,7 @@ export function FiliaisTab() {
   const remover = (filial: Filial) => {
     confirmar({
       titulo: `Remover a filial "${filial.nome}"?`,
-      descricao: 'Contas e usuarios ficam sem filial.',
+      descricao: 'Contas e usuários ficam sem filial.',
       variante: 'perigo',
       rotuloConfirmar: 'Remover',
       aoConfirmar: async () => {
@@ -73,8 +73,20 @@ export function FiliaisTab() {
     <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
       <Card
         titulo="Filiais"
-        descricao={`${filiais.length} unidade(s) — so classificacao, nao muda quem ve o que`}
+        descricao={`${filiais.length} unidade(s) — só classificação, não muda quem vê o que`}
       >
+        {/* Aviso fixo: quem cadastra precisa saber para que serve e o que a filial NAO faz. */}
+        <div className="mb-4">
+          <Alerta tipo="aviso">
+            <p className="font-medium">Para que serve a filial</p>
+            <ul className="mt-1 list-disc space-y-0.5 pl-5">
+              <li>Cadastre as unidades físicas da empresa (loja, escritório, regional) para saber de qual local vem cada cliente.</li>
+              <li>Depois, escolha a filial na ficha da empresa (CRM &gt; Empresas) e no cadastro do usuário.</li>
+              <li>É só uma classificação: <strong>não muda o que cada pessoa enxerga</strong> e não cria hierarquia entre unidades.</li>
+              <li>Se a empresa opera em um endereço só, não precisa cadastrar nada: nenhuma tela exige filial.</li>
+            </ul>
+          </Alerta>
+        </div>
         {erro && <div className="mb-4"><Alerta>{erro}</Alerta></div>}
         {filiais.length === 0 ? (
           <EmptyState

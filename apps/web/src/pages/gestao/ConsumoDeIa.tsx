@@ -36,7 +36,7 @@ const TOM: Record<ConsumoDeIa['situacao'], 'neutro' | 'sucesso' | 'alerta' | 'ma
 
 const FRASE: Record<ConsumoDeIa['situacao'], string> = {
   SEM_TETO: 'Sem teto definido',
-  SEM_CONSUMO: 'Nenhum uso neste mes',
+  SEM_CONSUMO: 'Nenhum uso neste mês',
   DENTRO: 'Dentro do teto',
   PROJETA_ESTOURO: 'O ritmo projeta estouro',
   ESTOUROU: 'Teto estourado',
@@ -97,13 +97,13 @@ export function ConsumoDeIaCard() {
    */
   if (!dados.ligado) {
     return (
-      <Card titulo="Consumo de IA" descricao="Medidor por ciclo, com projecao de fim de mes">
+      <Card titulo="Consumo de IA" descricao="Medidor por ciclo, com projeção de fim de mês">
         <p className="text-sm text-slate-600">
-          Nenhum recurso de IA esta ligado nesta instalacao — nao ha consumo para medir. O medidor passa a
+          Nenhum recurso de IA está ligado nesta instalação — não há consumo para medir. O medidor passa a
           contar assim que o motor de IA responder a primeira conversa.
         </p>
         <p className="mt-2 text-xs text-slate-500">
-          O custo aparece quando o motor informa quanto gastou: a plataforma registra o uso, e o preco do
+          O custo aparece quando o motor informa quanto gastou: a plataforma registra o uso, e o preço do
           token e do lado de quem processa.
         </p>
       </Card>
@@ -113,7 +113,7 @@ export function ConsumoDeIaCard() {
   return (
     <Card
       titulo="Consumo de IA"
-      descricao={`${dados.usos} uso(s) no mes · dia ${dados.diasDecorridos} de ${dados.diasNoMes}`}
+      descricao={`${dados.usos} uso(s) no mês · dia ${dados.diasDecorridos} de ${dados.diasNoMes}`}
       acao={<Badge tom={TOM[dados.situacao]}>{FRASE[dados.situacao]}</Badge>}
     >
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -127,9 +127,9 @@ export function ConsumoDeIaCard() {
           }
         />
         <StatTile
-          rotulo="Projecao do mes"
+          rotulo="Projeção do mês"
           valor={custo(dados.projecao)}
-          detalhe={dados.projecao === null ? 'sem ritmo para projetar' : 'pelo ritmo ate hoje'}
+          detalhe={dados.projecao === null ? 'sem ritmo para projetar' : 'pelo ritmo até hoje'}
         />
         <StatTile
           rotulo="Teto"
@@ -137,9 +137,9 @@ export function ConsumoDeIaCard() {
           detalhe={dados.teto === null ? 'nenhum teto definido' : 'limite mensal'}
         />
         <StatTile
-          rotulo="Da projecao no teto"
+          rotulo="Da projeção no teto"
           valor={dados.fracaoDoTeto === null ? '\u2014' : `${Math.round(dados.fracaoDoTeto * 100)}%`}
-          detalhe={dados.fracaoDoTeto === null ? 'precisa de teto e de consumo' : 'quanto a projecao ocupa'}
+          detalhe={dados.fracaoDoTeto === null ? 'precisa de teto e de consumo' : 'quanto a projeção ocupa'}
         />
       </div>
 
@@ -185,8 +185,8 @@ export function ConsumoDeIaCard() {
       )}
 
       <p className="mt-3 text-xs text-slate-500">
-        Mes encerrado nao tem projecao: o gasto real e o resultado. Uso sem custo informado conta como uso e
-        nao entra na soma &mdash; e por isso a coluna diz sobre quantos usos o custo fala.
+        Mês encerrado não tem projeção: o gasto real e o resultado. Uso sem custo informado conta como uso e
+        não entra na soma &mdash; e por isso a coluna diz sobre quantos usos o custo fala.
       </p>
     </Card>
   );

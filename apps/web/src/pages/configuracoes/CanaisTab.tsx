@@ -321,8 +321,8 @@ export function CanaisTab() {
    */
   const trocarNumero = () => {
     confirmar({
-      titulo: 'Desconectar o numero atual?',
-      descricao: 'O WhatsApp para de receber ate alguem escanear o novo QR.',
+      titulo: 'Desconectar o número atual?',
+      descricao: 'O WhatsApp para de receber até alguém escanear o novo QR.',
       variante: 'perigo',
       rotuloConfirmar: 'Desconectar',
       aoConfirmar: async () => {
@@ -344,7 +344,7 @@ export function CanaisTab() {
   const trocarLinha = (numero: CanalConfig) => {
     confirmar({
       titulo: `Desconectar o WhatsApp de ${numero.dono?.nome}?`,
-      descricao: 'Ele para de receber pelo WhatsApp ate escanear o novo QR.',
+      descricao: 'Ele para de receber pelo WhatsApp até escanear o novo QR.',
       variante: 'perigo',
       rotuloConfirmar: 'Desconectar',
       aoConfirmar: async () => {
@@ -355,7 +355,7 @@ export function CanaisTab() {
           setQrLinha(null);
           setEstadoLinha(null);
         } catch (e) {
-          setNumeroErro(e instanceof ApiError ? e.message : 'Falha ao desconectar o numero');
+          setNumeroErro(e instanceof ApiError ? e.message : 'Falha ao desconectar o número');
         } finally {
           setTrocandoLinha(false);
         }
@@ -437,7 +437,7 @@ export function CanaisTab() {
     setNumeroErro(null);
     setNumeroOk(null);
     if (!numeroForm.id && !numeroForm.donoId) {
-      setNumeroErro('Escolha o vendedor dono do numero');
+      setNumeroErro('Escolha o vendedor dono do número');
       return;
     }
     setNumeroOcupado(true);
@@ -472,10 +472,10 @@ export function CanaisTab() {
       }
 
       setNumeroForm(numeroVazio);
-      setNumeroOk(numeroForm.id ? 'Numero atualizado.' : 'Numero criado.');
+      setNumeroOk(numeroForm.id ? 'Número atualizado.' : 'Número criado.');
       await carregar();
     } catch (e) {
-      setNumeroErro(e instanceof ApiError ? e.message : 'Falha ao salvar numero');
+      setNumeroErro(e instanceof ApiError ? e.message : 'Falha ao salvar número');
     } finally {
       setNumeroOcupado(false);
     }
@@ -483,8 +483,8 @@ export function CanaisTab() {
 
   const excluirNumero = (numero: CanalConfig) => {
     confirmar({
-      titulo: `Remover o numero de ${numero.dono?.nome}?`,
-      descricao: 'Conversas ja existentes so perdem a referencia.',
+      titulo: `Remover o número de ${numero.dono?.nome}?`,
+      descricao: 'Conversas já existentes só perdem a referência.',
       variante: 'perigo',
       rotuloConfirmar: 'Remover',
       aoConfirmar: async () => {
@@ -492,10 +492,10 @@ export function CanaisTab() {
         setNumeroOk(null);
         try {
           await api.del(`/canais/numeros/${numero.id}`);
-          setNumeroOk('Numero removido.');
+          setNumeroOk('Número removido.');
           await carregar();
         } catch (e) {
-          setNumeroErro(e instanceof ApiError ? e.message : 'Falha ao remover numero');
+          setNumeroErro(e instanceof ApiError ? e.message : 'Falha ao remover número');
         }
       },
     });
@@ -506,7 +506,7 @@ export function CanaisTab() {
 
   return (
     <div className="grid gap-5 lg:grid-cols-[1fr_380px]">
-      <Card titulo="Canais externos" descricao="Integracoes oficiais da Meta">
+      <Card titulo="Canais externos" descricao="Integrações oficiais da Meta">
         {erro && <div className="mb-4"><Alerta>{erro}</Alerta></div>}
         {ok && <div className="mb-4"><Alerta tipo="sucesso">{ok}</Alerta></div>}
 
@@ -535,14 +535,14 @@ export function CanaisTab() {
           <p className="font-medium text-slate-700">Antes de ativar</p>
           <p className="mt-1">
             O WhatsApp Business API oficial exige conta verificada na Meta (CNPJ, comprovante de
-            endereco e site) — o processo leva dias ou semanas. A URL de webhook a cadastrar no painel
+            endereço e site) — o processo leva dias ou semanas. A URL de webhook a cadastrar no painel
             da Meta, para este canal, e:
           </p>
           <code className="mt-2 block break-all rounded bg-white px-2 py-1 font-mono text-slate-800">
             {urlWebhook}
           </code>
           <p className="mt-2">
-            Em desenvolvimento a Meta exige HTTPS publico — use um tunel (ngrok, cloudflared) apontando
+            Em desenvolvimento a Meta exige HTTPS público — use um tunel (ngrok, cloudflared) apontando
             para esta porta.
           </p>
           {/* No modo nao oficial a URL e outra, e quem a cadastra e a ponte — nao
@@ -550,7 +550,7 @@ export function CanaisTab() {
               errado, que produz um canal silencioso. */}
           {editando === 'WHATSAPP' && modo === 'NAO_OFICIAL' && caminhoPonte && (
             <>
-              <p className="mt-3 font-medium text-slate-700">No modo nao oficial</p>
+              <p className="mt-3 font-medium text-slate-700">No modo não oficial</p>
               <p className="mt-1">
                 Nada e cadastrado na Meta. Configure a PONTE para postar cada mensagem recebida em:
               </p>
@@ -559,17 +559,17 @@ export function CanaisTab() {
                 {caminhoPonte}
               </code>
               <p className="mt-2">
-                Assinada com HMAC-SHA256 do corpo, no cabecalho <code>X-Ponte-Assinatura</code>, usando o
+                Assinada com HMAC-SHA256 do corpo, no cabeçalho <code>X-Ponte-Assinatura</code>, usando o
                 segredo configurado ao lado. Corpo:{' '}
-                <code>{'{ numero, texto, idExterno, nome? }'}</code> &mdash; o <code>idExterno</code> e
-                obrigatorio porque e ele que evita mensagem duplicada quando a ponte reentrega.
+                <code>{'{ número, texto, idExterno, nome? }'}</code> &mdash; o <code>idExterno</code> e
+                obrigatório porque e ele que evita mensagem duplicada quando a ponte reentrega.
               </p>
             </>
           )}
         </div>
       </Card>
 
-      <Card titulo={`Configurar ${ROTULO[editando]}`} descricao="Campos em branco nao alteram o valor salvo">
+      <Card titulo={`Configurar ${ROTULO[editando]}`} descricao="Campos em branco não alteram o valor salvo">
         <div className="space-y-3">
           {editando === 'WHATSAPP' && (
             <div className="rounded-lg border border-slate-200 p-3">
@@ -594,8 +594,8 @@ export function CanaisTab() {
                       </span>
                       <span className="block text-xs text-slate-500">
                         {opcao === 'OFICIAL'
-                          ? 'Numero em uma WABA verificada. Custo por conversa, template para iniciar contato, e continuidade garantida pela Meta.'
-                          : 'Conecta como WhatsApp Web, lendo um QR Code com o celular. Funciona com qualquer numero e sem custo por mensagem.'}
+                          ? 'Número em uma WABA verificada. Custo por conversa, template para iniciar contato, e continuidade garantida pela Meta.'
+                          : 'Conecta como WhatsApp Web, lendo um QR Code com o celular. Funciona com qualquer número e sem custo por mensagem.'}
                       </span>
                     </span>
                   </label>
@@ -609,12 +609,12 @@ export function CanaisTab() {
                   <p className="font-medium">Leia antes de ligar</p>
                   <p className="mt-1">
                     {aviso ??
-                      'O modo nao oficial se conecta como WhatsApp Web e viola os termos de uso do WhatsApp: o numero pode ser bloqueado sem aviso. Use um numero que a operacao possa perder.'}
+                      'O modo não oficial se conecta como WhatsApp Web e viola os termos de uso do WhatsApp: o número pode ser bloqueado sem aviso. Use um número que a operação possa perder.'}
                   </p>
                   {!conexaoGlobal && (
                     <p className="mt-1">
-                      A plataforma nao hospeda a ponte: ela conversa por HTTP com um servico separado, que
-                      mantem a sessao do QR Code. Trocar de modo depois nao apaga as credenciais do outro.
+                      A plataforma não hospeda a ponte: ela conversa por HTTP com um serviço separado, que
+                      mantém a sessão do QR Code. Trocar de modo depois não apaga as credenciais do outro.
                     </p>
                   )}
                 </div>
@@ -622,7 +622,7 @@ export function CanaisTab() {
 
               {estadoPonte && (
                 <p className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-                  <span className="text-slate-500">Conexao:</span>
+                  <span className="text-slate-500">Conexão:</span>
                   <Badge
                     tom={
                       estadoPonte.situacao === 'CONECTADO'
@@ -636,7 +636,7 @@ export function CanaisTab() {
                       ? 'conectada'
                       : estadoPonte.situacao === 'DESCONECTADO'
                         ? 'desconectada'
-                        : 'nao confirmada'}
+                        : 'não confirmada'}
                   </Badge>
                   {estadoPonte.situacao === 'CONECTADO' && estadoPonte.telefone ? (
                     <span className="text-slate-700">{telefoneLegivel(estadoPonte.telefone)}</span>
@@ -658,7 +658,7 @@ export function CanaisTab() {
                   {qrPonte.conectado ? (
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <p className="text-sm text-slate-700">
-                        <span className="font-medium text-emerald-700">Numero conectado.</span> Nao ha nada
+                        <span className="font-medium text-emerald-700">Número conectado.</span> Não há nada
                         para escanear.
                       </p>
                       <button
@@ -667,7 +667,7 @@ export function CanaisTab() {
                         disabled={trocandoNumero}
                         className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                       >
-                        {trocandoNumero ? 'Desconectando...' : 'Trocar de numero'}
+                        {trocandoNumero ? 'Desconectando...' : 'Trocar de número'}
                       </button>
                     </div>
                   ) : qrPonte.qr ? (
@@ -682,16 +682,16 @@ export function CanaisTab() {
                       <div className="text-xs text-slate-600">
                         <p className="text-sm font-medium text-slate-800">Conecte o WhatsApp</p>
                         <ol className="mt-2 list-decimal space-y-1 pl-4">
-                          <li>Abra o WhatsApp no celular do numero da operacao</li>
+                          <li>Abra o WhatsApp no celular do número da operação</li>
                           <li>
                             Toque em <strong>Aparelhos conectados</strong> e depois em{' '}
                             <strong>Conectar aparelho</strong>
                           </li>
-                          <li>Aponte a camera para este codigo</li>
+                          <li>Aponte a camera para este código</li>
                         </ol>
                         {/* Sem este aviso, ver o codigo mudar sozinho parece falha. */}
                         <p className="mt-2 text-slate-500">
-                          O codigo se renova a cada poucos segundos. Se perder, espere o proximo.
+                          O código se renova a cada poucos segundos. Se perder, espere o próximo.
                         </p>
                       </div>
                     </div>
@@ -707,10 +707,10 @@ export function CanaisTab() {
 
           {editando === 'WHATSAPP' && modo === 'NAO_OFICIAL' && conexaoGlobal ? (
             // Conexao de infraestrutura: nada a preencher, o QR acima e a conexao.
-            <p className="text-xs text-slate-500">A conexao e feita pelo QR Code acima. Nao ha nada a preencher aqui.</p>
+            <p className="text-xs text-slate-500">A conexão é feita pelo QR Code acima. Não há nada a preencher aqui.</p>
           ) : editando === 'WHATSAPP' && modo === 'NAO_OFICIAL' ? (
             <>
-              <Field label="Endereco da ponte" hint="Ex.: http://wpp:3000/api — a plataforma chama /mensagens, /arquivos e /estado">
+              <Field label="Endereço da ponte" hint="Ex.: http://wpp:3000/api — a plataforma chama /mensagens, /arquivos e /estado">
                 <Input
                   value={form.ponteUrl}
                   placeholder={atual?.ponteUrl ?? 'http://localhost:3000/api'}
@@ -726,7 +726,7 @@ export function CanaisTab() {
               </Field>
               <Field
                 label="Segredo de assinatura"
-                hint="Com que a PONTE assina o que manda para ca (HMAC-SHA256, minimo 16 caracteres). Sem ele nada e recebido."
+                hint="Com que a PONTE assina o que manda para ca (HMAC-SHA256, mínimo 16 caracteres). Sem ele nada e recebido."
               >
                 <Input
                   type="password"
@@ -734,7 +734,7 @@ export function CanaisTab() {
                   onChange={(e) => setForm({ ...form, ponteSegredo: e.target.value })}
                 />
               </Field>
-              <Field label="Sessao / instancia" hint="Se a ponte hospeda mais de um numero. Em branco = sessao unica">
+              <Field label="Sessão / instância" hint="Se a ponte hospeda mais de um número. Em branco = sessão única">
                 <Input
                   value={form.ponteSessao}
                   placeholder={atual?.ponteSessao ?? ''}
@@ -758,7 +758,7 @@ export function CanaisTab() {
               onChange={(e) => setForm({ ...form, appSecret: e.target.value })}
             />
           </Field>
-          <Field label="Verify Token" hint="Voce escolhe; o mesmo valor vai no painel da Meta">
+          <Field label="Verify Token" hint="Você escolhe; o mesmo valor vai no painel da Meta">
             <Input value={form.verifyToken} onChange={(e) => setForm({ ...form, verifyToken: e.target.value })} />
           </Field>
 
@@ -807,8 +807,8 @@ export function CanaisTab() {
       {editando === 'WHATSAPP' && (
         <div className="lg:col-span-2">
         <Card
-          titulo="Numeros pessoais"
-          descricao="Um WhatsApp proprio por vendedor: a conversa nasce ja atribuida a ele, sem passar por fila"
+          titulo="Números pessoais"
+          descricao="Um WhatsApp próprio por vendedor: a conversa nasce já atribuída a ele, sem passar por fila"
         >
           <div className="space-y-4">
             {numeroErro && <Alerta>{numeroErro}</Alerta>}
@@ -816,7 +816,7 @@ export function CanaisTab() {
 
             {numeros.length === 0 ? (
               <EmptyState
-                titulo="Nenhum numero pessoal"
+                titulo="Nenhum número pessoal"
                 descricao="Cadastre o WhatsApp de um vendedor abaixo — ele passa a atender pelo painel de Atendimento"
               />
             ) : (
@@ -825,7 +825,7 @@ export function CanaisTab() {
                   <thead>
                     <tr className="text-xs text-slate-500">
                       <th className="pb-2 font-medium">Vendedor</th>
-                      <th className="pb-2 font-medium">Numero</th>
+                      <th className="pb-2 font-medium">Número</th>
                       <th className="pb-2 font-medium">Fila de espera</th>
                       <th className="pb-2 font-medium">Estado</th>
                       <th className="pb-2 font-medium" />
@@ -869,7 +869,7 @@ export function CanaisTab() {
                             <td colSpan={5} className="bg-slate-50 px-2 py-3">
                               {estadoLinha && (
                                 <p className="mb-2 flex items-center gap-2 text-xs">
-                                  <span className="text-slate-500">Sessao:</span>
+                                  <span className="text-slate-500">Sessão:</span>
                                   <Badge
                                     tom={
                                       estadoLinha.situacao === 'CONECTADO'
@@ -883,7 +883,7 @@ export function CanaisTab() {
                                       ? 'conectada'
                                       : estadoLinha.situacao === 'DESCONECTADO'
                                         ? 'desconectada'
-                                        : 'nao confirmada'}
+                                        : 'não confirmada'}
                                   </Badge>
                                   {estadoLinha.situacao === 'CONECTADO' && estadoLinha.telefone && (
                                     <span className="text-slate-700">{telefoneLegivel(estadoLinha.telefone)}</span>
@@ -893,7 +893,7 @@ export function CanaisTab() {
                               {qrLinha?.conectado ? (
                                 <div className="flex flex-wrap items-center justify-between gap-3">
                                   <p className="text-sm text-slate-700">
-                                    <span className="font-medium text-emerald-700">Numero conectado.</span>
+                                    <span className="font-medium text-emerald-700">Número conectado.</span>
                                   </p>
                                   <button
                                     type="button"
@@ -901,7 +901,7 @@ export function CanaisTab() {
                                     disabled={trocandoLinha}
                                     className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                                   >
-                                    {trocandoLinha ? 'Desconectando...' : 'Trocar de numero'}
+                                    {trocandoLinha ? 'Desconectando...' : 'Trocar de número'}
                                   </button>
                                 </div>
                               ) : qrLinha?.qr ? (
@@ -915,7 +915,7 @@ export function CanaisTab() {
                                   />
                                   <p className="text-xs text-slate-600">
                                     Peca para {n.dono?.nome} abrir o WhatsApp, tocar em{' '}
-                                    <strong>Aparelhos conectados</strong> e apontar a camera para este codigo.
+                                    <strong>Aparelhos conectados</strong> e apontar a camera para este código.
                                   </p>
                                 </div>
                               ) : (
@@ -935,10 +935,10 @@ export function CanaisTab() {
 
             <div className="rounded-lg border border-slate-200 p-4">
               <p className="mb-3 text-xs font-medium text-slate-700">
-                {numeroForm.id ? 'Editar numero' : 'Adicionar numero'}
+                {numeroForm.id ? 'Editar número' : 'Adicionar número'}
               </p>
               <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Vendedor" hint="Quem recebe as conversas deste numero">
+                <Field label="Vendedor" hint="Quem recebe as conversas deste número">
                   <Select
                     value={numeroForm.donoId}
                     disabled={Boolean(numeroForm.id)}
@@ -950,7 +950,7 @@ export function CanaisTab() {
                     ))}
                   </Select>
                 </Field>
-                <Field label="Rotulo" hint="Como este numero aparece na lista">
+                <Field label="Rótulo" hint="Como este número aparece na lista">
                   <Input
                     value={numeroForm.nome}
                     placeholder="Ex.: Vendedor 1"
@@ -977,8 +977,8 @@ export function CanaisTab() {
 
                 {numeroForm.modo === 'NAO_OFICIAL' ? (
                   <div className="sm:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-                    As configuracoes de conexao sao definidas automaticamente pela configuracao do
-                    WhatsApp da empresa. Depois de salvar, use o botao "Conectar" para escanear o QR Code.
+                    As configurações de conexão são definidas automaticamente pela configuração do
+                    WhatsApp da empresa. Depois de salvar, use o botão "Conectar" para escanear o QR Code.
                   </div>
                 ) : (
                   <>
@@ -1033,7 +1033,7 @@ export function CanaisTab() {
                     checked={numeroForm.iaAtiva}
                     onChange={(e) => setNumeroForm({ ...numeroForm, iaAtiva: e.target.checked })}
                   />
-                  IA responde por este numero antes do vendedor
+                  IA responde por este número antes do vendedor
                 </label>
                 {numeroForm.iaAtiva && (
                   <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -1065,7 +1065,7 @@ export function CanaisTab() {
                   Ativo
                 </label>
                 <Button disabled={numeroOcupado} onClick={() => void salvarNumero()}>
-                  {numeroForm.id ? 'Salvar alteracoes' : 'Adicionar numero'}
+                  {numeroForm.id ? 'Salvar alterações' : 'Adicionar número'}
                 </Button>
                 {numeroForm.id && (
                   <Button variante="neutro" disabled={numeroOcupado} onClick={cancelarEdicaoNumero}>
@@ -1084,7 +1084,7 @@ export function CanaisTab() {
         descricao="Uma tag no site do cliente abre o Webchat como bolha flutuante"
       >
         <p className="text-xs text-slate-500">
-          O widget carrega o Webchat dentro de um iframe: o CSS do site nao afeta o chat e o chat nao
+          O widget carrega o Webchat dentro de um iframe: o CSS do site não afeta o chat e o chat não
           afeta o site. As cores vem do White Label.
         </p>
 
@@ -1099,7 +1099,7 @@ export function CanaisTab() {
             void navigator.clipboard
               ?.writeText(`<script src="${window.location.origin}/api/widget.js" defer></script>`)
               .then(() => setOk('Tag copiada.'))
-              .catch(() => setErro('Nao foi possivel copiar — selecione o texto acima.'));
+              .catch(() => setErro('Não foi possível copiar — selecione o texto acima.'));
           }}
         >
           Copiar tag
@@ -1107,7 +1107,7 @@ export function CanaisTab() {
 
         <p className="mt-3 text-xs text-slate-500">
           Opcionais: <code>data-fila="&lt;id&gt;"</code> direciona para uma fila especifica e{' '}
-          <code>data-titulo="..."</code> troca o texto do botao.
+          <code>data-titulo="..."</code> troca o texto do botão.
         </p>
       </Card>
     </div>

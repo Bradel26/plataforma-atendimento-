@@ -31,14 +31,14 @@ providerWebhooksRoutes.post(
     const nome = param(req, 'provider');
     const provider = obterProvider(nome);
     if (!provider) {
-      res.status(404).json({ error: { code: 'PROVIDER_DESCONHECIDO', message: `Provider "${nome}" nao existe` } });
+      res.status(404).json({ error: { code: 'PROVIDER_DESCONHECIDO', message: `Provider "${nome}" não existe` } });
       return;
     }
 
     const corpoBruto = Buffer.isBuffer(req.body) ? req.body : Buffer.from('');
     if (!provider.webhook.autenticar({ corpoBruto, header: (h) => req.header(h), query: req.query })) {
-      log.warn('webhook', 'webhook recusado: autenticacao invalida', { provider: provider.nome });
-      res.status(401).json({ error: { code: 'WEBHOOK_NAO_AUTENTICADO', message: 'Webhook sem autenticacao valida' } });
+      log.warn('webhook', 'webhook recusado: autenticação inválida', { provider: provider.nome });
+      res.status(401).json({ error: { code: 'WEBHOOK_NAO_AUTENTICADO', message: 'Webhook sem autenticação valida' } });
       return;
     }
 
@@ -46,7 +46,7 @@ providerWebhooksRoutes.post(
     try {
       corpo = JSON.parse(corpoBruto.toString('utf8'));
     } catch {
-      res.status(400).json({ error: { code: 'JSON_INVALIDO', message: 'Corpo nao e JSON' } });
+      res.status(400).json({ error: { code: 'JSON_INVALIDO', message: 'Corpo não e JSON' } });
       return;
     }
 
@@ -60,7 +60,7 @@ providerWebhooksRoutes.post(
 
       const organizacaoId = await organizacaoDaSessao(evento.sessaoExterna);
       if (!organizacaoId) {
-        log.warn('webhook', 'evento de sessao desconhecida descartado', {
+        log.warn('webhook', 'evento de sessão desconhecida descartado', {
           provider: provider.nome,
           sessaoExterna: evento.sessaoExterna,
           tipo: evento.tipo,

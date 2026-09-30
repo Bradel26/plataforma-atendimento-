@@ -325,7 +325,7 @@ export function AtendimentoPage() {
       setMostrarConectar(true);
     } catch (erro) {
       setErroConectar(
-        erro instanceof ApiError ? erro.message : 'Nao foi possivel conectar o WhatsApp. Verifique sua internet e tente novamente.',
+        erro instanceof ApiError ? erro.message : 'Não foi possível conectar o WhatsApp. Verifique sua internet e tente novamente.',
       );
     } finally {
       setConectandoLinha(false);
@@ -334,7 +334,7 @@ export function AtendimentoPage() {
 
   const desconectarWhatsapp = useCallback(async () => {
     if (!minhaLinha) return;
-    if (!window.confirm('Desconectar seu WhatsApp? Voce vai precisar escanear o QR Code de novo para reconectar.')) return;
+    if (!window.confirm('Desconectar seu WhatsApp? Você vai precisar escanear o QR Code de novo para reconectar.')) return;
     setErroConectar(null);
     setDesconectandoLinha(true);
     try {
@@ -344,7 +344,7 @@ export function AtendimentoPage() {
       setQrConectar(null);
     } catch (erro) {
       setErroConectar(
-        erro instanceof ApiError ? erro.message : 'Nao foi possivel desconectar agora. Tente novamente.',
+        erro instanceof ApiError ? erro.message : 'Não foi possível desconectar agora. Tente novamente.',
       );
     } finally {
       setDesconectandoLinha(false);
@@ -413,7 +413,7 @@ export function AtendimentoPage() {
           aplicarEvento(lida);
         }
       } catch (err) {
-        setErroAberta(err instanceof ApiError ? err.message : 'Nao foi possivel abrir a conversa');
+        setErroAberta(err instanceof ApiError ? err.message : 'Não foi possível abrir a conversa');
       }
     },
     [aplicarEvento, focarConversa],
@@ -436,7 +436,7 @@ export function AtendimentoPage() {
         setPrevias((atual) => atual.filter((p) => p.id !== previa.id));
         await abrir(conversa.id);
       } catch (err) {
-        setErroAberta(err instanceof ApiError ? err.message : 'Nao foi possivel abrir a conversa');
+        setErroAberta(err instanceof ApiError ? err.message : 'Não foi possível abrir a conversa');
       }
     },
     [abrir],
@@ -629,7 +629,7 @@ export function AtendimentoPage() {
                 <Card>
                   <div className="flex flex-col items-center gap-3 text-center">
                     <Badge tom={erroConectar ? 'erro' : mostrarConectar ? 'alerta' : 'erro'}>
-                      {erroConectar ? '⚠️ Erro' : mostrarConectar ? '🟡 Conectando' : '🔴 Nao conectado'}
+                      {erroConectar ? '⚠️ Erro' : mostrarConectar ? '🟡 Conectando' : '🔴 Não conectado'}
                     </Badge>
 
                     {!mostrarConectar ? (
@@ -670,9 +670,9 @@ export function AtendimentoPage() {
                               <li>
                                 3. Toque em <strong>Conectar aparelho</strong>
                               </li>
-                              <li>4. Aponte a camera para o codigo acima</li>
+                              <li>4. Aponte a camera para o código acima</li>
                             </ol>
-                            <p className="text-xs text-slate-400">Aguardando conexao...</p>
+                            <p className="text-xs text-slate-400">Aguardando conexão...</p>
                           </>
                         ) : (
                           <p className="text-xs text-slate-500">{qrConectar?.motivo ?? 'Gerando o QR Code...'}</p>
@@ -707,7 +707,7 @@ export function AtendimentoPage() {
                   <Badge tom="sucesso">🟢 WhatsApp conectado</Badge>
                   {numeroConectado && (
                     <p className="text-sm text-slate-600">
-                      Numero: <span className="font-medium text-slate-800">{telefoneLegivel(numeroConectado)}</span>
+                      Número: <span className="font-medium text-slate-800">{telefoneLegivel(numeroConectado)}</span>
                     </p>
                   )}
                   <Button

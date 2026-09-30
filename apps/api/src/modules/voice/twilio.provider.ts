@@ -83,7 +83,7 @@ export const twilio: Provedor = {
       throw new AppError(
         400,
         'VOZ_SEM_WEBHOOK',
-        'Configure a URL publica de webhook antes de originar chamadas — o provedor precisa dela para conduzir a ligacao',
+        'Configure a URL pública de webhook antes de originar chamadas — o provedor precisa dela para conduzir a ligação',
       );
     }
 
@@ -109,7 +109,7 @@ export const twilio: Provedor = {
       throw new AppError(
         502,
         'VOZ_INACESSIVEL',
-        `Nao foi possivel falar com o provedor de voz: ${err instanceof Error ? err.message : 'erro de rede'}`,
+        `Não foi possível falar com o provedor de voz: ${err instanceof Error ? err.message : 'erro de rede'}`,
       );
     });
 

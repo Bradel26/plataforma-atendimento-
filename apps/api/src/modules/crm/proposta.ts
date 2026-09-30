@@ -121,12 +121,12 @@ export function montarProposta(o: Entrada, emissor: string, agora: Date): Propos
   if (totais.valorMensal > 0) {
     observacoes.push(
       `O valor total considera ${o.mesesRecorrencia} ${o.mesesRecorrencia === 1 ? 'mes' : 'meses'} ` +
-        'de recorrencia, somados a parte de cobranca unica.',
+        'de recorrência, somados a parte de cobrança única.',
     );
   }
 
   if (totais.descontoTotal > 0) {
-    observacoes.push('Os descontos indicados constam de cada linha e ja estao aplicados nos totais.');
+    observacoes.push('Os descontos indicados constam de cada linha e já estão aplicados nos totais.');
   }
 
   return {

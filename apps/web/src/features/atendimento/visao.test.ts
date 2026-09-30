@@ -10,15 +10,15 @@ import { parametrosDaVisao, pertenceALista, pertenceAVisao } from './visao';
  * sendo autoridade exclusiva do backend (`politicaConversas.filtro`).
  */
 describe('parametrosDaVisao', () => {
-  it('1. Minhas envia minhas=true, sem status — API devolve qualquer status atribuido a mim', () => {
+  it('1. Minhas envia minhas=true, sem status — API devolve qualquer status atribuído a mim', () => {
     expect(parametrosDaVisao('MINHAS')).toEqual({ minhas: true });
   });
 
-  it('2. Nao atribuidas envia status=EM_ESPERA, sem minhas', () => {
+  it('2. Não atribuídas envia status=EM_ESPERA, sem minhas', () => {
     expect(parametrosDaVisao('NAO_ATRIBUIDAS')).toEqual({ status: 'EM_ESPERA' });
   });
 
-  it('3. Todas nao envia nenhum parametro extra — nao reimplementa nem afrouxa a politica de visibilidade do backend', () => {
+  it('3. Todas não envia nenhum parametro extra — não reimplementa nem afrouxa a política de visibilidade do backend', () => {
     expect(parametrosDaVisao('TODAS')).toEqual({});
   });
 });
@@ -32,33 +32,33 @@ const base = (
 });
 
 describe('pertenceAVisao', () => {
-  it('6. conversa EM_ESPERA (sem agente) pertence a Nao atribuidas', () => {
+  it('6. conversa EM_ESPERA (sem agente) pertence a Não atribuídas', () => {
     const conversa = base({ status: 'EM_ESPERA', agente: null });
     expect(pertenceAVisao(conversa, 'NAO_ATRIBUIDAS', 'user-1')).toBe(true);
     expect(pertenceAVisao(conversa, 'MINHAS', 'user-1')).toBe(false);
     expect(pertenceAVisao(conversa, 'TODAS', 'user-1')).toBe(true);
   });
 
-  it('7. conversa atribuida ao usuario atual pertence a Minhas, nao a Nao atribuidas', () => {
+  it('7. conversa atribuída ao usuário atual pertence a Minhas, não a Não atribuídas', () => {
     const conversa = base({ status: 'ATRIBUIDO', agente: { id: 'user-1', nome: 'Fulano' } });
     expect(pertenceAVisao(conversa, 'MINHAS', 'user-1')).toBe(true);
     expect(pertenceAVisao(conversa, 'NAO_ATRIBUIDAS', 'user-1')).toBe(false);
     expect(pertenceAVisao(conversa, 'TODAS', 'user-1')).toBe(true);
   });
 
-  it('conversa atribuida a OUTRO agente nao aparece em Minhas', () => {
+  it('conversa atribuída a OUTRO agente não aparece em Minhas', () => {
     const conversa = base({ status: 'EM_ATENDIMENTO', agente: { id: 'user-2', nome: 'Outra pessoa' } });
     expect(pertenceAVisao(conversa, 'MINHAS', 'user-1')).toBe(false);
     expect(pertenceAVisao(conversa, 'TODAS', 'user-1')).toBe(true);
   });
 
-  it('sem usuario logado (meuUsuarioId nulo), Minhas nunca casa com nada', () => {
+  it('sem usuário logado (meuUsuarioId nulo), Minhas nunca casa com nada', () => {
     const conversa = base({ status: 'ATRIBUIDO', agente: { id: 'user-1', nome: 'Fulano' } });
     expect(pertenceAVisao(conversa, 'MINHAS', null)).toBe(false);
   });
 
   it('Todas aceita qualquer status/agente — inclusive finalizado', () => {
-    const conversa = base({ status: 'FINALIZADO', agente: { id: 'user-9', nome: 'Alguem' } });
+    const conversa = base({ status: 'FINALIZADO', agente: { id: 'user-9', nome: 'Alguém' } });
     expect(pertenceAVisao(conversa, 'TODAS', 'user-1')).toBe(true);
   });
 });
@@ -78,12 +78,12 @@ const comArquivada = (
 });
 
 describe('pertenceALista', () => {
-  it('Minhas: conversa arquivada nunca aparece, mesmo atribuida ao usuario atual', () => {
+  it('Minhas: conversa arquivada nunca aparece, mesmo atribuída ao usuário atual', () => {
     const conversa = comArquivada({ status: 'ATRIBUIDO', agente: { id: 'user-1', nome: 'Fulano' }, arquivada: true });
     expect(pertenceALista(conversa, 'MINHAS', 'user-1')).toBe(false);
   });
 
-  it('Nao atribuidas: conversa arquivada nunca aparece, mesmo EM_ESPERA', () => {
+  it('Não atribuídas: conversa arquivada nunca aparece, mesmo EM_ESPERA', () => {
     const conversa = comArquivada({ status: 'EM_ESPERA', agente: null, arquivada: true });
     expect(pertenceALista(conversa, 'NAO_ATRIBUIDAS', 'user-1')).toBe(false);
   });
@@ -93,7 +93,7 @@ describe('pertenceALista', () => {
     expect(pertenceALista(conversa, 'TODAS', 'user-1')).toBe(false);
   });
 
-  it('conversa nao arquivada continua seguindo exatamente a regra de pertenceAVisao, nas tres visoes', () => {
+  it('conversa não arquivada continua seguindo exatamente a regra de pertenceAVisao, nas três visões', () => {
     const minha = comArquivada({ status: 'ATRIBUIDO', agente: { id: 'user-1', nome: 'Fulano' }, arquivada: false });
     expect(pertenceALista(minha, 'MINHAS', 'user-1')).toBe(true);
     expect(pertenceALista(minha, 'NAO_ATRIBUIDAS', 'user-1')).toBe(false);

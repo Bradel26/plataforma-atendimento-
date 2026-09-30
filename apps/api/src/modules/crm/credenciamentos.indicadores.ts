@@ -559,7 +559,7 @@ export async function acompanhamentos(diasSemInteracao: number) {
     aguardandoDocumentacao: emFluxo.filter((c) => papelDoEstagio(c.estagio.nome) === 'PENDENCIA').map((c) => item(c)),
     precisamDeContato: emFluxo
       .filter((c) => c.contato.conversas.length === 0 || c.responsavel === null)
-      .map((c) => item(c, { motivo: c.responsavel === null ? 'sem responsavel' : 'nunca houve conversa' })),
+      .map((c) => item(c, { motivo: c.responsavel === null ? 'sem responsável' : 'nunca houve conversa' })),
     semInteracao: emFluxo
       .filter((c) => c.contato.conversas[0] && c.contato.conversas[0].ultimaMensagemEm < limite)
       .map((c) => item(c)),

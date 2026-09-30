@@ -34,9 +34,9 @@ export class GowaErro extends Error {
   ) {
     super(
       tipo === 'tempo'
-        ? `o WhatsApp nao respondeu a tempo (${operacao})`
+        ? `o WhatsApp não respondeu a tempo (${operacao})`
         : tipo === 'rede'
-          ? `nao foi possivel falar com o servidor do WhatsApp (${operacao}${corpoErro ? `: ${corpoErro}` : ''})`
+          ? `não foi possível falar com o servidor do WhatsApp (${operacao}${corpoErro ? `: ${corpoErro}` : ''})`
           : `o servidor do WhatsApp recusou ${operacao} (HTTP ${status})${corpoErro ? `: ${corpoErro}` : ''}`,
     );
     this.name = 'GowaErro';

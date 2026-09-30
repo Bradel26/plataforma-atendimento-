@@ -28,7 +28,7 @@ vendedoresRoutes.get(
 
 const mesSchema = z
   .string()
-  .regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Informe o mes no formato AAAA-MM')
+  .regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Informe o mês no formato AAAA-MM')
   .transform((v) => new Date(`${v}-01T00:00:00Z`))
   .optional();
 

@@ -27,7 +27,7 @@ export function agendarCicloParceiro() {
 
   const rodar = async () => {
     try {
-      const organizacoes = await semOrganizacao('ciclo do parceiro: percorre todas as organizacoes', () =>
+      const organizacoes = await semOrganizacao('ciclo do parceiro: percorre todas as organizações', () =>
         prismaSemIsolamento.organizacao.findMany({ where: { ativa: true }, select: { id: true } }),
       );
       for (const org of organizacoes) {

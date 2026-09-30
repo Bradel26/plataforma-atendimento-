@@ -109,7 +109,7 @@ export const LABEL_PERFIL: Record<Perfil, string> = {
 
 export const LABEL_STATUS: Record<AgentStatus, string> = {
   OFFLINE: 'Offline',
-  DISPONIVEL: 'Disponivel',
+  DISPONIVEL: 'Disponível',
   EM_ATENDIMENTO: 'Em atendimento',
   PAUSA: 'Em pausa',
 };
@@ -241,7 +241,7 @@ export type RelatorioAssuntos = {
 
 export const LABEL_CONVERSA_STATUS: Record<ConversaStatus, string> = {
   EM_ESPERA: 'Em espera',
-  ATRIBUIDO: 'Atribuido',
+  ATRIBUIDO: 'Atribuído',
   EM_ATENDIMENTO: 'Em atendimento',
   FINALIZADO: 'Finalizado',
 };
@@ -389,8 +389,8 @@ export type AprovacaoDesconto = 'NAO_REQUER' | 'PENDENTE' | 'APROVADA' | 'REPROV
  * desconto, nao do estado interno do registro.
  */
 export const LABEL_APROVACAO_DESCONTO: Record<AprovacaoDesconto, string> = {
-  NAO_REQUER: 'Dentro da alcada',
-  PENDENTE: 'Aguardando aprovacao',
+  NAO_REQUER: 'Dentro da alçada',
+  PENDENTE: 'Aguardando aprovação',
   APROVADA: 'Aprovado',
   REPROVADA: 'Reprovado',
 };
@@ -630,9 +630,9 @@ export const FASES_LEAD: LeadFase[] = ['NOVO', 'QUALIFICACAO', 'PROPOSTA', 'NEGO
 
 export const LABEL_FASE_LEAD: Record<LeadFase, string> = {
   NOVO: 'Novo',
-  QUALIFICACAO: 'Qualificacao',
+  QUALIFICACAO: 'Qualificação',
   PROPOSTA: 'Proposta',
-  NEGOCIACAO: 'Negociacao',
+  NEGOCIACAO: 'Negociação',
   GANHO: 'Ganho',
   PERDIDO: 'Perdido',
 };
@@ -640,7 +640,7 @@ export const LABEL_FASE_LEAD: Record<LeadFase, string> = {
 export const LABEL_TIPO_LEAD: Record<LeadTipo, string> = {
   INBOUND: 'Inbound',
   OUTBOUND: 'Outbound',
-  INDICACAO: 'Indicacao',
+  INDICACAO: 'Indicação',
   PARCEIRO: 'Parceiro',
 };
 
@@ -662,17 +662,17 @@ export const CAMPOS_AUDITADOS = [
 export type CampoAuditado = (typeof CAMPOS_AUDITADOS)[number];
 
 export const LABEL_CAMPO_AUDITADO: Record<CampoAuditado, string> = {
-  TITULO: 'Titulo',
+  TITULO: 'Título',
   VALOR_INFORMADO: 'Valor informado',
-  MESES_RECORRENCIA: 'Meses de recorrencia',
-  RESPONSAVEL: 'Responsavel',
-  PREVISAO_FECHAMENTO: 'Previsao de fechamento',
-  CONDICAO_PAGAMENTO: 'Condicao de pagamento',
+  MESES_RECORRENCIA: 'Meses de recorrência',
+  RESPONSAVEL: 'Responsável',
+  PREVISAO_FECHAMENTO: 'Previsão de fechamento',
+  CONDICAO_PAGAMENTO: 'Condição de pagamento',
   PRAZO_ENTREGA: 'Prazo de entrega',
   ORIGEM: 'Origem',
   ITENS: 'Proposta',
-  STATUS: 'Situacao',
-  APROVACAO_DESCONTO: 'Aprovacao do desconto',
+  STATUS: 'Situação',
+  APROVACAO_DESCONTO: 'Aprovação do desconto',
 };
 
 /**
@@ -701,7 +701,7 @@ export type EventoAuditoria = {
 };
 
 export const LABEL_MOTIVO_PERDA: Record<MotivoPerda, string> = {
-  PRECO: 'Preco',
+  PRECO: 'Preço',
   SEM_INTERESSE: 'Sem interesse',
   CONCORRENTE: 'Concorrente',
   SEM_BUDGET: 'Sem budget',
@@ -910,7 +910,7 @@ export type ResultadosPesquisa = {
   }>;
 };
 
-export const DIAS_SEMANA = ['Domingo', 'Segunda', 'Terca', 'Quarta', 'Quinta', 'Sexta', 'Sabado'];
+export const DIAS_SEMANA = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 
 // --------------------------------------------------------------------------
 // Fase 4 — Campanhas e Chatbot
@@ -971,7 +971,7 @@ export const LABEL_CAMPANHA_STATUS: Record<CampanhaStatus, string> = {
   RASCUNHO: 'Rascunho',
   ATIVA: 'Ativa',
   PAUSADA: 'Pausada',
-  CONCLUIDA: 'Concluida',
+  CONCLUIDA: 'Concluída',
 };
 
 export const LABEL_ITEM_STATUS: Record<CampanhaItemStatus, string> = {
@@ -1172,7 +1172,7 @@ export const LABEL_CHAMADA_STATUS: Record<CallStatus, string> = {
   CHAMANDO: 'Chamando',
   EM_ANDAMENTO: 'Em andamento',
   COMPLETADA: 'Completada',
-  NAO_ATENDIDA: 'Nao atendida',
+  NAO_ATENDIDA: 'Não atendida',
   OCUPADA: 'Ocupada',
   FALHOU: 'Falhou',
   CANCELADA: 'Cancelada',
@@ -1211,7 +1211,7 @@ export type TipoEvento = (typeof TIPOS_EVENTO)[number];
 
 export const LABEL_TIPO_EVENTO: Record<TipoEvento, string> = {
   CONVERSA: 'Conversa',
-  CHAMADA: 'Ligacao',
+  CHAMADA: 'Ligação',
   ATIVIDADE: 'Atividade',
   PROTOCOLO: 'Protocolo',
   OPORTUNIDADE: 'Jornada',
@@ -1263,14 +1263,14 @@ export type TipoAtividade = (typeof TIPOS_ATIVIDADE)[number];
 export const LABEL_TIPO_ATIVIDADE: Record<TipoAtividade, string> = {
   NOTA: 'Nota',
   TAREFA: 'Tarefa',
-  LIGACAO: 'Ligacao',
+  LIGACAO: 'Ligação',
   WHATSAPP: 'WhatsApp',
   EMAIL: 'E-mail',
-  REUNIAO: 'Reuniao',
+  REUNIAO: 'Reunião',
   VISITA: 'Visita',
   PROPOSTA: 'Proposta',
   RETORNO: 'Retorno',
-  DOCUMENTACAO: 'Envio de documentacao',
+  DOCUMENTACAO: 'Envio de documentação',
   ACOMPANHAMENTO: 'Acompanhamento',
   OUTRO: 'Outro',
 };
@@ -1472,10 +1472,10 @@ export const PAPEIS_NA_CONTA = [
 export type PapelNaConta = (typeof PAPEIS_NA_CONTA)[number];
 
 export const LABEL_PAPEL_NA_CONTA: Record<PapelNaConta, string> = {
-  SOCIO: 'Socio',
+  SOCIO: 'Sócio',
   ADMINISTRADOR: 'Administrador',
   DECISOR: 'Decisor',
-  TECNICO: 'Tecnico',
+  TECNICO: 'Técnico',
   FINANCEIRO: 'Financeiro',
   COMPRAS: 'Compras',
   OUTRO: 'Outro',
@@ -1513,10 +1513,10 @@ export type PreviaEnriquecimento = {
 
 /** Rotulos dos campos da conta, para a previa nao mostrar nome de coluna. */
 export const LABEL_CAMPO_CONTA: Record<string, string> = {
-  razaoSocial: 'Razao social',
+  razaoSocial: 'Razão social',
   telefone: 'Telefone',
   email: 'E-mail',
-  situacaoCadastral: 'Situacao cadastral',
+  situacaoCadastral: 'Situação cadastral',
   atividadePrincipal: 'Atividade principal',
 };
 
@@ -1525,16 +1525,16 @@ export const LABEL_CAMPO_CONTA: Record<string, string> = {
 export type RecursoIA = 'TRANSCRICAO' | 'RESUMO' | 'SUGESTAO_RESPOSTA' | 'CLASSIFICACAO' | 'OUTRO';
 
 export const LABEL_RECURSO_IA: Record<RecursoIA, string> = {
-  TRANSCRICAO: 'Transcricao de audio',
+  TRANSCRICAO: 'Transcrição de áudio',
   RESUMO: 'Resumo',
   SUGESTAO_RESPOSTA: 'Resposta do agente de IA',
-  CLASSIFICACAO: 'Classificacao',
+  CLASSIFICACAO: 'Classificação',
   OUTRO: 'Outro',
 };
 
 /** Unidade de cada recurso — nao existe unidade universal entre eles. */
 export const UNIDADE_RECURSO_IA: Record<RecursoIA, string> = {
-  TRANSCRICAO: 'min de audio',
+  TRANSCRICAO: 'min de áudio',
   RESUMO: 'mil tokens',
   SUGESTAO_RESPOSTA: 'mil tokens',
   CLASSIFICACAO: 'mil tokens',
@@ -1582,7 +1582,7 @@ export type CicloDeVida = (typeof CICLOS_DE_VIDA)[number];
 
 export const LABEL_CICLO_DE_VIDA: Record<CicloDeVida, string> = {
   CLIENTE: 'Cliente',
-  EM_NEGOCIACAO: 'Em negociacao',
+  EM_NEGOCIACAO: 'Em negociação',
   PERDIDO: 'Perdido',
   QUALIFICADO: 'Qualificado',
   CONTATADO: 'Contatado',
@@ -1591,11 +1591,11 @@ export const LABEL_CICLO_DE_VIDA: Record<CicloDeVida, string> = {
 
 /** O que cada degrau significa, para a tela nao precisar de manual. */
 export const AJUDA_CICLO_DE_VIDA: Record<CicloDeVida, string> = {
-  CLIENTE: 'Tem jornada ganha. Compra nao expira: cliente que sumiu continua tendo comprado.',
-  EM_NEGOCIACAO: 'Tem negociacao aberta agora.',
-  PERDIDO: 'Perdeu e nao tem nada aberto.',
+  CLIENTE: 'Tem jornada ganha. Compra não expira: cliente que sumiu continua tendo comprado.',
+  EM_NEGOCIACAO: 'Tem negociação aberta agora.',
+  PERDIDO: 'Perdeu é não tem nada aberto.',
   QUALIFICADO: 'Lead que passou da triagem, ainda sem jornada.',
-  CONTATADO: 'Ja houve conversa, ou existe lead na entrada.',
+  CONTATADO: 'Já houve conversa, ou existe lead na entrada.',
   LEAD: 'Cadastro e mais nada — nunca houve conversa.',
 };
 

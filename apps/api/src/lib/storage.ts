@@ -82,7 +82,7 @@ export const urlPublica = (chave: string) => `/api/arquivos/${chave}`;
 
 export async function salvar(entrada: { buffer: Buffer; nome: string; tipo: string }): Promise<ArquivoSalvo> {
   const tipo = entrada.tipo.split(';')[0]!.trim().toLowerCase();
-  if (!tipoAceito(tipo)) throw badRequest(`Tipo de arquivo nao aceito: ${tipo}`);
+  if (!tipoAceito(tipo)) throw badRequest(`Tipo de arquivo não aceito: ${tipo}`);
   if (entrada.buffer.length === 0) throw badRequest('Arquivo vazio');
   if (entrada.buffer.length > limiteBytes) {
     throw badRequest(`Arquivo acima do limite de ${env.UPLOAD_MAX_MB} MB`);
@@ -113,20 +113,20 @@ export async function salvar(entrada: { buffer: Buffer; nome: string; tipo: stri
  * qualquer arquivo do servidor.
  */
 export function caminhoDe(chave: string) {
-  if (!chaveValida(chave)) throw notFound('Arquivo nao encontrado');
+  if (!chaveValida(chave)) throw notFound('Arquivo não encontrado');
   // A organizacao do caminho tem de ser a de quem pede. Sem esta linha, o
   // prefixo seria organizacao no nome e nada na pratica: a assinatura sozinha
   // liberaria o arquivo para qualquer sessao.
   const prefixo = chave.split('/')[0]!;
   if (CHAVE_VALIDA.test(chave) && prefixo !== organizacaoAtual()) {
-    throw notFound('Arquivo nao encontrado');
+    throw notFound('Arquivo não encontrado');
   }
   // Chave antiga pertence a organizacao inicial — e so ela pode ler.
   if (CHAVE_ANTIGA.test(chave) && organizacaoAtual() !== ORGANIZACAO_INICIAL) {
-    throw notFound('Arquivo nao encontrado');
+    throw notFound('Arquivo não encontrado');
   }
   const destino = resolve(raiz(), ...chave.split('/'));
-  if (!destino.startsWith(raiz() + sep)) throw notFound('Arquivo nao encontrado');
+  if (!destino.startsWith(raiz() + sep)) throw notFound('Arquivo não encontrado');
   return destino;
 }
 

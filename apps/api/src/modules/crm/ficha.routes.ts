@@ -45,7 +45,7 @@ const timelineSchema = z.object({
     .transform((v) => (v ? v.split(',').map((t) => t.trim().toUpperCase()) : undefined))
     .refine(
       (v) => !v || v.every((t) => (TIPOS_EVENTO as readonly string[]).includes(t)),
-      `Tipo invalido. Use: ${TIPOS_EVENTO.join(', ')}`,
+      `Tipo inválido. Use: ${TIPOS_EVENTO.join(', ')}`,
     )
     .transform((v) => v as (typeof TIPOS_EVENTO)[number][] | undefined),
   desde: z.coerce.date().optional(),
@@ -80,7 +80,7 @@ fichaRoutes.get(
       where: apenasVisivel(contatoId, await filtroDe(politicaContatos)),
       select: { contaId: true },
     });
-    if (!contato) throw notFound('Contato nao encontrado');
+    if (!contato) throw notFound('Contato não encontrado');
 
     const q = res.locals.query as z.infer<typeof timelineSchema>;
     res.json(await timeline({ ...q, contatoId, contaId: contato.contaId }));
@@ -96,7 +96,7 @@ fichaRoutes.get(
       where: apenasVisivel(contaId, await filtroDe(politicaContas)),
       select: { id: true },
     });
-    if (!existe) throw notFound('Conta nao encontrada');
+    if (!existe) throw notFound('Conta não encontrada');
 
     const q = res.locals.query as z.infer<typeof timelineSchema>;
     res.json(await timeline({ ...q, contatoId: null, contaId }));
@@ -117,7 +117,7 @@ const vinculos = {
 const criarSchema = z
   .object({
     tipo: z.enum(TIPOS),
-    titulo: z.string().trim().min(2, 'Titulo muito curto').max(160),
+    titulo: z.string().trim().min(2, 'Título muito curto').max(160),
     descricao: z.string().trim().max(4000).nullable().optional(),
     /** Nulo = so registrando o que aconteceu. Preenchido = tarefa com prazo. */
     prazo: z.coerce.date().nullable().optional(),
@@ -342,7 +342,7 @@ async function conferirVinculos(dados: {
 
   for (const [valor, buscar] of conferencias) {
     if (!valor) continue;
-    if (!(await buscar())) throw notFound('Registro vinculado nao encontrado');
+    if (!(await buscar())) throw notFound('Registro vinculado não encontrado');
   }
 }
 
@@ -381,7 +381,7 @@ atividadesRoutes.patch(
       where: apenasVisivel(id, await filtroDe(politicaAtividades)),
       select: { id: true },
     });
-    if (!existe) throw notFound('Atividade nao encontrada');
+    if (!existe) throw notFound('Atividade não encontrada');
     /*
      * Sem conferencia de vinculo aqui, e de proposito: o `atualizarSchema` da
      * atividade nao aceita `contatoId`, `contaId` nem `oportunidadeId` — so
@@ -410,8 +410,8 @@ atividadesRoutes.post(
       where: apenasVisivel(id, await filtroDe(politicaAtividades)),
       select: { concluidoEm: true },
     });
-    if (!atual) throw notFound('Atividade nao encontrada');
-    if (atual.concluidoEm) throw badRequest('Atividade ja esta concluida');
+    if (!atual) throw notFound('Atividade não encontrada');
+    if (atual.concluidoEm) throw badRequest('Atividade já está concluída');
 
     const atividade = await prisma.activity.update({
       where: { id },
@@ -449,7 +449,7 @@ atividadesRoutes.post(
       where: apenasVisivel(id, await filtroDe(politicaAtividades)),
       select: { tipo: true, checkinEm: true, checkoutEm: true },
     });
-    if (!atual) throw notFound('Atividade nao encontrada');
+    if (!atual) throw notFound('Atividade não encontrada');
 
     const impedimento = impedimentoDoCheckin(atual);
     if (impedimento) throw badRequest(impedimento);
@@ -474,7 +474,7 @@ atividadesRoutes.post(
       where: apenasVisivel(id, await filtroDe(politicaAtividades)),
       select: { tipo: true, checkinEm: true, checkoutEm: true, concluidoEm: true },
     });
-    if (!atual) throw notFound('Atividade nao encontrada');
+    if (!atual) throw notFound('Atividade não encontrada');
 
     const impedimento = impedimentoDoCheckout(atual);
     if (impedimento) throw badRequest(impedimento);
@@ -518,7 +518,7 @@ atividadesRoutes.post(
       where: apenasVisivel(id, await filtroDe(politicaAtividades)),
       select: { id: true },
     });
-    if (!existe) throw notFound('Atividade nao encontrada');
+    if (!existe) throw notFound('Atividade não encontrada');
 
     const atividade = await prisma.activity.update({
       where: { id },
@@ -538,7 +538,7 @@ atividadesRoutes.delete(
       where: apenasVisivel(id, await filtroDe(politicaAtividades)),
       select: { id: true },
     });
-    if (!existe) throw notFound('Atividade nao encontrada');
+    if (!existe) throw notFound('Atividade não encontrada');
 
     await prisma.activity.delete({ where: { id } });
     res.status(204).end();

@@ -29,7 +29,7 @@ export function webhookWahaAutentico(req: RequisicaoDeWebhook, segredo: string |
     // TODA mensagem seria recusada — e "autenticacao invalida" generico nao
     // apontaria para a assinatura. Nunca loga a assinatura nem o segredo.
     if (!confere) {
-      log.warn('webhook', 'assinatura X-Webhook-Hmac do WAHA nao confere', {
+      log.warn('webhook', 'assinatura X-Webhook-Hmac do WAHA não confere', {
         provider: 'waha',
         algoritmo: req.header('x-webhook-hmac-algorithm') ?? null,
         tamanhoDaAssinatura: assinatura.length,

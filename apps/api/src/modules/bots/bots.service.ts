@@ -57,7 +57,7 @@ export async function salvarBot(input: {
 
 export async function excluirBot(id: string) {
   const bot = await prisma.bot.findUnique({ where: { id } });
-  if (!bot) throw notFound('Bot nao encontrado');
+  if (!bot) throw notFound('Bot não encontrado');
   await prisma.bot.delete({ where: { id } });
 }
 

@@ -13,7 +13,7 @@ export const VISOES_INBOX: readonly VisaoInbox[] = ['MINHAS', 'NAO_ATRIBUIDAS', 
 
 export const LABEL_VISAO_INBOX: Record<VisaoInbox, string> = {
   MINHAS: 'Minhas',
-  NAO_ATRIBUIDAS: 'Nao atribuidas',
+  NAO_ATRIBUIDAS: 'Não atribuídas',
   TODAS: 'Todas',
 };
 

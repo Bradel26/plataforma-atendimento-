@@ -32,10 +32,10 @@ export async function listarDefinicoes(entidade?: EntidadeVisao) {
 
 export async function criarDefinicao(input: z.infer<typeof criarCampoCustomizadoSchema>) {
   const chave = gerarChave(input.nome);
-  if (!chave) throw badRequest('Nome nao gera uma chave valida');
+  if (!chave) throw badRequest('Nome não gera uma chave valida');
 
   const existente = await prisma.campoCustomizado.findFirst({ where: { entidade: input.entidade, chave } });
-  if (existente) throw conflict('Ja existe um campo com um nome equivalente nesta entidade');
+  if (existente) throw conflict('Já existe um campo com um nome equivalente nesta entidade');
 
   const campo = await prisma.campoCustomizado.create({
     data: {
@@ -55,10 +55,10 @@ export async function criarDefinicao(input: z.infer<typeof criarCampoCustomizado
 
 export async function atualizarDefinicao(id: string, input: z.infer<typeof atualizarCampoCustomizadoSchema>) {
   const atual = await prisma.campoCustomizado.findUnique({ where: { id } });
-  if (!atual) throw notFound('Campo customizado nao encontrado');
+  if (!atual) throw notFound('Campo customizado não encontrado');
 
   if (input.opcoes && atual.tipo !== 'SELECAO') {
-    throw badRequest('Opcoes so se aplicam a campos do tipo SELECAO');
+    throw badRequest('Opções só se aplicam a campos do tipo SELEÇÃO');
   }
 
   const campo = await prisma.campoCustomizado.update({
@@ -77,7 +77,7 @@ export async function atualizarDefinicao(id: string, input: z.infer<typeof atual
 
 export async function removerDefinicao(id: string) {
   const atual = await prisma.campoCustomizado.findUnique({ where: { id } });
-  if (!atual) throw notFound('Campo customizado nao encontrado');
+  if (!atual) throw notFound('Campo customizado não encontrado');
   // Cascade apaga os valores gravados junto — nao ha o que fazer com valor
   // orfao de um campo que nao existe mais.
   await prisma.campoCustomizado.delete({ where: { id } });
@@ -224,7 +224,7 @@ export async function prepararValoresDoRegistro(
   if (brutos === undefined) {
     if (criando) {
       const faltando = definicoes.filter((d) => d.obrigatorio).map((d) => d.nome);
-      if (faltando.length) throw badRequest(`Campo(s) obrigatorio(s) faltando: ${faltando.join(', ')}`);
+      if (faltando.length) throw badRequest(`Campo(s) obrigatório(s) faltando: ${faltando.join(', ')}`);
     }
     return { paraGravar: [], paraRemover: [] };
   }
@@ -238,7 +238,7 @@ export async function prepararValoresDoRegistro(
     const faltando = definicoes
       .filter((d) => d.obrigatorio && (!(d.chave in brutos) || brutos[d.chave] === null))
       .map((d) => d.nome);
-    if (faltando.length) throw badRequest(`Campo(s) obrigatorio(s) faltando: ${faltando.join(', ')}`);
+    if (faltando.length) throw badRequest(`Campo(s) obrigatório(s) faltando: ${faltando.join(', ')}`);
   }
 
   const paraGravar: ValorPreparado[] = [];
@@ -248,7 +248,7 @@ export async function prepararValoresDoRegistro(
     const def = porChave.get(chave)!;
 
     if (bruto === null) {
-      if (def.obrigatorio) throw badRequest(`${def.nome} e obrigatorio e nao pode ficar vazio`);
+      if (def.obrigatorio) throw badRequest(`${def.nome} é obrigatório é não pode ficar vazio`);
       paraRemover.push(def.id);
       continue;
     }
@@ -257,7 +257,7 @@ export async function prepararValoresDoRegistro(
     if (!resultado.ok) throw badRequest(`${def.nome}: ${resultado.erro}`);
 
     if (def.valorUnico && (await existeDuplicado(entidade, def.id, resultado.valor, registroId ?? undefined))) {
-      throw conflict(`Ja existe um registro com "${def.nome}" = "${resultado.valor}"`);
+      throw conflict(`Já existe um registro com "${def.nome}" = "${resultado.valor}"`);
     }
 
     paraGravar.push({ campoId: def.id, valor: resultado.valor });

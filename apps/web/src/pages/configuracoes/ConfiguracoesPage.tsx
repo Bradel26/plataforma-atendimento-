@@ -12,7 +12,7 @@ import { VozTab } from './VozTab';
 import { WhiteLabelTab } from './WhiteLabelTab';
 
 const ABAS = [
-  { id: 'usuarios', label: 'Usuarios e permissoes' },
+  { id: 'usuarios', label: 'Usuários e permissões' },
   { id: 'filiais', label: 'Filiais' },
   { id: 'campos-customizados', label: 'Campos customizados' },
   { id: 'filas', label: 'Filas' },
@@ -21,7 +21,7 @@ const ABAS = [
   { id: 'ia', label: 'IA (motor externo)' },
   { id: 'whitelabel', label: 'White Label' },
   { id: 'voz', label: 'Voz' },
-  { id: 'lgpd', label: 'LGPD e retencao' },
+  { id: 'lgpd', label: 'LGPD e retenção' },
   { id: 'fila', label: 'Fila de trabalho' },
 ] as const;
 

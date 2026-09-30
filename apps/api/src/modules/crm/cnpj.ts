@@ -219,7 +219,7 @@ export function planoDeEnriquecimento(
     }
   };
 
-  considerar('razaoSocial', conta.razaoSocial, dados.razaoSocial, 'Razao social');
+  considerar('razaoSocial', conta.razaoSocial, dados.razaoSocial, 'Razão social');
   considerar('telefone', conta.telefone, dados.telefone, 'Telefone');
   considerar('email', conta.email, dados.email, 'E-mail');
   /*

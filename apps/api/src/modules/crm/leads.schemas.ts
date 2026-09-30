@@ -19,7 +19,7 @@ const dataOpcional = z.coerce.date().optional();
 const camposCustomizados = z.record(z.string(), z.unknown()).optional();
 
 export const criarLeadSchema = z.object({
-  contatoId: z.string().uuid('Informe um contato valido'),
+  contatoId: z.string().uuid('Informe um contato válido'),
   contaId: z.string().uuid().nullable().optional(),
   fase: fase.default('NOVO'),
   tipo: z.enum(TIPOS).default('INBOUND'),

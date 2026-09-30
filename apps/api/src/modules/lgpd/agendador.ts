@@ -42,23 +42,23 @@ export function agendarExpurgo() {
 
     const resumo = await executarExpurgo({ simulacao: false, autorId: null });
     console.log(
-      `[lgpd] expurgo automatico (${organizacaoId}): ${resumo.mensagens} mensagens, ${resumo.titulares} titulares anonimizados`,
+      `[lgpd] expurgo automático (${organizacaoId}): ${resumo.mensagens} mensagens, ${resumo.titulares} titulares anonimizados`,
     );
   };
 
   const rodar = async () => {
     try {
-      const organizacoes = await semOrganizacao('expurgo: percorre todas as organizacoes', () =>
+      const organizacoes = await semOrganizacao('expurgo: percorre todas as organizações', () =>
         prismaSemIsolamento.organizacao.findMany({ where: { ativa: true }, select: { id: true } }),
       );
       for (const org of organizacoes) {
         // Falha de uma organizacao nao pode impedir as seguintes.
         await comOrganizacao(org.id, () => rodarOrganizacao(org.id)).catch((err) =>
-          registrarErro(`[lgpd] expurgo automatico falhou (${org.id}):`, err),
+          registrarErro(`[lgpd] expurgo automático falhou (${org.id}):`, err),
         );
       }
     } catch (err) {
-      registrarErro('[lgpd] expurgo automatico falhou:', err);
+      registrarErro('[lgpd] expurgo automático falhou:', err);
     }
   };
 

@@ -27,7 +27,7 @@ export const ORDEM_STATUS: StatusCiclo[] = [
 
 export const LABEL_STATUS_CICLO: Record<StatusCiclo, string> = {
   NOVO_PARCEIRO: 'Novo parceiro',
-  EM_IMPLANTACAO: 'Em implantacao',
+  EM_IMPLANTACAO: 'Em implantação',
   ATIVO: 'Ativo',
   SEM_ACOMPANHAMENTO: 'Sem acompanhamento',
   EM_RISCO: 'Em risco',
@@ -36,13 +36,13 @@ export const LABEL_STATUS_CICLO: Record<StatusCiclo, string> = {
 };
 
 export const AJUDA_STATUS_CICLO: Record<StatusCiclo, string> = {
-  NOVO_PARCEIRO: 'Acabou de concluir o credenciamento e ainda nao comecou a implantacao.',
-  EM_IMPLANTACAO: 'Passando pelas etapas para comecar a operar: treinamento, acessos, materiais.',
-  ATIVO: 'Implantacao concluida e relacionamento em dia. Nao significa que esteja vendendo.',
-  SEM_ACOMPANHAMENTO: 'Mais de 30 dias sem nenhuma interacao registrada no CRM.',
-  EM_RISCO: 'Ha indicio de perder o parceiro. Marcado pelo consultor, com motivo.',
-  INATIVO: 'Deixou de operar ou nao pretende continuar. Marcado pelo consultor, com motivo.',
-  REATIVADO: 'Estava em risco ou inativo e retomou o relacionamento. Fica 30 dias em observacao.',
+  NOVO_PARCEIRO: 'Acabou de concluir o credenciamento e ainda não começou a implantação.',
+  EM_IMPLANTACAO: 'Passando pelas etapas para começar a operar: treinamento, acessos, materiais.',
+  ATIVO: 'Implantação concluída e relacionamento em dia. Não significa que esteja vendendo.',
+  SEM_ACOMPANHAMENTO: 'Mais de 30 dias sem nenhuma interação registrada no CRM.',
+  EM_RISCO: 'Há indício de perder o parceiro. Marcado pelo consultor, com motivo.',
+  INATIVO: 'Deixou de operar ou não pretende continuar. Marcado pelo consultor, com motivo.',
+  REATIVADO: 'Estava em risco ou inativo e retomou o relacionamento. Fica 30 dias em observação.',
 };
 
 /** Classes de cor de cada status (as de risco e reativado ficam em index.css, com tema escuro). */
@@ -58,20 +58,20 @@ export const COR_STATUS_CICLO: Record<StatusCiclo, string> = {
 
 export const MOTIVOS_EM_RISCO = [
   'Demonstrou desinteresse',
-  'Nao responde aos contatos',
+  'Não responde aos contatos',
   'Informou dificuldade para operar',
   'Solicitou pausa',
-  'Pendencia impede a continuidade',
+  'Pendência impede a continuidade',
   'Outro',
 ];
 
 export const MOTIVOS_INATIVO = [
   'Solicitou encerramento',
-  'Nao possui mais interesse',
+  'Não possui mais interesse',
   'Empresa fechou',
   'Mudanca de atividade',
   'Problemas operacionais',
-  'Sem retorno apos diversas tentativas',
+  'Sem retorno após diversas tentativas',
   'Outro',
 ];
 
@@ -122,15 +122,15 @@ export const dataBr = (iso: string) => new Date(iso).toLocaleDateString('pt-BR')
 export function textoDeAtencao(i: ItemCiclo): string {
   switch (i.status) {
     case 'SEM_ACOMPANHAMENTO':
-      return `Parceiro ha ${i.diasSemInteracao} dias sem acompanhamento`;
+      return `Parceiro há ${i.diasSemInteracao} dias sem acompanhamento`;
     case 'EM_RISCO':
-      return `Em risco ha ${i.diasNoStatus} dias`;
+      return `Em risco há ${i.diasNoStatus} dias`;
     case 'INATIVO':
-      return `Inativo ha ${i.diasNoStatus} dias`;
+      return `Inativo há ${i.diasNoStatus} dias`;
     case 'REATIVADO':
-      return `Reativado ha ${i.diasNoStatus} dias`;
+      return `Reativado há ${i.diasNoStatus} dias`;
     case 'NOVO_PARCEIRO':
-      return `Credenciado ha ${i.diasComoParceiro} dias e a implantacao nao comecou`;
+      return `Credenciado há ${i.diasComoParceiro} dias e a implantação não começou`;
     default:
       return '';
   }

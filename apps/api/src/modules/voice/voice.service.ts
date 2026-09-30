@@ -55,11 +55,11 @@ export async function salvarConfig(input: {
   guardarGravacao?: boolean;
 }) {
   if (input.provedor && !PROVEDORES[input.provedor]) {
-    throw badRequest(`Provedor de voz nao suportado: ${input.provedor}`);
+    throw badRequest(`Provedor de voz não suportado: ${input.provedor}`);
   }
   if (input.filaId) {
     const fila = await prisma.queue.findUnique({ where: { id: input.filaId } });
-    if (!fila) throw notFound('Fila nao encontrada');
+    if (!fila) throw notFound('Fila não encontrada');
   }
 
   const atual = await obterConfig();
@@ -70,7 +70,7 @@ export async function salvarConfig(input: {
   // Sem URL publica o provedor nao consegue reportar nada: a chamada existiria
   // sem ninguem saber o que aconteceu com ela.
   if (futuro.ativo && !futuro.urlWebhook?.startsWith('https://')) {
-    throw badRequest('A URL de webhook precisa ser publica e HTTPS para o provedor reportar os eventos');
+    throw badRequest('A URL de webhook precisa ser pública e HTTPS para o provedor reportar os eventos');
   }
 
   const dados = { ...input, ...(input.authToken ? { authToken: cifrar(input.authToken) } : {}) };
@@ -83,9 +83,9 @@ async function ativo(): Promise<{ provedor: Provedor; credenciais: Credenciais }
   const config = await obterConfig();
   const provedor = PROVEDORES[config.provedor];
 
-  if (!provedor) throw badRequest(`Provedor de voz nao suportado: ${config.provedor}`);
+  if (!provedor) throw badRequest(`Provedor de voz não suportado: ${config.provedor}`);
   if (!config.ativo || !config.contaSid || !config.authToken) {
-    throw new AppError(503, 'VOZ_INDISPONIVEL', 'Canal de voz nao esta configurado ou esta inativo');
+    throw new AppError(503, 'VOZ_INDISPONIVEL', 'Canal de voz não está configurado ou está inativo');
   }
 
   return {
@@ -197,7 +197,7 @@ async function contatoDoNumero(evento: EventoChamada) {
 /** Chamada originada pelo agente (clique-para-ligar). */
 export async function originarChamada(agenteId: string, destino: string) {
   const { provedor, credenciais } = await ativo();
-  if (!credenciais.numeroPadrao) throw badRequest('Configure o numero padrao de saida');
+  if (!credenciais.numeroPadrao) throw badRequest('Configure o número padrão de saída');
 
   // Fala com o provedor ANTES de gravar: chamada que o provedor recusou nao
   // pode aparecer no relatorio como tentativa realizada.
@@ -315,7 +315,7 @@ function serializar(c: ChamadaDb) {
  */
 export async function classificarChamada(id: string, classificacao: number | null, usuarioId: string) {
   const chamada = await prisma.call.findFirst({ where: { id }, select: { id: true } });
-  if (!chamada) throw notFound('Chamada nao encontrada');
+  if (!chamada) throw notFound('Chamada não encontrada');
 
   return serializar(
     await prisma.call.update({

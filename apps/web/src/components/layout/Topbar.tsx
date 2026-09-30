@@ -32,7 +32,7 @@ export function Topbar({ titulo, aoAbrirMenu }: { titulo: string; aoAbrirMenu: (
           type="button"
           id="botao-abrir-menu"
           onClick={aoAbrirMenu}
-          aria-label="Abrir menu de navegacao"
+          aria-label="Abrir menu de navegação"
           className="anel-de-foco -ml-2 rounded-lg p-2 text-slate-600 hover:bg-slate-100 md:hidden"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" className="h-5 w-5" aria-hidden="true">

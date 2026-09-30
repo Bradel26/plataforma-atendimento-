@@ -145,7 +145,7 @@ const atualizarNumeroSchema = z
 
 const canalDaRota = (valor: string): CanalExterno => {
   const canal = valor.toUpperCase();
-  if (!(CANAIS_EXTERNOS as readonly string[]).includes(canal)) throw notFound('Canal nao suportado');
+  if (!(CANAIS_EXTERNOS as readonly string[]).includes(canal)) throw notFound('Canal não suportado');
   return canal as CanalExterno;
 };
 
@@ -158,7 +158,7 @@ const CANAIS_IA = ['WEBCHAT', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'EMAIL'] as c
 
 const canalDeIa = (valor: string): Channel => {
   const canal = valor.toUpperCase();
-  if (!(CANAIS_IA as readonly string[]).includes(canal)) throw notFound('Canal nao suportado para IA');
+  if (!(CANAIS_IA as readonly string[]).includes(canal)) throw notFound('Canal não suportado para IA');
   return canal as Channel;
 };
 
@@ -201,7 +201,7 @@ channelsRoutes.get(
 
     if (!config || modoEfetivo(config.modo) !== 'NAO_OFICIAL') {
       res.json({
-        estado: { situacao: 'DESCONHECIDO', detalhe: 'o WhatsApp nao esta no modo nao oficial' },
+        estado: { situacao: 'DESCONHECIDO', detalhe: 'o WhatsApp não está no modo não oficial' },
         aviso: AVISO_NAO_OFICIAL,
         caminhoWebhook,
       });
@@ -228,7 +228,7 @@ channelsRoutes.get(
     const config = await obterConfig('WHATSAPP');
 
     if (!config || modoEfetivo(config.modo) !== 'NAO_OFICIAL') {
-      res.json({ qr: null, conectado: false, motivo: 'o WhatsApp nao esta no modo nao oficial' });
+      res.json({ qr: null, conectado: false, motivo: 'o WhatsApp não está no modo não oficial' });
       return;
     }
 
@@ -249,7 +249,7 @@ channelsRoutes.post(
     const config = await obterConfig('WHATSAPP');
 
     if (!config || modoEfetivo(config.modo) !== 'NAO_OFICIAL') {
-      throw notFound('O WhatsApp nao esta no modo nao oficial');
+      throw notFound('O WhatsApp não está no modo não oficial');
     }
 
     await whatsAppProvider.disconnect(config);
@@ -359,11 +359,11 @@ channelsRoutes.get(
   '/numeros/:id/ponte/estado',
   asyncHandler(async (req, res) => {
     const config = await obterConfigPorId(param(req, 'id'));
-    if (!config) throw notFound('Numero nao encontrado');
+    if (!config) throw notFound('Número não encontrado');
     exigirDonoOuAdmin(req, config.donoId);
     if (config.donoId && !config.ponteSessao) {
       throw badRequest(
-        'Esta linha pessoal nao tem nome de sessao configurado — configure antes de conectar, para nao usar a sessao da linha compartilhada.',
+        'Esta linha pessoal não tem nome de sessão configurado — configure antes de conectar, para não usar a sessão da linha compartilhada.',
       );
     }
 
@@ -371,7 +371,7 @@ channelsRoutes.get(
 
     if (config.canal !== 'WHATSAPP' || modoEfetivo(config.modo) !== 'NAO_OFICIAL') {
       res.json({
-        estado: { situacao: 'DESCONHECIDO', detalhe: 'este numero nao esta no modo nao oficial' },
+        estado: { situacao: 'DESCONHECIDO', detalhe: 'este número não está no modo não oficial' },
         aviso: AVISO_NAO_OFICIAL,
         caminhoWebhook,
       });
@@ -392,23 +392,23 @@ channelsRoutes.get(
   '/numeros/:id/ponte/qr',
   asyncHandler(async (req, res) => {
     const config = await obterConfigPorId(param(req, 'id'));
-    if (!config) throw notFound('Numero nao encontrado');
+    if (!config) throw notFound('Número não encontrado');
     exigirDonoOuAdmin(req, config.donoId);
     if (config.donoId && !config.ponteSessao) {
       throw badRequest(
-        'Esta linha pessoal nao tem nome de sessao configurado — configure antes de conectar, para nao usar a sessao da linha compartilhada.',
+        'Esta linha pessoal não tem nome de sessão configurado — configure antes de conectar, para não usar a sessão da linha compartilhada.',
       );
     }
 
     if (config.canal !== 'WHATSAPP' || modoEfetivo(config.modo) !== 'NAO_OFICIAL') {
-      res.json({ qr: null, conectado: false, motivo: 'este numero nao esta no modo nao oficial' });
+      res.json({ qr: null, conectado: false, motivo: 'este número não está no modo não oficial' });
       return;
     }
     // TEMP-DEBUG (auditoria WhatsApp — remover apos investigacao): confirma
     // qual canalConfigId/donoId/ponteSessao chegou de fato ate a chamada para
     // a Ponte, para este pedido especifico de QR.
     console.log(
-      `[crm] GET /numeros/:id/ponte/qr usuarioAutenticado=${req.user!.sub} canalConfigId=${config.id} donoId=${config.donoId ?? 'nenhum (linha compartilhada)'} ponteSessao=${config.ponteSessao ?? 'nenhum'}`,
+      `[crm] GET /números/:id/ponte/qr usuarioAutenticado=${req.user!.sub} canalConfigId=${config.id} donoId=${config.donoId ?? 'nenhum (linha compartilhada)'} ponteSessao=${config.ponteSessao ?? 'nenhum'}`,
     );
     res.json(await whatsAppProvider.getQRCode(config));
   }),
@@ -419,16 +419,16 @@ channelsRoutes.post(
   '/numeros/:id/ponte/desconectar',
   asyncHandler(async (req, res) => {
     const config = await obterConfigPorId(param(req, 'id'));
-    if (!config) throw notFound('Numero nao encontrado');
+    if (!config) throw notFound('Número não encontrado');
     exigirDonoOuAdmin(req, config.donoId);
     if (config.donoId && !config.ponteSessao) {
       throw badRequest(
-        'Esta linha pessoal nao tem nome de sessao configurado — configure antes de conectar, para nao usar a sessao da linha compartilhada.',
+        'Esta linha pessoal não tem nome de sessão configurado — configure antes de conectar, para não usar a sessão da linha compartilhada.',
       );
     }
 
     if (config.canal !== 'WHATSAPP' || modoEfetivo(config.modo) !== 'NAO_OFICIAL') {
-      throw notFound('Este numero nao esta no modo nao oficial');
+      throw notFound('Este número não está no modo não oficial');
     }
     await whatsAppProvider.disconnect(config);
     await marcarDesconectadoLocalmente(config);

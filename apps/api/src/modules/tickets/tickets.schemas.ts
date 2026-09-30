@@ -22,7 +22,7 @@ const categoria = z.enum(CATEGORIAS_TICKET);
 const tipoTi = z.enum(TIPOS_TI);
 
 export const criarTicketSchema = z.object({
-  titulo: z.string().trim().min(3, 'Titulo muito curto').max(160),
+  titulo: z.string().trim().min(3, 'Título muito curto').max(160),
   descricao: z.string().trim().min(3, 'Descreva o chamado').max(4000),
   prioridade: prioridade.default('NORMAL'),
   categoria: categoria.default('ATENDIMENTO'),
@@ -65,7 +65,7 @@ export const listarTicketsSchema = z.object({
 });
 
 export const comentarioSchema = z.object({
-  conteudo: z.string().trim().min(1, 'Escreva o comentario').max(4000),
+  conteudo: z.string().trim().min(1, 'Escreva o comentário').max(4000),
   /** Nota interna por padrao — resposta ao cliente exige interno=false explicito. */
   interno: z.boolean().default(true),
 });

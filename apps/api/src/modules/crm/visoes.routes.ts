@@ -52,7 +52,7 @@ visoesRoutes.post(
     const existente = await prisma.visaoSalva.findFirst({
       where: { entidade: dados.entidade, nome: dados.nome },
     });
-    if (existente) throw conflict('Ja existe uma visao com este nome para esta entidade');
+    if (existente) throw conflict('Já existe uma visão com este nome para esta entidade');
 
     const visao = await prisma.visaoSalva.create({
       data: {
@@ -74,9 +74,9 @@ visoesRoutes.patch(
   asyncHandler(async (req, res) => {
     const id = param(req, 'id');
     const atual = await prisma.visaoSalva.findFirst({ where: { id } });
-    if (!atual) throw notFound('Visao nao encontrada');
+    if (!atual) throw notFound('Visão não encontrada');
     if (!podeEditar(req, atual.criadoPorId)) {
-      throw forbidden('So quem criou a visao, ou ADMIN/SUPERVISOR, pode edita-la');
+      throw forbidden('Só quem criou a visão, ou ADMIN/SUPERVISOR, pode edita-la');
     }
 
     const dados = req.body as z.infer<typeof atualizarVisaoSchema>;
@@ -88,7 +88,7 @@ visoesRoutes.patch(
       const duplicada = await prisma.visaoSalva.findFirst({
         where: { entidade: atual.entidade, nome: dados.nome, id: { not: id } },
       });
-      if (duplicada) throw conflict('Ja existe uma visao com este nome para esta entidade');
+      if (duplicada) throw conflict('Já existe uma visão com este nome para esta entidade');
     }
 
     const visao = await prisma.visaoSalva.update({
@@ -105,9 +105,9 @@ visoesRoutes.delete(
   asyncHandler(async (req, res) => {
     const id = param(req, 'id');
     const atual = await prisma.visaoSalva.findFirst({ where: { id } });
-    if (!atual) throw notFound('Visao nao encontrada');
+    if (!atual) throw notFound('Visão não encontrada');
     if (!podeEditar(req, atual.criadoPorId)) {
-      throw forbidden('So quem criou a visao, ou ADMIN/SUPERVISOR, pode remove-la');
+      throw forbidden('Só quem criou a visão, ou ADMIN/SUPERVISOR, pode remove-la');
     }
 
     await prisma.visaoSalva.delete({ where: { id } });

@@ -105,7 +105,7 @@ export function TelefoniaPage() {
       setChamadas((atual) => atual.map((c) => (c.id === id ? chamada : c)));
       setErro(null);
     } catch (e) {
-      setErro(e instanceof ApiError ? e.message : 'Falha ao classificar a ligacao');
+      setErro(e instanceof ApiError ? e.message : 'Falha ao classificar a ligação');
     }
   };
 
@@ -125,9 +125,9 @@ export function TelefoniaPage() {
       {aviso && <Alerta tipo="sucesso">{aviso}</Alerta>}
 
       {/* O botao de ligar vem primeiro e grande: e a acao da tela. */}
-      <Card titulo="Ligar" descricao="Clique-para-ligar pelo numero configurado na plataforma">
+      <Card titulo="Ligar" descricao="Clique-para-ligar pelo número configurado na plataforma">
         <form onSubmit={ligar} className="flex flex-wrap items-end gap-3">
-          <Field label="Numero de destino">
+          <Field label="Número de destino">
             <Input
               required
               placeholder="+5511988887777"
@@ -155,12 +155,12 @@ export function TelefoniaPage() {
         <StatTile
           rotulo="Taxa de atendimento"
           valor={indicadores?.taxaAtendimento == null ? '—' : `${indicadores.taxaAtendimento}%`}
-          detalhe="abaixo de 80% a operacao esta perdendo chamada"
+          detalhe="abaixo de 80% a operação esta perdendo chamada"
           estado={
             indicadores?.taxaAtendimento != null && indicadores.taxaAtendimento < 80 ? ESTADO.atencao : undefined
           }
         />
-        <StatTile rotulo="TMA de voz" valor={duracaoCurta(indicadores?.tma ?? null)} detalhe="media das atendidas" />
+        <StatTile rotulo="TMA de voz" valor={duracaoCurta(indicadores?.tma ?? null)} detalhe="média das atendidas" />
       </div>
 
       {/* Custo (item 6.6). Nota media e "ligacoes negativas" sairam a pedido da
@@ -172,11 +172,11 @@ export function TelefoniaPage() {
           detalhe={
             indicadores?.chamadasComCusto
               ? `${indicadores.chamadasComCusto} chamada(s) com custo informado`
-              : 'o provedor nao informou custo'
+              : 'o provedor não informou custo'
           }
         />
         <StatTile
-          rotulo="Custo medio"
+          rotulo="Custo médio"
           valor={custoCurto(indicadores?.custoMedio)}
           detalhe="por chamada com custo informado"
         />
@@ -185,22 +185,22 @@ export function TelefoniaPage() {
       <Card titulo="Chamadas" descricao={`${chamadas.length} registro(s)`}>
         {chamadas.length === 0 ? (
           <p className="text-sm text-slate-500">
-            Nenhuma chamada registrada. Configure o provedor em Configuracoes &rarr; Voz.
+            Nenhuma chamada registrada. Configure o provedor em Configurações &rarr; Voz.
           </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
-                  <th className="py-2 pr-3">Inicio</th>
+                  <th className="py-2 pr-3">Início</th>
                   <th className="py-2 pr-3">Direcao</th>
-                  <th className="py-2 pr-3">Numero</th>
+                  <th className="py-2 pr-3">Número</th>
                   <th className="py-2 pr-3">Contato</th>
                   <th className="py-2 pr-3">Status</th>
-                  <th className="py-2 pr-3">Duracao</th>
+                  <th className="py-2 pr-3">Duração</th>
                   <th className="py-2 pr-3 text-right">Custo</th>
-                  <th className="py-2 pr-3">Audio</th>
-                  <th className="py-2 pr-3">Gravacao</th>
+                  <th className="py-2 pr-3">Áudio</th>
+                  <th className="py-2 pr-3">Gravação</th>
                   <th className="py-2">Assistente</th>
                 </tr>
               </thead>
@@ -229,14 +229,14 @@ export function TelefoniaPage() {
                           a gestao faz ao olhar esta lista e "o que a gente pagou
                           por isso valeu?", e as duas colunas juntas respondem. */}
                       <select
-                        aria-label={`Classificacao da ligacao de ${dataHora(c.iniciadoEm)}`}
+                        aria-label={`Classificação da ligação de ${dataHora(c.iniciadoEm)}`}
                         value={c.classificacao ?? ''}
                         onChange={(e) => void classificar(c.id, e.target.value)}
                         className="rounded border border-slate-300 bg-white px-1.5 py-1 text-xs text-slate-700"
                         title={
                           c.classificadoPor
                             ? `Classificada por ${c.classificadoPor.nome}`
-                            : 'Nao classificada'
+                            : 'Não classificada'
                         }
                       >
                         {/* Vazio e "nao classificada", e continua disponivel: nota
@@ -270,8 +270,8 @@ export function TelefoniaPage() {
                           {assistente === c.id ? 'Fechar' : 'Abrir'}
                         </button>
                       ) : (
-                        <span className="text-xs text-slate-500" title="Nenhum motor analisou esta ligacao">
-                          sem analise
+                        <span className="text-xs text-slate-500" title="Nenhum motor analisou esta ligação">
+                          sem análise
                         </span>
                       )}
                     </td>

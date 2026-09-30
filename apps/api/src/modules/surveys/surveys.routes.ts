@@ -33,10 +33,10 @@ const periodoSchema = z.object({
  * pergunta e "de quem e este token?".
  */
 async function organizacaoDoConvite(token: string): Promise<string> {
-  const pesquisa = await semOrganizacao('pesquisa publica: o token e que revela a organizacao', () =>
+  const pesquisa = await semOrganizacao('pesquisa pública: o token e que revela a organização', () =>
     prismaSemIsolamento.survey.findFirst({ where: { token }, select: { organizacaoId: true } }),
   );
-  if (!pesquisa) throw notFound('Pesquisa nao encontrada');
+  if (!pesquisa) throw notFound('Pesquisa não encontrada');
   return pesquisa.organizacaoId;
 }
 

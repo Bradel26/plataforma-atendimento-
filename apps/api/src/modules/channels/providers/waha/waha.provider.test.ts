@@ -149,7 +149,7 @@ describe('WahaProvider', () => {
 
   it('estado: conectado com o numero, e nunca cria sessao', async () => {
     const provider = await novoProvider();
-    expect(await provider.sessao.estado(LINHA)).toEqual({ estado: 'DESCONECTADO', detalhe: 'sessao ainda nao criada', telefone: null });
+    expect(await provider.sessao.estado(LINHA)).toEqual({ estado: 'DESCONECTADO', detalhe: 'sessão ainda não criada', telefone: null });
     expect(waha.sessoes.size).toBe(0);
 
     waha.sessoes.set('vendedor-1a2b3c4d', {
@@ -182,7 +182,7 @@ describe('WahaProvider', () => {
     await expect(provider.enviarTexto(LINHA, '5562999990000@c.us', 'Ola')).rejects.toMatchObject({
       status: 503,
       code: 'CANAL_INDISPONIVEL',
-      message: 'O WhatsApp desta linha nao esta conectado',
+      message: 'O WhatsApp desta linha não está conectado',
     });
   });
 

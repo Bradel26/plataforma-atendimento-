@@ -151,7 +151,7 @@ accountsRoutes.get(
       // dele.
       include: { contatos: { where: await filtroDe(politicaContatos), orderBy: { nome: 'asc' } } },
     });
-    if (!conta) throw notFound('Conta nao encontrada');
+    if (!conta) throw notFound('Conta não encontrada');
 
     /*
      * Leads e oportunidades da ficha NAO passam pelas politicas comerciais.
@@ -194,7 +194,7 @@ accountsRoutes.post(
   asyncHandler(async (req, res) => {
     if (req.body.cnpj) {
       const existente = await prisma.account.findFirst({ where: { cnpj: req.body.cnpj } });
-      if (existente) throw conflict('Ja existe uma conta com este CNPJ');
+      if (existente) throw conflict('Já existe uma conta com este CNPJ');
     }
     if (req.body.filialId) await exigirFilialDaOrganizacao(req.body.filialId);
 
@@ -217,11 +217,11 @@ accountsRoutes.patch(
     const atual = await prisma.account.findFirst({
       where: apenasVisivel(id, await filtroDe(politicaContas)),
     });
-    if (!atual) throw notFound('Conta nao encontrada');
+    if (!atual) throw notFound('Conta não encontrada');
 
     if (req.body.cnpj && req.body.cnpj !== atual.cnpj) {
       const existente = await prisma.account.findFirst({ where: { cnpj: req.body.cnpj } });
-      if (existente) throw conflict('Ja existe uma conta com este CNPJ');
+      if (existente) throw conflict('Já existe uma conta com este CNPJ');
     }
     if (req.body.filialId) await exigirFilialDaOrganizacao(req.body.filialId);
 
@@ -265,8 +265,8 @@ accountsRoutes.post(
       prisma.account.findFirst({ where: apenasVisivel(id, escopoConta) }),
       prisma.contact.findFirst({ where: apenasVisivel(req.body.contatoId, escopoContato) }),
     ]);
-    if (!conta) throw notFound('Conta nao encontrada');
-    if (!contato) throw notFound('Contato nao encontrado');
+    if (!conta) throw notFound('Conta não encontrada');
+    if (!contato) throw notFound('Contato não encontrado');
 
     res.json({
       contato: await prisma.contact.update({ where: { id: contato.id }, data: { contaId: id } }),
@@ -292,10 +292,10 @@ accountsRoutes.delete(
     const contato = await prisma.contact.findFirst({
       where: apenasVisivel(contatoId, await filtroDe(politicaContatos)),
     });
-    if (!contato) throw notFound('Contato nao encontrado');
+    if (!contato) throw notFound('Contato não encontrado');
     // Confere o par: `DELETE /contas/<outra>/contatos/<id>` nao pode soltar um
     // vinculo que nao e daquela conta.
-    if (contato.contaId !== id) throw badRequest('Este contato nao esta vinculado a esta conta');
+    if (contato.contaId !== id) throw badRequest('Este contato não está vinculado a esta conta');
 
     res.json({ contato: await prisma.contact.update({ where: { id: contatoId }, data: { contaId: null } }) });
   }),
@@ -312,7 +312,7 @@ accountsRoutes.delete(
     const atual = await prisma.account.findFirst({
       where: apenasVisivel(id, await filtroDe(politicaContas)),
     });
-    if (!atual) throw notFound('Conta nao encontrada');
+    if (!atual) throw notFound('Conta não encontrada');
     await prisma.account.delete({ where: { id } });
     res.status(204).end();
   }),
@@ -367,11 +367,11 @@ accountsRoutes.patch(
       prisma.account.findFirst({ where: apenasVisivel(id, escopoConta), select: { id: true } }),
       prisma.contact.findFirst({ where: apenasVisivel(contatoId, escopoContato), select: { id: true, contaId: true } }),
     ]);
-    if (!conta) throw notFound('Conta nao encontrada');
-    if (!contato) throw notFound('Contato nao encontrado');
+    if (!conta) throw notFound('Conta não encontrada');
+    if (!contato) throw notFound('Contato não encontrado');
     // O contato tem de ser DAQUELA conta: papel e vinculo, e definir o papel de
     // alguem de outra empresa nao significaria nada.
-    if (contato.contaId !== conta.id) throw badRequest('Este contato nao pertence a este cliente');
+    if (contato.contaId !== conta.id) throw badRequest('Este contato não pertence a este cliente');
 
     res.json({ contato: await definirPapelNaConta(contato.id, req.body.papelNaConta) });
   }),

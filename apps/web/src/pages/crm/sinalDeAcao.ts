@@ -45,6 +45,6 @@ export function sinalDeAcao(o: Oportunidade, agora: number = Date.now()): SinalD
   // monta a oportunidade a mao. Nesse caso nao ha o que afirmar, e um aviso
   // errado e pior que aviso nenhum: quem ve "sem proxima acao" num cartao que
   // tem tarefa deixa de confiar no aviso nos cartoes em que ele esta certo.
-  if (o.tarefasAbertas === 0) return { texto: 'Sem proxima acao', tom: 'neutro' };
+  if (o.tarefasAbertas === 0) return { texto: 'Sem próxima ação', tom: 'neutro' };
   return null;
 }

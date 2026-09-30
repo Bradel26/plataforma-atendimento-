@@ -28,13 +28,13 @@ export function Indicadores({ dados, escopo }: { dados: IndicadoresFicha; escopo
   return (
     <div className={`grid gap-2 sm:grid-cols-3 ${doContato ? 'lg:grid-cols-6' : 'lg:grid-cols-4'}`}>
       {doContato && <Indicador rotulo="Conversas" valor={String(dados.conversas)} />}
-      {doContato && <Indicador rotulo="Ligacoes" valor={String(dados.chamadas)} />}
+      {doContato && <Indicador rotulo="Ligações" valor={String(dados.chamadas)} />}
       {/* Rotulo curto e a qualificacao no detalhe: "Protocolos abertos" em duas
           linhas desalinha a altura dos cartoes. */}
       <Indicador rotulo="Protocolos" valor={String(dados.protocolosAbertos)} detalhe="abertos" />
       <Indicador rotulo="Jornadas" valor={String(dados.oportunidadesAbertas)} detalhe="em aberto" />
       <Indicador
-        rotulo="Ja comprou"
+        rotulo="Já comprou"
         valor={moeda(dados.valorGanho)}
         detalhe={`${dados.oportunidadesGanhas} ganha(s)`}
       />

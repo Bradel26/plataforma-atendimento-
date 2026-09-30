@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alerta, Card, EmptyState, Field, Input } from '../../components/ui';
 import { ApiError, api } from '../../lib/api';
+import { matrizDemo, modoDemo } from './produtividadeDemo';
 import { LABEL_TIPO_ATIVIDADE, TIPOS_ATIVIDADE, type CelulaProdutividade, type MatrizProdutividade } from '../../lib/types';
 
 /**
@@ -50,16 +51,19 @@ export function ProdutividadeTab() {
   const [matriz, setMatriz] = useState<MatrizProdutividade | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [selecao, setSelecao] = useState<Selecao | null>(null);
+  // Dados ficticios so em desenvolvimento: `?demo=1` ou o botao da tela vazia.
+  const [demo, setDemo] = useState(modoDemo());
 
   const carregar = useCallback(async () => {
     try {
-      setMatriz(await api.get<MatrizProdutividade>(`/produtividade?mes=${mes}`));
+      // `?demo=1` (so em desenvolvimento): dados ficticios para ver a tela cheia.
+      setMatriz(demo ? matrizDemo(mes) : await api.get<MatrizProdutividade>(`/produtividade?mes=${mes}`));
       setSelecao(null);
       setErro(null);
     } catch (e) {
       setErro(e instanceof ApiError ? e.message : 'Falha ao carregar a matriz');
     }
-  }, [mes]);
+  }, [mes, demo]);
 
   useEffect(() => {
     void carregar();
@@ -68,12 +72,20 @@ export function ProdutividadeTab() {
   return (
     <div className="space-y-4">
       <Card titulo="Produtividade" descricao="Atividades com prazo, feitas contra agendadas, por pessoa e por tipo">
-        <Field label="Mes">
+        <Field label="Mês">
           <Input type="month" value={mes} onChange={(e) => setMes(e.target.value)} className="max-w-[180px]" />
         </Field>
       </Card>
 
       {erro && <Alerta>{erro}</Alerta>}
+      {demo && (
+        <Alerta tipo="aviso">
+          Dados fictícios, só para visualização. Nada disto está no banco.{' '}
+          <button type="button" className="underline" onClick={() => setDemo(false)}>
+            Voltar aos dados reais
+          </button>
+        </Alerta>
+      )}
 
       <Card
         titulo="Matriz"
@@ -83,13 +95,20 @@ export function ProdutividadeTab() {
           <p className="text-sm text-slate-500">Carregando...</p>
         ) : matriz.linhas.length === 0 ? (
           <EmptyState
-            titulo="Nada agendado neste mes"
-            descricao="Ninguem tem atividade com prazo neste periodo, dentro do que voce pode ver."
+            titulo="Nada agendado neste mês"
+            descricao="Ninguém tem atividade com prazo neste período, dentro do que você pode ver."
+            acao={
+              import.meta.env.DEV ? (
+                <button type="button" className="text-sm text-[var(--brand-primary)] hover:underline" onClick={() => setDemo(true)}>
+                  Ver com dados de exemplo
+                </button>
+              ) : undefined
+            }
           />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <caption className="sr-only">Matriz de produtividade do mes</caption>
+              <caption className="sr-only">Matriz de produtividade do mês</caption>
               <thead>
                 <tr className="text-left text-xs text-slate-500">
                   <th className="py-1.5 pr-3 font-medium">Pessoa</th>

@@ -79,11 +79,11 @@ export function JornadasTab() {
 
       <Card
         titulo="Jornadas"
-        descricao="Em que etapa da relacao com a empresa cada parceiro esta. Clique num parceiro para ver a implantacao e o historico."
+        descricao="Em que etapa da relação com a empresa cada parceiro esta. Clique num parceiro para ver a implantação e o histórico."
       >
         <div className="grid gap-3 sm:grid-cols-[minmax(0,260px)_1fr]">
-          <Select aria-label="Filtrar por operacao" value={funilId} onChange={(e) => setFunilId(e.target.value)}>
-            <option value="">Todas as operacoes</option>
+          <Select aria-label="Filtrar por operação" value={funilId} onChange={(e) => setFunilId(e.target.value)}>
+            <option value="">Todas as operações</option>
             {operacoes.map(([id, nome]) => (
               <option key={id} value={id}>
                 {nome}
@@ -103,7 +103,7 @@ export function JornadasTab() {
         <Card>
           <EmptyState
             titulo="Nenhum parceiro em jornada ainda"
-            descricao="O parceiro entra aqui, como Novo parceiro, quando o credenciamento chega ao estagio Ativo da esteira."
+            descricao="O parceiro entra aqui, como Novo parceiro, quando o credenciamento chega ao estágio Ativo da esteira."
             acao={
               <Link to="/esteira" className="text-sm text-[var(--brand-primary)] hover:underline">
                 Abrir esteira
@@ -160,15 +160,15 @@ function CartaoDaJornada({ item, ativo, aoAbrir }: { item: ItemCiclo; ativo: boo
       <span className="block truncate text-sm font-medium text-slate-800">{item.contato.nome}</span>
       <span className="block truncate text-xs text-slate-500">{item.funil.nome}</span>
       <span className="mt-1 block text-xs text-slate-500">
-        Parceiro ha {item.diasComoParceiro} dia{item.diasComoParceiro === 1 ? '' : 's'}
+        Parceiro há {item.diasComoParceiro} dia{item.diasComoParceiro === 1 ? '' : 's'}
       </span>
       {item.status === 'EM_IMPLANTACAO' && (
         <span className="block text-xs text-slate-500">
-          Implantacao: {item.etapasConcluidas.length} de {item.totalEtapas} etapas
+          Implantação: {item.etapasConcluidas.length} de {item.totalEtapas} etapas
         </span>
       )}
       {parado && <span className="block text-xs text-amber-700">{parado}</span>}
-      <span className="mt-1 block truncate text-xs text-slate-400">{item.responsavel?.nome ?? 'sem responsavel'}</span>
+      <span className="mt-1 block truncate text-xs text-slate-400">{item.responsavel?.nome ?? 'sem responsável'}</span>
     </button>
   );
 }

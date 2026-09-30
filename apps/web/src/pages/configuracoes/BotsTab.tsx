@@ -23,8 +23,8 @@ const novoBot = () => ({
   nome: 'Atendente virtual',
   ativo: false,
   canal: '' as string,
-  mensagemBoasVindas: 'Ola! Sou o assistente virtual e vou tentar te ajudar.',
-  fallback: 'Nao entendi. Digite "atendente" para falar com uma pessoa.',
+  mensagemBoasVindas: 'Olá! Sou o assistente virtual e vou tentar te ajudar.',
+  fallback: 'Não entendi. Digite "atendente" para falar com uma pessoa.',
   limiteSemResposta: 2,
   passos: [{ ...PASSO_VAZIO }] as BotPasso[],
 });
@@ -167,7 +167,7 @@ export function BotsTab() {
               onChange={(e) => setForm({ ...form, mensagemBoasVindas: e.target.value })}
             />
           </Field>
-          <Field label="Resposta quando nao entende">
+          <Field label="Resposta quando não entende">
             <Input required value={form.fallback} onChange={(e) => setForm({ ...form, fallback: e.target.value })} />
           </Field>
 
@@ -188,7 +188,7 @@ export function BotsTab() {
                 <Field label="Resposta">
                   <Input value={passo.resposta} onChange={(e) => atualizarPasso(i, { resposta: e.target.value })} />
                 </Field>
-                <Field label="Acao">
+                <Field label="Ação">
                   <Select value={passo.acao} onChange={(e) => atualizarPasso(i, { acao: e.target.value as BotAcao })}>
                     {ACOES.map((a) => (
                       <option key={a.valor} value={a.valor}>{a.label}</option>

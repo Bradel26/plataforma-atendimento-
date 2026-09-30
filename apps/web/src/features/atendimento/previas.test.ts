@@ -20,19 +20,19 @@ function previa(overrides: Partial<Previa> = {}): Previa {
  * obrigatorios do prompt de implementacao.
  */
 describe('upsertPrevia', () => {
-  it('evento de nova previa adiciona o item quando a lista esta vazia', () => {
+  it('evento de nova prévia adiciona o item quando a lista está vazia', () => {
     const resultado = upsertPrevia([], previa());
     expect(resultado).toEqual([previa()]);
   });
 
-  it('evento de nova previa adiciona sem remover as ja existentes', () => {
+  it('evento de nova prévia adiciona sem remover as já existentes', () => {
     const outra = previa({ id: 'previa-2', nome: 'Outro Cliente' });
     const resultado = upsertPrevia([outra], previa());
     expect(resultado).toHaveLength(2);
     expect(resultado.map((p) => p.id).sort()).toEqual(['previa-1', 'previa-2']);
   });
 
-  it('evento de atualizacao (mesmo id) substitui o item existente, nao cria um segundo', () => {
+  it('evento de atualização (mesmo id) substitui o item existente, não cria um segundo', () => {
     const original = previa({ naoLidas: 1, ultimaMensagem: 'oi' });
     const atualizada = previa({ naoLidas: 5, ultimaMensagem: 'nova mensagem' });
 
@@ -42,7 +42,7 @@ describe('upsertPrevia', () => {
     expect(resultado[0]).toEqual(atualizada);
   });
 
-  it('evento duplicado (mesmo payload, chegou duas vezes) nao duplica o item', () => {
+  it('evento duplicado (mesmo payload, chegou duas vezes) não duplica o item', () => {
     const p = previa();
     const primeiraVez = upsertPrevia([], p);
     const segundaVez = upsertPrevia(primeiraVez, p);
@@ -51,8 +51,8 @@ describe('upsertPrevia', () => {
     expect(segundaVez).toEqual([p]);
   });
 
-  it('mantem as outras previas intactas ao atualizar uma so', () => {
-    const intacta = previa({ id: 'previa-2', nome: 'Nao deve mudar' });
+  it('mantém as outras prévias intactas ao atualizar uma só', () => {
+    const intacta = previa({ id: 'previa-2', nome: 'Não deve mudar' });
     const atualizada = previa({ naoLidas: 9 });
 
     const resultado = upsertPrevia([intacta, previa()], atualizada);

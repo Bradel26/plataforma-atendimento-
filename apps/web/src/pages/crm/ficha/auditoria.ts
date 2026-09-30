@@ -39,7 +39,7 @@ export function descreverValor(campo: CampoAuditado | null, valor: ValorAuditado
     case 'VALOR_INFORMADO':
       return typeof valor === 'number' ? moeda(valor) : String(valor);
     case 'MESES_RECORRENCIA':
-      return `${valor} ${Number(valor) === 1 ? 'mes' : 'meses'}`;
+      return `${valor} ${Number(valor) === 1 ? 'mês' : 'meses'}`;
     case 'PREVISAO_FECHAMENTO':
       return new Date(String(valor)).toLocaleDateString('pt-BR');
     case 'APROVACAO_DESCONTO':
@@ -62,7 +62,7 @@ export function descreverValor(campo: CampoAuditado | null, valor: ValorAuditado
  */
 export function rotuloDoEvento(e: EventoAuditoria): string {
   if (e.tipo === 'ETAPA') return 'Etapa';
-  if (!e.campo) return 'Alteracao';
+  if (!e.campo) return 'Alteração';
   return LABEL_CAMPO_AUDITADO[e.campo] ?? e.campo;
 }
 

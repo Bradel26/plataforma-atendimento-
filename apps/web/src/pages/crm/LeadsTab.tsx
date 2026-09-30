@@ -228,7 +228,7 @@ export function LeadsTab() {
               ))}
             </Select>
           </Field>
-          <Field label="Responsavel">
+          <Field label="Responsável">
             <Select
               value={filtros.responsavelId}
               onChange={(e) => setFiltros({ ...filtros, responsavelId: e.target.value })}
@@ -247,7 +247,7 @@ export function LeadsTab() {
           </Field>
           <Field label="Busca">
             <Input
-              placeholder="Contato, conta ou observacao"
+              placeholder="Contato, conta ou observação"
               value={filtros.busca}
               onChange={(e) => setFiltros({ ...filtros, busca: e.target.value })}
             />
@@ -318,7 +318,7 @@ export function LeadsTab() {
         </div>
       )}
 
-      <Card titulo="Novo lead" descricao="Arraste os cartoes entre as colunas para mudar a fase">
+      <Card titulo="Novo lead" descricao="Arraste os cartões entre as colunas para mudar a fase">
         <form onSubmit={criar} className="grid gap-3 sm:grid-cols-5 sm:items-end">
           <Field label="Contato">
             <Select required value={novo.contatoId} onChange={(e) => setNovo({ ...novo, contatoId: e.target.value })}>

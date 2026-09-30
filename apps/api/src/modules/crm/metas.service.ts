@@ -168,7 +168,7 @@ export async function gravarRampa(input: {
     where: { id: input.usuarioId },
     select: { id: true, perfil: true },
   });
-  if (!usuario) throw notFound('Usuario nao encontrado');
+  if (!usuario) throw notFound('Usuário não encontrado');
 
   /*
    * Meta de equipe so para GESTOR.
@@ -206,7 +206,7 @@ export async function gravarRampa(input: {
 /** A rampa que existe hoje para uma pessoa, num intervalo de meses. */
 export async function lerRampa(usuarioId: string, de: Date, ate: Date, escopo: 'INDIVIDUAL' | 'EQUIPE') {
   const meses = mesesEntre(de, ate);
-  if (meses.length === 0) throw badRequest('O mes final nao pode ser anterior ao inicial');
+  if (meses.length === 0) throw badRequest('O mês final não pode ser anterior ao inicial');
 
   const metas = await prisma.meta.findMany({
     where: { usuarioId, escopo, mes: { gte: meses[0], lte: meses[meses.length - 1] } },
@@ -234,6 +234,6 @@ export async function apagarMeta(usuarioId: string, escopo: 'INDIVIDUAL' | 'EQUI
     where: { usuarioId, escopo, mes: competencia(mes) },
     select: { id: true },
   });
-  if (!alvo) throw notFound('Meta nao encontrada');
+  if (!alvo) throw notFound('Meta não encontrada');
   await prisma.meta.delete({ where: { id: alvo.id } });
 }
