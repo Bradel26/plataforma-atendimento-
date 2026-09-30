@@ -103,7 +103,7 @@ describe('montarPublico', () => {
       expect([null, 'telefone', 'email'], `canal ${canal}`).toContain(campo);
     }
     expect(Object.keys(CAMPO_DO_CANAL).sort()).toEqual(
-      ['EMAIL', 'FACEBOOK', 'INSTAGRAM', 'VOZ', 'WEBCHAT', 'WHATSAPP'].sort(),
+      ['EMAIL', 'FACEBOOK', 'INDICACAO', 'INSTAGRAM', 'PROSPECCAO_ATIVA', 'VOZ', 'WEBCHAT', 'WHATSAPP'].sort(),
     );
   });
 });

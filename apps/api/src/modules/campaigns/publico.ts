@@ -77,6 +77,9 @@ export const CAMPO_DO_CANAL: Record<Channel, 'telefone' | 'email' | null> = {
   WEBCHAT: null,
   INSTAGRAM: null,
   FACEBOOK: null,
+  // Origens de cadastro, nao canais: nao existe entrega por elas.
+  PROSPECCAO_ATIVA: null,
+  INDICACAO: null,
 };
 
 export type Publico = {

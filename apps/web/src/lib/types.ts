@@ -2,7 +2,15 @@ export type Perfil = 'ADMIN' | 'SUPERVISOR' | 'GESTOR' | 'COMERCIAL' | 'SUPORTE'
 
 export type AgentStatus = 'OFFLINE' | 'DISPONIVEL' | 'EM_ATENDIMENTO' | 'PAUSA';
 
-export type Canal = 'WEBCHAT' | 'WHATSAPP' | 'INSTAGRAM' | 'FACEBOOK' | 'EMAIL' | 'VOZ';
+export type Canal =
+  | 'WEBCHAT'
+  | 'WHATSAPP'
+  | 'INSTAGRAM'
+  | 'FACEBOOK'
+  | 'EMAIL'
+  | 'VOZ'
+  | 'PROSPECCAO_ATIVA'
+  | 'INDICACAO';
 
 /**
  * Quao quente esta a negociacao, na leitura de quem esta nela.

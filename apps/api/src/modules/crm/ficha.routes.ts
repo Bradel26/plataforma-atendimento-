@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { recalcularCiclosDoContato } from './cicloParceiro.service';
 import { z } from 'zod';
 import { asyncHandler } from '../../http/async-handler';
 import { requireAuth } from '../../http/middleware/auth';
@@ -365,6 +366,8 @@ atividadesRoutes.post(
       include: inclusao,
     });
 
+    if (atividade.contatoId) void recalcularCiclosDoContato(atividade.contatoId).catch(() => undefined);
+
     res.status(201).json({ atividade });
   }),
 );
@@ -415,6 +418,8 @@ atividadesRoutes.post(
       data: { concluidoEm: new Date() },
       include: inclusao,
     });
+
+    if (atividade.contatoId) void recalcularCiclosDoContato(atividade.contatoId).catch(() => undefined);
 
     res.json({ atividade });
   }),

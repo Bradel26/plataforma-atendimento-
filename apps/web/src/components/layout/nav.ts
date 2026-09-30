@@ -119,6 +119,8 @@ export const NAV: NavItem[] = [
       { rota: '/clientes/:id' },
       // Oportunidade e processo comercial: o AGENTE ve o CRM, mas nao esta rota.
       // Ele continua vendo informacao comercial resumida na ficha do cliente.
+      { rota: '/jornadas/:id', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'] },
+      // Endereco antigo da mesma tela, mantido para nao quebrar link salvo.
       { rota: '/oportunidades/:id', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'] },
     ],
   },

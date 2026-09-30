@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { TabsDeNavegacao } from '../../components/ui/Tabs';
 import { useAuth } from '../../features/auth/AuthProvider';
@@ -12,6 +13,8 @@ import { OportunidadesTab } from './OportunidadesTab';
 import { PainelVendedorTab } from './PainelVendedorTab';
 import { HistoricoTab } from './HistoricoTab';
 import { AcompanhamentosTab } from './AcompanhamentosTab';
+import { CicloParceiroTab } from './CicloParceiroTab';
+import { JornadasTab } from './JornadasTab';
 
 /**
  * `perfis` na aba restringe quem a ve.
@@ -50,13 +53,16 @@ const ABAS = [
    */
   { id: 'historico', label: 'Historico' },
   { id: 'acompanhamentos', label: 'Acompanhamentos', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'] },
+  // Ciclo de vida do parceiro depois de credenciado. Le a esteira, entao segue o mesmo perfil.
+  { id: 'ciclo-parceiro', label: 'Ciclo do parceiro', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'] },
   { id: 'contas', label: 'Empresas' },
   // Leads mudou para a aba Campanhas (mesmo funil de captacao); nao mora mais aqui.
-  { id: 'oportunidades', label: 'Jornadas', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'] },
+  { id: 'jornadas', label: 'Jornadas', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'] },
   // Ler o painel de metas e trabalho de gestao (inclui GESTOR); DEFINIR meta e
   // ADMIN/SUPERVISOR, e o formulario da rampa se esconde dentro da aba. Mesmo
   // corte da politica de desconto e do processo do funil.
-  { id: 'metas', label: 'Metas', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR'] },
+  // COMERCIAL entra para ver as proprias metas de operacao; as comerciais seguem restritas a gestao.
+  { id: 'metas', label: 'Metas', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'] },
   // Mesmo corte de leitura de metas e da leitura comercial: e painel de gestao.
   { id: 'produtividade', label: 'Produtividade', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR'] },
   // Mesmo corte de leitura de metas e produtividade: e painel de gestao. COMERCIAL
@@ -79,7 +85,9 @@ type AbaId = (typeof ABAS)[number]['id'];
 const REGISTROS = {
   contatos: { base: '/contatos', aba: 'contatos' },
   clientes: { base: '/clientes', aba: 'contas' },
-  oportunidades: { base: '/oportunidades', aba: 'oportunidades' },
+  jornadas: { base: '/jornadas', aba: 'jornadas' },
+  // Endereco antigo: abre a mesma aba.
+  oportunidades: { base: '/oportunidades', aba: 'jornadas' },
 } as const satisfies Record<string, { base: string; aba: AbaId }>;
 
 const POR_PREFIXO = Object.values(REGISTROS);
@@ -101,7 +109,13 @@ export function CrmPage() {
   const abasVisiveis = ABAS.filter((a) => ('perfis' in a ? temPerfil(...a.perfis) : true));
 
   const registro = POR_PREFIXO.find((r) => pathname.startsWith(`${r.base}/`));
-  const abaDaBusca = new URLSearchParams(search).get('aba');
+  const abaPedida = new URLSearchParams(search).get('aba');
+  // `?aba=oportunidades` e o endereco antigo da aba Jornadas.
+  const abaDaBusca = abaPedida === 'oportunidades' ? 'jornadas' : abaPedida;
+  // Endereco antigo: troca a URL para o novo sem criar entrada no historico do navegador.
+  useEffect(() => {
+    if (abaPedida === 'oportunidades') navigate('/crm?aba=jornadas', { replace: true });
+  }, [abaPedida, navigate]);
   // Aba pedida na URL so vale se o perfil a enxerga: `?aba=metas` digitado por
   // um agente cai em Contatos, e nao numa aba que a API vai recusar.
   const aba: AbaId =
@@ -132,6 +146,7 @@ export function CrmPage() {
       {aba === 'agenda' && <AgendaDaSemana />}
       {aba === 'historico' && <HistoricoTab />}
       {aba === 'acompanhamentos' && <AcompanhamentosTab />}
+      {aba === 'ciclo-parceiro' && <CicloParceiroTab />}
       {aba === 'contatos' && (
         <ContatosTab
           selecionadoId={registro?.base === '/contatos' ? (id ?? null) : null}
@@ -146,11 +161,17 @@ export function CrmPage() {
           aoFechar={fechar('contas')}
         />
       )}
-      {aba === 'oportunidades' && (
+      {/*
+        Jornadas = etapa do parceiro na relacao com a empresa, sem valores. O funil
+        de vendas antigo so aparece para abrir uma oportunidade que ja existe
+        (`/oportunidades/:id`), para nao quebrar link salvo.
+      */}
+      {aba === 'jornadas' && !((registro?.base === '/jornadas' || registro?.base === '/oportunidades') && id) && <JornadasTab />}
+      {aba === 'jornadas' && (registro?.base === '/jornadas' || registro?.base === '/oportunidades') && id && (
         <OportunidadesTab
-          selecionadoId={registro?.base === '/oportunidades' ? (id ?? null) : null}
-          aoAbrir={abrir('/oportunidades')}
-          aoFechar={fechar('oportunidades')}
+          selecionadoId={id ?? null}
+          aoAbrir={abrir('/jornadas')}
+          aoFechar={fechar('jornadas')}
         />
       )}
       {aba === 'metas' && <MetasTab />}

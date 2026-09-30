@@ -28,6 +28,7 @@ import {
 import { useFaixaDeLargura } from '../../lib/useFaixaDeLargura';
 import { CamposCustomizadosCampos } from './CamposCustomizados';
 import { BaseInstalada } from './ficha/BaseInstalada';
+import { CredenciamentosDaEmpresa } from './ficha/CredenciamentosDaEmpresa';
 import { VisoesSalvas } from './VisoesSalvas';
 import { Indicadores } from './ficha/Indicadores';
 import { LinhaDoTempo } from './ficha/LinhaDoTempo';
@@ -850,6 +851,11 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
               </ul>
             )}
           </Card>
+
+          <CredenciamentosDaEmpresa
+            contaId={ficha.conta.id}
+            contatos={(ficha.conta.contatos ?? []).map((c) => ({ id: c.id, nome: c.nome }))}
+          />
 
           <Card titulo="Base instalada" descricao={`${ficha.produtosInstalados.length} equipamento(s)`}>
             <BaseInstalada

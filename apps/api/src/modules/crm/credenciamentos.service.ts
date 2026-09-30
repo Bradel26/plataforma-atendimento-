@@ -5,6 +5,7 @@ import { usuarioAtualOuNulo } from '../../lib/tenant';
 import { apenasVisivel } from '../../lib/visibilidade';
 import { badRequest, notFound } from '../../lib/errors';
 import { diasDesde, papelDoEstagio } from './esteira';
+import { iniciarCiclos } from './cicloParceiro.service';
 import type {
   AtualizarCredenciamentoInput,
   CriarCredenciamentoInput,
@@ -178,6 +179,7 @@ export async function criarCredenciamento(input: CriarCredenciamentoInput) {
     },
     include: inclusao,
   });
+  await iniciarCicloSemFalhar(criado.id);
   return serialize(criado);
 }
 
@@ -216,7 +218,20 @@ export async function atualizarCredenciamento(id: string, input: AtualizarCreden
       });
     }
   });
+  await iniciarCicloSemFalhar(id);
   return obterCredenciamento(id);
+}
+
+/**
+ * Ao chegar ao estagio Ativo o parceiro entra no ciclo de vida. Falha aqui nao pode
+ * desfazer a movimentacao do card: o agendador e a listagem criam o ciclo depois.
+ */
+async function iniciarCicloSemFalhar(id: string) {
+  try {
+    await iniciarCiclos(id);
+  } catch (erro) {
+    console.error('[ciclo-parceiro] nao iniciou o ciclo', erro);
+  }
 }
 
 /** Kanban do funil ESTEIRA: uma coluna por estagio, na ordem configurada. */

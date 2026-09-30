@@ -67,7 +67,7 @@ export function CenaTerra3D() {
     const scene = new THREE.Scene();
     // FOV fechado: um FOV largo estica a esfera nas bordas e denuncia o 3D.
     const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 1000);
-    camera.position.set(0, 1.3, 10.4);
+    camera.position.set(0, 1.3, 9.2);
     camera.lookAt(0, 0, 0);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -126,33 +126,52 @@ export function CenaTerra3D() {
     const grupoRotacao = new THREE.Group();
     grupoInclinado.add(grupoRotacao);
 
+    const mapaLuzes = textura(TEXTURAS.luzes, true);
     const terraMaterial = new THREE.MeshPhongMaterial({
       map: textura(TEXTURAS.dia, true),
       normalMap: textura(TEXTURAS.relevo, false),
       normalScale: new THREE.Vector2(0.8, 0.8),
       specularMap: textura(TEXTURAS.oceanos, false),
-      specular: new THREE.Color(0x5a7894),
-      shininess: 18,
-      emissiveMap: textura(TEXTURAS.luzes, true),
-      emissive: new THREE.Color(0xffc98a),
-      emissiveIntensity: 1.25,
+      specular: new THREE.Color(0x3c5876),
+      shininess: 30,
     });
-    // Luzes das cidades so no lado noturno, com transicao suave no terminador.
-    const solNaCamera = { value: new THREE.Vector3() };
-    terraMaterial.onBeforeCompile = (shader) => {
-      shader.uniforms.solNaCamera = solNaCamera;
-      shader.fragmentShader =
-        'uniform vec3 solNaCamera;\n' +
-        shader.fragmentShader.replace(
-          '#include <emissivemap_fragment>',
-          `#ifdef USE_EMISSIVEMAP
-            vec4 emissiveColor = texture2D( emissiveMap, vEmissiveMapUv );
-            float ladoNoite = smoothstep( 0.08, -0.22, dot( normalize( vNormal ), solNaCamera ) );
-            totalEmissiveRadiance *= emissiveColor.rgb * ladoNoite;
-          #endif`,
-        );
-    };
     grupoRotacao.add(new THREE.Mesh(new THREE.SphereGeometry(RAIO_TERRA, 128, 96), terraMaterial));
+
+    // Camada separada para as cidades: mantem os pontos luminosos legiveis no
+    // lado noturno sem depender da composicao interna do shader Phong.
+    const luzesNoturnas = new THREE.Mesh(
+      new THREE.SphereGeometry(RAIO_TERRA * 1.001, 128, 96),
+      new THREE.ShaderMaterial({
+        uniforms: { mapaLuzes: { value: mapaLuzes }, direcaoSol: { value: direcaoSol } },
+        vertexShader: /* glsl */ `
+          varying vec2 vUv;
+          varying vec3 normalMundo;
+          void main() {
+            vUv = uv;
+            normalMundo = normalize(mat3(modelMatrix) * normal);
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: /* glsl */ `
+          uniform sampler2D mapaLuzes;
+          uniform vec3 direcaoSol;
+          varying vec2 vUv;
+          varying vec3 normalMundo;
+          void main() {
+            vec3 mapa = texture2D(mapaLuzes, vUv).rgb;
+            float brilhoCidade = smoothstep(0.08, 0.48, max(mapa.r, max(mapa.g, mapa.b)));
+            float ladoNoite = 1.0 - smoothstep(-0.08, 0.14, dot(normalize(normalMundo), normalize(direcaoSol)));
+            float brilho = brilhoCidade * ladoNoite;
+            gl_FragColor = vec4(vec3(1.0, 0.62, 0.3) * brilho * 2.4, brilho * 0.82);
+          }
+        `,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        toneMapped: false,
+      }),
+    );
+    grupoRotacao.add(luzesNoturnas);
 
     // Nuvens numa camada propria, levemente acima da superficie.
     const nuvens = new THREE.Mesh(
@@ -161,7 +180,7 @@ export function CenaTerra3D() {
         color: 0xffffff,
         alphaMap: textura(TEXTURAS.nuvens, false),
         transparent: true,
-        opacity: 0.92,
+        opacity: 0.74,
         depthWrite: false,
       }),
     );
@@ -320,11 +339,10 @@ export function CenaTerra3D() {
       const proporcao = largura / altura;
       camera.aspect = proporcao;
       // Coluna estreita: afasta a camera pros satelites nao sairem do quadro.
-      camera.position.setLength(proporcao < 1 ? 10.6 / Math.max(proporcao, 0.55) : 10.4);
+      camera.position.setLength(proporcao < 1 ? 10.5 / Math.max(proporcao, 0.55) : 9.2);
       camera.lookAt(0, 0, 0);
       camera.updateProjectionMatrix();
       camera.updateMatrixWorld();
-      solNaCamera.value.copy(direcaoSol).transformDirection(camera.matrixWorldInverse);
       renderer.setSize(largura, altura);
     }
 

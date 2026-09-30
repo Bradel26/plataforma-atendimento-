@@ -4,7 +4,7 @@ import { asyncHandler } from '../../http/async-handler';
 import { requireAuth, requireRole } from '../../http/middleware/auth';
 import { param } from '../../http/params';
 import { validateBody, validateQuery } from '../../http/middleware/validate';
-import { notFound } from '../../lib/errors';
+import { badRequest, notFound } from '../../lib/errors';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { apos, decodificarCursor, fatiar } from '../../lib/paginacao';
@@ -66,13 +66,29 @@ const criarSchema = z.object({
   nome: z.string().trim().min(2, 'Nome muito curto').max(120),
   email: z.string().email().nullable().optional(),
   telefone: z.string().trim().min(8).max(20).nullable().optional(),
-  canalOrigem: z.enum(['WEBCHAT', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'EMAIL', 'VOZ']).default('WEBCHAT'),
+  canalOrigem: z.enum(['WEBCHAT', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'EMAIL', 'VOZ', 'PROSPECCAO_ATIVA', 'INDICACAO']).default('WEBCHAT'),
   observacoes: z.string().trim().max(2000).nullable().optional(),
   /** Estado (UF) e cidade do parceiro: base do "por estado/regiao" e do publico de campanha. */
   uf: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/, 'UF invalida').nullable().optional(),
   cidade: z.string().trim().max(80).nullable().optional(),
   tags: z.array(z.string().trim().min(1).max(TAMANHO_MAXIMO)).max(MAXIMO_POR_REGISTRO).default([]),
   contaId: z.string().uuid().nullable().optional(),
+  /**
+   * Empresa digitada no cadastro: vincula a uma conta existente (mesmo CNPJ ou mesmo nome) ou
+   * cria a conta na hora. `contaId`, quando vem, manda e a empresa e ignorada.
+   */
+  empresa: z
+    .object({
+      nome: z.string().trim().min(2, 'Nome da empresa muito curto').max(160),
+      cnpj: z
+        .string()
+        .trim()
+        .transform((v) => v.replace(/\D/g, ''))
+        .refine((v) => v === '' || v.length === 14, 'CNPJ deve ter 14 digitos')
+        .optional(),
+    })
+    .nullable()
+    .optional(),
   /** Ausente e diferente de nulo: ausente herda da conta, nulo deixa sem dono. */
   responsavelId: z.string().uuid().nullable().optional(),
 });
@@ -258,7 +274,45 @@ contactsRoutes.post(
   '/',
   validateBody(criarSchema),
   asyncHandler(async (req, res) => {
-    const dados = req.body as z.infer<typeof criarSchema>;
+    const { empresa, ...corpo } = req.body as z.infer<typeof criarSchema>;
+    const dados = corpo;
+    let contaCriada = false;
+
+    /*
+     * Empresa digitada: acha a conta ou cria uma.
+     *
+     * A busca e por CNPJ (a identidade real da empresa) e, sem CNPJ, pelo nome exato
+     * sem diferenciar caixa. Nome parecido nao basta: juntar "Silva Telecom" com
+     * "Silva Telecom Sul" por engano misturaria carteiras. A conta so e reutilizada
+     * se o usuario a enxerga; senao seria vinculo a um registro que ele nao pode ver.
+     */
+    if (!dados.contaId && empresa) {
+      const cnpj = empresa.cnpj || null;
+      const visivel = await filtroDe(politicaContas);
+      const existente = await prisma.account.findFirst({
+        where: {
+          AND: [
+            visivel,
+            cnpj ? { cnpj } : { nome: { equals: empresa.nome, mode: 'insensitive' } },
+          ],
+        },
+        select: { id: true },
+      });
+      if (existente) {
+        dados.contaId = existente.id;
+      } else {
+        // CNPJ ja usado por conta que o usuario nao enxerga: a criacao bateria na unicidade.
+        if (cnpj && (await prisma.account.findFirst({ where: { cnpj }, select: { id: true } }))) {
+          throw badRequest('Ja existe uma empresa com este CNPJ fora da sua carteira');
+        }
+        const conta = await prisma.account.create({
+          data: { nome: empresa.nome, cnpj },
+          select: { id: true },
+        });
+        dados.contaId = conta.id;
+        contaCriada = true;
+      }
+    }
 
     /*
      * Responsavel inicial vindo da conta.
@@ -310,7 +364,7 @@ contactsRoutes.post(
         tags: normalizarTags(dados.tags),
       },
     });
-    res.status(201).json({ contato, possivelDuplicado: duplicado });
+    res.status(201).json({ contato, possivelDuplicado: duplicado, contaCriada });
   }),
 );
 

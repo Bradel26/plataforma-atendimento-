@@ -5,6 +5,8 @@ import { requireAuth, requireRole } from '../../http/middleware/auth';
 import { validateBody, validateQuery } from '../../http/middleware/validate';
 import { apagarMeta, gravarRampa, lerRampa, listarMetas, minhaMeta } from './metas.service';
 import { mesesEntre } from './metas';
+import { CHAVES_INDICADORES } from './metasOperacionais';
+import { equipeDoGestor, gravarAlvos, lerAlvos, minhasMetasOperacionais, painelOperacional } from './metasOperacionais.service';
 
 /**
  * Metas mensais (item 4.1 do plano em ANALISE-CRM.md).
@@ -122,5 +124,56 @@ metasRoutes.get(
   validateQuery(z.object({ de: mesSchema, ate: mesSchema })),
   asyncHandler(async (_req, res) => {
     res.json({ meses: mesesEntre(res.locals.query.de, res.locals.query.ate) });
+  }),
+);
+
+/* ── Metas operacionais do consultor (processo, nao dinheiro) ─────────────── */
+
+/**
+ * Painel da gestao. O GESTOR ve so a propria equipe; ADMIN e SUPERVISOR veem todos.
+ */
+metasRoutes.get(
+  '/operacionais',
+  LEITURA,
+  validateQuery(z.object({ mes: mesSchema.optional() })),
+  asyncHandler(async (req, res) => {
+    const restrito = req.user?.perfil === 'GESTOR' ? await equipeDoGestor(req.user.sub) : undefined;
+    res.json(await painelOperacional(res.locals.query.mes ?? new Date(), restrito));
+  }),
+);
+
+/** A propria meta operacional. Sem `requireRole`: cada consultor ve o proprio numero. */
+metasRoutes.get(
+  '/operacionais/minha',
+  validateQuery(z.object({ mes: mesSchema.optional() })),
+  asyncHandler(async (_req, res) => {
+    res.json(await minhasMetasOperacionais(res.locals.query.mes ?? new Date()));
+  }),
+);
+
+metasRoutes.get(
+  '/operacionais/alvos',
+  ESCRITA,
+  validateQuery(z.object({ usuarioId: z.string().uuid(), mes: mesSchema })),
+  asyncHandler(async (_req, res) => {
+    const { usuarioId, mes } = res.locals.query;
+    res.json({ alvos: await lerAlvos(usuarioId, mes) });
+  }),
+);
+
+/** Numero grava, `null` apaga (volta para "nao definida"), indicador omitido nao e tocado. */
+metasRoutes.put(
+  '/operacionais/alvos',
+  ESCRITA,
+  validateBody(
+    z.object({
+      usuarioId: z.string().uuid(),
+      mes: mesSchema,
+      alvos: z.record(z.enum(CHAVES_INDICADORES), z.number().int().min(0).max(100_000).nullable()),
+    }),
+  ),
+  asyncHandler(async (req, res) => {
+    const { usuarioId, mes, alvos } = req.body;
+    res.json({ alvos: await gravarAlvos(usuarioId, mes, alvos) });
   }),
 );

@@ -38,6 +38,16 @@ type Resposta = {
 const data = (iso: string | null) =>
   iso === null ? 'nunca' : new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 
+/** A regra que coloca alguem na lista: quem le o card sabe por que o parceiro esta ali. */
+function Regra({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="mb-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+      <span className="font-semibold text-slate-700">Como funciona: </span>
+      {children}
+    </p>
+  );
+}
+
 function ListaDeParceiros({ itens, vazio }: { itens: ItemParceiro[]; vazio: string }) {
   if (itens.length === 0) return <p className="text-sm text-slate-500">{vazio}</p>;
   return (
@@ -106,6 +116,7 @@ export function AcompanhamentosTab() {
 
       <div className="grid gap-5 lg:grid-cols-2">
         <Card titulo="Aguardando retorno" descricao={`${dados.aguardandoRetorno.length} retorno(s) marcados e nao feitos`}>
+          <Regra>Mostra os retornos que voce ou a equipe agendaram e ainda nao fizeram. Os vencidos ficam marcados como atrasados.</Regra>
           {dados.aguardandoRetorno.length === 0 ? (
             <p className="text-sm text-slate-500">Nenhum retorno pendente.</p>
           ) : (
@@ -136,18 +147,22 @@ export function AcompanhamentosTab() {
           titulo="Aguardando documentacao"
           descricao={`${dados.aguardandoDocumentacao.length} parceiro(s) na etapa de pendencia`}
         >
+          <Regra>Parceiros parados na etapa de pendencia, esperando enviar documentos. Saem da lista quando avancam na esteira.</Regra>
           <ListaDeParceiros itens={dados.aguardandoDocumentacao} vazio="Ninguem com pendencia de documentos." />
         </Card>
 
         <Card titulo="Precisam de contato" descricao="Na esteira sem responsavel ou sem nenhuma conversa">
+          <Regra>Parceiros em credenciamento que ainda nao tem responsavel ou nunca conversaram com a equipe. Defina um responsavel e inicie a conversa.</Regra>
           <ListaDeParceiros itens={dados.precisamDeContato} vazio="Todos ja tem responsavel e conversa." />
         </Card>
 
         <Card titulo={`Sem interacao ha ${dados.diasSemInteracao}+ dias`} descricao="Ultima mensagem antiga, ainda na esteira">
+          <Regra>Parceiros em credenciamento que pararam de responder. O prazo e o numero de dias no campo acima.</Regra>
           <ListaDeParceiros itens={dados.semInteracao} vazio="Nenhum parceiro esquecido." />
         </Card>
 
         <Card titulo="Precisam de reativacao" descricao="Parceiros inativados">
+          <Regra>Parceiros marcados como inativos na esteira, com o motivo. Use para tentar retomar o contato.</Regra>
           <ListaDeParceiros itens={dados.reativacao} vazio="Nenhum parceiro inativado." />
         </Card>
       </div>

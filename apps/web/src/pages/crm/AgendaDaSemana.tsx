@@ -148,7 +148,7 @@ export function AgendaDaSemana() {
             so faltava o link daqui pra la. */}
         {item.oportunidade && podeAbrirOportunidade ? (
           <Link
-            to={`/oportunidades/${item.oportunidade.id}`}
+            to={`/jornadas/${item.oportunidade.id}`}
             className="block truncate text-xs text-[var(--brand-primary)] underline-offset-2 hover:underline"
           >
             {item.oportunidade.titulo}

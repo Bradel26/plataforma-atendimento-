@@ -17,7 +17,7 @@ describe('navegacao', () => {
   });
 
   it('a rota de registro resolve para o modulo dono', () => {
-    for (const caminho of ['/contatos/abc', '/clientes/abc', '/oportunidades/abc']) {
+    for (const caminho of ['/contatos/abc', '/clientes/abc', '/jornadas/abc', '/oportunidades/abc']) {
       expect(itemDaRota(caminho)?.rota).toBe('/crm');
     }
   });

@@ -3,6 +3,7 @@ import { Alerta, Badge, Button, Card, Field, Input, Select } from '../../compone
 import { BarraDeMeta } from '../../components/viz/BarraDeMeta';
 import { ApiError, api } from '../../lib/api';
 import { useAuth } from '../../features/auth/AuthProvider';
+import { MetasOperacionais } from './MetasOperacionais';
 import {
   LABEL_SITUACAO_META,
   TOM_SITUACAO_META,
@@ -114,7 +115,7 @@ function Tabela({
   );
 }
 
-export function MetasTab() {
+function MetasComerciais() {
   const [mes, setMes] = useState(mesCorrente());
   const [painel, setPainel] = useState<PainelDeMetas | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -364,6 +365,53 @@ export function MetasTab() {
             </div>
           )}
         </Card>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Metas: duas familias, de proposito separadas.
+ *
+ * Operacao = processo do consultor de credenciamento (parceiros cadastrados,
+ * credenciados, contatos...). Comercial = meta em dinheiro sobre vendas fechadas.
+ * Misturar as duas faria uma meta de processo parecer resultado financeiro.
+ */
+export function MetasTab() {
+  const { temPerfil } = useAuth();
+  const gestao = temPerfil('ADMIN', 'SUPERVISOR', 'GESTOR');
+  const [familia, setFamilia] = useState<'operacao' | 'comercial'>('operacao');
+
+  // Quem nao e da gestao (consultor) so ve as proprias metas de operacao.
+  if (!gestao) return <MetasOperacionais visaoGeral={false} podeEditar={false} />;
+
+  return (
+    <div className="space-y-5">
+      <div className="flex gap-2 text-sm" role="tablist" aria-label="Tipo de meta">
+        {([
+          ['operacao', 'Operacao (credenciamento)'],
+          ['comercial', 'Comercial (vendas)'],
+        ] as const).map(([id, rotulo]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={familia === id}
+            onClick={() => setFamilia(id)}
+            className={`rounded-full border px-3 py-1.5 transition ${
+              familia === id
+                ? 'border-[var(--brand-primary)] bg-[var(--brand-primary)]/10 font-medium text-[var(--brand-primary)]'
+                : 'border-slate-300 text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            {rotulo}
+          </button>
+        ))}
+      </div>
+      {familia === 'operacao' ? (
+        <MetasOperacionais visaoGeral podeEditar={temPerfil('ADMIN', 'SUPERVISOR')} />
+      ) : (
+        <MetasComerciais />
       )}
     </div>
   );

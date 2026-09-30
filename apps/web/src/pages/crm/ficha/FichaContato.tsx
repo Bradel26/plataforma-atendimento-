@@ -18,6 +18,7 @@ import { LinhaDoTempo } from './LinhaDoTempo';
 import { CheckinDeVisita } from './CheckinDeVisita';
 import { RegistrarAtividade } from './RegistrarAtividade';
 import { EditorEtiquetas, ETIQUETAS_CONTATO } from '../Etiquetas';
+import { LABEL_CANAL_ORIGEM } from '../temperatura';
 
 /**
  * A vida do cliente numa tela: quem e, o que esta em aberto, o que ficou
@@ -376,7 +377,7 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoExcluir }: FichaPr
           </div>
           <div>
             <dt className="text-xs text-slate-500">Origem</dt>
-            <dd className="text-slate-800">{contato.canalOrigem ?? '—'}</dd>
+            <dd className="text-slate-800">{contato.canalOrigem ? LABEL_CANAL_ORIGEM[contato.canalOrigem] : '—'}</dd>
           </div>
           <div>
             <dt className="text-xs text-slate-500">Cliente desde</dt>

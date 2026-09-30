@@ -73,6 +73,8 @@ model Organizacao {
   funis              Funnel[]
   oportunidades      Opportunity[]
   credenciamentos    Credenciamento[]
+  ciclosParceiro     CicloParceiro[]
+  metasOperacionais  MetaOperacional[]
   produtos           Product[]
   catalogos          PriceCatalog[]
   protocolos         Ticket[]
@@ -118,30 +120,30 @@ enum AgentStatus {
 }
 
 model User {
-  id            String      @id @default(uuid())
-  organizacaoId String      @default("") @map("organizacao_id")
-  nome          String
-  email         String
-  senhaHash     String      @map("senha_hash")
-  senhaPendente Boolean     @default(false) @map("senha_pendente")
-  perfil        Role        @default(AGENTE)
-  status        AgentStatus @default(OFFLINE)
-  ativo         Boolean     @default(true)
-  ultimoLogin   DateTime?   @map("ultimo_login")
+  id              String      @id @default(uuid())
+  organizacaoId   String      @default("") @map("organizacao_id")
+  nome            String
+  email           String
+  senhaHash       String      @map("senha_hash")
+  senhaPendente   Boolean     @default(false) @map("senha_pendente")
+  perfil          Role        @default(AGENTE)
+  status          AgentStatus @default(OFFLINE)
+  ativo           Boolean     @default(true)
+  ultimoLogin     DateTime?   @map("ultimo_login")
   /// Ultimo "estou aqui" recebido do front (heartbeat) enquanto a aba fica
   /// visivel. Base do job que fecha a presenca de quem fechou a aba ou ficou
   /// inativo sem trocar de status manualmente (ver `encerrarPresencasInativas`).
-  ultimoHeartbeat DateTime? @map("ultimo_heartbeat")
+  ultimoHeartbeat DateTime?   @map("ultimo_heartbeat")
   /// Gestor direto. Define a equipe do perfil GESTOR: equipe dele sao os
   /// usuarios que apontam para ele. Um nivel, sem arvore recursiva.
-  gestorId      String?     @map("gestor_id")
+  gestorId        String?     @map("gestor_id")
   /// Filial a que esta pessoa pertence (item 6.5). So classificacao — nao
   /// afeta visibilidade: sem confirmacao de que a Bradel hoje segrega
   /// quem-ve-o-que por unidade, reescrever `politicas.ts` seria resolver um
   /// requisito que ninguem pediu.
-  filialId      String?     @map("filial_id")
-  criadoEm      DateTime    @default(now()) @map("criado_em")
-  atualizadoEm  DateTime    @updatedAt @map("atualizado_em")
+  filialId        String?     @map("filial_id")
+  criadoEm        DateTime    @default(now()) @map("criado_em")
+  atualizadoEm    DateTime    @updatedAt @map("atualizado_em")
 
   filas                   QueueAgent[]
   conversas               Conversation[]
@@ -168,6 +170,9 @@ model User {
   propostasGeradas        PropostaGerada[]
   credenciamentos         Credenciamento[]
   historicoCredenciamento CredenciamentoHistorico[] @relation("CredHistoricoUsuario")
+  cicloParceiroHistorico  CicloParceiroHistorico[]  @relation("CicloHistoricoUsuario")
+  cicloParceiroEtapas     CicloParceiroEtapa[]      @relation("CicloEtapaUsuario")
+  metasOperacionais       MetaOperacional[]
   organizacao             Organizacao               @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
   /// SetNull: desligar o gestor nao pode apagar a equipe dele.
   gestor                  User?                     @relation("Equipe", fields: [gestorId], references: [id], onDelete: SetNull)
@@ -202,6 +207,10 @@ enum Channel {
   FACEBOOK
   EMAIL
   VOZ
+  /// Origem de cadastro, nao canal de conversa: o vendedor foi atras do cliente.
+  PROSPECCAO_ATIVA
+  /// Origem de cadastro, nao canal de conversa: alguem indicou o cliente.
+  INDICACAO
 }
 
 model Queue {
@@ -987,6 +996,41 @@ model Meta {
   @@map("metas")
 }
 
+/// Indicador de meta operacional do consultor de credenciamento. A definicao
+/// (nome, como mede, sentido) mora em codigo (`metasOperacionais.ts`).
+enum IndicadorMeta {
+  NOVOS_PARCEIROS
+  CREDENCIAMENTOS_CONCLUIDOS
+  TAXA_CONVERSAO
+  PARCEIROS_ATIVADOS
+  CONTATOS_REALIZADOS
+  PARCEIROS_SEM_ACOMPANHAMENTO
+  REATIVACOES
+}
+
+/// Meta operacional mensal: quantos parceiros cadastrar, credenciar, contatar...
+/// Separada de `Meta` (dinheiro): processo nao e resultado financeiro, e quando
+/// houver venda por parceiro ela entra como indicador novo, sem tocar nesta tabela.
+/// Uma linha por (consultor, indicador, mes); mes sempre no dia 1, em UTC.
+model MetaOperacional {
+  id            String        @id @default(uuid())
+  organizacaoId String        @default("") @map("organizacao_id")
+  usuarioId     String        @map("usuario_id")
+  indicador     IndicadorMeta
+  mes           DateTime      @db.Date
+  /// Quantidade, ou pontos percentuais no caso da taxa de conversao (60 = 60%).
+  alvo          Int
+  criadoEm      DateTime      @default(now()) @map("criado_em")
+  atualizadoEm  DateTime      @updatedAt @map("atualizado_em")
+
+  usuario     User        @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+
+  @@unique([organizacaoId, usuarioId, indicador, mes])
+  @@index([organizacaoId, mes])
+  @@map("metas_operacionais")
+}
+
 /// Que recurso de IA consumiu (item 6.8).
 ///
 /// Enum e nao texto livre pelo mesmo motivo do campo auditado: "resumo",
@@ -1534,13 +1578,14 @@ model Credenciamento {
   atualizadoEm DateTime  @updatedAt @map("atualizado_em")
   fechadoEm    DateTime? @map("fechado_em")
 
-  historico   CredenciamentoHistorico[]
-  contato     Contact                   @relation(fields: [contatoId], references: [id], onDelete: Cascade)
-  conta       Account?                  @relation(fields: [contaId], references: [id], onDelete: SetNull)
-  funil       Funnel                    @relation(fields: [funilId], references: [id], onDelete: Cascade)
-  estagio     FunnelStage               @relation(fields: [estagioId], references: [id])
-  responsavel User?                     @relation(fields: [responsavelId], references: [id], onDelete: SetNull)
-  organizacao Organizacao               @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  historico     CredenciamentoHistorico[]
+  cicloParceiro CicloParceiro?
+  contato       Contact                   @relation(fields: [contatoId], references: [id], onDelete: Cascade)
+  conta         Account?                  @relation(fields: [contaId], references: [id], onDelete: SetNull)
+  funil         Funnel                    @relation(fields: [funilId], references: [id], onDelete: Cascade)
+  estagio       FunnelStage               @relation(fields: [estagioId], references: [id])
+  responsavel   User?                     @relation(fields: [responsavelId], references: [id], onDelete: SetNull)
+  organizacao   Organizacao               @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
   @@index([organizacaoId, estagioId, atualizadoEm])
   @@index([organizacaoId, funilId, estagioDesde])
@@ -1568,6 +1613,86 @@ model CredenciamentoHistorico {
   @@index([credenciamentoId, criadoEm])
   @@index([paraEstagioId, criadoEm])
   @@map("credenciamento_historico")
+}
+
+/// Ciclo de vida do parceiro DEPOIS de credenciado: relacao e acompanhamento,
+/// nao producao. O CRM ainda nao tem venda por parceiro, entao nada aqui usa
+/// quantidade de vendas, faturamento ou data da ultima venda — e nenhum status
+/// e inferido de produtividade. ATIVO significa "credenciado, operacional e com
+/// relacionamento ativo", nao "vendendo".
+///
+/// Independente do funil de credenciamento: o funil responde "em que etapa esta
+/// a conversao do lead em parceiro"; o ciclo responde "como esta a relacao
+/// depois de credenciado". Um ciclo por credenciamento (um parceiro em TIM e
+/// Starlink tem dois), criado quando o card chega ao estagio Ativo da esteira.
+///
+/// Quando houver dados de producao, entram como fatos novos na funcao pura de
+/// `cicloParceiro.ts` e como tabela ao lado — sem mudar este modelo.
+enum StatusCicloParceiro {
+  NOVO_PARCEIRO
+  EM_IMPLANTACAO
+  ATIVO
+  SEM_ACOMPANHAMENTO
+  EM_RISCO
+  INATIVO
+  REATIVADO
+}
+
+model CicloParceiro {
+  id               String              @id @default(uuid())
+  organizacaoId    String              @default("") @map("organizacao_id")
+  credenciamentoId String              @unique @map("credenciamento_id")
+  status           StatusCicloParceiro @default(NOVO_PARCEIRO)
+  /// Desde quando esta no status atual (base do "ha X dias").
+  statusDesde      DateTime            @default(now()) @map("status_desde")
+  /// Quando o credenciamento foi concluido (entrada no estagio Ativo da esteira).
+  credenciadoEm    DateTime            @map("credenciado_em")
+  criadoEm         DateTime            @default(now()) @map("criado_em")
+  atualizadoEm     DateTime            @updatedAt @map("atualizado_em")
+
+  organizacao    Organizacao              @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  credenciamento Credenciamento           @relation(fields: [credenciamentoId], references: [id], onDelete: Cascade)
+  etapas         CicloParceiroEtapa[]
+  historico      CicloParceiroHistorico[]
+
+  @@index([organizacaoId, status])
+  @@map("ciclos_parceiro")
+}
+
+/// Etapa de implantacao concluida (treinamento, acesso, materiais...). A lista
+/// de etapas possiveis mora em codigo (`cicloParceiro.ts`); aqui so o que foi feito.
+model CicloParceiroEtapa {
+  id             String   @id @default(uuid())
+  cicloId        String   @map("ciclo_id")
+  chave          String
+  concluidaEm    DateTime @default(now()) @map("concluida_em")
+  concluidaPorId String?  @map("concluida_por_id")
+
+  ciclo        CicloParceiro @relation(fields: [cicloId], references: [id], onDelete: Cascade)
+  concluidaPor User?         @relation("CicloEtapaUsuario", fields: [concluidaPorId], references: [id], onDelete: SetNull)
+
+  @@unique([cicloId, chave])
+  @@map("ciclo_parceiro_etapas")
+}
+
+/// Toda mudanca de status, nunca apagada. `regra` diz o que provocou (codigo da
+/// regra automatica ou MANUAL); `motivo` e o texto para humanos.
+model CicloParceiroHistorico {
+  id         String               @id @default(uuid())
+  cicloId    String               @map("ciclo_id")
+  deStatus   StatusCicloParceiro? @map("de_status")
+  paraStatus StatusCicloParceiro  @map("para_status")
+  regra      String
+  motivo     String?
+  observacao String?
+  usuarioId  String?              @map("usuario_id")
+  criadoEm   DateTime             @default(now()) @map("criado_em")
+
+  ciclo   CicloParceiro @relation(fields: [cicloId], references: [id], onDelete: Cascade)
+  usuario User?         @relation("CicloHistoricoUsuario", fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([cicloId, criadoEm])
+  @@map("ciclo_parceiro_historico")
 }
 
 // ---------------------------------------------------------------------------

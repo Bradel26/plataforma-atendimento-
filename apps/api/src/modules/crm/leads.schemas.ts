@@ -10,7 +10,7 @@ export const MOTIVOS_PERDA = [
   'SEM_RESPOSTA',
   'OUTRO',
 ] as const;
-const CANAIS = ['WEBCHAT', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'EMAIL', 'VOZ'] as const;
+const CANAIS = ['WEBCHAT', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'EMAIL', 'VOZ', 'PROSPECCAO_ATIVA', 'INDICACAO'] as const;
 
 const fase = z.enum(FASES);
 const dataOpcional = z.coerce.date().optional();

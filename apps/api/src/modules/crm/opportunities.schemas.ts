@@ -55,7 +55,7 @@ export const criarOportunidadeSchema = z.object({
  * do banco: "de onde veio" e a mesma pergunta nos tres, e dois vocabularios
  * fariam o relatorio por origem precisar de traducao no meio.
  */
-const CANAIS_ORIGEM = ['WEBCHAT', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'EMAIL', 'VOZ'] as const;
+const CANAIS_ORIGEM = ['WEBCHAT', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'EMAIL', 'VOZ', 'PROSPECCAO_ATIVA', 'INDICACAO'] as const;
 
 export const atualizarOportunidadeSchema = z
   .object({

@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Badge, Card } from '../../../components/ui';
 import { useAuth } from '../../../features/auth/AuthProvider';
 import { api } from '../../../lib/api';
 import { LABEL_SITUACAO_EXCECAO, type Credenciamento, type OperacaoEsteira } from '../../../lib/types';
+import { PainelDoCiclo } from '../PainelDoCiclo';
+import { EnviarParaCredenciamento } from '../EnviarParaCredenciamento';
 
 /**
  * Ciclo do Parceiro (no lugar de "ciclo de vendas"): em que etapa da esteira o
@@ -18,7 +20,7 @@ export function CicloDoParceiro({ contatoId }: { contatoId: string }) {
   const [creds, setCreds] = useState<Credenciamento[] | null>(null);
   const [operacoes, setOperacoes] = useState<OperacaoEsteira[]>([]);
 
-  useEffect(() => {
+  const carregar = useCallback(() => {
     if (!podeVer) return;
     void Promise.all([
       api.get<{ credenciamentos: Credenciamento[] }>(`/credenciamentos?contatoId=${contatoId}`),
@@ -31,9 +33,14 @@ export function CicloDoParceiro({ contatoId }: { contatoId: string }) {
       .catch(() => setCreds([]));
   }, [contatoId, podeVer]);
 
+  useEffect(carregar, [carregar]);
+
   if (!podeVer || !creds || operacoes.length === 0) return null;
 
+  const ativos = creds.filter((c) => c.estagio.papel === 'ATIVO' && !c.situacaoExcecao);
+
   return (
+    <>
     <Card
       titulo="Ciclo do parceiro"
       descricao={creds.length === 0 ? 'Ainda nao entrou em nenhuma esteira' : 'Etapa atual em cada operacao'}
@@ -44,7 +51,7 @@ export function CicloDoParceiro({ contatoId }: { contatoId: string }) {
       }
     >
       {creds.length === 0 ? (
-        <p className="text-sm text-slate-500">Cadastre o parceiro pela Esteira para iniciar o credenciamento.</p>
+        <p className="text-sm text-slate-500">Ainda nao esta em nenhuma esteira. Envie para uma operacao abaixo.</p>
       ) : (
         <div className="space-y-4">
           {creds.map((c) => {
@@ -85,6 +92,19 @@ export function CicloDoParceiro({ contatoId }: { contatoId: string }) {
           })}
         </div>
       )}
+      {/* So as operacoes em que ele ainda nao esta com processo aberto. */}
+      <div className="mt-4">
+        <EnviarParaCredenciamento
+          contatos={[{ id: contatoId, nome: '' }]}
+          operacoes={operacoes.filter((o) => !creds.some((c) => c.funil.id === o.id && !c.situacaoExcecao))}
+          aoEnviar={carregar}
+        />
+      </div>
     </Card>
+    {/* Depois de credenciado, o que vale e a relacao: implantacao e acompanhamento. */}
+    {ativos.map((c) => (
+      <PainelDoCiclo key={c.id} credenciamentoId={c.id} />
+    ))}
+    </>
   );
 }

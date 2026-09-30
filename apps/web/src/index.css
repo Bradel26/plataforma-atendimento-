@@ -238,3 +238,22 @@ html.tema-escuro {
 .barra-rolagem-cinza::-webkit-scrollbar-thumb:hover {
   background: #64748b;
 }
+
+/* Ciclo de vida do parceiro: laranja (em risco) e roxo (reativado) nao existem na
+   escala remapeada do tema escuro, entao levam cor propria nos dois temas. */
+.selo-ciclo-risco {
+  background: #ffedd5;
+  color: #c2410c;
+}
+.selo-ciclo-reativado {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+html.tema-escuro .selo-ciclo-risco {
+  background: #2b1a0c;
+  color: #fdba74;
+}
+html.tema-escuro .selo-ciclo-reativado {
+  background: #1f1838;
+  color: #c4b5fd;
+}

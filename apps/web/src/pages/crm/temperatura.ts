@@ -44,6 +44,8 @@ export const LABEL_CANAL_ORIGEM: Record<Canal, string> = {
   FACEBOOK: 'Facebook',
   EMAIL: 'E-mail',
   VOZ: 'Telefone',
+  PROSPECCAO_ATIVA: 'Prospeccao ativa',
+  INDICACAO: 'Indicacao',
 };
 
 /**

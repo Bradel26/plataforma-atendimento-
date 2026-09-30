@@ -5,7 +5,7 @@ import { filtroDe, politicaContas } from '../../lib/politicas';
 import { gerarCsv, lerCsv, type LinhaCsv } from './csv';
 import { FASES, MOTIVOS_PERDA, TIPOS } from '../crm/leads.schemas';
 
-const CANAIS = ['WEBCHAT', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'EMAIL', 'VOZ'] as const;
+const CANAIS = ['WEBCHAT', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'EMAIL', 'VOZ', 'PROSPECCAO_ATIVA', 'INDICACAO'] as const;
 
 const COLUNAS_LEAD = [
   'nome',

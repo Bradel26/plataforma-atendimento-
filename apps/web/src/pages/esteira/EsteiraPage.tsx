@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Alerta, Badge, Button, Card, Field, Input, Select } from '../../components/ui';
 import { ApiError, api } from '../../lib/api';
 import { ESTADO } from '../../lib/viz';
@@ -11,6 +12,8 @@ import {
   type SituacaoExcecao,
 } from '../../lib/types';
 import { UFS } from './ufs';
+import { EmpresaInput, type EmpresaEscolhida } from '../crm/EmpresaInput';
+import { PainelDoCiclo } from '../crm/PainelDoCiclo';
 
 type Kanban = { funil: { id: string; nome: string }; colunas: ColunaCredenciamento[] };
 
@@ -157,8 +160,23 @@ function DetalheCredenciamento({
       {c && (
         <div className="grid gap-4 md:grid-cols-2">
           <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+            {/* Contato e empresa sao registros do CRM: o nome leva para a ficha de cada um. */}
             <dt className="text-slate-500">Contato</dt>
-            <dd className="text-slate-800">{c.contato.nome}</dd>
+            <dd className="text-slate-800">
+              <Link to={`/contatos/${c.contato.id}`} className="text-[var(--brand-primary)] hover:underline">
+                {c.contato.nome}
+              </Link>
+            </dd>
+            <dt className="text-slate-500">Empresa</dt>
+            <dd className="text-slate-800">
+              {c.conta ? (
+                <Link to={`/clientes/${c.conta.id}`} className="text-[var(--brand-primary)] hover:underline">
+                  {c.conta.nome}
+                </Link>
+              ) : (
+                'sem empresa vinculada'
+              )}
+            </dd>
             {c.conta?.cnpj && (
               <>
                 <dt className="text-slate-500">CNPJ</dt>
@@ -212,6 +230,12 @@ function DetalheCredenciamento({
           </div>
         </div>
       )}
+      {/* Chegou a Ativo: a relacao passa a ser acompanhada no ciclo de vida do CRM. */}
+      {c && c.estagio.papel === 'ATIVO' && !c.situacaoExcecao && (
+        <div className="mt-4">
+          <PainelDoCiclo credenciamentoId={c.id} />
+        </div>
+      )}
     </Card>
   );
 }
@@ -222,6 +246,7 @@ function NovoParceiro({ funilId, aoCriar }: { funilId: string; aoCriar: () => vo
   const [achados, setAchados] = useState<Contato[]>([]);
   const [escolhido, setEscolhido] = useState<Contato | null>(null);
   const [novo, setNovo] = useState({ nome: '', telefone: '', uf: '', cidade: '' });
+  const [empresa, setEmpresa] = useState<EmpresaEscolhida>({ nome: '', cnpj: '', contaId: null });
   const [modo, setModo] = useState<'existente' | 'novo'>('existente');
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
@@ -253,6 +278,13 @@ function NovoParceiro({ funilId, aoCriar }: { funilId: string; aoCriar: () => vo
           uf: novo.uf || null,
           cidade: novo.cidade.trim() || null,
           canalOrigem: 'WHATSAPP',
+          // A empresa nasce (ou e reaproveitada) junto com o contato, ja vinculada:
+          // o card mostra a empresa e o contato, e os dois aparecem no CRM.
+          ...(empresa.contaId
+            ? { contaId: empresa.contaId }
+            : empresa.nome.trim()
+              ? { empresa: { nome: empresa.nome.trim(), ...(empresa.cnpj ? { cnpj: empresa.cnpj } : {}) } }
+              : {}),
         });
         contatoId = contato.id;
       }
@@ -261,6 +293,7 @@ function NovoParceiro({ funilId, aoCriar }: { funilId: string; aoCriar: () => vo
       setEscolhido(null);
       setBusca('');
       setNovo({ nome: '', telefone: '', uf: '', cidade: '' });
+      setEmpresa({ nome: '', cnpj: '', contaId: null });
       aoCriar();
     } catch (err) {
       setErro(err instanceof ApiError ? err.message : 'Falha ao cadastrar o parceiro');
@@ -319,7 +352,7 @@ function NovoParceiro({ funilId, aoCriar }: { funilId: string; aoCriar: () => vo
           </Field>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Nome do parceiro">
+            <Field label="Nome do contato">
               <Input required value={novo.nome} onChange={(e) => setNovo({ ...novo, nome: e.target.value })} />
             </Field>
             <Field label="Telefone / WhatsApp">
@@ -336,6 +369,9 @@ function NovoParceiro({ funilId, aoCriar }: { funilId: string; aoCriar: () => vo
             <Field label="Cidade">
               <Input value={novo.cidade} onChange={(e) => setNovo({ ...novo, cidade: e.target.value })} />
             </Field>
+            <div className="sm:col-span-2">
+              <EmpresaInput value={empresa} onChange={setEmpresa} />
+            </div>
           </div>
         )}
         <Button type="submit" disabled={!pronto || ocupado}>

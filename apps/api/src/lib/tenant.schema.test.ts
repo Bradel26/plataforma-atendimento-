@@ -34,6 +34,10 @@ const FILHAS: Record<string, string> = {
   OpportunityItem: 'Opportunity',
   OpportunityStageLog: 'Opportunity',
   CredenciamentoHistorico: 'Credenciamento',
+  // Ciclo do parceiro: etapas e historico chegam sempre pelo ciclo, que ja
+  // carrega a organizacao e so e lido depois de conferir o credenciamento visivel.
+  CicloParceiroEtapa: 'CicloParceiro',
+  CicloParceiroHistorico: 'CicloParceiro',
   // A trilha de auditoria (item 3.2) e filha: toda leitura confere a
   // oportunidade com o filtro de visibilidade ANTES de ler a trilha, porque a
   // extensao de multi-tenant filtra a operacao consultada e nao a relacao.

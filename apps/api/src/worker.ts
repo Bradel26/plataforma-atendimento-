@@ -23,6 +23,7 @@ import './modules/voice/voice.worker';
 import { agendarExpurgo } from './modules/lgpd/agendador';
 import { agendarCampanhas } from './modules/campaigns/agendador';
 import { agendarEncerramentoDePresenca } from './modules/users/presenca.agendador';
+import { agendarCicloParceiro } from './modules/crm/cicloParceiro.agendador';
 
 avisarChaveDerivada();
 
@@ -32,6 +33,7 @@ avisarChaveDerivada();
 agendarExpurgo();
 agendarCampanhas();
 agendarEncerramentoDePresenca();
+agendarCicloParceiro();
 
 const pararWorker = iniciarWorker();
 

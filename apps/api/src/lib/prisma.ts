@@ -51,6 +51,10 @@ const COM_ORGANIZACAO = new Set([
   'CampoCustomizado',
   // Esteira de credenciamento: tabela raiz, com organizacao e CHECK proprio.
   'Credenciamento',
+  // Ciclo de vida do parceiro: tabela raiz, com organizacao e CHECK proprio.
+  'CicloParceiro',
+  // Metas operacionais do consultor: tabela raiz, com organizacao e CHECK proprio.
+  'MetaOperacional',
 ]);
 
 /** Operacoes que leem ou alteram por filtro: ganham `where`. */

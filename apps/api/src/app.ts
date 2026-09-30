@@ -40,6 +40,7 @@ import { buscaRoutes } from './modules/busca/busca.routes';
 import { consumoIaRoutes } from './modules/ia/consumo.routes';
 import { funnelsRoutes, opportunitiesRoutes } from './modules/crm/opportunities.routes';
 import { credenciamentosRoutes } from './modules/crm/credenciamentos.routes';
+import { cicloParceiroRoutes } from './modules/crm/cicloParceiro.routes';
 import { produtosInstaladosRoutes } from './modules/crm/produtos-instalados.routes';
 import { atividadesRoutes, fichaRoutes } from './modules/crm/ficha.routes';
 import { arquivosRoutes } from './modules/files/files.routes';
@@ -132,6 +133,8 @@ export function createApp() {
   app.use('/api/tags', tagsRoutes);
   app.use('/api/oportunidades', opportunitiesRoutes);
   app.use('/api/credenciamentos', credenciamentosRoutes);
+  // Ciclo de vida do parceiro apos o credenciamento.
+  app.use('/api/ciclo-parceiro', cicloParceiroRoutes);
   app.use('/api/comercial', comercialRoutes);
   app.use('/api/metas', metasRoutes);
   // Matriz de produtividade (item 3.3).

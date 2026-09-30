@@ -14,13 +14,36 @@ import {
 } from '../../lib/types';
 import { useFaixaDeLargura } from '../../lib/useFaixaDeLargura';
 import { FichaContato, FichaVazia } from './ficha/FichaContato';
+import { LABEL_CANAL_ORIGEM } from './temperatura';
+import { CidadeInput } from './CidadeInput';
+import { EmpresaInput, type EmpresaEscolhida } from './EmpresaInput';
 import { Etiquetas, FiltroEtiquetas } from './Etiquetas';
 import { FunilDeCicloDeVida } from './FunilDeCicloDeVida';
-import { UFS } from '../esteira/ufs';
+import { UFS_ATENDIDAS } from '../esteira/ufs';
 
-const ORIGENS: Canal[] = ['WEBCHAT', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'EMAIL', 'VOZ'];
+const ORIGENS: Canal[] = ['WEBCHAT', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'PROSPECCAO_ATIVA', 'INDICACAO'];
 
-const VAZIO = { nome: '', email: '', telefone: '', uf: '', cidade: '', canalOrigem: 'WHATSAPP' as Canal };
+const VAZIO = {
+  nome: '',
+  email: '',
+  telefone: '',
+  uf: '',
+  cidade: '',
+  canalOrigem: 'WHATSAPP' as Canal,
+  empresa: { nome: '', cnpj: '', contaId: null } as EmpresaEscolhida,
+};
+
+/** Campos que o cadastro manual exige antes de seguir. Devolve o que falta, em ordem de tela. */
+const camposFaltando = (n: typeof VAZIO) => {
+  const falta: string[] = [];
+  if (n.nome.trim().length < 2) falta.push('Nome');
+  if (n.telefone.replace(/\D/g, '').length < 10) falta.push('Telefone (com DDD)');
+  if (!/^\S+@\S+\.\S+$/.test(n.email.trim())) falta.push('E-mail');
+  if (!n.uf) falta.push('UF');
+  if (!n.cidade.trim()) falta.push('Cidade');
+  if (!n.canalOrigem) falta.push('Origem');
+  return falta;
+};
 
 const dataCurta = (iso: string) =>
   new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
@@ -147,24 +170,38 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
     evento.preventDefault();
     setErro(null);
     setDuplicado(null);
+    const falta = camposFaltando(novo);
+    if (falta.length > 0) {
+      setErro(`Preencha os campos obrigatorios: ${falta.join(', ')}.`);
+      return;
+    }
     setSalvando(true);
     try {
-      const { contato, possivelDuplicado } = await api.post<{
+      const { contato, possivelDuplicado, contaCriada } = await api.post<{
         contato: Contato;
+        contaCriada?: boolean;
         possivelDuplicado: { id: string; nome: string } | null;
       }>('/contatos', {
         nome: novo.nome.trim(),
-        email: novo.email.trim() || null,
-        telefone: novo.telefone.trim() ? mascararTelefoneBr(novo.telefone.trim()) : null,
-        uf: novo.uf || null,
-        cidade: novo.cidade.trim() || null,
+        email: novo.email.trim(),
+        telefone: mascararTelefoneBr(novo.telefone.trim()),
+        uf: novo.uf,
+        cidade: novo.cidade.trim(),
         canalOrigem: novo.canalOrigem,
+        ...(novo.empresa.contaId
+          ? { contaId: novo.empresa.contaId }
+          : novo.empresa.nome.trim()
+            ? { empresa: { nome: novo.empresa.nome.trim(), ...(novo.empresa.cnpj ? { cnpj: novo.empresa.cnpj } : {}) } }
+            : {}),
       });
 
       setNovo(VAZIO);
       setCadastrando(false);
       await carregar();
-      mostrarToast('sucesso', `${contato.nome} cadastrado.`);
+      mostrarToast(
+        'sucesso',
+        contaCriada ? `${contato.nome} cadastrado e empresa criada em Empresas.` : `${contato.nome} cadastrado.`,
+      );
       // Abre a ficha do contato novo: quem cadastrou quer registrar algo nele
       // em seguida, e nao procurar o nome de volta na lista.
       aoAbrir(contato.id);
@@ -253,8 +290,8 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
             cartao na mao, e sem isto a unica forma de registrar essa pessoa
             seria pedir que ela mandasse mensagem primeiro.
           */
-          <form className="mb-4 space-y-3 rounded-lg border border-slate-200 p-3" onSubmit={criar}>
-            <Field label="Nome">
+          <form className="mb-4 space-y-3 rounded-lg border border-slate-200 p-3" onSubmit={criar} noValidate>
+            <Field label="Nome *">
               <Input
                 autoFocus
                 value={novo.nome}
@@ -263,51 +300,69 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
                 required
               />
             </Field>
-            <Field label="Telefone" hint="Com DDD. E o que liga o contato ao WhatsApp.">
-              <Input
-                value={novo.telefone}
-                onChange={(e) => setNovo({ ...novo, telefone: e.target.value })}
-                placeholder="+55 00 00000-0000"
-                type="tel"
-                inputMode="tel"
-                maxLength={20}
-              />
+            <Field label="Telefone *" hint="Com DDD. E o que liga o contato ao WhatsApp.">
+              <div className="flex overflow-hidden rounded-lg border border-slate-300 transition focus-within:border-[var(--brand-primary)] focus-within:ring-2 focus-within:ring-[var(--brand-primary)]/20">
+                <span aria-hidden="true" className="flex items-center border-r border-slate-300 bg-slate-50 px-3 text-sm text-slate-600">
+                  +55
+                </span>
+                <Input
+                  className="min-w-0 rounded-none border-0 focus:border-transparent focus:ring-0"
+                  value={novo.telefone}
+                  onChange={(e) => {
+                    let telefone = e.target.value.replace(/\D/g, '');
+                    // Ao colar um numero completo com o DDI, mantemos o +55 fixo visual.
+                    if (telefone.length > 11 && telefone.startsWith('55')) telefone = telefone.slice(2);
+                    setNovo({ ...novo, telefone: telefone.slice(0, 11) });
+                  }}
+                  placeholder="00 00000-0000"
+                  type="tel"
+                  inputMode="numeric"
+                  autoComplete="tel-national"
+                  maxLength={11}
+                  required
+                />
+              </div>
             </Field>
-            <Field label="E-mail">
+            <Field label="E-mail *">
               <Input
+                required
                 type="email"
                 value={novo.email}
                 onChange={(e) => setNovo({ ...novo, email: e.target.value })}
               />
             </Field>
-            <div className="grid grid-cols-[90px_1fr] gap-2">
-              <Field label="UF">
-                <Select value={novo.uf} onChange={(e) => setNovo({ ...novo, uf: e.target.value })}>
+            <EmpresaInput value={novo.empresa} onChange={(empresa) => setNovo({ ...novo, empresa })} />
+            <div className="space-y-3">
+              <Field label="UF *">
+                <Select required value={novo.uf} onChange={(e) => setNovo({ ...novo, uf: e.target.value, cidade: '' })}>
                   <option value="">—</option>
-                  {UFS.map((uf) => (
-                    <option key={uf} value={uf}>{uf}</option>
+                  {UFS_ATENDIDAS.map((u) => (
+                    <option key={u.sigla} value={u.sigla}>{u.sigla} — {u.nome}</option>
                   ))}
                 </Select>
               </Field>
-              <Field label="Cidade">
-                <Input value={novo.cidade} onChange={(e) => setNovo({ ...novo, cidade: e.target.value })} />
+              <Field label="Cidade *">
+                <CidadeInput required uf={novo.uf} value={novo.cidade} onChange={(cidade) => setNovo({ ...novo, cidade })} />
               </Field>
             </div>
-            <Field label="Origem" hint="Por onde essa pessoa chegou.">
+            <Field label="Origem *" hint="Por onde essa pessoa chegou.">
               <Select
                 value={novo.canalOrigem}
                 onChange={(e) => setNovo({ ...novo, canalOrigem: e.target.value as Canal })}
               >
                 {ORIGENS.map((c) => (
                   <option key={c} value={c}>
-                    {c}
+                    {LABEL_CANAL_ORIGEM[c]}
                   </option>
                 ))}
               </Select>
             </Field>
-            <Button type="submit" className="w-full" disabled={salvando || novo.nome.trim().length < 2}>
+            <Button type="submit" className="w-full" disabled={salvando || camposFaltando(novo).length > 0}>
               {salvando ? 'Cadastrando...' : 'Cadastrar contato'}
             </Button>
+            {camposFaltando(novo).length > 0 && (
+              <p className="text-xs text-slate-500">Faltam: {camposFaltando(novo).join(', ')}.</p>
+            )}
           </form>
         )}
 
@@ -321,8 +376,8 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
           <div className="grid grid-cols-[1fr_80px] gap-2">
             <Select aria-label="Filtrar por UF" value={uf} onChange={(e) => setUf(e.target.value)}>
               <option value="">Todas as UFs</option>
-              {UFS.map((x) => (
-                <option key={x} value={x}>{x}</option>
+              {UFS_ATENDIDAS.map((u) => (
+                <option key={u.sigla} value={u.sigla}>{u.sigla} — {u.nome}</option>
               ))}
             </Select>
             <Input
