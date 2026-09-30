@@ -62,7 +62,7 @@ jobs:
           # Sem o segredo, avisa em vez de falhar: um X vermelho em todo push
           # antes de o token existir ensina a ignorar o resultado da acao.
           if [ -z "${COOLIFY_TOKEN}" ]; then
-            echo "::warning title=Deploy nao disparado::O segredo COOLIFY_TOKEN nao esta configurado. O deploy continua manual. Veja COOLIFY.md secao 8."
+            echo "::warning title=Deploy nao disparado::O segredo COOLIFY_TOKEN nao esta configurado. O deploy continua manual. Consulte a secao Deploy do README.md."
             exit 0
           fi
 
