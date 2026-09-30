@@ -60,6 +60,3 @@ A aplicação define seis perfis: Administrador (`ADMIN`), Supervisor (`SUPERVIS
 - [Integração WAHA](WAHA.md)
 - [Integração WPPConnect](WPPCONNECT.md)
 
-## Segurança
-
-Nunca versione arquivos .env, credenciais, tokens ou dados reais. Use valores fictícios em desenvolvimento e configure os segredos fora do repositório.
