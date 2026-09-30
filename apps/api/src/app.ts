@@ -98,7 +98,23 @@ export function createApp() {
 
   app.use(express.json({ limit: '1mb' }));
   app.use(cookieParser());
-  if (env.NODE_ENV !== 'test') app.use(morgan('dev'));
+  if (env.NODE_ENV !== 'test') {
+    // `morgan('dev')` registra `req.originalUrl`, incluindo query strings.
+    // O WPPConnect recebe um segredo legado na query e ele nao pode ir para
+    // logs de aplicacao. `req.path` mantem rota/status/latencia sem parametros.
+    app.use(
+      morgan((tokens, req, res) =>
+        [
+          tokens.method(req, res),
+          req.path,
+          tokens.status(req, res),
+          `${tokens['response-time'](req, res)} ms`,
+          '-',
+          tokens.res(req, res, 'content-length'),
+        ].join(' '),
+      ),
+    );
+  }
 
   /*
    * Nada da API entra em cache por padrao.

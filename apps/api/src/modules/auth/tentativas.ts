@@ -18,7 +18,12 @@ const BLOQUEIO_SEGUNDOS = 15 * 60;
 const chave = (email: string) => `login:falhas:${email.toLowerCase()}`;
 
 export async function garantirNaoBloqueado(email: string) {
-  const falhas = Number((await redis.get(chave(email)).catch(() => null)) ?? 0);
+  let falhas: number;
+  try {
+    falhas = Number((await redis.get(chave(email))) ?? 0);
+  } catch {
+    throw new AppError(503, 'PROTECAO_INDISPONIVEL', 'Não foi possível validar o acesso. Tente novamente em instantes.');
+  }
   if (falhas < MAXIMO) return;
 
   const restante = await redis.ttl(chave(email)).catch(() => BLOQUEIO_SEGUNDOS);
@@ -36,7 +41,7 @@ export async function registrarFalha(email: string) {
     await redis.expire(chave(email), BLOQUEIO_SEGUNDOS);
     return falhas;
   } catch {
-    return 0;
+    throw new AppError(503, 'PROTECAO_INDISPONIVEL', 'Não foi possível registrar a tentativa. Tente novamente em instantes.');
   }
 }
 

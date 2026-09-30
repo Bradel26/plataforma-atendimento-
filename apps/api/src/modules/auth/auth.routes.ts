@@ -25,7 +25,7 @@ export const authRoutes = Router();
  */
 authRoutes.post(
   '/login',
-  limitar({ nome: 'login', janelaSegundos: 300, maximo: 30 }),
+  limitar({ nome: 'login', janelaSegundos: 300, maximo: 30, falhaFechada: true }),
   validateBody(loginSchema),
   asyncHandler(async (req, res) => {
     // Irrestrito de proposito: e o e-mail que descobre a organizacao.
@@ -40,7 +40,7 @@ authRoutes.post(
 
 authRoutes.post(
   '/alterar-senha-inicial',
-  limitar({ nome: 'login', janelaSegundos: 300, maximo: 30 }),
+  limitar({ nome: 'login', janelaSegundos: 300, maximo: 30, falhaFechada: true }),
   validateBody(alterarSenhaInicialSchema),
   asyncHandler(async (req, res) => {
     await semOrganizacao('troca de senha temporária antes do login', () => alterarSenhaInicial(req.body));

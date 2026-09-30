@@ -16,6 +16,8 @@ export function limitar(opcoes: {
   nome: string;
   janelaSegundos: number;
   maximo: number;
+  /** Rejeita com 503 quando Redis falha, em vez de deixar a rota sem limite. */
+  falhaFechada?: boolean;
   /** Por padrao conta por IP. */
   chave?: (req: Request) => string;
 }) {
@@ -39,6 +41,15 @@ export function limitar(opcoes: {
       }
     } catch (err) {
       console.error(`[rate-limit] ${opcoes.nome} sem Redis:`, err instanceof Error ? err.message : err);
+      if (opcoes.falhaFechada) {
+        res.setHeader('Retry-After', '30');
+        return res.status(503).json({
+          error: {
+            code: 'PROTECAO_INDISPONIVEL',
+            message: 'Não foi possível validar o limite de acesso. Tente novamente em instantes.',
+          },
+        });
+      }
     }
 
     return next();
