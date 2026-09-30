@@ -7,7 +7,6 @@ import {
   LABEL_FASE_LEAD,
   LABEL_MOTIVO_PERDA,
   LABEL_TIPO_LEAD,
-  moeda,
   type CampoCustomizadoDef,
   type Contato,
   type FiltroLeadSalvo,
@@ -49,7 +48,6 @@ function Cartao({
     >
       <p className="truncate text-sm font-medium text-slate-800">{lead.contato.nome}</p>
       {lead.conta && <p className="truncate text-xs text-slate-500">{lead.conta.nome}</p>}
-      <p className="mt-1 text-xs font-medium text-slate-700">{moeda(lead.valorEstimado)}</p>
       <div className="mt-1.5 flex flex-wrap items-center gap-1">
         <Badge tom="neutro">{LABEL_TIPO_LEAD[lead.tipo]}</Badge>
         {lead.responsavel && <Badge tom="marca">{lead.responsavel.nome}</Badge>}
@@ -92,7 +90,7 @@ export function LeadsTab() {
   /** Lead pendente de motivo antes de virar PERDIDO — abre `MotivoPerdaDialog`. */
   const [pedidoMotivo, setPedidoMotivo] = useState<{ id: string; fase: LeadFase } | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-  const [novo, setNovo] = useState({ contatoId: '', tipo: 'INBOUND' as LeadTipo, valorEstimado: '', prazo: '' });
+  const [novo, setNovo] = useState({ contatoId: '', tipo: 'INBOUND' as LeadTipo, prazo: '' });
   /** Campos customizados (item 6.4) do "Novo lead". */
   const [camposDef, setCamposDef] = useState<CampoCustomizadoDef[]>([]);
   const [novosCampos, setNovosCampos] = useState<Record<string, unknown>>({});
@@ -184,11 +182,10 @@ export function LeadsTab() {
       await api.post('/leads', {
         contatoId: novo.contatoId,
         tipo: novo.tipo,
-        ...(novo.valorEstimado ? { valorEstimado: Number(novo.valorEstimado) } : {}),
         ...(novo.prazo ? { prazo: novo.prazo } : {}),
         ...(Object.keys(novosCampos).length ? { camposCustomizados: novosCampos } : {}),
       });
-      setNovo({ contatoId: '', tipo: 'INBOUND', valorEstimado: '', prazo: '' });
+      setNovo({ contatoId: '', tipo: 'INBOUND', prazo: '' });
       setNovosCampos({});
       await carregar();
     } catch (err) {
@@ -261,7 +258,6 @@ export function LeadsTab() {
         <div className="flex gap-3 overflow-x-auto pb-2">
           {FASES_LEAD.map((fase) => {
             const leads = colunas[fase];
-            const total = leads.reduce((acc, l) => acc + (l.valorEstimado ?? 0), 0);
             return (
               <div
                 key={fase}
@@ -272,7 +268,7 @@ export function LeadsTab() {
                 <header className="border-b border-slate-200 px-3 py-2.5">
                   <p className="text-sm font-semibold text-slate-700">{LABEL_FASE_LEAD[fase]}</p>
                   <p className="text-xs text-slate-500">
-                    {leads.length} lead{leads.length === 1 ? '' : 's'} · {moeda(total)}
+                    {leads.length} lead{leads.length === 1 ? '' : 's'}
                   </p>
                 </header>
                 <ul className="min-h-24 flex-1 space-y-2 p-2">
@@ -296,13 +292,12 @@ export function LeadsTab() {
         <div className="space-y-3">
           {FASES_LEAD.map((fase) => {
             const leads = colunas[fase];
-            const total = leads.reduce((acc, l) => acc + (l.valorEstimado ?? 0), 0);
             return (
               <details key={fase} open={leads.length > 0} className="rounded-xl border border-slate-200 bg-slate-50">
                 <summary className="cursor-pointer list-none px-3 py-2.5 [&::-webkit-details-marker]:hidden">
                   <span className="text-sm font-semibold text-slate-700">{LABEL_FASE_LEAD[fase]}</span>
                   <span className="ml-2 text-xs text-slate-500">
-                    {leads.length} lead{leads.length === 1 ? '' : 's'} · {moeda(total)}
+                    {leads.length} lead{leads.length === 1 ? '' : 's'}
                   </span>
                 </summary>
                 {leads.length > 0 && (
@@ -334,15 +329,6 @@ export function LeadsTab() {
                 <option key={t} value={t}>{LABEL_TIPO_LEAD[t]}</option>
               ))}
             </Select>
-          </Field>
-          <Field label="Valor estimado">
-            <Input
-              type="number"
-              min={0}
-              step="0.01"
-              value={novo.valorEstimado}
-              onChange={(e) => setNovo({ ...novo, valorEstimado: e.target.value })}
-            />
           </Field>
           <Field label="Prazo">
             <Input type="date" value={novo.prazo} onChange={(e) => setNovo({ ...novo, prazo: e.target.value })} />

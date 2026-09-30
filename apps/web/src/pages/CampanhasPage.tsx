@@ -2,7 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { Alerta, Badge, Button, Card, Field, Input, Select } from '../components/ui';
 import { Tabs } from '../components/ui/Tabs';
 import { StatTile } from '../components/viz/StatTile';
+import { useSearchParams } from 'react-router-dom';
 import { MontarPublico } from './campanhas/MontarPublico';
+import { CAMPANHAS_DEMO, ITENS_DEMO, RESULTADO_DEMO } from './campanhas/dadosDemo';
 import { LeadsTab } from './crm/LeadsTab';
 import { useAuth } from '../features/auth/AuthProvider';
 import { ApiError, api } from '../lib/api';
@@ -70,6 +72,11 @@ export function CampanhasPage() {
   // devolveria 403 antes de a pessoa sequer ver a aba Leads.
   const { temPerfil } = useAuth();
   const podeVerCampanhas = temPerfil('ADMIN', 'SUPERVISOR');
+  // Dados ficticios para conferir o layout; nao chama a API nem grava nada. Ligado
+  // por `?demo=1` e, no `npm run dev`, por padrao (`?demo=0` mostra as campanhas reais).
+  // O build de producao so os mostra com `?demo=1`.
+  const demoParam = useSearchParams()[0].get('demo');
+  const demo = demoParam === '1' || (import.meta.env.DEV && demoParam !== '0');
   const subAbasVisiveis = SUBABAS.filter((s) => s.chave !== 'campanhas' || podeVerCampanhas);
 
   const [subAba, setSubAba] = useState<SubAba>(podeVerCampanhas ? 'campanhas' : 'leads');
@@ -82,6 +89,10 @@ export function CampanhasPage() {
   const [aviso, setAviso] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
+    if (demo) {
+      setCampanhas(CAMPANHAS_DEMO);
+      return;
+    }
     try {
       const { campanhas: lista } = await api.get<{ campanhas: Campanha[] }>('/campanhas');
       setCampanhas(lista);
@@ -89,20 +100,25 @@ export function CampanhasPage() {
     } catch (e) {
       setErro(e instanceof ApiError ? e.message : 'Falha ao carregar campanhas');
     }
-  }, []);
+  }, [demo]);
 
   useEffect(() => {
     if (podeVerCampanhas) void carregar();
   }, [carregar, podeVerCampanhas]);
 
   const abrir = useCallback(async (id: string) => {
+    if (demo) {
+      const campanha = CAMPANHAS_DEMO.find((x) => x.id === id);
+      if (campanha) setAberta({ campanha, itens: campanha.total > 0 ? ITENS_DEMO : [], resultado: RESULTADO_DEMO });
+      return;
+    }
     try {
       setAberta(await api.get<Aberta>(`/campanhas/${id}`));
       setErro(null);
     } catch (e) {
       setErro(e instanceof ApiError ? e.message : 'Falha ao abrir a campanha');
     }
-  }, []);
+  }, [demo]);
 
   /**
    * O disparo so enfileira: o envio acontece no worker. Enquanto houver item
@@ -110,16 +126,20 @@ export function CampanhasPage() {
    * uma lista congelada sem saber se a fila andou.
    */
   useEffect(() => {
-    if (!aberta || aberta.campanha.status !== 'ATIVA') return;
+    if (demo || !aberta || aberta.campanha.status !== 'ATIVA') return;
     if (!aberta.itens.some((i) => i.status === 'PENDENTE')) return;
 
     const t = setTimeout(() => void abrir(aberta.campanha.id), 3000);
     return () => clearTimeout(t);
-  }, [aberta, abrir]);
+  }, [aberta, abrir, demo]);
 
   const agir = async (acao: () => Promise<unknown>, idParaReabrir?: string) => {
     setErro(null);
     setAviso(null);
+    if (demo) {
+      setAviso('Modo demonstração: nada é gravado.');
+      return;
+    }
     setOcupado(true);
     try {
       await acao();

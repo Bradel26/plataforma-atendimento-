@@ -278,7 +278,7 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
         titulo="Contatos"
         descricao={`${contatos.length} encontrado(s)`}
         acao={
-          <Button variante="neutro" onClick={() => setCadastrando((v) => !v)} aria-expanded={cadastrando}>
+          <Button variante={cadastrando ? 'neutro' : 'primario'} onClick={() => setCadastrando((v) => !v)} aria-expanded={cadastrando}>
             {cadastrando ? 'Cancelar' : 'Novo contato'}
           </Button>
         }
@@ -451,7 +451,7 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
           </BarraDeSelecao>
         )}
 
-        <div className="mt-3 max-h-[70vh] overflow-y-auto">
+        <div className="mt-4 max-h-[70vh] overflow-y-auto pr-1">
           {carregando && contatos.length === 0 ? (
             <div className="space-y-3 px-1 py-1" aria-hidden="true">
               {Array.from({ length: 6 }, (_, i) => (
@@ -506,50 +506,51 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
                     <button
                       type="button"
                       onClick={() => aoAbrir(c.id)}
-                      className={`flex-1 py-2.5 text-left transition hover:bg-slate-50 ${
-                        selecionado === c.id ? 'bg-slate-50' : ''
+                      className={`group flex min-w-0 flex-1 items-start gap-2.5 rounded-lg px-2 py-2.5 text-left transition hover:bg-slate-50 ${
+                        selecionado === c.id
+                          ? 'bg-blue-50/80 ring-1 ring-inset ring-blue-200'
+                          : 'border border-transparent'
                       }`}
                     >
-                      <p className="text-sm font-medium text-slate-800">{c.nome}</p>
-                      {/* Agenda telefonica: empresa, telefone, estado, responsavel,
-                          ultima interacao e proximo retorno sem abrir a ficha. */}
-                      {c.conta && <p className="truncate text-xs text-slate-600">{c.conta.nome}</p>}
-                      <p className="text-xs text-slate-500">
-                        {[c.telefone ?? c.email ?? 'Sem contato', c.uf].filter(Boolean).join(' · ')}
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        {c.responsavel ? c.responsavel.nome : 'sem responsável'}
-                        {c.ultimaInteracaoEm ? ` · última interação ${dataCurta(c.ultimaInteracaoEm)}` : ''}
-                      </p>
-                      {c.proximoRetorno && (
-                        <p
-                          className={`text-xs ${
+                      <span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 text-[11px] font-semibold text-blue-700 ring-1 ring-inset ring-blue-200/70">
+                        {c.nome.trim().split(/\s+/).slice(0, 2).map((parte) => parte[0]).join('').toLocaleUpperCase('pt-BR')}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex min-w-0 items-center justify-between gap-2">
+                          <span className="truncate text-[13px] font-semibold text-slate-800 group-hover:text-blue-700">{c.nome}</span>
+                          {c.cicloDeVida && (
+                            <span title={AJUDA_CICLO_DE_VIDA[c.cicloDeVida]}>
+                              <Badge tom={c.cicloDeVida === 'CLIENTE' ? 'sucesso' : 'neutro'}>
+                                {LABEL_CICLO_DE_VIDA[c.cicloDeVida]}
+                              </Badge>
+                            </span>
+                          )}
+                        </span>
+                        {c.conta && <span className="block truncate text-[11px] font-medium text-slate-600">{c.conta.nome}</span>}
+                        {/* Resumo de agenda: telefone, estado, responsavel e atividade sem abrir a ficha. */}
+                        <span className="mt-1 block truncate text-[11px] text-slate-500">
+                          {[c.telefone ?? c.email ?? 'Sem contato', c.uf].filter(Boolean).join(' · ')}
+                        </span>
+                        <span className="mt-0.5 block truncate text-[10px] text-slate-500">
+                          {c.responsavel ? c.responsavel.nome : 'Sem responsável'}
+                          {c.ultimaInteracaoEm ? ` · Último contato ${dataCurta(c.ultimaInteracaoEm)}` : ''}
+                        </span>
+                        {c.proximoRetorno && (
+                          <span className={`mt-0.5 block truncate text-[10px] font-medium ${
                             new Date(c.proximoRetorno.prazo) < new Date() ? 'text-red-700' : 'text-[var(--brand-primary)]'
-                          }`}
-                        >
-                          Próximo retorno {dataCurta(c.proximoRetorno.prazo)} · {c.proximoRetorno.titulo}
-                        </p>
-                      )}
-                      {typeof c.totalConversas === 'number' && (
-                        <p className="mt-1 text-xs text-slate-500">
-                          {c.totalConversas} conversa{c.totalConversas === 1 ? '' : 's'}
-                        </p>
-                      )}
-                      {c.cicloDeVida && (
-                        // O degrau na LINHA, e nao so na ficha: ciclo de vida serve
-                        // para varrer a carteira, e varrer nao se faz abrindo um
-                        // contato por vez.
-                        <p className="mt-1" title={AJUDA_CICLO_DE_VIDA[c.cicloDeVida]}>
-                          <Badge tom={c.cicloDeVida === 'CLIENTE' ? 'sucesso' : 'neutro'}>
-                            {LABEL_CICLO_DE_VIDA[c.cicloDeVida]}
-                          </Badge>
-                        </p>
-                      )}
-                      {c.tags && c.tags.length > 0 && (
-                        <div className="mt-1.5">
-                          <Etiquetas tags={c.tags} />
-                        </div>
-                      )}
+                          }`}>
+                            Próximo retorno {dataCurta(c.proximoRetorno.prazo)} · {c.proximoRetorno.titulo}
+                          </span>
+                        )}
+                        <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                          {typeof c.totalConversas === 'number' && (
+                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">
+                              {c.totalConversas} conversa{c.totalConversas === 1 ? '' : 's'}
+                            </span>
+                          )}
+                          {c.tags && c.tags.length > 0 && <Etiquetas tags={c.tags} />}
+                        </span>
+                      </span>
                     </button>
                   </li>
                 ))}
@@ -628,7 +629,7 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   return (
     <div ref={containerRef}>
       {ladoALado ? (
-        <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
+        <div className="grid gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
           {painelLista}
           <div className="space-y-5">
             {painelFunil}

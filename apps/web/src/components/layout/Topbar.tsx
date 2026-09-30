@@ -45,7 +45,7 @@ export function Topbar({ titulo, aoAbrirMenu }: { titulo: string; aoAbrirMenu: (
           largura do texto inteiro — e num celular estreito isso empurrava o
           titulo pra fora da tela em vez de cortar com reticencias.
         */}
-        <h1 className="min-w-0 flex-1 truncate text-base font-semibold text-slate-800">{titulo}</h1>
+        <h1 className="min-w-0 flex-1 truncate text-lg font-semibold tracking-tight text-slate-900">{titulo}</h1>
       </div>
 
       <div className="flex shrink-0 items-center gap-2 sm:gap-4">
@@ -53,13 +53,13 @@ export function Topbar({ titulo, aoAbrirMenu }: { titulo: string; aoAbrirMenu: (
           {/* A bolinha duplica a cor que ja esta no proprio texto selecionado
               — some primeiro quando o espaco aperta, o select continua
               dizendo a mesma coisa por extenso. */}
-          <span className={`hidden h-2.5 w-2.5 rounded-full sm:inline-block ${COR_STATUS[usuario.status]}`} aria-hidden />
+          <span className={`hidden h-2.5 w-2.5 rounded-full ring-4 ring-slate-100 sm:inline-block ${COR_STATUS[usuario.status]}`} aria-hidden />
           <select
             aria-label="Status do agente"
             value={usuario.status}
             disabled={salvando}
             onChange={(e) => void trocarStatus(e.target.value as AgentStatus)}
-            className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-700 outline-none focus:border-[var(--brand-primary)]"
+            className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-medium text-slate-700 outline-none transition hover:border-slate-300 focus:border-[var(--brand-primary)]"
           >
             {STATUS_DISPONIVEIS.map((s) => (
               <option key={s} value={s}>
@@ -75,7 +75,7 @@ export function Topbar({ titulo, aoAbrirMenu }: { titulo: string; aoAbrirMenu: (
         </div>
 
         <span
-          className="flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold texto-sobre-cor-fixa"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold ring-2 ring-slate-100 texto-sobre-cor-fixa"
           style={{ backgroundColor: 'var(--brand-primary)' }}
         >
           {usuario.nome.charAt(0).toUpperCase()}

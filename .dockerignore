@@ -6,4 +6,9 @@ apps/api/storage
 .github
 *.log
 .env
+.env.*
 **/.env
+**/.env.*
+
+# WhatsApp linked-device credentials and session data
+apps/ponte/dados

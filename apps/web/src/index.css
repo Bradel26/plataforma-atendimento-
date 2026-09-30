@@ -20,6 +20,16 @@ body,
 
 body {
   @apply bg-slate-100 text-slate-800 antialiased;
+  font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* Barras de abas rolam na horizontal sem mostrar a barra de rolagem do sistema. */
+.sem-barra-de-rolagem {
+  scrollbar-width: none;
+}
+.sem-barra-de-rolagem::-webkit-scrollbar {
+  display: none;
 }
 
 /*

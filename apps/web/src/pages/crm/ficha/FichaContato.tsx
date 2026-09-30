@@ -462,7 +462,18 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoExcluir }: FichaPr
 export function FichaVazia() {
   return (
     <Card titulo="Ficha do contato">
-      <EmptyState titulo="Selecione um contato" descricao="A vida do cliente aparece aqui." />
+      <div className="flex min-h-56 flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-gradient-to-br from-slate-50/80 to-white px-6 py-8 text-center">
+        <span className="mb-3 grid size-12 place-items-center rounded-2xl bg-blue-50 text-blue-600 ring-1 ring-inset ring-blue-100">
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="size-6">
+            <circle cx="9" cy="8" r="3.25" stroke="currentColor" strokeWidth="1.6" />
+            <path d="M3.75 19c.35-3.15 2.2-4.75 5.25-4.75 1.35 0 2.45.32 3.28.95M16.25 8.25h4M18.25 6.25v4M15.4 14.55a3 3 0 1 0 4.24 4.24 3 3 0 0 0-4.24-4.24Z" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+          </svg>
+        </span>
+        <p className="text-sm font-semibold text-slate-800">Escolha um contato para começar</p>
+        <p className="mt-1 max-w-sm text-xs leading-relaxed text-slate-500">
+          A ficha reúne os dados, conversas e atividades do cliente em um só lugar.
+        </p>
+      </div>
     </Card>
   );
 }

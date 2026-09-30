@@ -15,12 +15,12 @@ export function Card({ titulo, descricao, acao, children }: {
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+    <section className="rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_3px_rgb(15_23_42/0.05)]">
       {(titulo || acao) && (
         <header className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
           <div>
-            {titulo && <h2 className="text-sm font-semibold text-slate-800">{titulo}</h2>}
-            {descricao && <p className="mt-0.5 text-xs text-slate-500">{descricao}</p>}
+            {titulo && <h2 className="text-[15px] font-semibold tracking-tight text-slate-900">{titulo}</h2>}
+            {descricao && <p className="mt-1 text-xs leading-relaxed text-slate-500">{descricao}</p>}
           </div>
           {acao}
         </header>
