@@ -105,12 +105,12 @@ export function createApp() {
     app.use(
       morgan((tokens, req, res) =>
         [
-          tokens.method(req, res),
+          tokens.method?.(req, res) ?? '-',
           req.path,
-          tokens.status(req, res),
-          `${tokens['response-time'](req, res)} ms`,
+          tokens.status?.(req, res) ?? '-',
+          `${tokens['response-time']?.(req, res) ?? '-'} ms`,
           '-',
-          tokens.res(req, res, 'content-length'),
+          tokens.res?.(req, res, 'content-length') ?? '-',
         ].join(' '),
       ),
     );
