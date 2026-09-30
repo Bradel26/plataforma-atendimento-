@@ -1,10 +1,30 @@
-# Plataforma de Atendimento
+# Plataforma de Atendimento Bradel
 
-Plataforma de atendimento multicanal + call center + CRM. Escopo completo e roadmap em [SCOPE.md](SCOPE.md). O que falta fazer, e de quem depende, em [PENDENCIAS.md](PENDENCIAS.md). Manual de uso em [MANUAL.md](MANUAL.md). Passo a passo de produção em [DEPLOY.md](DEPLOY.md). Na VPS com Coolify, [COOLIFY.md](COOLIFY.md). Provider GOWA em [GOWA.md](GOWA.md).
+Sistema web de atendimento, CRM e gestão operacional. O repositório contém o frontend, a API,
+integrações e ferramentas de desenvolvimento. A aplicação de produção é publicada em
+[atendimento.bradel.com.br](https://atendimento.bradel.com.br).
 
-**Estado atual:** Fases 0 a 3 concluídas. Fase 4 parcial — campanhas e chatbot prontos;
-**telefonia (PABX/voz, monitoria, transcrição) não foi construída** e o motivo está no
-[SCOPE.md](SCOPE.md). Os canais da Meta aguardam credenciais reais.
+## Recursos
+
+- Atendimento multicanal, conversas, filas e gestão de agentes.
+- CRM com contatos, empresas, funis, atividades, metas e produtividade.
+- Campanhas, relatórios, dashboards e configurações de usuários e permissões.
+- Chamados internos de TI e acompanhamento do histórico.
+- Integrações configuráveis com WhatsApp e outros canais.
+
+## Tecnologias
+
+- Frontend: React, TypeScript, Vite e Tailwind CSS.
+- API: Node.js, Express, TypeScript e Prisma.
+- Dados e filas: PostgreSQL e Redis.
+- Implantação: Docker; produção gerenciada pelo Coolify.
+
+## Documentação
+
+- [Manual de uso](MANUAL.md)
+- [Integração GOWA](GOWA.md)
+- [Integração WAHA](WAHA.md)
+- [Integração WPPConnect](WPPCONNECT.md)
 
 ## Estrutura
 
@@ -51,7 +71,7 @@ Atalho: `npm run setup` faz install + infra + migrate + seed.
 
 Alternativa sem Docker (é o que está em uso hoje): Postgres no **Neon** e Redis no **Upstash**.
 Nesse caso pule o `infra:up` e preencha `DATABASE_URL`, `DIRECT_URL` e `REDIS_URL` no `.env`.
-Detalhes em *Ambiente de desenvolvimento* no [SCOPE.md](SCOPE.md).
+Configure `DATABASE_URL`, `DIRECT_URL` e `REDIS_URL` no ambiente da API.
 
 Acesse http://localhost:5173. O Vite faz proxy de `/api` para a API, mantendo front e
 backend na mesma origem (necessário para o cookie de refresh).
@@ -203,12 +223,12 @@ Base: `/api`. Corpo e respostas em JSON. Erros no formato `{ error: { code, mess
 | PUT | `/bots` | admin, supervisor |
 | DELETE | `/bots/:id` | admin |
 
-WebSocket em `/socket.io`. Contrato de eventos e salas documentado no [SCOPE.md](SCOPE.md).
+WebSocket em `/socket.io` para eventos em tempo real do atendimento.
 
 ## Perfis
 
 Cinco perfis. **Perfil** decide o que a pessoa pode *fazer*; **escopo de visibilidade** decide
-*quais registros* da própria organização ela enxerga (decisão 51 do SCOPE.md).
+quais registros da organização ela pode consultar.
 
 | Perfil | Telas | Escopo de dados |
 |---|---|---|
@@ -478,7 +498,8 @@ conta própria com o motivo gravado — contato sem telefone fica *Ignorado*, en
 fica *Falhou* com a mensagem do provedor — e "Reprocessar falhas" devolve todos para a fila depois
 de corrigir os dados. Campanha de **voz é recusada**. A telefonia existe desde a Fase 4, mas o disparo em lote nunca foi
 ligado a ela: campanha de voz é discagem automática, que precisa de ritmo, horário permitido e
-desistência por número — não é o mesmo trabalho que enviar texto. Está listado em PENDENCIAS.md.
+desistência por número — não é o mesmo trabalho que enviar texto e não está habilitado nesta
+plataforma.
 
 **Chatbot** (Configurações → Chatbot): fluxo por palavra-chave, não LLM. Cada passo tem gatilhos,
 resposta e uma ação (responder, transferir para fila, encerrar). O bot responde só enquanto a

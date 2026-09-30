@@ -1,8 +1,7 @@
 # Manual da plataforma
 
 Este arquivo explica **o que a plataforma faz e como se usa**, em linguagem de operação. A
-documentação técnica (como rodar, endpoints, decisões de arquitetura) está no
-[README.md](README.md) e no [SCOPE.md](SCOPE.md).
+documentação técnica (como rodar e consultar os endpoints) está no [README.md](README.md).
 
 ---
 

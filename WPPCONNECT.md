@@ -1,7 +1,7 @@
 # WhatsApp por QR Code com WPPConnect Server
 
-Como subir o **WPPConnect Server** no Coolify, na mesma VPS da plataforma (ver [COOLIFY.md](COOLIFY.md)),
-e ligar a API a ele com `WHATSAPP_PROVIDER=wppconnect`.
+Como subir o **WPPConnect Server** no Coolify e ligar a API a ele com
+`WHATSAPP_PROVIDER=wppconnect`.
 
 Com isso funcionam os dois fluxos de conexão por QR Code:
 
