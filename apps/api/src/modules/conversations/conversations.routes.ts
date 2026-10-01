@@ -99,7 +99,7 @@ conversationsRoutes.get(
   asyncHandler(async (req, res) => {
     const foto = await buscarFotoDaConversa(param(req, 'id'));
     if (!foto) {
-      res.setHeader('Cache-Control', 'private, max-age=600');
+      res.setHeader('Cache-Control', 'no-store');
       res.status(404).end();
       return;
     }

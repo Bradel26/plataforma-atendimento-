@@ -3,6 +3,7 @@ import { obterImagemPrivada } from '../../lib/api';
 
 const cache = new Map<string, { expiraEm: number; blob: Promise<Blob | null> }>();
 const TEMPO_CACHE = 10 * 60_000;
+const TEMPO_SEM_FOTO = 30_000;
 
 function imagemEmCache(chave: string, caminho: string): Promise<Blob | null> {
   const agora = Date.now();
@@ -14,7 +15,11 @@ function imagemEmCache(chave: string, caminho: string): Promise<Blob | null> {
   }
   if (existente) cache.delete(chave);
 
-  const entrada = { expiraEm: agora + TEMPO_CACHE, blob: obterImagemPrivada(caminho) };
+  const entrada = { expiraEm: agora + TEMPO_CACHE, blob: Promise.resolve(null) as Promise<Blob | null> };
+  entrada.blob = obterImagemPrivada(caminho).catch(() => null).then((blob) => {
+    entrada.expiraEm = Date.now() + (blob ? TEMPO_CACHE : TEMPO_SEM_FOTO);
+    return blob;
+  });
   cache.set(chave, entrada);
   if (cache.size > 40) cache.delete(cache.keys().next().value!);
   return entrada.blob;
@@ -35,10 +40,15 @@ export function AvatarConversa({ conversaId, nome, className, avatarPath }: {
     if (!elemento) return;
     let cancelado = false;
     let objectUrl: string | null = null;
+    let tentativa: number | null = null;
     const carregar = () => {
       const caminho = avatarPath ?? `/conversas/${conversaId}/avatar`;
       void imagemEmCache(caminho, caminho).then((blob) => {
-        if (!blob || cancelado) return;
+        if (cancelado) return;
+        if (!blob) {
+          tentativa = window.setTimeout(carregar, TEMPO_SEM_FOTO);
+          return;
+        }
         objectUrl = URL.createObjectURL(blob);
         setUrl(objectUrl);
       });
@@ -56,6 +66,7 @@ export function AvatarConversa({ conversaId, nome, className, avatarPath }: {
     return () => {
       cancelado = true;
       observar?.disconnect();
+      if (tentativa !== null) window.clearTimeout(tentativa);
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [conversaId, avatarPath]);

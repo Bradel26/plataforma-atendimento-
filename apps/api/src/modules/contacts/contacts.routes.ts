@@ -261,7 +261,7 @@ contactsRoutes.get(
 
     const telefone = (contato.telefone ?? '').replace(/\D/g, '');
     if (telefone.length < 10 || telefone.length > 15) {
-      res.setHeader('Cache-Control', 'private, max-age=600');
+      res.setHeader('Cache-Control', 'no-store');
       res.status(404).end();
       return;
     }
@@ -275,14 +275,14 @@ contactsRoutes.get(
       ? await obterConfigPorId(conversa.canalConfigId)
       : await obterConfig('WHATSAPP');
     if (!config) {
-      res.setHeader('Cache-Control', 'private, max-age=600');
+      res.setHeader('Cache-Control', 'no-store');
       res.status(404).end();
       return;
     }
 
     const provider = getWhatsAppProvider();
     if (!provider.fetchAvatar) {
-      res.setHeader('Cache-Control', 'private, max-age=600');
+      res.setHeader('Cache-Control', 'no-store');
       res.status(404).end();
       return;
     }
@@ -293,7 +293,7 @@ contactsRoutes.get(
     if (!entrada || entrada.expiraEm <= agora) {
       entrada = { expiraEm: agora + 15_000, busca: Promise.resolve(null) };
       entrada.busca = provider.fetchAvatar(config, telefone).catch(() => null).then((foto) => {
-        entrada!.expiraEm = Date.now() + (foto ? 6 * 60 * 60_000 : 10 * 60_000);
+        entrada!.expiraEm = Date.now() + (foto ? 6 * 60 * 60_000 : 30_000);
         return foto;
       });
       cacheFotosContato.set(chave, entrada);
@@ -305,7 +305,7 @@ contactsRoutes.get(
 
     const foto = await entrada.busca;
     if (!foto) {
-      res.setHeader('Cache-Control', 'private, max-age=600');
+      res.setHeader('Cache-Control', 'no-store');
       res.status(404).end();
       return;
     }

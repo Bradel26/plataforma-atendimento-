@@ -77,7 +77,7 @@ export async function buscarFotoDaConversa(id: string): Promise<FotoPerfil | nul
 
   const entrada = { expiraEm: agora + 15_000, busca: Promise.resolve(null) as Promise<FotoPerfil | null> };
   entrada.busca = provider.fetchAvatar(config, telefone).catch(() => null).then((foto) => {
-    entrada.expiraEm = Date.now() + (foto ? 6 * 60 * 60_000 : 10 * 60_000);
+    entrada.expiraEm = Date.now() + (foto ? 6 * 60 * 60_000 : 30_000);
     return foto;
   });
   cacheFotosPerfil.set(chave, entrada);

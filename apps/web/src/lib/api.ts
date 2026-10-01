@@ -146,9 +146,9 @@ export const api = {
 
 /** Baixa uma imagem privada da API usando o token em memória e renovando a sessão se necessário. */
 export async function obterImagemPrivada(path: string): Promise<Blob | null> {
-  let res = await raw(path, { method: 'GET' });
+  let res = await raw(path, { method: 'GET', cache: 'no-store' });
   if (res.status === 401) {
-    if (await renovarSessao()) res = await raw(path, { method: 'GET' });
+    if (await renovarSessao()) res = await raw(path, { method: 'GET', cache: 'no-store' });
     else {
       setAccessToken(null);
       window.dispatchEvent(new Event(AUTH_EXPIRADA));
