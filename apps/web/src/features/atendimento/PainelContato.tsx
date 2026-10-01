@@ -6,7 +6,7 @@ import { Indicador } from '../../pages/crm/ficha/Indicadores';
 import { RegistrarAtividade } from '../../pages/crm/ficha/RegistrarAtividade';
 import { EditorEtiquetas, ETIQUETAS_CONTATO, ETIQUETAS_CONVERSA } from '../../pages/crm/Etiquetas';
 import { LABEL_TIPO_ATIVIDADE, type Atividade, type ConversaDetalhe, type FichaContato as Ficha } from '../../lib/types';
-import { api } from '../../lib/api';
+import { api } from '../../lib/api'; import { AvatarConversa } from './AvatarConversa';
 
 /**
  * Quem e essa pessoa, sem sair da conversa — e o que fazer a respeito dela.
@@ -98,12 +98,7 @@ export function PainelContato({
     <div className="flex h-full flex-col overflow-hidden">
       <div className="border-b border-slate-100 p-4">
         <div className="flex items-start gap-3">
-          <span
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold"
-            style={{ backgroundColor: 'var(--brand-primary-soft)', color: 'var(--brand-primary)' }}
-          >
-            {contato.nome.charAt(0).toUpperCase()}
-          </span>
+          <AvatarConversa conversaId={conversaId ?? contatoId} nome={contato.nome} className="h-11 w-11" avatarPath={`/contatos/${contatoId}/avatar`} />
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold text-slate-800">{contato.nome}</p>
             {contato.conta ? (
