@@ -40,6 +40,7 @@ export function AvatarConversa({ conversaId, nome, className, avatarPath }: {
     if (!elemento) return;
     let cancelado = false;
     let objectUrl: string | null = null;
+    setUrl(null);
     let tentativa: number | null = null;
     const carregar = () => {
       const caminho = avatarPath ?? `/conversas/${conversaId}/avatar`;

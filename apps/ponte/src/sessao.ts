@@ -668,7 +668,16 @@ export async function fotoDePerfil(nome: string, numero: string): Promise<string
   if (!sessao?.sock || sessao.situacao !== 'CONECTADO') return null;
 
   try {
-    return (await sessao.sock.profilePictureUrl(jid(numero), 'preview', 8_000)) ?? null;
+    // O WhatsApp sabe o JID real (com ou sem o nono digito); montar na mao pode
+    // apontar para outra pessoa ou para ninguem.
+    let destino = jid(numero);
+    if (!jidOriginal.has(numero)) {
+      const achado = await sessao.sock.onWhatsApp(numero).catch(() => undefined);
+      const registro = achado?.[0];
+      if (registro && !registro.exists) return null;
+      if (registro?.jid) destino = registro.jid;
+    }
+    return (await sessao.sock.profilePictureUrl(destino, 'preview', 8_000)) ?? null;
   } catch {
     // Sem foto, restricao de privacidade ou falha pontual nao afetam a conversa.
     return null;
