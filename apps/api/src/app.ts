@@ -67,7 +67,7 @@ export function createApp() {
   app.use(
     helmet({
       strictTransportSecurity: env.HSTS_ATIVO ? undefined : false,
-      contentSecurityPolicy: { directives: { upgradeInsecureRequests: env.HSTS_ATIVO ? [] : null } },
+      contentSecurityPolicy: { directives: { imgSrc: ["'self'", 'data:', 'blob:'], upgradeInsecureRequests: env.HSTS_ATIVO ? [] : null } },
     }),
   );
   app.use(cors({ origin: env.WEB_ORIGIN, credentials: true }));
