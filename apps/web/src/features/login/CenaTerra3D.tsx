@@ -266,6 +266,13 @@ export function CenaTerra3D() {
       const prato = new THREE.Mesh(new THREE.ConeGeometry(0.065, 0.045, 12), metal);
       prato.position.set(0.04, 0.28, 0);
       grupo.add(prato);
+      // Pequena luz de navegação para destacar o satélite contra o espaço.
+      const luzNavegacao = new THREE.Mesh(
+        new THREE.SphereGeometry(0.035, 10, 8),
+        new THREE.MeshBasicMaterial({ color: 0x67e8f9, toneMapped: false }),
+      );
+      luzNavegacao.position.set(0.24, 0.06, 0.02);
+      grupo.add(luzNavegacao);
       for (const lado of [-1, 1]) {
         const braco = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.014, 0.018), metalEscuro);
         braco.position.x = lado * 0.26;
@@ -316,8 +323,8 @@ export function CenaTerra3D() {
     }
 
     const orbitas = [
-      criarOrbita(2.35, 53, 20, 0.6), // camada tipo Starlink
-      criarOrbita(2.75, 97.6, -35, 2.8), // polar, sol-sincrona
+      criarOrbita(2.35, 53, 20, 0.6), // órbita baixa
+      criarOrbita(2.75, 97.6, -35, 2.8), // órbita polar
     ];
 
     // Atitude calculada no referencial do plano: +z aponta pro centro e "up" e
@@ -407,5 +414,9 @@ export function CenaTerra3D() {
     };
   }, []);
 
-  return <div ref={containerRef} className="h-full w-full" aria-hidden="true" />;
+  return (
+    <div className="relative h-full w-full overflow-hidden" aria-hidden="true">
+      <div ref={containerRef} className="absolute inset-0" />
+    </div>
+  );
 }

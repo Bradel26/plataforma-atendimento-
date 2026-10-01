@@ -6,6 +6,7 @@ import {
 } from '../../config/wppconnect.config';
 import { numeroNormalizado, type EstadoDaPonte } from './whatsapp.modo';
 import type { ConfigDaPonte, QrDaPonte } from './whatsapp.ponte';
+import { baixarFotoDePerfil, urlDaFotoPerfil, type FotoPerfil } from './avatar';
 
 /**
  * O driver do WhatsApp via WPPConnect Server: fala HTTP diretamente com ele
@@ -517,5 +518,35 @@ export async function desconectarWpp(config: ConfigDaPonte): Promise<void> {
         typeof dados.message === 'string' ? dados.message : 'sem detalhe'
       }`,
     );
+  }
+}
+
+/** Leitura best-effort da foto do contato; não altera a sessão nem o estado da conexão. */
+export async function buscarFotoPerfilWpp(config: ConfigDaPonte, destino: string): Promise<FotoPerfil | null> {
+  const cfg = configOuNulo();
+  const sessao = config.ponteSessao?.trim();
+  const telefone = destino.replace(/\D/g, '');
+  if (!cfg || !sessao || !telefone) return null;
+
+  try {
+    const resposta = await chamarAutenticado(
+      cfg,
+      sessao,
+      `/api/${encodeURIComponent(sessao)}/profile-pic/${encodeURIComponent(telefone)}`,
+      { method: 'GET', headers: { Accept: 'application/json, image/*' } },
+    );
+    if (!resposta.ok) return null;
+
+    const contentType = resposta.headers.get('content-type')?.split(';')[0]?.toLowerCase();
+    if (contentType === 'image/jpeg' || contentType === 'image/png' || contentType === 'image/webp') {
+      const buffer = Buffer.from(await resposta.arrayBuffer());
+      return buffer.length > 0 && buffer.length <= 2 * 1024 * 1024 ? { buffer, contentType } : null;
+    }
+
+    const url = urlDaFotoPerfil(await lerCorpo(resposta));
+    return url ? baixarFotoDePerfil(url) : null;
+  } catch {
+    // Foto é decorativa; indisponibilidade do endpoint não afeta o atendimento.
+    return null;
   }
 }

@@ -8,10 +8,11 @@ import { normalizarTags } from '../../lib/tags';
 import { AppError, badRequest, forbidden, notFound } from '../../lib/errors';
 import { notificarConversaAtualizada, notificarConversaNova, notificarMensagem } from '../../realtime/hub';
 import { enviarArquivoParaCanal, enviarParaCanal, exigeEnvioExterno } from '../channels/outbound.service';
-import { obterConfig } from '../channels/channels.service';
+import { obterConfig, obterConfigPorId } from '../channels/channels.service';
 import { decidirDestino, filaPadraoDoCanal } from '../channels/inbound.service';
 import { impedimentoDeEnvio, numeroNormalizado } from '../channels/whatsapp.modo';
 import { getWhatsAppProvider } from '../channels/whatsapp-provider.factory';
+import type { FotoPerfil } from '../channels/avatar';
 import { promoverPrevia } from '../channels/chat-previews.service';
 import { entregarParaIa } from '../bots/ia.service';
 import { TIPO_CONVITE_PESQUISA, criarPesquisa, entregarPesquisa } from '../surveys/surveys.service';
@@ -40,6 +41,52 @@ export type Solicitante = { sub: string; perfil: Role; nome: string };
  * uma delas ficar para tras numa mudanca futura.
  */
 const escopoVisivel = () => filtroDe(politicaConversas);
+
+const cacheFotosPerfil = new Map<string, { expiraEm: number; busca: Promise<FotoPerfil | null> }>();
+
+/** Foto opcional do contato, consultada apenas depois da mesma checagem de acesso da conversa. */
+export async function buscarFotoDaConversa(id: string): Promise<FotoPerfil | null> {
+  const conversa = await prisma.conversation.findFirst({
+    where: apenasVisivel(id, await escopoVisivel()),
+    select: {
+      id: true,
+      canal: true,
+      canalConfigId: true,
+      enderecoExterno: true,
+      contato: { select: { telefone: true } },
+    },
+  });
+  if (!conversa) throw notFound('Conversa não encontrada');
+  if (conversa.canal !== 'WHATSAPP') return null;
+
+  const telefone = (conversa.contato.telefone ?? conversa.enderecoExterno ?? '').replace(/\D/g, '');
+  if (telefone.length < 10 || telefone.length > 15) return null;
+
+  const config = conversa.canalConfigId
+    ? await obterConfigPorId(conversa.canalConfigId)
+    : await obterConfig('WHATSAPP');
+  if (!config) return null;
+
+  const provider = getWhatsAppProvider();
+  if (!provider.fetchAvatar) return null;
+  const chave = `${provider.constructor.name}:${config.id ?? config.ponteSessao ?? 'linha'}:${telefone}`;
+  const agora = Date.now();
+  const existente = cacheFotosPerfil.get(chave);
+  if (existente && existente.expiraEm > agora) return existente.busca;
+  if (existente) cacheFotosPerfil.delete(chave);
+
+  const entrada = { expiraEm: agora + 15_000, busca: Promise.resolve(null) as Promise<FotoPerfil | null> };
+  entrada.busca = provider.fetchAvatar(config, telefone).catch(() => null).then((foto) => {
+    entrada.expiraEm = Date.now() + (foto ? 6 * 60 * 60_000 : 10 * 60_000);
+    return foto;
+  });
+  cacheFotosPerfil.set(chave, entrada);
+  if (cacheFotosPerfil.size > 1000) {
+    const primeira = cacheFotosPerfil.keys().next().value;
+    if (primeira) cacheFotosPerfil.delete(primeira);
+  }
+  return entrada.busca;
+}
 
 export async function listarConversas(solicitante: Solicitante, query: ListarConversasQuery) {
   const filtros: Prisma.ConversationWhereInput[] = [await escopoVisivel()];

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Alerta, Badge, Button, Select } from '../../components/ui';
 import { ApiError, api } from '../../lib/api';
 import { LABEL_CONVERSA_STATUS, type ConversaDetalhe, type Mensagem, type Usuario } from '../../lib/types';
+import { AvatarConversa } from './AvatarConversa';
 
 const hora = (iso: string) =>
   new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -269,12 +270,7 @@ export function PainelChat({
               &larr;
             </Button>
           )}
-          <span
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold"
-            style={{ backgroundColor: 'var(--brand-primary-soft)', color: 'var(--brand-primary)' }}
-          >
-            {conversa.contato.nome.charAt(0).toUpperCase()}
-          </span>
+          <AvatarConversa conversaId={conversa.id} nome={conversa.contato.nome} className="h-9 w-9" />
           <div className="min-w-0 flex-1">
             <p className="truncate font-medium text-slate-800">{conversa.contato.nome}</p>
             <p className="truncate text-xs text-slate-500">

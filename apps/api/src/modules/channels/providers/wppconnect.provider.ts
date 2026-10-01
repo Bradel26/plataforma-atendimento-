@@ -2,6 +2,7 @@ import {
   desconectarWpp,
   enviarArquivoWpp,
   enviarTextoWpp,
+  buscarFotoPerfilWpp,
   estadoWpp,
   qrWpp,
 } from '../wppconnect.client';
@@ -24,6 +25,8 @@ export class WPPConnectProvider implements WhatsAppProvider {
   getStatus: WhatsAppProvider['getStatus'] = (config) => estadoWpp(config);
 
   disconnect: WhatsAppProvider['disconnect'] = (config) => desconectarWpp(config);
+
+  fetchAvatar: WhatsAppProvider['fetchAvatar'] = (config, telefone) => buscarFotoPerfilWpp(config, telefone);
 
   readonly credenciaisPorLinha = false;
 

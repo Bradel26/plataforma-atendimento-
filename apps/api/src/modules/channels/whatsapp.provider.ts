@@ -1,5 +1,6 @@
 import type { ConfigDaPonte, QrDaPonte } from './whatsapp.ponte';
 import type { EstadoDaPonte } from './whatsapp.modo';
+import type { FotoPerfil } from './avatar';
 
 /**
  * Abstracao do "driver" de WhatsApp nao oficial.
@@ -26,6 +27,9 @@ export interface WhatsAppProvider {
   getStatus(config: ConfigDaPonte): Promise<EstadoDaPonte>;
 
   disconnect(config: ConfigDaPonte): Promise<void>;
+
+  /** Busca opcional da foto do contato; falha ou ausência nunca afeta mensagens. */
+  fetchAvatar?(config: ConfigDaPonte, telefone: string): Promise<FotoPerfil | null>;
 
   /**
    * De onde vem a conexao com o servidor do WhatsApp nao oficial.

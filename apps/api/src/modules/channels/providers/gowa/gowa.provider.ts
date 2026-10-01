@@ -162,6 +162,11 @@ export class GowaProvider implements ChannelProvider {
     }
   }
 
+  async buscarAvatar(sessao: SessaoResolvida, telefone: string) {
+    if (!GowaProvider.sessaoPermitida(sessao)) return null;
+    return this.cliente().obterAvatar(GowaProvider.deviceId(sessao), telefone);
+  }
+
   // ------------------------------------------------------------------- sessao
 
   /** Garante que o device existe no GOWA (cria se preciso) — equivalente a `ensure_device` de referencia. */

@@ -17,6 +17,7 @@ import {
 import {
   arquivarConversa,
   assumirConversa,
+  buscarFotoDaConversa,
   contarPorStatus,
   definirTags,
   desarquivarConversa,
@@ -90,6 +91,22 @@ conversationsRoutes.get(
   '/contadores',
   asyncHandler(async (req, res) => {
     res.json({ contadores: await contarPorStatus(quem(req)) });
+  }),
+);
+
+conversationsRoutes.get(
+  '/:id/avatar',
+  asyncHandler(async (req, res) => {
+    const foto = await buscarFotoDaConversa(param(req, 'id'));
+    if (!foto) {
+      res.setHeader('Cache-Control', 'private, max-age=600');
+      res.status(404).end();
+      return;
+    }
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+    res.type(foto.contentType).send(foto.buffer);
   }),
 );
 

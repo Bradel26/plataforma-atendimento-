@@ -1,4 +1,5 @@
 import type { MensagemNormalizada } from '../meta.types';
+import type { FotoPerfil } from '../avatar';
 
 /**
  * Contrato de um provider de canal — a engine por tras de um canal (WAHA
@@ -105,6 +106,9 @@ export interface ChannelProvider {
   /** Lancam `AppError` quando a mensagem nao sai: nao existe "enviada" que nao chegou. */
   enviarTexto(sessao: SessaoResolvida, destino: string, texto: string): Promise<ResultadoEnvio>;
   enviarMidia(sessao: SessaoResolvida, destino: string, midia: InputMidia): Promise<ResultadoEnvio>;
+
+  /** Leitura opcional de avatar; providers que não oferecem isso usam a inicial do contato. */
+  buscarAvatar?(sessao: SessaoResolvida, telefone: string): Promise<FotoPerfil | null>;
 
   sessao: {
     /** Cria (se preciso) e sobe a sessao na engine, ja com o webhook de volta. */

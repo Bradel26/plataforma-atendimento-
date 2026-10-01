@@ -221,14 +221,9 @@ export function LoginPage() {
         {branding.logoUrl ? (
           <img src={branding.logoUrl} alt="" className="h-9 w-9 rounded object-contain" />
         ) : (
-          <span
-            className="flex h-9 w-9 items-center justify-center rounded-lg font-bold"
-            style={{ backgroundColor: 'var(--brand-primary)' }}
-          >
-            {branding.appName.charAt(0).toUpperCase()}
-          </span>
+          <img src="/branding/bradel-branco-escuro.jpeg" alt="Bradel" className="h-8 w-24 object-contain mix-blend-screen" />
         )}
-        <span className="font-semibold">{branding.appName}</span>
+        <span className="font-semibold">{branding.logoUrl ? branding.appName : 'Plataforma de Atendimento'}</span>
       </div>
 
       {/* Cor literal pelo mesmo motivo do IconeDecorativo: cena sempre escura. */}
@@ -241,23 +236,13 @@ export function LoginPage() {
       <div className="relative z-10 flex w-full flex-1 items-center justify-center px-6 lg:w-[32%] lg:flex-none">
         <div className="w-full max-w-sm rounded-2xl border border-[rgba(255,255,255,0.1)] bg-slate-950/70 p-8 shadow-2xl backdrop-blur-xl">
           <div className="mb-6 flex items-center justify-center gap-4 border-b border-[rgba(255,255,255,0.1)] pb-5">
-            <span className="flex items-center gap-1 text-lg font-semibold italic tracking-wide texto-sobre-cor-fixa">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M3 12c4-6 14-6 18 0" stroke="#e2e8f0" strokeWidth="2" strokeLinecap="round" />
-                <path d="M6 16c3-4 9-4 12 0" stroke="#e2e8f0" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-              STARLINK
-            </span>
+            <img
+              src="/branding/starlink-preto-branco.jpeg"
+              alt="Starlink"
+              className="h-12 w-32 object-contain invert mix-blend-screen"
+            />
             <span className="h-8 w-px bg-[rgba(255,255,255,0.2)]" />
-            <span className="flex items-center gap-1.5 text-lg font-bold texto-sobre-cor-fixa">
-              <span className="grid grid-cols-2 gap-0.5">
-                <span className="h-2 w-2 rounded-[1px] bg-red-600" />
-                <span className="h-2 w-2 rounded-[1px] bg-red-600" />
-                <span className="h-2 w-2 rounded-[1px] bg-red-600" />
-                <span className="h-2 w-2 rounded-[1px] bg-red-600" />
-              </span>
-              TIM
-            </span>
+            <img src="/branding/tim-branco-azul.jpeg" alt="TIM" className="h-8 w-24 rounded object-contain" />
           </div>
 
           <form onSubmit={trocaObrigatoria ? trocarSenha : submeter} className="space-y-5">

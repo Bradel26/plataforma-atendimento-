@@ -1,4 +1,5 @@
 import type { ArquivoGowa, DeviceGowa, EndpointDeMidiaGowa, EnvioGowa, LoginGowa, StatusGowa } from './gowa.types';
+import { baixarFotoDePerfil, urlDaFotoPerfil, type FotoPerfil } from '../../avatar';
 
 /**
  * O unico lugar que conhece a API HTTP do GOWA (go-whatsapp-web-multidevice):
@@ -159,6 +160,32 @@ export class GowaClient {
   async reconectar(deviceId: string): Promise<void> {
     const resposta = await this.chamar('reconectar', '/app/reconnect', { deviceId });
     if (!resposta.ok) throw new GowaErro('reconectar', 'http', resposta.status, await GowaClient.corpoDeErro(resposta));
+  }
+
+  /** Foto de perfil opcional do contato; devolve null se não houver ou o GOWA não responder. */
+  async obterAvatar(deviceId: string, telefone: string): Promise<FotoPerfil | null> {
+    const numero = telefone.replace(/\D/g, '');
+    if (!numero) return null;
+    try {
+      const jid = `${numero}@s.whatsapp.net`;
+      const resposta = await this.chamar(
+        'obter a foto do contato',
+        `/user/avatar?phone=${encodeURIComponent(jid)}&is_preview=true`,
+        { deviceId },
+      );
+      if (!resposta.ok) return null;
+
+      const contentType = resposta.headers.get('content-type')?.split(';')[0]?.toLowerCase();
+      if (contentType === 'image/jpeg' || contentType === 'image/png' || contentType === 'image/webp') {
+        const buffer = Buffer.from(await resposta.arrayBuffer());
+        return buffer.length > 0 && buffer.length <= 2 * 1024 * 1024 ? { buffer, contentType } : null;
+      }
+
+      const url = urlDaFotoPerfil(await GowaClient.json(resposta));
+      return url ? baixarFotoDePerfil(url) : null;
+    } catch {
+      return null;
+    }
   }
 
   async enviarTexto(deviceId: string, phone: string, texto: string): Promise<EnvioGowa> {

@@ -2,6 +2,7 @@ import { Badge } from '../../components/ui';
 import { SkeletonBloco } from '../../components/ui/Skeleton';
 import { EtiquetasCompactas } from '../../pages/crm/Etiquetas';
 import type { ConversaResumo, Previa } from '../../lib/types';
+import { AvatarConversa } from './AvatarConversa';
 
 /** Silhueta de um cartao de conversa: avatar, nome+hora, previa. */
 function SkeletonConversa() {
@@ -135,14 +136,7 @@ export function ListaConversas({
               }`}
               style={ativa ? { borderLeft: '3px solid var(--brand-primary)' } : { borderLeft: '3px solid transparent' }}
             >
-              {/* Iniciais, e nao foto: nenhum canal manda avatar do cliente, e um
-                  circulo vazio no lugar chamaria mais atencao que a inicial. */}
-              <span
-                className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold"
-                style={{ backgroundColor: 'var(--brand-primary-soft)', color: 'var(--brand-primary)' }}
-              >
-                {c.contato.nome.charAt(0).toUpperCase()}
-              </span>
+              <AvatarConversa conversaId={c.id} nome={c.contato.nome} className="h-9 w-9" />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="truncate text-sm font-medium text-slate-800">{c.contato.nome}</span>

@@ -48,6 +48,9 @@ export class WhatsAppProviderLegado implements WhatsAppProvider {
   sendMedia: WhatsAppProvider['sendMedia'] = (config, destino, arquivo) =>
     this.provider.enviarMidia(sessaoDa(config), destino, arquivo);
 
+  fetchAvatar: WhatsAppProvider['fetchAvatar'] = (config, telefone) =>
+    this.provider.buscarAvatar?.(sessaoDa(config), telefone) ?? Promise.resolve(null);
+
   getQRCode = (config: ConfigDaPonte): Promise<QrDaPonte> => this.provider.sessao.qr(sessaoDa(config));
 
   getStatus = async (config: ConfigDaPonte): Promise<EstadoDaPonte> =>

@@ -144,6 +144,22 @@ export const api = {
   del: <T>(path: string) => request<T>('DELETE', path),
 };
 
+/** Baixa uma imagem privada da API usando o token em memória e renovando a sessão se necessário. */
+export async function obterImagemPrivada(path: string): Promise<Blob | null> {
+  let res = await raw(path, { method: 'GET' });
+  if (res.status === 401) {
+    if (await renovarSessao()) res = await raw(path, { method: 'GET' });
+    else {
+      setAccessToken(null);
+      window.dispatchEvent(new Event(AUTH_EXPIRADA));
+      return null;
+    }
+  }
+  const tipo = res.headers.get('content-type')?.toLowerCase() ?? '';
+  if (!res.ok || !tipo.startsWith('image/')) return null;
+  return res.blob();
+}
+
 /**
  * Baixa um CSV da API. Um <a href> simples nao serve: a rota exige o header
  * Authorization, que o navegador nao envia em navegacao — entao buscamos o
