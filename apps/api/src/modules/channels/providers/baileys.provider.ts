@@ -2,6 +2,7 @@ import {
   desconectarPonte,
   enviarArquivoPelaPonte,
   enviarTextoPelaPonte,
+  buscarFotoPelaPonte,
   estadoDaPonte,
   qrDaPonte,
 } from '../whatsapp.ponte';
@@ -28,6 +29,8 @@ export class BaileysProvider implements WhatsAppProvider {
   getStatus: WhatsAppProvider['getStatus'] = (config) => estadoDaPonte(config);
 
   disconnect: WhatsAppProvider['disconnect'] = (config) => desconectarPonte(config);
+
+  fetchAvatar: WhatsAppProvider['fetchAvatar'] = (config, telefone) => buscarFotoPelaPonte(config, telefone);
 
   readonly credenciaisPorLinha = true;
 

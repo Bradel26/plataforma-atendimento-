@@ -1,4 +1,5 @@
 import { AppError } from '../../lib/errors';
+import { baixarFotoDePerfil, type FotoPerfil } from './avatar';
 import {
   enderecosDaPonte,
   lerEstadoDaPonte,
@@ -100,6 +101,27 @@ function credenciais(config: ConfigDaPonte) {
     enderecos: enderecosDaPonte(config.ponteUrl, config.ponteSessao),
     token: config.ponteToken,
   };
+}
+
+/** Busca a foto pela mesma ponte e sessao usadas para enviar mensagens. */
+export async function buscarFotoPelaPonte(config: ConfigDaPonte, destino: string): Promise<FotoPerfil | null> {
+  const numero = numeroNormalizado(destino);
+  if (!numero || !config.ponteUrl || !config.ponteToken) return null;
+
+  try {
+    const { enderecos, token } = credenciais(config);
+    const url = new URL(enderecos.foto);
+    url.searchParams.set('numero', numero);
+    const resposta = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!resposta.ok) return null;
+    const corpo = (await resposta.json()) as { url?: unknown };
+    return typeof corpo.url === 'string' ? baixarFotoDePerfil(corpo.url) : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Manda texto pela ponte. */

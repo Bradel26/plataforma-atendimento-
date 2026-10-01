@@ -662,6 +662,19 @@ export function enviarTexto(nome: string, destino: string, texto: string) {
   return enviar(nome, destino, { text: texto });
 }
 
+/** Consulta apenas a foto publica que a sessao conectada consegue ver. */
+export async function fotoDePerfil(nome: string, numero: string): Promise<string | null> {
+  const sessao = sessoes.get(nome);
+  if (!sessao?.sock || sessao.situacao !== 'CONECTADO') return null;
+
+  try {
+    return (await sessao.sock.profilePictureUrl(jid(numero), 'preview', 8_000)) ?? null;
+  } catch {
+    // Sem foto, restricao de privacidade ou falha pontual nao afetam a conversa.
+    return null;
+  }
+}
+
 export function enviarArquivo(
   nome: string,
   destino: string,

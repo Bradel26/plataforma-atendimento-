@@ -8,6 +8,7 @@ import {
   desconectar,
   enviarArquivo,
   enviarTexto,
+  fotoDePerfil,
   garantirNoAr,
   listar,
   qrDe,
@@ -118,6 +119,23 @@ export function criarServidor() {
   };
   app.get('/estado', rota(estado));
   app.get('/estado/:sessao', rota(estado));
+
+  const foto = async (req: Request, res: Response) => {
+    const numero = normalizar(req.query.numero);
+    if (!numero) {
+      res.status(400).json({ erro: 'numero invalido' });
+      return;
+    }
+    const url = await fotoDePerfil(sessaoDaUrl(req), numero);
+    res.setHeader('Cache-Control', 'no-store');
+    if (!url) {
+      res.status(404).end();
+      return;
+    }
+    res.json({ url });
+  };
+  app.get('/foto', rota(foto));
+  app.get('/foto/:sessao', rota(foto));
 
   /**
    * O QR para parear — a razao de ser desta ponte.
