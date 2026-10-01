@@ -20,6 +20,7 @@ import { EmpresaInput, type EmpresaEscolhida } from './EmpresaInput';
 import { Etiquetas, FiltroEtiquetas } from './Etiquetas';
 import { FunilDeCicloDeVida } from './FunilDeCicloDeVida';
 import { UFS_ATENDIDAS } from '../esteira/ufs';
+import { AvatarConversa } from '../../features/atendimento/AvatarConversa';
 
 const ORIGENS: Canal[] = ['WEBCHAT', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'PROSPECCAO_ATIVA', 'INDICACAO'];
 
@@ -512,9 +513,12 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
                           : 'border border-transparent'
                       }`}
                     >
-                      <span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 text-[11px] font-semibold text-blue-700 ring-1 ring-inset ring-blue-200/70">
-                        {c.nome.trim().split(/\s+/).slice(0, 2).map((parte) => parte[0]).join('').toLocaleUpperCase('pt-BR')}
-                      </span>
+                      <AvatarConversa
+                        conversaId={c.id}
+                        nome={c.nome.trim().split(/\s+/).slice(0, 2).map((parte) => parte[0]).join('').toLocaleUpperCase('pt-BR')}
+                        className="mt-0.5 size-9 text-[11px] ring-1 ring-inset ring-blue-200/70"
+                        avatarPath={`/contatos/${c.id}/avatar`}
+                      />
                       <span className="min-w-0 flex-1">
                         <span className="flex min-w-0 items-center justify-between gap-2">
                           <span className="truncate text-[13px] font-semibold text-slate-800 group-hover:text-blue-700">{c.nome}</span>

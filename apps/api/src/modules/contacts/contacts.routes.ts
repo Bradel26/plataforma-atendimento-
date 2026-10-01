@@ -20,8 +20,13 @@ import { CICLOS } from '../crm/cicloDeVida';
 import { apenasVisivel } from '../../lib/visibilidade';
 import { MAXIMO_POR_REGISTRO, TAMANHO_MAXIMO, normalizarTags } from '../../lib/tags';
 import { ufDoTelefone } from '../../lib/ddd';
+import { obterConfig, obterConfigPorId } from '../channels/channels.service';
+import { getWhatsAppProvider } from '../channels/whatsapp-provider.factory';
+import type { FotoPerfil } from '../channels/avatar';
 
 export const contactsRoutes = Router();
+
+const cacheFotosContato = new Map<string, { expiraEm: number; busca: Promise<FotoPerfil | null> }>();
 
 contactsRoutes.use(requireAuth);
 
@@ -244,6 +249,73 @@ contactsRoutes.get(
 );
 
 /** Ficha do contato com o historico de conversas — CRM basico da Fase 1. */
+contactsRoutes.get(
+  '/:id/avatar',
+  asyncHandler(async (req, res) => {
+    const id = param(req, 'id');
+    const contato = await prisma.contact.findFirst({
+      where: apenasVisivel(id, await filtroDe(politicaContatos)),
+      select: { id: true, telefone: true },
+    });
+    if (!contato) throw notFound('Contato não encontrado');
+
+    const telefone = (contato.telefone ?? '').replace(/\D/g, '');
+    if (telefone.length < 10 || telefone.length > 15) {
+      res.setHeader('Cache-Control', 'private, max-age=600');
+      res.status(404).end();
+      return;
+    }
+
+    const conversa = await prisma.conversation.findFirst({
+      where: { contatoId: id, canal: 'WHATSAPP', AND: [await filtroDe(politicaConversas)] },
+      select: { canalConfigId: true },
+      orderBy: { ultimaMensagemEm: 'desc' },
+    });
+    const config = conversa?.canalConfigId
+      ? await obterConfigPorId(conversa.canalConfigId)
+      : await obterConfig('WHATSAPP');
+    if (!config) {
+      res.setHeader('Cache-Control', 'private, max-age=600');
+      res.status(404).end();
+      return;
+    }
+
+    const provider = getWhatsAppProvider();
+    if (!provider.fetchAvatar) {
+      res.setHeader('Cache-Control', 'private, max-age=600');
+      res.status(404).end();
+      return;
+    }
+
+    const chave = `${config.id ?? config.ponteSessao ?? 'linha'}:${telefone}`;
+    const agora = Date.now();
+    let entrada = cacheFotosContato.get(chave);
+    if (!entrada || entrada.expiraEm <= agora) {
+      entrada = { expiraEm: agora + 15_000, busca: Promise.resolve(null) };
+      entrada.busca = provider.fetchAvatar(config, telefone).catch(() => null).then((foto) => {
+        entrada!.expiraEm = Date.now() + (foto ? 6 * 60 * 60_000 : 10 * 60_000);
+        return foto;
+      });
+      cacheFotosContato.set(chave, entrada);
+      if (cacheFotosContato.size > 1000) {
+        const primeira = cacheFotosContato.keys().next().value;
+        if (primeira) cacheFotosContato.delete(primeira);
+      }
+    }
+
+    const foto = await entrada.busca;
+    if (!foto) {
+      res.setHeader('Cache-Control', 'private, max-age=600');
+      res.status(404).end();
+      return;
+    }
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+    res.type(foto.contentType).send(foto.buffer);
+  }),
+);
+
 contactsRoutes.get(
   '/:id',
   asyncHandler(async (req, res) => {
