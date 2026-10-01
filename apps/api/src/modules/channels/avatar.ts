@@ -37,11 +37,22 @@ export async function baixarFotoDePerfil(url: string): Promise<FotoPerfil | null
 export function urlDaFotoPerfil(corpo: unknown): string | null {
   if (!corpo || typeof corpo !== 'object') return null;
   const objeto = corpo as Record<string, unknown>;
-  const interno = (objeto.results ?? objeto.data ?? objeto) as Record<string, unknown> | null;
-  if (!interno || typeof interno !== 'object') return null;
-  const miniatura = interno.profilePicThumbObj as Record<string, unknown> | null | undefined;
-  for (const valor of [interno.eurl, interno.url, interno.profile_picture, miniatura?.eurl]) {
-    if (typeof valor === 'string' && valor.trim()) return valor.trim();
+  const camadas = [objeto.results, objeto.data, objeto.response, corpo].flatMap((valor) =>
+    Array.isArray(valor) ? valor : valor && typeof valor === 'object' ? [valor] : [],
+  ) as Record<string, unknown>[];
+  for (const camada of camadas) {
+    const miniaturas = [camada.profilePicThumbObj, camada.profilePicThumb, camada.avatar].filter(
+      (valor): valor is Record<string, unknown> => Boolean(valor && typeof valor === 'object'),
+    );
+    const candidatos = [
+      camada.eurl,
+      camada.url,
+      camada.profile_picture,
+      ...miniaturas.flatMap((miniatura) => [miniatura.eurl, miniatura.imgFull, miniatura.img, miniatura.url]),
+    ];
+    for (const valor of candidatos) {
+      if (typeof valor === 'string' && valor.trim()) return valor.trim();
+    }
   }
   return null;
 }
