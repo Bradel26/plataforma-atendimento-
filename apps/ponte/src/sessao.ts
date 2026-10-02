@@ -674,8 +674,8 @@ export async function fotoDePerfil(nome: string, numero: string): Promise<string
     if (!jidOriginal.has(numero)) {
       const achado = await sessao.sock.onWhatsApp(numero).catch(() => undefined);
       const registro = achado?.[0];
-      if (registro && !registro.exists) return null;
-      if (registro?.jid) destino = registro.jid;
+      // Só troca o endereço quando o WhatsApp confirma; qualquer dúvida mantém o comportamento anterior.
+      if (registro?.exists && registro.jid) destino = registro.jid;
     }
     return (await sessao.sock.profilePictureUrl(destino, 'preview', 8_000)) ?? null;
   } catch {
