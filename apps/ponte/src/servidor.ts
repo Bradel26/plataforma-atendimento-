@@ -90,7 +90,8 @@ export function criarServidor() {
    * ser marcado como morto quando estivesse vivo.
    */
   app.get('/saude', (_req, res) => {
-    res.json({ ok: true, sessoes: listar() });
+    // `foto` identifica a versao da busca de foto em execucao: permite conferir o deploy sem acesso aos logs.
+    res.json({ ok: true, foto: 'sem-token-v1', sessoes: listar() });
   });
 
   /*
