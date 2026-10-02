@@ -124,6 +124,35 @@ export async function buscarFotoPelaPonte(config: ConfigDaPonte, destino: string
   }
 }
 
+/** Valida o numero no WhatsApp pela ponte. Qualquer falha vira "nao sei", nunca recusa. */
+export async function verificarNumeroPelaPonte(
+  config: ConfigDaPonte,
+  destino: string,
+): Promise<{ existe: boolean | null; numero: string | null }> {
+  const desconhecido = { existe: null, numero: null };
+  const numero = numeroNormalizado(destino);
+  if (!numero || !config.ponteUrl || !config.ponteToken) return desconhecido;
+
+  try {
+    const { enderecos, token } = credenciais(config);
+    const url = new URL(enderecos.contato);
+    url.searchParams.set('numero', numero);
+    const resposta = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!resposta.ok) return desconhecido;
+    const corpo = (await resposta.json()) as { existe?: unknown; numero?: unknown };
+    const digitos = typeof corpo.numero === 'string' ? corpo.numero.replace(/\D/g, '') : '';
+    return {
+      existe: typeof corpo.existe === 'boolean' ? corpo.existe : null,
+      numero: digitos.length >= 10 && digitos.length <= 15 ? digitos : null,
+    };
+  } catch {
+    return desconhecido;
+  }
+}
+
 /** Manda texto pela ponte. */
 export async function enviarTextoPelaPonte(
   config: ConfigDaPonte,

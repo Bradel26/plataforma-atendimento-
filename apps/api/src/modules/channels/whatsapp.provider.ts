@@ -32,6 +32,12 @@ export interface WhatsAppProvider {
   fetchAvatar?(config: ConfigDaPonte, telefone: string): Promise<FotoPerfil | null>;
 
   /**
+   * Pergunta ao WhatsApp se o numero existe e qual e a forma real dele (com ou
+   * sem o nono digito). `existe: null` = nao deu para saber; nunca bloqueia.
+   */
+  checkNumber?(config: ConfigDaPonte, telefone: string): Promise<{ existe: boolean | null; numero: string | null }>;
+
+  /**
    * De onde vem a conexao com o servidor do WhatsApp nao oficial.
    *
    * `true` (Baileys): cada linha carrega endereco/token/segredo da ponte na

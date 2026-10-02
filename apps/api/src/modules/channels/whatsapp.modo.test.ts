@@ -163,6 +163,7 @@ describe('enderecosDaPonte', () => {
       arquivo: 'http://ponte:3000/api/arquivos',
       estado: 'http://ponte:3000/api/estado',
       foto: 'http://ponte:3000/api/foto',
+      contato: 'http://ponte:3000/api/contato',
       qr: 'http://ponte:3000/api/qr',
       desconectar: 'http://ponte:3000/api/desconectar',
     });

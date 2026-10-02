@@ -665,6 +665,28 @@ export function enviarTexto(nome: string, destino: string, texto: string) {
   return enviar(nome, destino, { text: texto });
 }
 
+export type VerificacaoDeNumero = {
+  /** `null` = nao deu para saber (sessao fora do ar ou WhatsApp sem resposta). */
+  existe: boolean | null;
+  /** Numero que o WhatsApp usa de fato (com ou sem o nono digito), so digitos. */
+  numero: string | null;
+};
+
+/** Pergunta ao WhatsApp se o numero existe e qual e a forma real dele. */
+export async function verificarNumero(nome: string, numero: string): Promise<VerificacaoDeNumero> {
+  const sessao = sessoes.get(nome);
+  if (!sessao?.sock || sessao.situacao !== 'CONECTADO') return { existe: null, numero: null };
+  try {
+    const achado = await sessao.sock.onWhatsApp(numero);
+    if (!achado) return { existe: null, numero: null };
+    const registro = achado[0];
+    if (!registro || !registro.exists) return { existe: false, numero: null };
+    return { existe: true, numero: numeroDoJid(registro.jid) ?? numero };
+  } catch {
+    return { existe: null, numero: null };
+  }
+}
+
 /** Pedido de foto sem tctoken; devolve a URL do CDN ou nulo (sem foto, privacidade ou falha). */
 async function fotoSemToken(sock: WASocket, destino: string): Promise<string | null> {
   try {
