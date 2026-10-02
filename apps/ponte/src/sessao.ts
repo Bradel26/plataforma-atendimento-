@@ -3,8 +3,11 @@ import {
   Browsers,
   DisconnectReason,
   fetchLatestBaileysVersion,
+  getBinaryNodeChild,
   getCodeFromWSError,
+  jidNormalizedUser,
   makeWASocket,
+  S_WHATSAPP_NET,
   type AnyMessageContent,
   type WASocket,
 } from '@whiskeysockets/baileys';
@@ -662,6 +665,24 @@ export function enviarTexto(nome: string, destino: string, texto: string) {
   return enviar(nome, destino, { text: texto });
 }
 
+/** Pedido de foto sem tctoken; devolve a URL do CDN ou nulo (sem foto, privacidade ou falha). */
+async function fotoSemToken(sock: WASocket, destino: string): Promise<string | null> {
+  try {
+    const resposta = await sock.query(
+      {
+        tag: 'iq',
+        attrs: { target: jidNormalizedUser(destino), to: S_WHATSAPP_NET, type: 'get', xmlns: 'w:profile:picture' },
+        content: [{ tag: 'picture', attrs: { type: 'preview', query: 'url' } }],
+      },
+      4_000,
+    );
+    return getBinaryNodeChild(resposta, 'picture')?.attrs?.url ?? null;
+  } catch (err) {
+    console.log(`[ponte] foto simples recusada: ${err instanceof Error ? err.message : String(err)}`);
+    return null;
+  }
+}
+
 /** Consulta apenas a foto publica que a sessao conectada consegue ver. */
 export async function fotoDePerfil(nome: string, numero: string): Promise<string | null> {
   const sessao = sessoes.get(nome);
@@ -685,8 +706,17 @@ export async function fotoDePerfil(nome: string, numero: string): Promise<string
         resolvido = registro ? 'inexistente' : 'sem-resposta';
       }
     }
-    const url = (await sessao.sock.profilePictureUrl(destino, 'preview', 8_000)) ?? null;
-    console.log(`[ponte] foto alvo="${alvo}" jid=${resolvido} resultado=${url ? 'ok' : 'vazio'}`);
+    // 1) Pedido simples, sem tctoken: o do Baileys 7.0.0-rc anexa o token e, sem ele
+    //    no cofre, trava ou falha em silencio (WhiskeySockets/Baileys#2498). E o mesmo
+    //    pedido que o WhatsApp Web e o GOWA fazem.
+    let url = await fotoSemToken(sessao.sock, destino);
+    let via = 'simples';
+    // 2) Caminho do Baileys, com tctoken, para quem so libera a foto a contatos.
+    if (!url) {
+      url = (await sessao.sock.profilePictureUrl(destino, 'preview', 3_000).catch(() => undefined)) ?? null;
+      via = 'tctoken';
+    }
+    console.log(`[ponte] foto alvo="${alvo}" jid=${resolvido} via=${via} resultado=${url ? 'ok' : 'vazio'}`);
     return url;
   } catch (err) {
     // Sem foto, restricao de privacidade ou falha pontual nao afetam a conversa.

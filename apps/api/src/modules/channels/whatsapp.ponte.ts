@@ -114,7 +114,7 @@ export async function buscarFotoPelaPonte(config: ConfigDaPonte, destino: string
     url.searchParams.set('numero', numero);
     const resposta = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(8_000),
+      signal: AbortSignal.timeout(15_000),
     });
     if (!resposta.ok) return null;
     const corpo = (await resposta.json()) as { url?: unknown };
