@@ -3,11 +3,8 @@ import {
   Browsers,
   DisconnectReason,
   fetchLatestBaileysVersion,
-  getBinaryNodeChild,
   getCodeFromWSError,
-  jidNormalizedUser,
   makeWASocket,
-  S_WHATSAPP_NET,
   type AnyMessageContent,
   type WASocket,
 } from '@whiskeysockets/baileys';
@@ -665,84 +662,15 @@ export function enviarTexto(nome: string, destino: string, texto: string) {
   return enviar(nome, destino, { text: texto });
 }
 
-export type VerificacaoDeNumero = {
-  /** `null` = nao deu para saber (sessao fora do ar ou WhatsApp sem resposta). */
-  existe: boolean | null;
-  /** Numero que o WhatsApp usa de fato (com ou sem o nono digito), so digitos. */
-  numero: string | null;
-};
-
-/** Pergunta ao WhatsApp se o numero existe e qual e a forma real dele. */
-export async function verificarNumero(nome: string, numero: string): Promise<VerificacaoDeNumero> {
-  const sessao = sessoes.get(nome);
-  if (!sessao?.sock || sessao.situacao !== 'CONECTADO') return { existe: null, numero: null };
-  try {
-    const achado = await sessao.sock.onWhatsApp(numero);
-    if (!achado) return { existe: null, numero: null };
-    const registro = achado[0];
-    if (!registro || !registro.exists) return { existe: false, numero: null };
-    return { existe: true, numero: numeroDoJid(registro.jid) ?? numero };
-  } catch {
-    return { existe: null, numero: null };
-  }
-}
-
-/** Pedido de foto sem tctoken; devolve a URL do CDN ou nulo (sem foto, privacidade ou falha). */
-async function fotoSemToken(sock: WASocket, destino: string): Promise<string | null> {
-  try {
-    const resposta = await sock.query(
-      {
-        tag: 'iq',
-        attrs: { target: jidNormalizedUser(destino), to: S_WHATSAPP_NET, type: 'get', xmlns: 'w:profile:picture' },
-        content: [{ tag: 'picture', attrs: { type: 'preview', query: 'url' } }],
-      },
-      4_000,
-    );
-    return getBinaryNodeChild(resposta, 'picture')?.attrs?.url ?? null;
-  } catch (err) {
-    console.log(`[ponte] foto simples recusada: ${err instanceof Error ? err.message : String(err)}`);
-    return null;
-  }
-}
-
 /** Consulta apenas a foto publica que a sessao conectada consegue ver. */
 export async function fotoDePerfil(nome: string, numero: string): Promise<string | null> {
   const sessao = sessoes.get(nome);
   if (!sessao?.sock || sessao.situacao !== 'CONECTADO') return null;
 
-  // So os 4 ultimos digitos vao para o log: da para casar com o contato sem expor o numero.
-  const alvo = `...${numero.slice(-4)}`;
   try {
-    // O WhatsApp sabe o JID real (com ou sem o nono digito); montar na mao pode
-    // apontar para outra pessoa ou para ninguem.
-    let destino = jid(numero);
-    let resolvido = 'montado';
-    if (!jidOriginal.has(numero)) {
-      const achado = await sessao.sock.onWhatsApp(numero).catch(() => undefined);
-      const registro = achado?.[0];
-      // Só troca o endereço quando o WhatsApp confirma; qualquer dúvida mantém o comportamento anterior.
-      if (registro?.exists && registro.jid) {
-        destino = registro.jid;
-        resolvido = 'confirmado';
-      } else {
-        resolvido = registro ? 'inexistente' : 'sem-resposta';
-      }
-    }
-    // 1) Pedido simples, sem tctoken: o do Baileys 7.0.0-rc anexa o token e, sem ele
-    //    no cofre, trava ou falha em silencio (WhiskeySockets/Baileys#2498). E o mesmo
-    //    pedido que o WhatsApp Web e o GOWA fazem.
-    let url = await fotoSemToken(sessao.sock, destino);
-    let via = 'simples';
-    // 2) Caminho do Baileys, com tctoken, para quem so libera a foto a contatos.
-    if (!url) {
-      url = (await sessao.sock.profilePictureUrl(destino, 'preview', 3_000).catch(() => undefined)) ?? null;
-      via = 'tctoken';
-    }
-    console.log(`[ponte] foto alvo="${alvo}" jid=${resolvido} via=${via} resultado=${url ? 'ok' : 'vazio'}`);
-    return url;
-  } catch (err) {
+    return (await sessao.sock.profilePictureUrl(jid(numero), 'preview', 8_000)) ?? null;
+  } catch {
     // Sem foto, restricao de privacidade ou falha pontual nao afetam a conversa.
-    console.log(`[ponte] foto alvo="${alvo}" erro="${err instanceof Error ? err.message : String(err)}"`);
     return null;
   }
 }

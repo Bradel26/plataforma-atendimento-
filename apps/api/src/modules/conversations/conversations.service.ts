@@ -13,7 +13,6 @@ import { decidirDestino, filaPadraoDoCanal } from '../channels/inbound.service';
 import { impedimentoDeEnvio, numeroNormalizado } from '../channels/whatsapp.modo';
 import { getWhatsAppProvider } from '../channels/whatsapp-provider.factory';
 import type { FotoPerfil } from '../channels/avatar';
-import { fotoDoNumero } from '../channels/foto-perfil';
 import { promoverPrevia } from '../channels/chat-previews.service';
 import { entregarParaIa } from '../bots/ia.service';
 import { TIPO_CONVITE_PESQUISA, criarPesquisa, entregarPesquisa } from '../surveys/surveys.service';
@@ -43,6 +42,8 @@ export type Solicitante = { sub: string; perfil: Role; nome: string };
  */
 const escopoVisivel = () => filtroDe(politicaConversas);
 
+const cacheFotosPerfil = new Map<string, { expiraEm: number; busca: Promise<FotoPerfil | null> }>();
+
 /** Foto opcional do contato, consultada apenas depois da mesma checagem de acesso da conversa. */
 export async function buscarFotoDaConversa(id: string): Promise<FotoPerfil | null> {
   const conversa = await prisma.conversation.findFirst({
@@ -66,7 +67,25 @@ export async function buscarFotoDaConversa(id: string): Promise<FotoPerfil | nul
     : await obterConfig('WHATSAPP');
   if (!config) return null;
 
-  return fotoDoNumero(config, telefone);
+  const provider = getWhatsAppProvider();
+  if (!provider.fetchAvatar) return null;
+  const chave = `${provider.constructor.name}:${config.id ?? config.ponteSessao ?? 'linha'}:${telefone}`;
+  const agora = Date.now();
+  const existente = cacheFotosPerfil.get(chave);
+  if (existente && existente.expiraEm > agora) return existente.busca;
+  if (existente) cacheFotosPerfil.delete(chave);
+
+  const entrada = { expiraEm: agora + 15_000, busca: Promise.resolve(null) as Promise<FotoPerfil | null> };
+  entrada.busca = provider.fetchAvatar(config, telefone).catch(() => null).then((foto) => {
+    entrada.expiraEm = Date.now() + (foto ? 6 * 60 * 60_000 : 30_000);
+    return foto;
+  });
+  cacheFotosPerfil.set(chave, entrada);
+  if (cacheFotosPerfil.size > 1000) {
+    const primeira = cacheFotosPerfil.keys().next().value;
+    if (primeira) cacheFotosPerfil.delete(primeira);
+  }
+  return entrada.busca;
 }
 
 export async function listarConversas(solicitante: Solicitante, query: ListarConversasQuery) {

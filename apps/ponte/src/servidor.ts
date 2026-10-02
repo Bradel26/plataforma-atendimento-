@@ -13,7 +13,6 @@ import {
   listar,
   qrDe,
   situacaoDe,
-  verificarNumero,
 } from './sessao.js';
 
 /**
@@ -91,8 +90,7 @@ export function criarServidor() {
    * ser marcado como morto quando estivesse vivo.
    */
   app.get('/saude', (_req, res) => {
-    // `foto` identifica a versao da busca de foto em execucao: permite conferir o deploy sem acesso aos logs.
-    res.json({ ok: true, foto: 'sem-token-v1', sessoes: listar() });
+    res.json({ ok: true, sessoes: listar() });
   });
 
   /*
@@ -138,19 +136,6 @@ export function criarServidor() {
   };
   app.get('/foto', rota(foto));
   app.get('/foto/:sessao', rota(foto));
-
-  /** Valida o numero no WhatsApp e devolve a forma real dele (nono digito incluso). */
-  const contato = async (req: Request, res: Response) => {
-    const numero = normalizar(req.query.numero);
-    if (!numero) {
-      res.status(400).json({ erro: 'numero invalido' });
-      return;
-    }
-    res.setHeader('Cache-Control', 'no-store');
-    res.json(await verificarNumero(sessaoDaUrl(req), numero));
-  };
-  app.get('/contato', rota(contato));
-  app.get('/contato/:sessao', rota(contato));
 
   /**
    * O QR para parear — a razao de ser desta ponte.

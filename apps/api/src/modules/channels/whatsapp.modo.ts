@@ -177,7 +177,6 @@ export function enderecosDaPonte(base: string, sessao: string | null | undefined
     arquivo: `${raiz}/arquivos${sufixo}`,
     estado: `${raiz}/estado${sufixo}`,
     foto: `${raiz}/foto${sufixo}`,
-    contato: `${raiz}/contato${sufixo}`,
     /*
      * `qr` e `desconectar` sao o pareamento pela tela, e nem toda ponte os tem
      * — quem usa uma de terceiro (Evolution API e afins) responde 404 aqui, e o

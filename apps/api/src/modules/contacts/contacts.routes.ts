@@ -21,10 +21,12 @@ import { apenasVisivel } from '../../lib/visibilidade';
 import { MAXIMO_POR_REGISTRO, TAMANHO_MAXIMO, normalizarTags } from '../../lib/tags';
 import { ufDoTelefone } from '../../lib/ddd';
 import { obterConfig, obterConfigPorId } from '../channels/channels.service';
-import { fotoDoNumero } from '../channels/foto-perfil';
-import { telefoneConferidoNoWhatsApp } from '../channels/numero-whatsapp';
+import { getWhatsAppProvider } from '../channels/whatsapp-provider.factory';
+import type { FotoPerfil } from '../channels/avatar';
 
 export const contactsRoutes = Router();
+
+const cacheFotosContato = new Map<string, { expiraEm: number; busca: Promise<FotoPerfil | null> }>();
 
 contactsRoutes.use(requireAuth);
 
@@ -278,7 +280,30 @@ contactsRoutes.get(
       return;
     }
 
-    const foto = await fotoDoNumero(config, telefone);
+    const provider = getWhatsAppProvider();
+    if (!provider.fetchAvatar) {
+      res.setHeader('Cache-Control', 'no-store');
+      res.status(404).end();
+      return;
+    }
+
+    const chave = `${config.id ?? config.ponteSessao ?? 'linha'}:${telefone}`;
+    const agora = Date.now();
+    let entrada = cacheFotosContato.get(chave);
+    if (!entrada || entrada.expiraEm <= agora) {
+      entrada = { expiraEm: agora + 15_000, busca: Promise.resolve(null) };
+      entrada.busca = provider.fetchAvatar(config, telefone).catch(() => null).then((foto) => {
+        entrada!.expiraEm = Date.now() + (foto ? 6 * 60 * 60_000 : 30_000);
+        return foto;
+      });
+      cacheFotosContato.set(chave, entrada);
+      if (cacheFotosContato.size > 1000) {
+        const primeira = cacheFotosContato.keys().next().value;
+        if (primeira) cacheFotosContato.delete(primeira);
+      }
+    }
+
+    const foto = await entrada.busca;
     if (!foto) {
       res.setHeader('Cache-Control', 'no-store');
       res.status(404).end();
@@ -387,9 +412,6 @@ contactsRoutes.post(
       if (!('responsavelId' in dados)) herdado = conta.responsavelId;
     }
 
-    // Confere no WhatsApp: numero inexistente e recusado e o gravado e o real.
-    if (dados.telefone) dados.telefone = await telefoneConferidoNoWhatsApp(dados.telefone);
-
     // Nao ha unique em email nem telefone (o mesmo numero pode aparecer em
     // canais diferentes durante a importacao), entao a duplicidade e avisada e
     // nao bloqueada — bloquear aqui travaria o cadastro legitimo de dois
@@ -460,7 +482,6 @@ contactsRoutes.patch(
      * as tags do contato.
      */
     const corpo = req.body as z.infer<typeof atualizarSchema>;
-    if (corpo.telefone) corpo.telefone = await telefoneConferidoNoWhatsApp(corpo.telefone);
     const dados = corpo.tags === undefined ? corpo : { ...corpo, tags: normalizarTags(corpo.tags) };
 
     res.json({ contato: await prisma.contact.update({ where: { id }, data: dados }) });
