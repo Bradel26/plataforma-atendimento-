@@ -667,19 +667,30 @@ export async function fotoDePerfil(nome: string, numero: string): Promise<string
   const sessao = sessoes.get(nome);
   if (!sessao?.sock || sessao.situacao !== 'CONECTADO') return null;
 
+  // So os 4 ultimos digitos vao para o log: da para casar com o contato sem expor o numero.
+  const alvo = `...${numero.slice(-4)}`;
   try {
     // O WhatsApp sabe o JID real (com ou sem o nono digito); montar na mao pode
     // apontar para outra pessoa ou para ninguem.
     let destino = jid(numero);
+    let resolvido = 'montado';
     if (!jidOriginal.has(numero)) {
       const achado = await sessao.sock.onWhatsApp(numero).catch(() => undefined);
       const registro = achado?.[0];
       // Só troca o endereço quando o WhatsApp confirma; qualquer dúvida mantém o comportamento anterior.
-      if (registro?.exists && registro.jid) destino = registro.jid;
+      if (registro?.exists && registro.jid) {
+        destino = registro.jid;
+        resolvido = 'confirmado';
+      } else {
+        resolvido = registro ? 'inexistente' : 'sem-resposta';
+      }
     }
-    return (await sessao.sock.profilePictureUrl(destino, 'preview', 8_000)) ?? null;
-  } catch {
+    const url = (await sessao.sock.profilePictureUrl(destino, 'preview', 8_000)) ?? null;
+    console.log(`[ponte] foto alvo="${alvo}" jid=${resolvido} resultado=${url ? 'ok' : 'vazio'}`);
+    return url;
+  } catch (err) {
     // Sem foto, restricao de privacidade ou falha pontual nao afetam a conversa.
+    console.log(`[ponte] foto alvo="${alvo}" erro="${err instanceof Error ? err.message : String(err)}"`);
     return null;
   }
 }
