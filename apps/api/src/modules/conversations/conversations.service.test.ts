@@ -295,6 +295,58 @@ describe('iniciarConversa — publicacao em tempo real (Fase 11.2)', () => {
     expect(conversationUpdate).not.toHaveBeenCalled();
     expect(notificarConversaAtualizada).not.toHaveBeenCalled();
   });
+
+  /*
+   * Auditoria de 23/09/2026, achado critico #1: a busca de conversa existente
+   * nao filtrava por `canalConfigId` -- so por `contatoId` + `canal` +
+   * `status`. Um vendedor B clicando "Iniciar conversa" com um contato que ja
+   * tinha conversa aberta na linha PESSOAL do vendedor A "reabria" o id
+   * dessa conversa, que a politica de visibilidade nem deixa B ver.
+   */
+  it('nao reaproveita conversa aberta na linha PESSOAL de outro vendedor: cria uma nova na linha do solicitante', async () => {
+    contactFindFirst.mockResolvedValue({ id: 'contato-7', telefone: '5511933332222' });
+    // O solicitante (user-1) tem linha pessoal propria, diferente da que
+    // recebeu a conversa aberta com este contato (essa e de outro vendedor,
+    // e nunca aparece no mock -- o ponto do teste e que ela e ignorada).
+    channelConfigFindFirst.mockResolvedValue({ id: 'cfg-vendedor-b', donoId: 'user-1', filaId: null, ...CONFIG_OFICIAL_BASE });
+    conversationFindFirst
+      .mockResolvedValueOnce(null) // existente, filtrada pela linha do SOLICITANTE -- nao acha
+      .mockResolvedValueOnce({ id: 'conv-nova-b', fila: null, agente: { id: 'user-1' } }); // carregarOuFalhar em publicarNova
+    conversationCreate.mockResolvedValue({ id: 'conv-nova-b' });
+
+    const resultado = await comOrganizacao('org-1', () => iniciarConversa(SOLICITANTE, 'contato-7'), {
+      id: 'user-1',
+      perfil: 'ADMIN',
+    });
+
+    expect(resultado).toEqual({ id: 'conv-nova-b' });
+    // A busca da conversa existente foi filtrada pela linha do solicitante --
+    // nunca acharia a conversa aberta na linha de outro vendedor.
+    const chamadaExistente = conversationFindFirst.mock.calls[0]?.[0];
+    expect(chamadaExistente?.where).toMatchObject({
+      contatoId: 'contato-7',
+      canal: 'WHATSAPP',
+      canalConfigId: 'cfg-vendedor-b',
+    });
+    expect(conversationCreate).toHaveBeenCalledTimes(1);
+    expect(conversationCreate.mock.calls[0]?.[0]?.data.canalConfigId).toBe('cfg-vendedor-b');
+  });
+
+  it('reaproveita conversa aberta na MESMA linha do solicitante (sem regressao no caso comum)', async () => {
+    contactFindFirst.mockResolvedValue({ id: 'contato-8', telefone: '5511922221111' });
+    channelConfigFindFirst.mockResolvedValue({ id: 'cfg-vendedor-b', donoId: 'user-1', filaId: null, ...CONFIG_OFICIAL_BASE });
+    conversationFindFirst.mockResolvedValueOnce({ id: 'conv-mesma-linha', canalConfigId: 'cfg-vendedor-b', arquivada: false });
+
+    const resultado = await comOrganizacao('org-1', () => iniciarConversa(SOLICITANTE, 'contato-8'), {
+      id: 'user-1',
+      perfil: 'ADMIN',
+    });
+
+    expect(resultado).toEqual({ id: 'conv-mesma-linha' });
+    const chamadaExistente = conversationFindFirst.mock.calls[0]?.[0];
+    expect(chamadaExistente?.where).toMatchObject({ canalConfigId: 'cfg-vendedor-b' });
+    expect(conversationCreate).not.toHaveBeenCalled();
+  });
 });
 
 /*
