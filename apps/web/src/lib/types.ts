@@ -149,6 +149,8 @@ export type Contato = {
   canalOrigem?: Canal;
   tags?: string[];
   observacoes?: string | null;
+  /** Operação de credenciamento reconhecida na importação. */
+  segmentoParceiro?: 'TIM' | 'STARLINK' | null;
   criadoEm?: string;
   atualizadoEm?: string;
   totalConversas?: number;

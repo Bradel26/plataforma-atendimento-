@@ -307,6 +307,8 @@ model Contact {
   canalOrigem     Channel   @default(WEBCHAT) @map("canal_origem")
   tags            String[]  @default([])
   observacoes     String?
+  /// Linha de negócio reconhecida na importação: TIM ou Starlink.
+  segmentoParceiro String?  @map("segmento_parceiro")
   /// Estado (UF, duas letras maiusculas) e cidade do parceiro. Alimentam o
   /// "parceiros por estado/regiao" do Dashboard e o filtro de publico de
   /// campanha. Anulaveis: o contato que nasce no webchat nao tem endereco.

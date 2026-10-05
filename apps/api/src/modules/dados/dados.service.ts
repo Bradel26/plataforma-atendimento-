@@ -4,6 +4,7 @@ import { ufDoTelefone } from '../../lib/ddd';
 import { filtroDe, politicaContas } from '../../lib/politicas';
 import { gerarCsv, lerCsv, type LinhaCsv } from './csv';
 import { FASES, MOTIVOS_PERDA, TIPOS } from '../crm/leads.schemas';
+import { identificarSegmentoParceiro } from '../crm/segmentoParceiro';
 
 const CANAIS = ['WEBCHAT', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'EMAIL', 'VOZ', 'PROSPECCAO_ATIVA', 'INDICACAO'] as const;
 
@@ -39,7 +40,7 @@ export const MODELO_LEADS_CSV = gerarCsv([...COLUNAS_LEAD], [
   },
 ]);
 
-const COLUNAS_CONTATO = ['nome', 'email', 'telefone', 'conta', 'canal_origem', 'observacoes'] as const;
+const COLUNAS_CONTATO = ['nome', 'email', 'telefone', 'conta', 'canal_origem', 'segmento_parceiro', 'observacoes'] as const;
 
 export const MODELO_CONTATOS_CSV = gerarCsv([...COLUNAS_CONTATO], [
   {
@@ -48,6 +49,7 @@ export const MODELO_CONTATOS_CSV = gerarCsv([...COLUNAS_CONTATO], [
     telefone: '11988880000',
     conta: 'Empresa Exemplo',
     canal_origem: 'WHATSAPP',
+    segmento_parceiro: '',
     observacoes: 'Indicado por cliente atual',
   },
 ]);
@@ -271,6 +273,8 @@ export async function importarContatos(texto: string, dryRun: boolean): Promise<
 
     const email = normalizar(linha.email ?? '').toLowerCase();
     const telefone = normalizar(linha.telefone ?? '');
+    const observacoes = normalizar(linha.observacoes ?? '') || null;
+    const segmentoParceiro = identificarSegmentoParceiro(linha.segmento_parceiro, observacoes);
 
     const existente = email
       ? await prisma.contact.findFirst({ where: { email } })
@@ -293,7 +297,8 @@ export async function importarContatos(texto: string, dryRun: boolean): Promise<
         uf: ufDoTelefone(telefone),
         canalOrigem: enumOu(CANAIS, linha.canal_origem ?? '', 'EMAIL'),
         contaId: conta?.id ?? null,
-        observacoes: normalizar(linha.observacoes ?? '') || null,
+        segmentoParceiro,
+        observacoes,
       },
     });
   }, dryRun);
@@ -454,13 +459,14 @@ export async function exportarContatos() {
   });
 
   return gerarCsv(
-    ['nome', 'email', 'telefone', 'conta', 'canal_origem', 'conversas', 'criado_em'],
+    ['nome', 'email', 'telefone', 'conta', 'canal_origem', 'segmento_parceiro', 'conversas', 'criado_em'],
     contatos.map((c) => ({
       nome: c.nome,
       email: c.email ?? '',
       telefone: c.telefone ?? '',
       conta: c.conta?.nome ?? '',
       canal_origem: c.canalOrigem,
+      segmento_parceiro: c.segmentoParceiro ?? '',
       conversas: c._count.conversas,
       criado_em: dataBr(c.criadoEm),
     })),

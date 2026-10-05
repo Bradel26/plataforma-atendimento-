@@ -60,7 +60,7 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoExcluir }: FichaPr
   const [iniciando, setIniciando] = useState(false);
   const [editando, setEditando] = useState(false);
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
-  const [edicao, setEdicao] = useState({ nome: '', email: '', telefone: '', observacoes: '', uf: '', cidade: '' });
+  const [edicao, setEdicao] = useState({ nome: '', email: '', telefone: '', observacoes: '', uf: '', cidade: '', segmentoParceiro: '' as '' | 'TIM' | 'STARLINK' });
   // Contador de recargas: mudar este numero e o sinal para a linha do tempo
   // buscar de novo. Guardar a lista aqui para repassar seria duplicar o estado
   // dela — e a paginacao por cursor mora la dentro.
@@ -166,6 +166,7 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoExcluir }: FichaPr
       observacoes: c.observacoes ?? '',
       uf: c.uf ?? '',
       cidade: c.cidade ?? '',
+      segmentoParceiro: c.segmentoParceiro ?? '',
     });
     setEditando(true);
   };
@@ -188,6 +189,7 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoExcluir }: FichaPr
         observacoes: edicao.observacoes.trim() || null,
         uf: edicao.uf || null,
         cidade: edicao.cidade.trim() || null,
+        segmentoParceiro: edicao.segmentoParceiro || null,
       });
       setEditando(false);
       atualizar();
@@ -352,6 +354,13 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoExcluir }: FichaPr
                 maxLength={2000}
               />
             </Field>
+            <Field label="Segmento do parceiro">
+              <Select value={edicao.segmentoParceiro} onChange={(e) => setEdicao({ ...edicao, segmentoParceiro: e.target.value as '' | 'TIM' | 'STARLINK' })}>
+                <option value="">Sem classificação</option>
+                <option value="TIM">TIM</option>
+                <option value="STARLINK">Starlink</option>
+              </Select>
+            </Field>
             <div className="flex gap-2">
               <Button onClick={() => void salvarEdicao()} disabled={salvandoEdicao || !edicao.nome.trim()}>
                 {salvandoEdicao ? 'Salvando...' : 'Salvar'}
@@ -378,6 +387,10 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoExcluir }: FichaPr
           <div>
             <dt className="text-xs text-slate-500">Origem</dt>
             <dd className="text-slate-800">{contato.canalOrigem ? LABEL_CANAL_ORIGEM[contato.canalOrigem] : '—'}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-slate-500">Segmento do parceiro</dt>
+            <dd className="text-slate-800">{contato.segmentoParceiro === 'TIM' ? 'TIM' : contato.segmentoParceiro === 'STARLINK' ? 'Starlink' : 'Sem classificação'}</dd>
           </div>
           <div>
             <dt className="text-xs text-slate-500">Cliente desde</dt>
@@ -414,7 +427,7 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoExcluir }: FichaPr
         {erro && <div className="mt-3"><Alerta>{erro}</Alerta></div>}
       </Card>
 
-      <CicloDoParceiro contatoId={contatoId} />
+      <CicloDoParceiro contatoId={contatoId} segmentoParceiro={ficha?.contato.segmentoParceiro ?? null} />
 
       {atividadesAbertas.length > 0 && (
         <Card titulo="Tarefas marcadas" descricao={`${atividadesAbertas.length} em aberto`}>

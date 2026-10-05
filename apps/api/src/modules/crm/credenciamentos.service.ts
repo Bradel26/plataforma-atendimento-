@@ -154,7 +154,29 @@ export async function criarCredenciamento(input: CriarCredenciamentoInput) {
     if (!conta) throw notFound('Conta não encontrada');
   }
 
-  const { funil, estagio } = await resolverFunilEsteira(input.funilId, input.estagioId);
+  let destino = input.funilId;
+  let estagioDestino = input.estagioId;
+  if (contato.segmentoParceiro) {
+    const palavra = contato.segmentoParceiro === 'TIM' ? 'TIM' : 'Starlink';
+    const funilDoSegmento = await prisma.funnel.findFirst({
+      where: {
+        tipo: 'ESTEIRA',
+        ativo: true,
+        nome: { equals: `Credenciamento ${palavra}`, mode: 'insensitive' },
+      },
+      orderBy: { criadoEm: 'asc' },
+      select: { id: true },
+    });
+    if (!funilDoSegmento) throw badRequest(`Não existe uma esteira ativa de credenciamento para ${palavra}`);
+    if (input.funilId && input.funilId !== funilDoSegmento.id) {
+      throw badRequest(`Este contato está identificado como ${palavra}; o destino correto é a esteira Credenciamento ${palavra}`);
+    }
+    destino = funilDoSegmento.id;
+    // A entrada sempre começa no primeiro estágio da operação correspondente.
+    estagioDestino = undefined;
+  }
+
+  const { funil, estagio } = await resolverFunilEsteira(destino, estagioDestino);
 
   // O mesmo parceiro nao entra duas vezes na mesma operacao enquanto o
   // processo anterior esta aberto: dois cards do mesmo parceiro dividiriam o

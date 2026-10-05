@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alerta, Button, Field, Select } from '../../components/ui';
 import { useToast } from '../../components/ui/Toast';
 import { ApiError, api } from '../../lib/api';
@@ -6,7 +6,7 @@ import type { OperacaoEsteira } from '../../lib/types';
 
 type Props = {
   /** Quem pode entrar na esteira. Com um so, o seletor de contato some. */
-  contatos: Array<{ id: string; nome: string }>;
+  contatos: Array<{ id: string; nome: string; segmentoParceiro?: 'TIM' | 'STARLINK' | null }>;
   contaId?: string | null;
   operacoes: OperacaoEsteira[];
   aoEnviar: () => void;
@@ -23,6 +23,20 @@ export function EnviarParaCredenciamento({ contatos, contaId, operacoes, aoEnvia
   const [funilId, setFunilId] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+
+  const contatoSelecionado = contatos.find((contato) => contato.id === contatoId);
+  const segmento = contatoSelecionado?.segmentoParceiro ?? null;
+  const termoOperacao = segmento === 'STARLINK' ? 'starlink' : segmento === 'TIM' ? 'tim' : null;
+  const operacoesDisponiveis = useMemo(
+    () => termoOperacao
+      ? operacoes.filter((operacao) => operacao.nome.toLocaleLowerCase('pt-BR').includes(termoOperacao))
+      : operacoes,
+    [termoOperacao, operacoes],
+  );
+
+  useEffect(() => {
+    setFunilId(termoOperacao ? operacoesDisponiveis[0]?.id ?? '' : '');
+  }, [contatoId, termoOperacao, operacoesDisponiveis]);
 
   if (operacoes.length === 0 || contatos.length === 0) return null;
 
@@ -60,17 +74,25 @@ export function EnviarParaCredenciamento({ contatos, contaId, operacoes, aoEnvia
           </Field>
         )}
         <Field label="Operação">
-          <Select value={funilId} onChange={(e) => setFunilId(e.target.value)}>
-            <option value="">Selecione...</option>
-            {operacoes.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.nome}
-              </option>
-            ))}
-          </Select>
+          {segmento ? (
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+              {operacoesDisponiveis[0]
+                ? `${operacoesDisponiveis[0].nome} · ${operacoesDisponiveis[0].estagios[0]?.nome ?? 'primeira etapa'}`
+                : `Nenhuma esteira ativa para ${segmento === 'TIM' ? 'TIM' : 'Starlink'}`}
+            </div>
+          ) : (
+            <Select value={funilId} onChange={(e) => setFunilId(e.target.value)}>
+              <option value="">Selecione...</option>
+              {operacoesDisponiveis.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.nome}
+                </option>
+              ))}
+            </Select>
+          )}
         </Field>
       </div>
-      <Button onClick={() => void enviar()} disabled={enviando || !contatoId || !funilId}>
+      <Button onClick={() => void enviar()} disabled={enviando || !contatoId || !funilId || (Boolean(segmento) && operacoesDisponiveis.length === 0)}>
         {enviando ? 'Enviando...' : 'Enviar para credenciamento'}
       </Button>
     </div>

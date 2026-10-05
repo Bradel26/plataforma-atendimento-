@@ -366,7 +366,7 @@ export async function fichaConta(contaId: string) {
     include: {
       contatos: {
         where: await filtroDe(politicaContatos),
-        select: { id: true, nome: true, telefone: true, email: true },
+        select: { id: true, nome: true, telefone: true, email: true, segmentoParceiro: true },
         orderBy: { nome: 'asc' },
       },
     },

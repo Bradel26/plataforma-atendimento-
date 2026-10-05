@@ -16,7 +16,7 @@ export function CredenciamentosDaEmpresa({
   contatos,
 }: {
   contaId: string;
-  contatos: Array<{ id: string; nome: string }>;
+  contatos: Array<{ id: string; nome: string; segmentoParceiro?: 'TIM' | 'STARLINK' | null }>;
 }) {
   const { temPerfil } = useAuth();
   const podeVer = temPerfil('ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL');

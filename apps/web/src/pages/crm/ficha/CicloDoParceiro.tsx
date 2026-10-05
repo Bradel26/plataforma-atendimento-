@@ -14,7 +14,7 @@ import { EnviarParaCredenciamento } from '../EnviarParaCredenciamento';
  *
  * AGENTE nao ve esteira (mesmo corte da API); para ele o bloco nem aparece.
  */
-export function CicloDoParceiro({ contatoId }: { contatoId: string }) {
+export function CicloDoParceiro({ contatoId, segmentoParceiro }: { contatoId: string; segmentoParceiro?: 'TIM' | 'STARLINK' | null }) {
   const { temPerfil } = useAuth();
   const podeVer = temPerfil('ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL');
   const [creds, setCreds] = useState<Credenciamento[] | null>(null);
@@ -95,7 +95,7 @@ export function CicloDoParceiro({ contatoId }: { contatoId: string }) {
       {/* So as operacoes em que ele ainda nao esta com processo aberto. */}
       <div className="mt-4">
         <EnviarParaCredenciamento
-          contatos={[{ id: contatoId, nome: '' }]}
+          contatos={[{ id: contatoId, nome: '', segmentoParceiro }]}
           operacoes={operacoes.filter((o) => !creds.some((c) => c.funil.id === o.id && !c.situacaoExcecao))}
           aoEnviar={carregar}
         />

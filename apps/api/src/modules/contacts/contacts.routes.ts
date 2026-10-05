@@ -23,6 +23,7 @@ import { ufDoTelefone } from '../../lib/ddd';
 import { obterConfig, obterConfigPorId } from '../channels/channels.service';
 import { getWhatsAppProvider } from '../channels/whatsapp-provider.factory';
 import type { FotoPerfil } from '../channels/avatar';
+import { SEGMENTOS_PARCEIRO, identificarSegmentoParceiro } from '../crm/segmentoParceiro';
 
 export const contactsRoutes = Router();
 
@@ -73,6 +74,7 @@ const criarSchema = z.object({
   telefone: z.string().trim().min(8).max(20).nullable().optional(),
   canalOrigem: z.enum(['WEBCHAT', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'EMAIL', 'VOZ', 'PROSPECCAO_ATIVA', 'INDICACAO']).default('WEBCHAT'),
   observacoes: z.string().trim().max(2000).nullable().optional(),
+  segmentoParceiro: z.enum(SEGMENTOS_PARCEIRO).nullable().optional(),
   /** Estado (UF) e cidade do parceiro: base do "por estado/regiao" e do publico de campanha. */
   uf: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/, 'UF inválida').nullable().optional(),
   cidade: z.string().trim().max(80).nullable().optional(),
@@ -109,6 +111,7 @@ const atualizarSchema = z
     email: z.string().email().nullable().optional(),
     telefone: z.string().trim().min(8).max(20).nullable().optional(),
     observacoes: z.string().trim().max(2000).nullable().optional(),
+    segmentoParceiro: z.enum(SEGMENTOS_PARCEIRO).nullable().optional(),
     /** Estado (UF) e cidade do parceiro: base do "por estado/regiao" e do publico de campanha. */
     uf: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/, 'UF inválida').nullable().optional(),
     cidade: z.string().trim().max(80).nullable().optional(),
@@ -438,6 +441,8 @@ contactsRoutes.post(
         // estado a mao.
         uf: dados.uf ?? ufDoTelefone(dados.telefone),
         tags: normalizarTags(dados.tags),
+        segmentoParceiro:
+          dados.segmentoParceiro ?? identificarSegmentoParceiro(null, dados.observacoes),
       },
     });
     res.status(201).json({ contato, possivelDuplicado: duplicado, contaCriada });

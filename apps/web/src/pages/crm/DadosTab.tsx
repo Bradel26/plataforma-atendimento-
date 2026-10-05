@@ -27,7 +27,7 @@ const IMPORTACOES = [
   {
     recurso: 'contatos',
     label: 'Contatos',
-    colunas: 'nome (obrigatória), email, telefone, conta, canal_origem, observações',
+    colunas: 'nome (obrigatória), email, telefone, conta, canal_origem, segmento_parceiro (TIM ou STARLINK), observações',
   },
   {
     recurso: 'contas',
