@@ -17,6 +17,7 @@ import {
   criarCredenciamento,
   esteiraKanban,
   funisDaEsteira,
+  importarContatosClassificados,
   listarCredenciamentos,
   obterCredenciamento,
 } from './credenciamentos.service';
@@ -125,6 +126,14 @@ credenciamentosRoutes.get(
   '/:id',
   asyncHandler(async (req, res) => {
     res.json({ credenciamento: await obterCredenciamento(param(req, 'id')) });
+  }),
+);
+
+credenciamentosRoutes.post(
+  '/importar-contatos-classificados',
+  validateBody(z.object({ previa: z.boolean() })),
+  asyncHandler(async (req, res) => {
+    res.json(await importarContatosClassificados(req.body.previa));
   }),
 );
 

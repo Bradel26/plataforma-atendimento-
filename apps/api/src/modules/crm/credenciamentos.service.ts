@@ -4,6 +4,7 @@ import { filtroDe, politicaContas, politicaContatos, politicaCredenciamentos } f
 import { usuarioAtualOuNulo } from '../../lib/tenant';
 import { apenasVisivel } from '../../lib/visibilidade';
 import { badRequest, notFound } from '../../lib/errors';
+import { identificarSegmentoParceiro, type SegmentoParceiro } from './segmentoParceiro';
 import { diasDesde, papelDoEstagio } from './esteira';
 import { iniciarCiclos } from './cicloParceiro.service';
 import type {
@@ -203,6 +204,87 @@ export async function criarCredenciamento(input: CriarCredenciamentoInput) {
   });
   await iniciarCicloSemFalhar(criado.id);
   return serialize(criado);
+}
+
+/**
+ * Classifica contatos pela origem guardada nas observacoes e encaminha em lote
+ * para a esteira TIM ou Starlink. A previa e somente leitura; a execucao e
+ * idempotente por contato e funil.
+ */
+export async function importarContatosClassificados(previa: boolean) {
+  const visibilidade = await filtroDe(politicaContatos);
+  const contatos = await prisma.contact.findMany({
+    where: {
+      AND: [
+        visibilidade,
+        {
+          OR: [
+            { segmentoParceiro: { not: null } },
+            { observacoes: { contains: 'fonte:', mode: 'insensitive' } },
+            { observacoes: { contains: 'carteira', mode: 'insensitive' } },
+            { observacoes: { contains: 'CONTATOS STARLINK', mode: 'insensitive' } },
+            { observacoes: { contains: 'PDV TIM', mode: 'insensitive' } },
+          ],
+        },
+      ],
+    },
+    select: { id: true, nome: true, segmentoParceiro: true, observacoes: true },
+    orderBy: { nome: 'asc' },
+  });
+
+  const classificados = contatos.flatMap((contato) => {
+    const segmento = identificarSegmentoParceiro(contato.segmentoParceiro, contato.observacoes);
+    return segmento ? [{ ...contato, segmento }] : [];
+  });
+  const funis = await funisDaEsteira();
+  const destino = new Map<SegmentoParceiro, (typeof funis)[number] | undefined>([
+    ['TIM', funis.find((funil) => funil.nome.toLocaleLowerCase('pt-BR') === 'credenciamento tim')],
+    ['STARLINK', funis.find((funil) => funil.nome.toLocaleLowerCase('pt-BR') === 'credenciamento starlink')],
+  ]);
+  const ids = classificados.map((contato) => contato.id);
+  const credenciamentosAbertos = ids.length
+    ? await prisma.credenciamento.findMany({
+        where: { contatoId: { in: ids }, situacaoExcecao: null },
+        select: { contatoId: true, funilId: true },
+      })
+    : [];
+  const porSegmento = {
+    TIM: { identificados: 0, paraEnviar: 0, jaNaEsteira: 0, emOutraEsteira: 0, semEsteiraConfigurada: 0, enviados: 0, erros: [] as Array<{ contato: string; motivo: string }> },
+    STARLINK: { identificados: 0, paraEnviar: 0, jaNaEsteira: 0, emOutraEsteira: 0, semEsteiraConfigurada: 0, enviados: 0, erros: [] as Array<{ contato: string; motivo: string }> },
+  };
+
+  for (const contato of classificados) {
+    const resumo = porSegmento[contato.segmento];
+    const funil = destino.get(contato.segmento);
+    resumo.identificados += 1;
+    if (!funil || funil.estagios.length === 0) {
+      resumo.semEsteiraConfigurada += 1;
+      continue;
+    }
+    const existentes = credenciamentosAbertos.filter((item) => item.contatoId === contato.id);
+    if (existentes.some((item) => item.funilId === funil.id)) {
+      resumo.jaNaEsteira += 1;
+      continue;
+    }
+    if (existentes.length > 0) resumo.emOutraEsteira += 1;
+    resumo.paraEnviar += 1;
+    if (previa) continue;
+
+    try {
+      if (contato.segmentoParceiro !== contato.segmento) {
+        await prisma.contact.update({ where: { id: contato.id }, data: { segmentoParceiro: contato.segmento } });
+      }
+      await criarCredenciamento({ contatoId: contato.id, funilId: funil.id });
+      resumo.enviados += 1;
+    } catch (erro) {
+      resumo.erros.push({
+        contato: contato.nome,
+        motivo: erro instanceof Error ? erro.message : 'Falha ao enviar para a esteira',
+      });
+    }
+  }
+
+  return { previa, totalIdentificados: classificados.length, porSegmento };
 }
 
 export async function atualizarCredenciamento(id: string, input: AtualizarCredenciamentoInput) {

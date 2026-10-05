@@ -14,6 +14,6 @@ export function identificarSegmentoParceiro(
 
   const fonte = normalizar(observacoes ?? '');
   if (/FONTE\s*:\s*CONTATOS?\s+STARLINK|IMPORTAD[OA].{0,60}STARLINK/.test(fonte)) return 'STARLINK';
-  if (/FONTE\s*:\s*.*\bTIM\b|CARTEIRA.{0,40}PDV.{0,12}\bTIM\b|PDV\s+TIM/.test(fonte)) return 'TIM';
+  if (/FONTE\s*:\s*.*\bTIM\b|CARTEIRA.{0,40}PDV.{0,12}\bTIM\b|PDV\s+TIM|CONTATOS\s+TIM/.test(fonte)) return 'TIM';
   return null;
 }

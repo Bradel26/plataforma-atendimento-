@@ -16,6 +16,19 @@ import { EmpresaInput, type EmpresaEscolhida } from '../crm/EmpresaInput';
 import { PainelDoCiclo } from '../crm/PainelDoCiclo';
 
 type Kanban = { funil: { id: string; nome: string }; colunas: ColunaCredenciamento[] };
+type ResumoLote = {
+  previa: boolean;
+  totalIdentificados: number;
+  porSegmento: Record<'TIM' | 'STARLINK', {
+    identificados: number;
+    paraEnviar: number;
+    jaNaEsteira: number;
+    emOutraEsteira: number;
+    semEsteiraConfigurada: number;
+    enviados: number;
+    erros: Array<{ contato: string; motivo: string }>;
+  }>;
+};
 
 /** Acima disto o card fica vermelho: mesmo limite padrao da Area da Gestao. */
 const LIMITE_DIAS = 5;
@@ -393,6 +406,9 @@ export function EsteiraPage() {
   const [pedidoExcecao, setPedidoExcecao] = useState<string | null>(null);
   const [motivo, setMotivo] = useState('');
   const [situacao, setSituacao] = useState<SituacaoExcecao>('CANCELADO');
+  const [importacaoAberta, setImportacaoAberta] = useState(false);
+  const [processandoImportacao, setProcessandoImportacao] = useState(false);
+  const [resumoLote, setResumoLote] = useState<ResumoLote | null>(null);
 
   useEffect(() => {
     void api
@@ -450,6 +466,20 @@ export function EsteiraPage() {
       await carregar();
     } catch (e) {
       setErro(e instanceof ApiError ? e.message : 'Falha ao marcar exceção');
+    }
+  };
+
+  const importarClassificados = async (previa: boolean) => {
+    setProcessandoImportacao(true);
+    setErro(null);
+    try {
+      const resultado = await api.post<ResumoLote>('/credenciamentos/importar-contatos-classificados', { previa });
+      setResumoLote(resultado);
+      if (!previa) await carregar();
+    } catch (e) {
+      setErro(e instanceof ApiError ? e.message : 'Falha ao processar contatos importados');
+    } finally {
+      setProcessandoImportacao(false);
     }
   };
 
@@ -515,11 +545,61 @@ export function EsteiraPage() {
         </div>
       </div>
 
+      <div className="flex justify-end"><Button variante="neutro" onClick={() => { setImportacaoAberta((aberta) => !aberta); setResumoLote(null); }}>Importar contatos TIM / Starlink</Button></div>
       <p className="text-xs text-slate-500">
         {total} parceiro(s) · Novo cadastro → Pendência → Aprovação → Credenciado → Ativo · Reprovado, Cancelado e
         Inativado ficam marcados no card, sem virar coluna.
       </p>
 
+      {importacaoAberta && (
+        <Card titulo="Importar contatos identificados" descricao="A origem da observação define a esteira; telefone não é obrigatório.">
+          <p className="mb-3 text-sm text-slate-600">
+            Lê contatos com “Fonte: CONTATOS STARLINK”, “Fonte: ... TIM” ou origem de carteira PDV TIM. Quem já está
+            na esteira correta será ignorado para evitar duplicação.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button variante="neutro" onClick={() => void importarClassificados(true)} disabled={processandoImportacao}>
+              {processandoImportacao ? 'Consultando...' : 'Contar contatos antes de enviar'}
+            </Button>
+            {resumoLote?.previa && resumoLote.porSegmento.TIM.paraEnviar + resumoLote.porSegmento.STARLINK.paraEnviar > 0 && (
+              <Button
+                onClick={() => void importarClassificados(false)}
+                disabled={processandoImportacao || resumoLote.porSegmento.TIM.semEsteiraConfigurada + resumoLote.porSegmento.STARLINK.semEsteiraConfigurada > 0}
+              >
+                {processandoImportacao ? 'Enviando...' : `Enviar ${resumoLote.porSegmento.TIM.paraEnviar + resumoLote.porSegmento.STARLINK.paraEnviar} contatos às esteiras`}
+              </Button>
+            )}
+          </div>
+          {resumoLote && (
+            <div className="mt-4 space-y-3">
+              <p className="text-sm font-medium text-slate-800">
+                {resumoLote.previa ? `Prévia: ${resumoLote.totalIdentificados} contatos identificados` : `Importação concluída para ${resumoLote.totalIdentificados} contatos identificados`}
+              </p>
+              {(['TIM', 'STARLINK'] as const).map((segmento) => {
+                const linha = resumoLote.porSegmento[segmento];
+                return (
+                  <div key={segmento} className="rounded-lg border border-slate-200 p-3 text-sm">
+                    <p className="font-medium text-slate-800">{segmento === 'TIM' ? 'Credenciamento TIM' : 'Credenciamento Starlink'}</p>
+                    <p className="mt-1 text-slate-600">
+                      {linha.identificados} identificados · {linha.paraEnviar} para enviar · {linha.jaNaEsteira} já na esteira correta
+                      {linha.emOutraEsteira ? ` · ${linha.emOutraEsteira} também ${linha.emOutraEsteira === 1 ? 'está' : 'estão'} em outra esteira` : ''}
+                    </p>
+                    {!resumoLote.previa && (
+                      <p className="mt-1 text-slate-600">{linha.enviados} enviados · {linha.erros.length} com erro · {linha.semEsteiraConfigurada} sem esteira ativa</p>
+                    )}
+                    {linha.erros.slice(0, 10).map((item) => (
+                      <p key={`${segmento}-${item.contato}`} className="mt-1 text-xs text-red-700">{item.contato}: {item.motivo}</p>
+                    ))}
+                  </div>
+                );
+              })}
+              {resumoLote.totalIdentificados === 0 && (
+                <p className="text-sm text-slate-600">Nenhum contato com origem TIM ou Starlink foi encontrado.</p>
+              )}
+            </div>
+          )}
+        </Card>
+      )}
       {erro && <Alerta>{erro}</Alerta>}
 
       {aberto && <DetalheCredenciamento id={aberto} aoFechar={() => setAberto(null)} aoMudar={() => void carregar()} />}

@@ -12,6 +12,8 @@ WHERE "segmento_parceiro" IS NULL
   AND (
     "observacoes" ILIKE '%PDV TIM%'
     OR "observacoes" ILIKE '%CARTEIRA%TIM%'
+    OR "observacoes" ILIKE '%CONTATOS TIM%'
+    OR "observacoes" ILIKE '%FONTE:%TIM%'
   );
 
 ALTER TABLE "contatos"
