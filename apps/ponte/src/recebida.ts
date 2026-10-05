@@ -167,7 +167,7 @@ export async function receber(sessao: Sessao, msg: WAMessage) {
 
     // Guarda o jid exato de onde isto chegou (pode ser "@lid", nao so
     // "@s.whatsapp.net") para a resposta sair pelo mesmo endereco.
-    lembrarJid(numero, remetente);
+    lembrarJid(sessao.nome, numero, remetente);
 
     const idExterno = msg.key?.id;
     if (!idExterno) return;

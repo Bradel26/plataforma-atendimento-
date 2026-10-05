@@ -175,13 +175,25 @@ export function descreverErroDeDesconexao(erroBruto: unknown): {
 const jidOriginal = new Map<string, string>();
 
 /** Chamado ao receber uma mensagem, para a resposta poder usar o MESMO jid. */
-export function lembrarJid(numero: string, jidCompleto: string) {
-  jidOriginal.set(numero, jidCompleto);
+export function lembrarJid(sessao: string, numero: string, jidCompleto: string) {
+  jidOriginal.set(`${sessao}:${numero}`, jidCompleto);
 }
 
-/** O jid de destino: o original lembrado, ou o formato padrao de telefone. */
-export function jid(numero: string) {
-  return jidOriginal.get(numero) ?? numero + '@s.whatsapp.net';
+export function jidLembrado(sessao: string, numero: string) {
+  return jidOriginal.get(`${sessao}:${numero}`) ?? null;
+}
+
+/** Resolve o endereco atual do contato, inclusive LID, antes de enviar. */
+async function jid(sessao: Sessao, numero: string) {
+  const lembrado = jidLembrado(sessao.nome, numero);
+  if (lembrado) return lembrado;
+
+  if (!sessao.sock) throw new SessaoIndisponivel(`A sessao "${sessao.nome}" nao esta conectada`);
+  const [contato] = (await sessao.sock.onWhatsApp(`${numero}@s.whatsapp.net`)) ?? [];
+  if (!contato?.exists || !contato.jid) {
+    throw new Error(`O numero ${numero} nao foi encontrado no WhatsApp. Confira o DDI e o numero.`);
+  }
+  return contato.jid;
 }
 
 /** So os digitos de um jid, sem sufixo nem id de aparelho. */
@@ -654,7 +666,7 @@ async function enviar(nome: string, destino: string, conteudo: AnyMessageContent
     );
   }
 
-  const enviada = await sessao.sock.sendMessage(jid(destino), conteudo);
+  const enviada = await sessao.sock.sendMessage(await jid(sessao, destino), conteudo);
   return enviada?.key?.id ?? null;
 }
 
@@ -668,7 +680,7 @@ export async function fotoDePerfil(nome: string, numero: string): Promise<string
   if (!sessao?.sock || sessao.situacao !== 'CONECTADO') return null;
 
   try {
-    return (await sessao.sock.profilePictureUrl(jid(numero), 'preview', 8_000)) ?? null;
+    return (await sessao.sock.profilePictureUrl(await jid(sessao, numero), 'preview', 8_000)) ?? null;
   } catch {
     // Sem foto, restricao de privacidade ou falha pontual nao afetam a conversa.
     return null;

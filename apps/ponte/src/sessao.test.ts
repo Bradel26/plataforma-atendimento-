@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chatValido, contatoValido, jid, lembrarJid, numeroDoJid } from './sessao.js';
+import { chatValido, contatoValido, jidLembrado, lembrarJid, numeroDoJid } from './sessao.js';
 
 /**
  * O WhatsApp passou a identificar alguns contatos por "LID" (endereco
@@ -9,18 +9,11 @@ import { chatValido, contatoValido, jid, lembrarJid, numeroDoJid } from './sessa
  * mensagem nunca chega. `lembrarJid` guarda o endereco de onde uma mensagem
  * realmente chegou, para a resposta usar o MESMO endereco.
  */
-describe('jid de resposta', () => {
-  it('sem nada lembrado, usa o formato padrao de numero de telefone', () => {
-    expect(jid('5511999998888')).toBe('5511999998888@s.whatsapp.net');
-  });
-
-  it('depois de lembrado, responde pelo mesmo jid completo que chegou (ex.: @lid)', () => {
-    lembrarJid('79233992933473', '79233992933473@lid');
-    expect(jid('79233992933473')).toBe('79233992933473@lid');
-  });
-
-  it('numero nunca visto continua caindo no formato padrao', () => {
-    expect(jid('5521988887777')).toBe('5521988887777@s.whatsapp.net');
+describe('jid lembrado por sessao', () => {
+  it('mantem o endereco LID recebido na sessao correspondente', () => {
+    lembrarJid('linha-a', '79233992933473', '79233992933473@lid');
+    expect(jidLembrado('linha-a', '79233992933473')).toBe('79233992933473@lid');
+    expect(jidLembrado('linha-b', '79233992933473')).toBeNull();
   });
 });
 
