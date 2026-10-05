@@ -70,6 +70,8 @@ type Props = {
  */
 export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   const [contatos, setContatos] = useState<Contato[]>([]);
+  const [proximoCursor, setProximoCursor] = useState<string | null>(null);
+  const [carregandoMais, setCarregandoMais] = useState(false);
   const [busca, setBusca] = useState('');
   /** Etiquetas ligadas no filtro. Semantica E: cada uma estreita a lista. */
   const [tags, setTags] = useState<string[]>([]);
@@ -112,6 +114,7 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   const [tagEmLote, setTagEmLote] = useState('');
   const [aplicandoLote, setAplicandoLote] = useState(false);
   const selecionarTodosRef = useRef<HTMLInputElement>(null);
+  const versaoDaLista = useRef(0);
 
   /**
    * Largura real do container, nao do viewport (mesmo principio do
@@ -151,25 +154,68 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
     if (uf) params.set('uf', uf);
     if (ddd.length === 2) params.set('ddd', ddd);
     const qs = params.size ? `?${params}` : '';
+    const versao = ++versaoDaLista.current;
+    setErro(null);
+    setProximoCursor(null);
+    setCarregandoMais(false);
     setCarregando(true);
     try {
-      const { contatos: lista } = await api.get<{ contatos: Contato[] }>(`/contatos${qs}`);
+      const { contatos: lista, proximoCursor: proximo } = await api.get<{
+        contatos: Contato[];
+        proximoCursor: string | null;
+      }>(`/contatos${qs}`);
+      if (versao !== versaoDaLista.current) return;
       setContatos(lista);
+      setProximoCursor(proximo);
       // A selecao pertence a este resultado: um filtro novo pode nao conter
       // mais quem estava marcado, e agir em cima de quem sumiu da tela seria
       // silencioso demais para uma acao em lote.
       setSelecionados(new Set());
     } catch (e) {
+      if (versao !== versaoDaLista.current) return;
       setErro(e instanceof ApiError ? e.message : 'Falha ao carregar contatos');
     } finally {
-      setCarregando(false);
+      if (versao === versaoDaLista.current) setCarregando(false);
     }
   }, [busca, tags, ciclos, uf, ddd]);
 
   useEffect(() => {
+    // Um filtro novo invalida qualquer pagina que ainda esteja chegando.
+    versaoDaLista.current += 1;
+    setProximoCursor(null);
+    setCarregandoMais(false);
     const t = setTimeout(() => void carregar(), 250);
     return () => clearTimeout(t);
   }, [carregar]);
+
+  const carregarMais = async () => {
+    if (!proximoCursor || carregandoMais) return;
+
+    const params = new URLSearchParams({ limite: '50', cursor: proximoCursor });
+    if (busca.trim()) params.set('busca', busca.trim());
+    for (const tag of tags) params.append('tags', tag);
+    for (const c of ciclos) params.append('ciclo', c);
+    if (uf) params.set('uf', uf);
+    if (ddd.length === 2) params.set('ddd', ddd);
+
+    const versao = versaoDaLista.current;
+    setCarregandoMais(true);
+    setErro(null);
+    try {
+      const { contatos: mais, proximoCursor: proximo } = await api.get<{
+        contatos: Contato[];
+        proximoCursor: string | null;
+      }>(`/contatos?${params}`);
+      if (versao !== versaoDaLista.current) return;
+      setContatos((atuais) => [...atuais, ...mais.filter((contato) => !atuais.some((atual) => atual.id === contato.id))]);
+      setProximoCursor(proximo);
+    } catch (e) {
+      if (versao !== versaoDaLista.current) return;
+      setErro(e instanceof ApiError ? e.message : 'Falha ao carregar mais contatos');
+    } finally {
+      if (versao === versaoDaLista.current) setCarregandoMais(false);
+    }
+  };
 
   const criar = async (evento: React.FormEvent) => {
     evento.preventDefault();
@@ -281,7 +327,7 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   const painelLista = (
       <Card
         titulo="Contatos"
-        descricao={`${contatos.length} encontrado(s)`}
+        descricao={`${contatos.length} exibido(s)${proximoCursor ? ' · há mais contatos' : ''}`}
         acao={
           <Button variante={cadastrando ? 'neutro' : 'primario'} onClick={() => setCadastrando((v) => !v)} aria-expanded={cadastrando}>
             {cadastrando ? 'Cancelar' : 'Novo contato'}
@@ -563,6 +609,13 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
                   </li>
                 ))}
               </ul>
+              {proximoCursor && (
+                <div className="flex justify-center border-t border-slate-100 px-2 py-3">
+                  <Button variante="neutro" disabled={carregandoMais} onClick={() => void carregarMais()}>
+                    {carregandoMais ? 'Carregando...' : 'Carregar mais contatos'}
+                  </Button>
+                </div>
+              )}
             </>
           )}
         </div>
