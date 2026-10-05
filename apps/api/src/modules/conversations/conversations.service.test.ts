@@ -82,7 +82,9 @@ const {
   conversationUpdate: vi.fn(),
   conversationGroupBy: vi.fn(),
   channelConfigFindFirst: vi.fn(),
-  queueAgentFindMany: vi.fn(),
+  // Lista vazia por padrao: desde 2026-10-05 o contexto de visibilidade busca as
+  // filas tambem para ADMIN/SUPERVISOR (aba Fila).
+  queueAgentFindMany: vi.fn().mockResolvedValue([]),
   messageCreate: vi.fn(),
 }));
 

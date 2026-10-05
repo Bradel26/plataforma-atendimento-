@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import type { Prisma, Role } from '@prisma/client';
 import { notFound } from './errors';
 import { prisma } from './prisma';
 import {
@@ -35,50 +35,94 @@ import {
  */
 const NADA = { id: { in: [] as string[] } };
 
+/**
+ * Perfis dos donos de numero que o SUPERVISOR acompanha.
+ *
+ * "Setor Comercial e Suporte" e o perfil do dono do numero — nao existe
+ * entidade de setor (decisao de 2026-10-05). Se alguem mudar de perfil, a
+ * visibilidade muda junto.
+ */
+export const PERFIS_ACOMPANHADOS_PELO_SUPERVISOR: Role[] = ['COMERCIAL', 'SUPORTE'];
+
+/** Quem tem a aba Acompanhar e o seletor de usuario. */
+export const podeAcompanhar = (perfil: string): boolean => perfil === 'ADMIN' || perfil === 'SUPERVISOR';
+
+/**
+ * Conversa do Numero da empresa: sem linha registrada, ou numa linha sem dono
+ * (a compartilhada, Instagram, Facebook). Nao e de nenhuma pessoa.
+ */
+export const DO_NUMERO_DA_EMPRESA: Prisma.ConversationWhereInput = {
+  OR: [{ canalConfigId: null }, { canalConfig: { donoId: null } }],
+};
+
 export const politicaConversas = {
   /**
-   * Agente e comercial: as proprias, mais as em espera nas filas em que atuam.
-   * Gestor: as da equipe, mais as em espera (fila e operacao, nao carteira —
-   * conversa esperando nao pertence a ninguem ainda).
+   * Atendimento organizado por NUMERO (`canalConfig.donoId`), nao por
+   * responsavel (2026-10-05):
    *
-   * Linha PESSOAL de WhatsApp (`ChannelConfig.donoId` preenchido) e excecao a
-   * "veTudo"/"veEquipe": e privada de quem conectou o proprio numero, mesmo
-   * para ADMIN/SUPERVISOR/GESTOR — decisao de produto, nao lacuna de dado
-   * (a conversa continua corretamente atribuida no banco a linha certa; o que
-   * muda aqui e so quem tem permissao de olhar). Webchat e linha COMPARTILHADA
-   * (`donoId` nulo) continuam com a supervisao normal.
+   * - ADMIN ve todas, inclusive numero pessoal de outra pessoa. Reverte a
+   *   decisao de 2026-09-25, que escondia linha pessoal ate do ADMIN.
+   * - SUPERVISOR ve o Numero da empresa e os numeros cujo dono e COMERCIAL ou
+   *   SUPORTE — nao o de ADMIN, nem o de outro SUPERVISOR. Vale em toda a
+   *   plataforma: lista, abrir por id, ficha do contato, etiquetas.
+   * - Os demais: as atribuidas a ele (de qualquer numero — e assim que uma
+   *   transferencia chega) e as em espera nas filas em que atua.
+   *
+   * Para todos, as conversas do proprio numero ficam sempre visiveis, mesmo
+   * transferidas: "Minhas" e o meu numero.
    */
   filtro(ctx: ContextoVisibilidade): Prisma.ConversationWhereInput {
-    const foraDeLinhaPessoalAlheia: Prisma.ConversationWhereInput = {
-      OR: [{ canalConfig: null }, { canalConfig: { donoId: null } }, { canalConfig: { donoId: ctx.usuarioId } }],
-    };
+    if (ctx.perfil === 'ADMIN') return {};
 
-    if (ctx.veTudo) return foraDeLinhaPessoalAlheia;
-    if (ctx.veEquipe) {
+    const doMeuNumero: Prisma.ConversationWhereInput = { canalConfig: { donoId: ctx.usuarioId } };
+    const atribuidaAMim: Prisma.ConversationWhereInput = { agenteId: ctx.usuarioId };
+
+    if (ctx.perfil === 'SUPERVISOR') {
       return {
-        AND: [
-          foraDeLinhaPessoalAlheia,
-          { OR: [{ agenteId: { in: ctx.equipeIds } }, { status: 'EM_ESPERA' }] },
+        OR: [
+          DO_NUMERO_DA_EMPRESA,
+          { canalConfig: { dono: { perfil: { in: PERFIS_ACOMPANHADOS_PELO_SUPERVISOR } } } },
+          doMeuNumero,
+          atribuidaAMim,
         ],
       };
     }
+
+    if (ctx.veEquipe) {
+      return {
+        OR: [
+          doMeuNumero,
+          atribuidaAMim,
+          { AND: [DO_NUMERO_DA_EMPRESA, { OR: [{ agenteId: { in: ctx.equipeIds } }, { status: 'EM_ESPERA' }] }] },
+        ],
+      };
+    }
+
     return {
-      AND: [
-        foraDeLinhaPessoalAlheia,
-        {
-          OR: [
-            { agenteId: ctx.usuarioId },
-            // `filaIds` vazio produz `in: []`, que nao casa com nada. E o
-            // comportamento certo: quem nao esta em fila nenhuma nao ve espera
-            // nenhuma. Um `if` que omitisse este termo transformaria "nenhuma
-            // fila" em "sem filtro".
-            { status: 'EM_ESPERA', filaId: { in: ctx.filaIds } },
-          ],
-        },
+      OR: [
+        doMeuNumero,
+        atribuidaAMim,
+        // `filaIds` vazio produz `in: []`, que nao casa com nada. E o
+        // comportamento certo: quem nao esta em fila nenhuma nao ve espera
+        // nenhuma. Um `if` que omitisse este termo transformaria "nenhuma
+        // fila" em "sem filtro".
+        { status: 'EM_ESPERA', filaId: { in: ctx.filaIds } },
       ],
     };
   },
 };
+
+/**
+ * O solicitante pode ver esta conversa? Mesma politica da lista e do acesso por
+ * id — usada pelo socket antes de deixar alguem entrar na sala da conversa.
+ */
+export async function conversaVisivel(id: string): Promise<boolean> {
+  const achada = await prisma.conversation.findFirst({
+    where: apenasVisivel(id, await filtroDe(politicaConversas)),
+    select: { id: true },
+  });
+  return achada !== null;
+}
 
 export const politicaProtocolos = {
   /**

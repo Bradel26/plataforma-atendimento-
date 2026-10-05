@@ -67,13 +67,14 @@ export function contextoVisibilidade(): Promise<ContextoVisibilidade> {
     const papel = perfil as Role;
     const veTudo = VE_TUDO.includes(papel);
 
-    // Quem ve tudo nao precisa de fila nem de equipe: as duas consultas
-    // existiriam para montar um filtro que nao vai ser usado.
+    // Quem ve tudo nao precisa de equipe, mas precisa das filas: a aba Fila
+    // mostra a espera das filas em que a pessoa atua, qualquer que seja o perfil.
     if (veTudo) {
+      const vinculos = await prisma.queueAgent.findMany({ where: { usuarioId }, select: { filaId: true } });
       return {
         usuarioId,
         perfil: papel,
-        filaIds: [],
+        filaIds: vinculos.map((v) => v.filaId),
         equipeIds: [],
         veTudo: true,
         veEquipe: false,

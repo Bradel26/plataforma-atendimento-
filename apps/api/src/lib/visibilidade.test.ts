@@ -46,19 +46,14 @@ const COMERCIAL = ctx({ perfil: 'COMERCIAL', carteiraAberta: true });
 const AGENTE = ctx({ perfil: 'AGENTE', filaIds: ['f-1'] });
 const AGENTE_SEM_FILA = ctx({ perfil: 'AGENTE' });
 
-/**
- * Termo repetido em toda politica de conversa (2026-09-25): linha pessoal de
- * WhatsApp e privada do dono, mesmo para quem "ve tudo"/"ve equipe".
- */
-const FORA_DE_LINHA_PESSOAL_ALHEIA = {
-  OR: [{ canalConfig: null }, { canalConfig: { donoId: null } }, { canalConfig: { donoId: EU } }],
-};
+/** Conversa do Numero da empresa: sem linha, ou linha sem dono (2026-10-05). */
+const EMPRESA = { OR: [{ canalConfigId: null }, { canalConfig: { donoId: null } }] };
+const MEU_NUMERO = { canalConfig: { donoId: EU } };
+const ATRIBUIDA_A_MIM = { agenteId: EU };
 
 /**
- * `politicaConversas` fica FORA desta lista de proposito: desde 2026-09-25 ela
- * e a unica excecao a "quem ve tudo recebe filtro vazio" (linha pessoal de
- * WhatsApp e privada do dono mesmo para ADMIN/SUPERVISOR) — tem describe
- * proprio em 'conversas', mais abaixo.
+ * `politicaConversas` fica FORA desta lista: o SUPERVISOR nao recebe filtro
+ * vazio nela (2026-10-05) — tem describe proprio em 'conversas', mais abaixo.
  */
 const TODAS = [
   politicaProtocolos,
@@ -92,11 +87,10 @@ describe('nada vira sem filtro', () => {
   });
 
   it('agente sem fila nenhuma nao ve espera nenhuma, e nao vira sem filtro', () => {
-    const filtro = politicaConversas.filtro(AGENTE_SEM_FILA);
     // O termo da fila continua no filtro, com lista vazia: `in: []` nao casa
     // com nada. Omitir o termo seria "qualquer conversa em espera".
-    expect(filtro).toEqual({
-      AND: [FORA_DE_LINHA_PESSOAL_ALHEIA, { OR: [{ agenteId: EU }, { status: 'EM_ESPERA', filaId: { in: [] } }] }],
+    expect(politicaConversas.filtro(AGENTE_SEM_FILA)).toEqual({
+      OR: [MEU_NUMERO, ATRIBUIDA_A_MIM, { status: 'EM_ESPERA', filaId: { in: [] } }],
     });
   });
 });
@@ -119,24 +113,41 @@ describe('escopo por responsavel', () => {
   });
 });
 
-describe('conversas', () => {
-  it('ADMIN e SUPERVISOR nao veem "sem filtro" — linha pessoal de outro agente fica de fora mesmo assim', () => {
-    expect(politicaConversas.filtro(ADMIN)).toEqual(FORA_DE_LINHA_PESSOAL_ALHEIA);
-    expect(politicaConversas.filtro(SUPERVISOR)).toEqual(FORA_DE_LINHA_PESSOAL_ALHEIA);
+describe('conversas (organizadas por numero, 2026-10-05)', () => {
+  it('ADMIN ve todas, inclusive numero pessoal de outra pessoa', () => {
+    expect(politicaConversas.filtro(ADMIN)).toEqual({});
   });
 
-  it('gestor ve a equipe e a espera — espera e fila, nao carteira — sem enxergar linha pessoal alheia', () => {
-    expect(politicaConversas.filtro(GESTOR)).toEqual({
-      AND: [
-        FORA_DE_LINHA_PESSOAL_ALHEIA,
-        { OR: [{ agenteId: { in: [EU, COLEGA] } }, { status: 'EM_ESPERA' }] },
+  it('SUPERVISOR ve Numero da empresa, numeros de Comercial e Suporte, o proprio e o atribuido a ele', () => {
+    expect(politicaConversas.filtro(SUPERVISOR)).toEqual({
+      OR: [
+        EMPRESA,
+        { canalConfig: { dono: { perfil: { in: ['COMERCIAL', 'SUPORTE'] } } } },
+        MEU_NUMERO,
+        ATRIBUIDA_A_MIM,
       ],
     });
   });
 
-  it('comercial e agente veem as proprias e a espera das filas em que atuam — sem enxergar linha pessoal alheia', () => {
+  it('SUPERVISOR nunca recebe filtro vazio — sem isso veria o numero do Administrador', () => {
+    expect(Object.keys(politicaConversas.filtro(SUPERVISOR)).length).toBeGreaterThan(0);
+  });
+
+  it('gestor: proprio numero, atribuidas, e a espera e a equipe so no Numero da empresa', () => {
+    expect(politicaConversas.filtro(GESTOR)).toEqual({
+      OR: [
+        MEU_NUMERO,
+        ATRIBUIDA_A_MIM,
+        { AND: [EMPRESA, { OR: [{ agenteId: { in: [EU, COLEGA] } }, { status: 'EM_ESPERA' }] }] },
+      ],
+    });
+  });
+
+  it('comercial/suporte/agente: proprio numero, atribuidas de qualquer numero, espera das filas em que atuam', () => {
+    // "Atribuidas de qualquer numero" e o caso da transferencia: o Leandro passa
+    // a conversa do numero dele para a Alessandra, e ela precisa ve-la.
     expect(politicaConversas.filtro(AGENTE)).toEqual({
-      AND: [FORA_DE_LINHA_PESSOAL_ALHEIA, { OR: [{ agenteId: EU }, { status: 'EM_ESPERA', filaId: { in: ['f-1'] } }] }],
+      OR: [MEU_NUMERO, ATRIBUIDA_A_MIM, { status: 'EM_ESPERA', filaId: { in: ['f-1'] } }],
     });
   });
 });
