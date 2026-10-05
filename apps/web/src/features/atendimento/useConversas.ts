@@ -3,16 +3,13 @@ import type { Socket } from 'socket.io-client';
 import { api, getAccessToken } from '../../lib/api';
 import { EVENTOS, conectar } from '../../lib/realtime';
 import type { Contadores, ConversaDetalhe, ConversaResumo, Mensagem } from '../../lib/types';
-import { parametrosDaVisao, pertenceALista, type VisaoInbox } from './visao';
+import { parametrosDaVisao, pertenceALista, type FiltroAcompanhar, type VisaoInbox } from './visao';
 
 type MensagemEvento = { conversaId: string; mensagem: Mensagem };
 
-const CONTADORES_ZERADOS: Contadores = {
-  EM_ESPERA: 0,
-  ATRIBUIDO: 0,
-  EM_ATENDIMENTO: 0,
-  FINALIZADO: 0,
-};
+const CONTADORES_ZERADOS: Contadores = { MINHAS: 0, FILA: 0, ACOMPANHAR: null };
+
+const SEM_FILTRO: FiltroAcompanhar = { donoId: null, canalConfigId: null };
 
 /** Ordena por atividade mais recente, como no painel de referencia. */
 const porAtividade = (a: ConversaResumo, b: ConversaResumo) =>
@@ -27,25 +24,27 @@ function paraResumo(c: ConversaDetalhe | ConversaResumo): ConversaResumo {
   return c;
 }
 
-/** Parte da query correspondente a visao ativa — sem o `&` de etiquetas, que `queryTags` ja resolve. */
-function partesDaVisao(visao: VisaoInbox): string {
-  const p = parametrosDaVisao(visao);
-  const partes: string[] = [];
-  if (p.status) partes.push(`status=${p.status}`);
-  if (p.minhas) partes.push('minhas=true');
-  return partes.join('&');
+/** Query da aba ativa — sem o `&` de etiquetas, que `queryTags` ja resolve. */
+function partesDaVisao(visao: VisaoInbox, filtro: FiltroAcompanhar): string {
+  return new URLSearchParams(parametrosDaVisao(visao, filtro)).toString();
 }
 
 /**
- * Estado do painel de atendimento: lista da visao ativa (Minhas / Nao
- * atribuidas / Todas — Fase 11.3), contadores e conversa aberta, mantidos em
- * sincronia por WebSocket.
+ * Estado do painel de atendimento: lista da aba ativa (Minhas / Fila /
+ * Acompanhar — 2026-10-05), contadores e conversa aberta, mantidos em sincronia
+ * por WebSocket.
  *
- * `meuUsuarioId` so serve para decidir se uma conversa que chegou por evento
- * pertence a visao "Minhas" (ver `pertenceAVisao`) — nunca para filtrar o que
- * a API devolve, que continua sendo autoridade exclusiva do backend.
+ * `meuUsuarioId`, as filas do usuario e o seletor de Acompanhar so servem para
+ * decidir em qual aba uma conversa que chegou por evento entra (ver
+ * `pertenceAVisao`) — nunca para filtrar o que a API devolve, que continua
+ * sendo autoridade exclusiva do backend.
  */
-export function useConversas(visao: VisaoInbox, tags: readonly string[] = [], meuUsuarioId: string | null = null) {
+export function useConversas(
+  visao: VisaoInbox,
+  tags: readonly string[] = [],
+  meuUsuarioId: string | null = null,
+  filtro: FiltroAcompanhar = SEM_FILTRO,
+) {
   const [conversas, setConversas] = useState<ConversaResumo[]>([]);
   const [contadores, setContadores] = useState<Contadores>(CONTADORES_ZERADOS);
   const [carregando, setCarregando] = useState(true);
@@ -58,6 +57,12 @@ export function useConversas(visao: VisaoInbox, tags: readonly string[] = [], me
   visaoRef.current = visao;
   const meuUsuarioIdRef = useRef(meuUsuarioId);
   meuUsuarioIdRef.current = meuUsuarioId;
+  const filtroRef = useRef(filtro);
+  filtroRef.current = filtro;
+  /** Muda so quando o seletor muda de verdade — o objeto chega novo a cada render. */
+  const chaveFiltro = `${filtro.donoId ?? ''}|${filtro.canalConfigId ?? ''}`;
+  /** Filas em que o usuario atua, para a aba Fila decidir eventos de socket. */
+  const minhasFilaIdsRef = useRef<readonly string[]>([]);
 
   /*
    * As etiquetas ativas viram uma string, e e ela que entra nas dependencias.
@@ -77,8 +82,9 @@ export function useConversas(visao: VisaoInbox, tags: readonly string[] = [], me
   );
 
   const carregarContadores = useCallback(async () => {
-    const { contadores: c } = await api.get<{ contadores: Contadores }>('/conversas/contadores');
-    setContadores(c);
+    const r = await api.get<{ contadores: Contadores; minhasFilaIds: string[] }>('/conversas/contadores');
+    setContadores(r.contadores);
+    minhasFilaIdsRef.current = r.minhasFilaIds;
   }, []);
 
   const carregarLista = useCallback(
@@ -88,7 +94,7 @@ export function useConversas(visao: VisaoInbox, tags: readonly string[] = [], me
         const { conversas: lista, proximoCursor: proximo } = await api.get<{
           conversas: ConversaResumo[];
           proximoCursor: string | null;
-        }>(`/conversas?${partesDaVisao(visaoParaCarregar)}${queryTags()}`);
+        }>(`/conversas?${partesDaVisao(visaoParaCarregar, filtroRef.current)}${queryTags()}`);
         setConversas(lista.sort(porAtividade));
         setCursor(proximo);
         setErro(null);
@@ -112,7 +118,7 @@ export function useConversas(visao: VisaoInbox, tags: readonly string[] = [], me
       const { conversas: lista, proximoCursor: proximo } = await api.get<{
         conversas: ConversaResumo[];
         proximoCursor: string | null;
-      }>(`/conversas?${partesDaVisao(visaoRef.current)}&cursor=${encodeURIComponent(cursor)}${queryTags()}`);
+      }>(`/conversas?${partesDaVisao(visaoRef.current, filtroRef.current)}&cursor=${encodeURIComponent(cursor)}${queryTags()}`);
       setConversas((atual) => {
         const vistos = new Set(atual.map((c) => c.id));
         return [...atual, ...lista.filter((c) => !vistos.has(c.id))].sort(porAtividade);
@@ -130,7 +136,7 @@ export function useConversas(visao: VisaoInbox, tags: readonly string[] = [], me
   useEffect(() => {
     void carregarLista(visao);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visao, chaveTags, carregarLista]);
+  }, [visao, chaveTags, chaveFiltro, carregarLista]);
 
   useEffect(() => {
     void carregarContadores().catch(() => undefined);
@@ -161,7 +167,12 @@ export function useConversas(visao: VisaoInbox, tags: readonly string[] = [], me
       const resumo = paraResumo(detalhe);
       setConversas((atual) => {
         const semEla = atual.filter((c) => c.id !== resumo.id);
-        if (!pertenceALista(resumo, visaoRef.current, meuUsuarioIdRef.current)) return semEla;
+        const naAba = pertenceALista(resumo, visaoRef.current, {
+          meuUsuarioId: meuUsuarioIdRef.current,
+          minhasFilaIds: minhasFilaIdsRef.current,
+          filtro: filtroRef.current,
+        });
+        if (!naAba) return semEla;
         const cabeNoFiltro = tagsRef.current.every((t) => resumo.tags.includes(t));
         if (!cabeNoFiltro) return semEla;
         return [...semEla, resumo].sort(porAtividade);

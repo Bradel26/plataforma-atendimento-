@@ -1,90 +1,95 @@
-import type { ConversaResumo, ConversaStatus } from '../../lib/types';
+import type { ConversaResumo } from '../../lib/types';
 
 /**
- * As tres visoes da Inbox (Fase 11.3) — uma camada ACIMA de `ConversaStatus`,
- * nao um substituto dele: `Conversation.status` continua tendo os quatro
- * valores de sempre (`EM_ESPERA`, `ATRIBUIDO`, `EM_ATENDIMENTO`, `FINALIZADO`),
- * e a visao so escolhe COMO consultar/filtrar essas conversas, do mesmo jeito
- * que WhatsApp Web tem "conversas" e nao um status por chat.
+ * Abas do Atendimento, organizadas pelo NUMERO de WhatsApp (2026-10-05), nao
+ * pelo responsavel:
+ *  - Minhas: conversas de qualquer numero meu
+ *  - Fila: o que esta atribuido a mim de outros numeros + espera das minhas filas
+ *  - Acompanhar: o que posso ver dos outros numeros (ADMIN e SUPERVISOR)
+ *
+ * Uma camada ACIMA de `ConversaStatus`: o status continua com os quatro valores
+ * de sempre, e a aba so escolhe como consultar/filtrar.
  */
-export type VisaoInbox = 'MINHAS' | 'NAO_ATRIBUIDAS' | 'TODAS';
+export type VisaoInbox = 'MINHAS' | 'FILA' | 'ACOMPANHAR';
 
-export const VISOES_INBOX: readonly VisaoInbox[] = ['MINHAS', 'NAO_ATRIBUIDAS', 'TODAS'];
+export const VISOES_INBOX: readonly VisaoInbox[] = ['MINHAS', 'FILA', 'ACOMPANHAR'];
 
 export const LABEL_VISAO_INBOX: Record<VisaoInbox, string> = {
   MINHAS: 'Minhas',
-  NAO_ATRIBUIDAS: 'Não atribuídas',
-  TODAS: 'Todas',
+  FILA: 'Fila',
+  ACOMPANHAR: 'Acompanhar',
 };
 
-/**
- * Parametros de `GET /conversas` para cada visao.
- *
- * Nao inventa filtro novo: `status` e `minhas` sao os dois parametros que
- * `listarConversasSchema`/`listarConversas` (conversations.service.ts) ja
- * aceitavam antes desta fase. Quem decide o que cabe em cada um continua
- * sendo `politicaConversas.filtro`, no backend — esta funcao so escolhe QUAIS
- * dos dois parametros existentes mandar, nunca reimplementa a regra deles.
- *
- * "Nao atribuidas" usa so `status=EM_ESPERA`, sem precisar de um filtro novo
- * de "sem agente": no schema atual, toda transicao PARA `EM_ESPERA` zera o
- * agente no mesmo `update` (`inbound.service.ts`, `conversations.service.ts`
- * — `transferirConversa` devolvendo para fila) — nunca existe conversa
- * `EM_ESPERA` com agente. `status=EM_ESPERA` e "sem agente" sao a mesma coisa.
- */
-export function parametrosDaVisao(visao: VisaoInbox): { status?: ConversaStatus; minhas?: true } {
-  switch (visao) {
-    case 'MINHAS':
-      return { minhas: true };
-    case 'NAO_ATRIBUIDAS':
-      return { status: 'EM_ESPERA' };
-    case 'TODAS':
-      return {};
-  }
-}
+/** Seletor de Acompanhar. `donoId` nulo = todos os usuarios permitidos; 'EMPRESA' = Numero da empresa. */
+export type FiltroAcompanhar = { donoId: string | null; canalConfigId: string | null };
+export const SEM_FILTRO_ACOMPANHAR: FiltroAcompanhar = { donoId: null, canalConfigId: null };
+
+export const visoesDisponiveis = (podeAcompanhar: boolean): readonly VisaoInbox[] =>
+  podeAcompanhar ? VISOES_INBOX : VISOES_INBOX.filter((v) => v !== 'ACOMPANHAR');
 
 /**
- * Uma conversa que chegou por evento de socket pertence a visao ativa?
- *
- * So decide ENTRE as visoes — nunca decide visibilidade. O servidor so manda
- * o evento (`conversa:nova`/`conversa:atualizada`) para quem ja esta na sala
- * certa (fila, agente ou supervisao — ver `realtime/hub.ts`), entao chegar
- * aqui ja significa que a politica de visibilidade liberou a conversa para
- * este usuario. Esta funcao so escolhe a ABA, do mesmo jeito que a politica
- * ja escolheu a SALA — nenhuma regra de organizacao, perfil ou fila e
- * reimplementada aqui.
+ * Query de `GET /conversas` para a aba. O seletor so vale em Acompanhar — a API
+ * recusa `donoId`/`canalConfigId` em qualquer outra aba.
  */
-export function pertenceAVisao(
-  conversa: Pick<ConversaResumo, 'status' | 'agente'>,
-  visao: VisaoInbox,
-  meuUsuarioId: string | null,
-): boolean {
+export function parametrosDaVisao(visao: VisaoInbox, filtro: FiltroAcompanhar): Record<string, string> {
+  const p: Record<string, string> = { visao };
+  if (visao === 'ACOMPANHAR') {
+    if (filtro.donoId) p.donoId = filtro.donoId;
+    if (filtro.canalConfigId) p.canalConfigId = filtro.canalConfigId;
+  }
+  return p;
+}
+
+export type ContextoDaVisao = {
+  meuUsuarioId: string | null;
+  /** Filas em que atuo — vem de `GET /conversas/contadores`. */
+  minhasFilaIds: readonly string[];
+  filtro: FiltroAcompanhar;
+};
+
+type Campos = Pick<ConversaResumo, 'status' | 'agente' | 'fila' | 'linha'>;
+
+/**
+ * Uma conversa que chegou pelo socket entra na aba ativa?
+ *
+ * So decide a ABA. Quem pode ver ja foi decidido pelo servidor ao escolher as
+ * salas (`realtime/hub.ts`) — nenhuma regra de perfil e reimplementada aqui.
+ * Espelha `filtroDaVisao` (api, conversations.visao.ts).
+ */
+export function pertenceAVisao(conversa: Campos, visao: VisaoInbox, ctx: ContextoDaVisao): boolean {
+  const eu = ctx.meuUsuarioId;
+  const dono = conversa.linha?.donoId ?? null;
+  const doMeuNumero = eu !== null && dono === eu;
+
   switch (visao) {
     case 'MINHAS':
-      return conversa.agente?.id === meuUsuarioId;
-    case 'NAO_ATRIBUIDAS':
-      return conversa.status === 'EM_ESPERA';
-    case 'TODAS':
+      return doMeuNumero;
+    case 'FILA':
+      if (doMeuNumero) return false;
+      if (eu !== null && conversa.agente?.id === eu) return true;
+      return conversa.status === 'EM_ESPERA' && conversa.fila !== null && ctx.minhasFilaIds.includes(conversa.fila.id);
+    case 'ACOMPANHAR': {
+      if (doMeuNumero) return false;
+      const { donoId, canalConfigId } = ctx.filtro;
+      if (donoId === 'EMPRESA' && dono !== null) return false;
+      if (donoId && donoId !== 'EMPRESA' && dono !== donoId) return false;
+      if (canalConfigId && conversa.linha?.id !== canalConfigId) return false;
       return true;
+    }
   }
 }
 
 /**
- * Pertence a LISTA (visao + arquivamento), nao so a visao — usada pelo
- * handler de eventos de socket (Fase 11.9-B).
- *
- * Arquivada sai de TODAS as tres visoes, sempre, antes de qualquer outra
- * regra: a consulta inicial (`GET /conversas` sem `arquivadas=true`) ja
- * exclui arquivadas por padrao no backend, mas o evento de socket carrega a
- * conversa inteira sem saber qual filtro a tela pediu — sem esta checagem,
- * arquivar uma conversa a deixaria visivel ate a proxima consulta em vez de
- * sumir na hora, em qualquer uma das tres abas.
+ * Pertence a LISTA (aba + arquivamento). Arquivada sai de todas as abas antes
+ * de qualquer outra regra: o evento de socket carrega a conversa inteira sem
+ * saber que filtro a tela pediu — sem isto, arquivar a deixaria visivel ate a
+ * proxima consulta (Fase 11.9-B).
  */
 export function pertenceALista(
-  conversa: Pick<ConversaResumo, 'status' | 'agente' | 'arquivada'>,
+  conversa: Campos & Pick<ConversaResumo, 'arquivada'>,
   visao: VisaoInbox,
-  meuUsuarioId: string | null,
+  ctx: ContextoDaVisao,
 ): boolean {
   if (conversa.arquivada) return false;
-  return pertenceAVisao(conversa, visao, meuUsuarioId);
+  return pertenceAVisao(conversa, visao, ctx);
 }

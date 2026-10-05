@@ -196,6 +196,8 @@ type ConversaBase = {
   agente: { id: string; nome: string } | null;
   /** Estado de IA do canal desta conversa. Null = conversa sem canal (ex. Webchat). */
   iaAtiva: boolean | null;
+  /** De qual numero a conversa e (2026-10-05). Nulo = Numero da empresa sem linha registrada. */
+  linha: { id: string; donoId: string | null } | null;
 };
 
 export type ConversaResumo = ConversaBase & { ultimaMensagem: Mensagem | null };
@@ -216,7 +218,14 @@ export type Previa = {
   naoLidas: number;
 };
 
-export type Contadores = Record<ConversaStatus, number>;
+/** Contadores por aba. ACOMPANHAR nulo = o perfil nao tem essa aba. */
+export type Contadores = { MINHAS: number; FILA: number; ACOMPANHAR: number | null };
+
+/** Quem posso acompanhar na aba Acompanhar, com os numeros de cada um. */
+export type Acompanhaveis = {
+  usuarios: Array<{ id: string; nome: string; perfil: string; numeros: Array<{ id: string; nome: string }> }>;
+  empresa: boolean;
+};
 
 /** Uma linha do relatorio de atendimentos por assunto (etiqueta da conversa). */
 export type LinhaAssunto = {

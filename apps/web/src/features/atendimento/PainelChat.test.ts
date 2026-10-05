@@ -42,6 +42,7 @@ function criarConversaDetalheMock(overrides: Partial<ConversaDetalhe> = {}): Con
     fila: null,
     agente: { id: 'user-1', nome: 'Fulano' },
     iaAtiva: null,
+    linha: null,
     mensagens: [],
     ...overrides,
   };

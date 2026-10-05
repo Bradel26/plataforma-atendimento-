@@ -30,6 +30,7 @@ const CONVERSA: ConversaResumo = {
   agente: { id: 'user-1', nome: 'Fulano' },
   ultimaMensagem: null,
   iaAtiva: null,
+  linha: null,
 };
 
 const PREVIA: Previa = {
