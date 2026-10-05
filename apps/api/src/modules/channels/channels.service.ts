@@ -427,7 +427,13 @@ export async function obterConfig(canal: Channel) {
   // primeira do canal — installs com so linha pessoal ainda tem de onde tirar
   // verifyToken para o GET de verificacao do webhook.
   const config =
-    (await prisma.channelConfig.findFirst({ where: { canal, donoId: null } })) ??
+    (await prisma.channelConfig.findFirst({
+      where: { canal, donoId: null },
+      // Ordem explicita: com mais de uma linha sem dono, sem ela o Postgres
+      // escolhe qualquer uma — e uma inativa derruba o envio de forma
+      // intermitente. A ativa vem primeiro; o resto desempata estavel.
+      orderBy: [{ ativo: 'desc' }, { atualizadoEm: 'asc' }, { id: 'asc' }],
+    })) ??
     (await prisma.channelConfig.findFirst({ where: { canal }, orderBy: { atualizadoEm: 'asc' } }));
   return config ? aberto(config) : null;
 }
