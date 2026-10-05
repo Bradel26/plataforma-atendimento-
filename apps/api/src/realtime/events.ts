@@ -39,5 +39,7 @@ export const salas = {
   usuario: (org: string, id: string) => `org:${org}:usuario:${id}`,
   fila: (org: string, id: string) => `org:${org}:fila:${id}`,
   conversa: (org: string, id: string) => `org:${org}:conversa:${id}`,
+  /** So ADMIN. A supervisao (SUPERVISOR) e outra sala desde 2026-10-05: ela nao recebe tudo. */
+  admin: (org: string) => `org:${org}:admin`,
   supervisao: (org: string) => `org:${org}:supervisao`,
 } as const;

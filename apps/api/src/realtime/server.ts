@@ -2,6 +2,7 @@ import type { Server as HttpServer } from 'node:http';
 import { Server } from 'socket.io';
 import { env } from '../env';
 import { prisma } from '../lib/prisma';
+import { conversaVisivel } from '../lib/politicas';
 import { comOrganizacao } from '../lib/tenant';
 import { verifyAccessToken, verifyWebchatToken, type AccessPayload } from '../lib/tokens';
 import { registrarIo } from './hub';
@@ -63,7 +64,9 @@ export function criarServidorRealtime(httpServer: HttpServer) {
 
     await socket.join(salas.usuario(org, usuario.sub));
 
-    if (usuario.perfil === 'ADMIN' || usuario.perfil === 'SUPERVISOR') {
+    if (usuario.perfil === 'ADMIN') {
+      await socket.join(salas.admin(org));
+    } else if (usuario.perfil === 'SUPERVISOR') {
       await socket.join(salas.supervisao(org));
     } else {
       // Agente escuta as filas em que esta vinculado. A consulta roda no contexto
@@ -85,7 +88,14 @@ export function criarServidorRealtime(httpServer: HttpServer) {
      * conversa de outra empresa entra numa sala que nao existe, e nao na dela.
      */
     socket.on('conversa:entrar', async (id: string) => {
-      if (typeof id === 'string' && id) await socket.join(salas.conversa(org, id));
+      if (typeof id !== 'string' || !id) return;
+      // Mesma politica da lista e do acesso por id: sem isto, qualquer usuario
+      // da organizacao escutaria as mensagens de qualquer conversa pelo id.
+      const pode = await comOrganizacao(org, () => conversaVisivel(id), {
+        id: usuario.sub,
+        perfil: usuario.perfil,
+      }).catch(() => false);
+      if (pode) await socket.join(salas.conversa(org, id));
     });
     socket.on('conversa:sair', async (id: string) => {
       if (typeof id === 'string' && id) await socket.leave(salas.conversa(org, id));
