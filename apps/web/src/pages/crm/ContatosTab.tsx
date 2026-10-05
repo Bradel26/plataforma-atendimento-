@@ -70,6 +70,7 @@ type Props = {
  */
 export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   const [contatos, setContatos] = useState<Contato[]>([]);
+  const [totalContatos, setTotalContatos] = useState<number | null>(null);
   const [proximoCursor, setProximoCursor] = useState<string | null>(null);
   const [carregandoMais, setCarregandoMais] = useState(false);
   const [busca, setBusca] = useState('');
@@ -160,12 +161,14 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
     setCarregandoMais(false);
     setCarregando(true);
     try {
-      const { contatos: lista, proximoCursor: proximo } = await api.get<{
+      const { contatos: lista, proximoCursor: proximo, total } = await api.get<{
         contatos: Contato[];
         proximoCursor: string | null;
+        total: number;
       }>(`/contatos${qs}`);
       if (versao !== versaoDaLista.current) return;
       setContatos(lista);
+      setTotalContatos(total);
       setProximoCursor(proximo);
       // A selecao pertence a este resultado: um filtro novo pode nao conter
       // mais quem estava marcado, e agir em cima de quem sumiu da tela seria
@@ -182,6 +185,7 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   useEffect(() => {
     // Um filtro novo invalida qualquer pagina que ainda esteja chegando.
     versaoDaLista.current += 1;
+    setTotalContatos(null);
     setProximoCursor(null);
     setCarregandoMais(false);
     const t = setTimeout(() => void carregar(), 250);
@@ -327,7 +331,7 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   const painelLista = (
       <Card
         titulo="Contatos"
-        descricao={`${contatos.length} exibido(s)${proximoCursor ? ' · há mais contatos' : ''}`}
+        descricao={`${totalContatos ?? contatos.length} contato${(totalContatos ?? contatos.length) === 1 ? '' : 's'} encontrado${(totalContatos ?? contatos.length) === 1 ? '' : 's'}${proximoCursor ? ` · ${contatos.length} carregado${contatos.length === 1 ? '' : 's'}` : ''}`}
         acao={
           <Button variante={cadastrando ? 'neutro' : 'primario'} onClick={() => setCadastrando((v) => !v)} aria-expanded={cadastrando}>
             {cadastrando ? 'Cancelar' : 'Novo contato'}

@@ -175,6 +175,9 @@ contactsRoutes.get(
       filtros.push({ id: { in: ids } });
     }
 
+    // Total do resultado completo, independente da pagina atual.
+    const total = await prisma.contact.count({ where: { AND: filtros } });
+
     const depois = apos('atualizadoEm', decodificarCursor(cursor));
     if (depois) filtros.push(depois);
 
@@ -227,6 +230,7 @@ contactsRoutes.get(
         cicloDeVida: ciclos.get(c.id) ?? null,
       })),
       proximoCursor,
+      total,
     });
   }),
 );
