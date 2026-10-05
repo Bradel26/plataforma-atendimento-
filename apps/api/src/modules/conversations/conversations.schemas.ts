@@ -3,8 +3,12 @@ import { MAXIMO_POR_REGISTRO, TAMANHO_MAXIMO, normalizarTags } from '../../lib/t
 
 export const listarConversasSchema = z.object({
   status: z.enum(['EM_ESPERA', 'ATRIBUIDO', 'EM_ATENDIMENTO', 'FINALIZADO']).optional(),
-  /** minhas=true limita as conversas atribuidas ao usuario autenticado. */
-  minhas: z.enum(['true', 'false']).optional(),
+  /** Aba do Atendimento. Sem ela, so a politica de visibilidade filtra. */
+  visao: z.enum(['MINHAS', 'FILA', 'ACOMPANHAR']).optional(),
+  /** Seletor de Acompanhar: id do dono do numero, ou EMPRESA. */
+  donoId: z.union([z.literal('EMPRESA'), z.string().uuid()]).optional(),
+  /** Filtro por numero dentro de Acompanhar. */
+  canalConfigId: z.string().uuid().optional(),
   /**
    * arquivadas=true troca a lista padrao (so nao arquivadas) pela lista de
    * arquivadas — nunca as duas juntas. Sem o parametro, o comportamento e o

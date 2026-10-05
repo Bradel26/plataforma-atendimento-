@@ -1,7 +1,13 @@
 import type { AttachmentType, Prisma, Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
-import { filtroDe, politicaContatos, politicaConversas } from '../../lib/politicas';
-import { apenasVisivel } from '../../lib/visibilidade';
+import {
+  PERFIS_ACOMPANHADOS_PELO_SUPERVISOR,
+  filtroDe,
+  podeAcompanhar,
+  politicaContatos,
+  politicaConversas,
+} from '../../lib/politicas';
+import { apenasVisivel, contextoVisibilidade } from '../../lib/visibilidade';
 import { salvar } from '../../lib/storage';
 import { apos, decodificarCursor, fatiar } from '../../lib/paginacao';
 import { normalizarTags } from '../../lib/tags';
@@ -26,6 +32,7 @@ import {
   toMensagem,
 } from './conversations.serializer';
 import type { ListarConversasQuery, TransferirInput } from './conversations.schemas';
+import { filtroDaVisao } from './conversations.visao';
 
 export type Solicitante = { sub: string; perfil: Role; nome: string };
 
@@ -92,7 +99,14 @@ export async function listarConversas(solicitante: Solicitante, query: ListarCon
   const filtros: Prisma.ConversationWhereInput[] = [await escopoVisivel()];
 
   if (query.status) filtros.push({ status: query.status });
-  if (query.minhas === 'true') filtros.push({ agenteId: solicitante.sub });
+  const ctx = await contextoVisibilidade();
+  if (query.visao === 'ACOMPANHAR' && !podeAcompanhar(ctx.perfil)) {
+    throw forbidden('Só administrador e supervisor acompanham outros números');
+  }
+  if ((query.donoId || query.canalConfigId) && query.visao !== 'ACOMPANHAR') {
+    throw badRequest('donoId e canalConfigId só valem na aba Acompanhar');
+  }
+  filtros.push(filtroDaVisao(query, ctx));
   // Padrao: so as nao arquivadas — arquivar so faz sentido se a conversa sai
   // da experiencia do dia a dia. `arquivadas=true` inverte para a lista de
   // arquivadas; nunca as duas junto (Fase 11.9-A, item 5).
@@ -155,22 +169,69 @@ export async function listarMensagens(
 }
 
 /**
- * Contadores por aba do painel.
+ * Contadores por aba, com o mesmo filtro da lista de cada uma — senao o numero
+ * da aba nao bate com o que aparece embaixo dele. Fila conta so as em espera,
+ * que e o que a aba destaca. Arquivadas nunca contam (Fase 11.9-A, item 8).
  *
- * So conta as nao arquivadas — os mesmos numeros que `listarConversas` sem
- * `arquivadas=true` devolveria, senao o contador da aba mostraria um numero
- * que a lista embaixo dele nunca bate (Fase 11.9-A, item 8).
+ * Devolve tambem as filas do solicitante: a tela precisa delas para decidir se
+ * uma conversa que chegou pelo socket entra na aba Fila.
  */
-export async function contarPorStatus(solicitante: Solicitante) {
-  const grupos = await prisma.conversation.groupBy({
-    by: ['status'],
-    where: { AND: [await escopoVisivel(), { arquivada: false }] },
-    _count: { _all: true },
+export async function contarPorVisao() {
+  const ctx = await contextoVisibilidade();
+  const base: Prisma.ConversationWhereInput[] = [await escopoVisivel(), { arquivada: false }];
+  const contar = (extra: Prisma.ConversationWhereInput) =>
+    prisma.conversation.count({ where: { AND: [...base, extra] } });
+
+  const [MINHAS, FILA, ACOMPANHAR] = await Promise.all([
+    contar(filtroDaVisao({ visao: 'MINHAS' }, ctx)),
+    contar({ AND: [filtroDaVisao({ visao: 'FILA' }, ctx), { status: 'EM_ESPERA' }] }),
+    podeAcompanhar(ctx.perfil) ? contar(filtroDaVisao({ visao: 'ACOMPANHAR' }, ctx)) : Promise.resolve(null),
+  ]);
+  return { contadores: { MINHAS, FILA, ACOMPANHAR }, minhasFilaIds: ctx.filaIds };
+}
+
+type LinhaComDono = {
+  id: string;
+  nome: string | null;
+  ponteSessao: string | null;
+  dono: { id: string; nome: string; perfil: Role } | null;
+};
+
+type Acompanhavel = { id: string; nome: string; perfil: Role; numeros: Array<{ id: string; nome: string }> };
+
+/** Agrupa as linhas por dono, para o seletor de Acompanhar. Pura. */
+export function agruparPorDono(linhas: LinhaComDono[]): Acompanhavel[] {
+  const porDono = new Map<string, Acompanhavel>();
+  for (const l of linhas) {
+    if (!l.dono) continue;
+    const item = porDono.get(l.dono.id) ?? { ...l.dono, numeros: [] };
+    item.numeros.push({ id: l.id, nome: l.nome ?? l.ponteSessao ?? 'Número sem nome' });
+    porDono.set(l.dono.id, item);
+  }
+  return [...porDono.values()];
+}
+
+/**
+ * Quem o solicitante pode acompanhar, com os numeros de cada um — mesma regra
+ * de `politicaConversas`. So lista quem tem numero: escolher alguem sem numero
+ * daria sempre uma lista vazia. O proprio solicitante fica de fora (o numero
+ * dele esta em Minhas).
+ */
+export async function listarAcompanhaveis() {
+  const ctx = await contextoVisibilidade();
+  if (!podeAcompanhar(ctx.perfil)) throw forbidden('Só administrador e supervisor acompanham outros números');
+
+  const linhas = await prisma.channelConfig.findMany({
+    where: {
+      canal: 'WHATSAPP',
+      AND: [{ donoId: { not: null } }, { donoId: { not: ctx.usuarioId } }],
+      ...(ctx.perfil === 'SUPERVISOR' ? { dono: { perfil: { in: PERFIS_ACOMPANHADOS_PELO_SUPERVISOR } } } : {}),
+    },
+    select: { id: true, nome: true, ponteSessao: true, dono: { select: { id: true, nome: true, perfil: true } } },
+    orderBy: [{ dono: { nome: 'asc' } }, { id: 'asc' }],
   });
 
-  const base = { EM_ESPERA: 0, ATRIBUIDO: 0, EM_ATENDIMENTO: 0, FINALIZADO: 0 };
-  for (const g of grupos) base[g.status] = g._count._all;
-  return base;
+  return { usuarios: agruparPorDono(linhas), empresa: true as const };
 }
 
 /**

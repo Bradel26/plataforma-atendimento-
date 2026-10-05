@@ -18,7 +18,7 @@ import {
   arquivarConversa,
   assumirConversa,
   buscarFotoDaConversa,
-  contarPorStatus,
+  contarPorVisao,
   definirTags,
   desarquivarConversa,
   enviarArquivo,
@@ -27,6 +27,7 @@ import {
   iniciarConversa,
   listarConversas,
   listarMensagens,
+  listarAcompanhaveis,
   listarPrevias,
   marcarComoLida,
   obterConversa,
@@ -89,8 +90,16 @@ conversationsRoutes.get(
 
 conversationsRoutes.get(
   '/contadores',
-  asyncHandler(async (req, res) => {
-    res.json({ contadores: await contarPorStatus(quem(req)) });
+  asyncHandler(async (_req, res) => {
+    res.json(await contarPorVisao());
+  }),
+);
+
+/** Seletor da aba Acompanhar — antes de `/:id` para nao ser engolida por ela. */
+conversationsRoutes.get(
+  '/acompanhaveis',
+  asyncHandler(async (_req, res) => {
+    res.json(await listarAcompanhaveis());
   }),
 );
 

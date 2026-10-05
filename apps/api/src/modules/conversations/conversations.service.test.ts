@@ -2,12 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { decidirDestino } from '../channels/inbound.service';
 import { comOrganizacao } from '../../lib/tenant';
 import {
+  agruparPorDono,
   arquivarConversa,
-  contarPorStatus,
+  contarPorVisao,
   desarquivarConversa,
   enviarMensagem,
   finalizarConversa,
   iniciarConversa,
+  listarAcompanhaveis,
   listarConversas,
   motivoSemTelefone,
   type Solicitante,
@@ -71,7 +73,9 @@ const {
   conversationCreate,
   conversationUpdate,
   conversationGroupBy,
+  conversationCount,
   channelConfigFindFirst,
+  channelConfigFindMany,
   queueAgentFindMany,
   messageCreate,
 } = vi.hoisted(() => ({
@@ -81,7 +85,9 @@ const {
   conversationCreate: vi.fn(),
   conversationUpdate: vi.fn(),
   conversationGroupBy: vi.fn(),
+  conversationCount: vi.fn().mockResolvedValue(0),
   channelConfigFindFirst: vi.fn(),
+  channelConfigFindMany: vi.fn().mockResolvedValue([]),
   // Lista vazia por padrao: desde 2026-10-05 o contexto de visibilidade busca as
   // filas tambem para ADMIN/SUPERVISOR (aba Fila).
   queueAgentFindMany: vi.fn().mockResolvedValue([]),
@@ -97,8 +103,9 @@ vi.mock('../../lib/prisma', () => ({
       create: conversationCreate,
       update: conversationUpdate,
       groupBy: conversationGroupBy,
+      count: conversationCount,
     },
-    channelConfig: { findFirst: channelConfigFindFirst },
+    channelConfig: { findFirst: channelConfigFindFirst, findMany: channelConfigFindMany },
     queueAgent: { findMany: queueAgentFindMany },
     message: { create: messageCreate },
   },
@@ -486,11 +493,83 @@ describe('listarConversas / contarPorStatus — exclusao de arquivadas (Fase 11.
     expect(JSON.stringify(where)).not.toContain('"arquivada":false');
   });
 
-  it('contarPorStatus: sempre exclui arquivadas, para o numero da aba bater com a lista', async () => {
-    await comOrganizacao('org-1', () => contarPorStatus(SOLICITANTE), { id: 'user-1', perfil: 'ADMIN' });
+  it('contarPorVisao: sempre exclui arquivadas, para o numero da aba bater com a lista', async () => {
+    await comOrganizacao('org-1', () => contarPorVisao(), { id: 'user-1', perfil: 'ADMIN' });
 
-    const where = conversationGroupBy.mock.calls[0]?.[0]?.where;
-    expect(JSON.stringify(where)).toContain('"arquivada":false');
+    expect(conversationCount).toHaveBeenCalledTimes(3);
+    for (const [args] of conversationCount.mock.calls) {
+      expect(JSON.stringify(args.where)).toContain('"arquivada":false');
+    }
+  });
+});
+
+describe('abas por numero (2026-10-05)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    conversationFindMany.mockResolvedValue([]);
+    conversationCount.mockResolvedValue(0);
+    channelConfigFindMany.mockResolvedValue([]);
+  });
+
+  const comoPerfil = <T>(perfil: string, fn: () => Promise<T>) =>
+    comOrganizacao('org-1', fn, { id: 'user-1', perfil });
+
+  it('Minhas filtra pelo dono do numero, nao pelo responsavel', async () => {
+    // Como ADMIN de proposito: a politica dele e vazia, entao o termo do numero
+    // so pode ter vindo da aba (a de Comercial ja contem o proprio numero).
+    await comoPerfil('ADMIN', () => listarConversas(SOLICITANTE, { limite: 50, tags: [], visao: 'MINHAS' }));
+    const where = JSON.stringify(conversationFindMany.mock.calls[0]?.[0]?.where);
+    expect(where).toContain('"canalConfig":{"donoId":"user-1"}');
+  });
+
+  it('Supervisor com donoId do Administrador: o termo entra junto da politica (lista vazia, nunca abre)', async () => {
+    await comoPerfil('SUPERVISOR', () =>
+      listarConversas(SOLICITANTE, { limite: 50, tags: [], visao: 'ACOMPANHAR', donoId: 'u-admin' }),
+    );
+    const where = JSON.stringify(conversationFindMany.mock.calls[0]?.[0]?.where);
+    expect(where).toContain('"donoId":"u-admin"');
+    expect(where).toContain('"perfil":{"in":["COMERCIAL","SUPORTE"]}');
+  });
+
+  it('Acompanhar e recusado para Comercial', async () => {
+    await expect(
+      comoPerfil('COMERCIAL', () => listarConversas(SOLICITANTE, { limite: 50, tags: [], visao: 'ACOMPANHAR' })),
+    ).rejects.toMatchObject({ status: 403 });
+  });
+
+  it('donoId fora da aba Acompanhar e 400', async () => {
+    await expect(
+      comoPerfil('ADMIN', () => listarConversas(SOLICITANTE, { limite: 50, tags: [], visao: 'FILA', donoId: 'u-x' })),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it('contadores: Fila conta so as em espera; Comercial nao tem Acompanhar', async () => {
+    const r = await comoPerfil('COMERCIAL', () => contarPorVisao());
+    expect(r.contadores.ACOMPANHAR).toBeNull();
+    const wheres = conversationCount.mock.calls.map((c) => JSON.stringify(c[0].where));
+    expect(wheres).toHaveLength(2);
+    expect(wheres[1]).toContain('"status":"EM_ESPERA"');
+  });
+
+  it('acompanhaveis: Comercial recebe 403', async () => {
+    await expect(comoPerfil('COMERCIAL', () => listarAcompanhaveis())).rejects.toMatchObject({ status: 403 });
+  });
+
+  it('acompanhaveis: Supervisor so ve donos Comercial/Suporte e nunca o proprio numero', async () => {
+    await comoPerfil('SUPERVISOR', () => listarAcompanhaveis());
+    const where = JSON.stringify(channelConfigFindMany.mock.calls[0]?.[0]?.where);
+    expect(where).toContain('"perfil":{"in":["COMERCIAL","SUPORTE"]}');
+    expect(where).toContain('{"donoId":{"not":"user-1"}}');
+  });
+
+  it('agruparPorDono junta os numeros de cada pessoa e da nome a numero sem rotulo', () => {
+    const dono = { id: 'u-l', nome: 'Leandro', perfil: 'COMERCIAL' as const };
+    expect(
+      agruparPorDono([
+        { id: 'c-1', nome: 'Vendas', ponteSessao: 's1', dono },
+        { id: 'c-2', nome: null, ponteSessao: 'vendedor-ab12', dono },
+      ]),
+    ).toEqual([{ ...dono, numeros: [{ id: 'c-1', nome: 'Vendas' }, { id: 'c-2', nome: 'vendedor-ab12' }] }]);
   });
 });
 

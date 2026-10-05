@@ -6,7 +6,7 @@ export const inclusaoResumo = {
   contato: true,
   fila: { select: { id: true, nome: true } },
   agente: { select: { id: true, nome: true } },
-  canalConfig: { select: { iaAtiva: true } },
+  canalConfig: { select: { id: true, donoId: true, iaAtiva: true } },
   mensagens: { orderBy: { criadoEm: 'desc' }, take: 1 },
 } satisfies Prisma.ConversationInclude;
 
@@ -17,7 +17,7 @@ export const inclusaoDetalhe = {
   contato: true,
   fila: { select: { id: true, nome: true } },
   agente: { select: { id: true, nome: true } },
-  canalConfig: { select: { iaAtiva: true } },
+  canalConfig: { select: { id: true, donoId: true, iaAtiva: true } },
   // Busca as mais recentes (desc) e inverte na serializacao: um atendimento com
   // dois anos de historico nao pode chegar inteiro a cada abertura do painel.
   mensagens: { orderBy: [{ criadoEm: 'desc' }, { id: 'desc' }], take: MENSAGENS_NO_DETALHE + 1 },
@@ -64,6 +64,9 @@ export function toConversaResumo(c: ConversaResumo) {
     // null = conversa sem canal configurado (ex. Webchat) — nao confundir
     // com false ("IA desligada"), que so se aplica quando ha canal.
     iaAtiva: c.canalConfig?.iaAtiva ?? null,
+    // De qual numero a conversa e — decide a aba (Minhas/Fila/Acompanhar).
+    // Nulo = Numero da empresa sem linha registrada.
+    linha: c.canalConfig ? { id: c.canalConfig.id, donoId: c.canalConfig.donoId } : null,
     ultimaMensagem: ultima ? toMensagem(ultima) : null,
   };
 }
@@ -92,6 +95,9 @@ export function toConversaDetalhe(c: ConversaDetalhe) {
     // null = conversa sem canal configurado (ex. Webchat) — nao confundir
     // com false ("IA desligada"), que so se aplica quando ha canal.
     iaAtiva: c.canalConfig?.iaAtiva ?? null,
+    // De qual numero a conversa e — decide a aba (Minhas/Fila/Acompanhar).
+    // Nulo = Numero da empresa sem linha registrada.
+    linha: c.canalConfig ? { id: c.canalConfig.id, donoId: c.canalConfig.donoId } : null,
     /**
      * Ordem cronologica para a tela. O registro extra (take + 1) nao vai para o
      * cliente: ele so serve para dizer se ha historico anterior.
