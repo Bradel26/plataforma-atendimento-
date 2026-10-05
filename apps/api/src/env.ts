@@ -67,6 +67,15 @@ const schema = z.object({
     .enum(['true', 'false'])
     .default('true')
     .transform((v) => v === 'true'),
+  /**
+   * Webchat (chat do site). Desligado por padrao desde 2026-10-05: sem ele, a
+   * rota publica e o script do widget respondem 404 — um widget esquecido em
+   * algum site nao cria conversa que ninguem ve.
+   */
+  WEBCHAT_ATIVO: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
   /** Chave de 32 bytes em hex para cifrar segredos de canal em repouso. */
   SECRETS_KEY: z.string().regex(/^[0-9a-f]{64}$/, 'SECRETS_KEY precisa ser 64 caracteres hex').optional(),
   SEED_ADMIN_EMAIL: z.string().email().default('admin@plataforma.local'),

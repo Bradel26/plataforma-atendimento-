@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Alerta, Badge, Button, Card, Field, Input, Select } from '../../components/ui';
 import { ApiError, api } from '../../lib/api';
+import { semWebchat } from '../../lib/recursos';
 import type { Bot, BotAcao, BotPasso, Canal, Fila } from '../../lib/types';
 
 const ACOES: Array<{ valor: BotAcao; label: string }> = [
@@ -9,13 +10,16 @@ const ACOES: Array<{ valor: BotAcao; label: string }> = [
   { valor: 'ENCERRAR', label: 'Encerrar atendimento' },
 ];
 
-const CANAIS: Array<{ valor: string; label: string }> = [
-  { valor: '', label: 'Todos os canais' },
-  { valor: 'WEBCHAT', label: 'Webchat' },
-  { valor: 'WHATSAPP', label: 'WhatsApp' },
-  { valor: 'INSTAGRAM', label: 'Instagram' },
-  { valor: 'FACEBOOK', label: 'Facebook' },
-];
+const CANAIS: Array<{ valor: string; label: string }> = semWebchat(
+  [
+    { valor: '', label: 'Todos os canais' },
+    { valor: 'WEBCHAT', label: 'Webchat' },
+    { valor: 'WHATSAPP', label: 'WhatsApp' },
+    { valor: 'INSTAGRAM', label: 'Instagram' },
+    { valor: 'FACEBOOK', label: 'Facebook' },
+  ],
+  (c) => c.valor,
+);
 
 const PASSO_VAZIO: BotPasso = { gatilhos: [], resposta: '', acao: 'RESPONDER', filaId: null };
 

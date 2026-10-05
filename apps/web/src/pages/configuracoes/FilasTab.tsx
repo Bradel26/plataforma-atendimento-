@@ -1,20 +1,27 @@
 import { useEffect, useState } from 'react';
 import { Alerta, Badge, Button, Card, EmptyState, Field, Input, Select } from '../../components/ui';
 import { ApiError, api } from '../../lib/api';
+import { WEBCHAT_ATIVO, semWebchat } from '../../lib/recursos';
 import type { Canal, Fila } from '../../lib/types';
 
-const CANAIS: Array<{ valor: Canal; label: string; disponivel: boolean }> = [
-  { valor: 'WEBCHAT', label: 'Webchat', disponivel: true },
-  { valor: 'WHATSAPP', label: 'WhatsApp (Fase 2)', disponivel: false },
-  { valor: 'INSTAGRAM', label: 'Instagram (Fase 2)', disponivel: false },
-  { valor: 'FACEBOOK', label: 'Facebook (Fase 2)', disponivel: false },
-  { valor: 'EMAIL', label: 'E-mail (Fase 2)', disponivel: false },
-  { valor: 'VOZ', label: 'Voz (Fase 4)', disponivel: false },
-];
+const CANAIS: Array<{ valor: Canal; label: string; disponivel: boolean }> = semWebchat(
+  [
+    { valor: 'WEBCHAT', label: 'Webchat', disponivel: true },
+    { valor: 'WHATSAPP', label: 'WhatsApp', disponivel: true },
+    { valor: 'INSTAGRAM', label: 'Instagram', disponivel: false },
+    { valor: 'FACEBOOK', label: 'Facebook', disponivel: false },
+    { valor: 'EMAIL', label: 'E-mail', disponivel: false },
+    { valor: 'VOZ', label: 'Voz', disponivel: false },
+  ],
+  (c) => c.valor,
+);
+
+/** Canal de fila nova. Sem Webchat, o atendimento e por WhatsApp. */
+const CANAL_PADRAO: Canal = WEBCHAT_ATIVO ? 'WEBCHAT' : 'WHATSAPP';
 
 export function FilasTab() {
   const [filas, setFilas] = useState<Fila[]>([]);
-  const [form, setForm] = useState({ nome: '', descricao: '', canalPadrao: 'WEBCHAT' as Canal });
+  const [form, setForm] = useState({ nome: '', descricao: '', canalPadrao: CANAL_PADRAO });
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
 
@@ -37,7 +44,7 @@ export function FilasTab() {
         canalPadrao: form.canalPadrao,
         ...(form.descricao ? { descricao: form.descricao } : {}),
       });
-      setForm({ nome: '', descricao: '', canalPadrao: 'WEBCHAT' });
+      setForm({ nome: '', descricao: '', canalPadrao: CANAL_PADRAO });
       await carregar();
     } catch (err) {
       setErro(err instanceof ApiError ? err.message : 'Falha ao criar fila');
@@ -83,7 +90,7 @@ export function FilasTab() {
           <Field label="Descrição">
             <Input value={form.descricao} onChange={(e) => setForm({ ...form, descricao: e.target.value })} />
           </Field>
-          <Field label="Canal padrão" hint="Somente Webchat está disponível na Fase 1">
+          <Field label="Canal padrão" hint="Canal em que a fila recebe conversas">
             <Select
               value={form.canalPadrao}
               onChange={(e) => setForm({ ...form, canalPadrao: e.target.value as Canal })}

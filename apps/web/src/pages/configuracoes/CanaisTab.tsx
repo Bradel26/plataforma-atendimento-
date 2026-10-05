@@ -2,6 +2,7 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import { Alerta, Badge, Button, Card, EmptyState, Field, Input, Select } from '../../components/ui';
 import { useConfirm } from '../../components/ui/ConfirmDialog';
 import { ApiError, api, getAccessToken } from '../../lib/api';
+import { WEBCHAT_ATIVO } from '../../lib/recursos';
 import { EVENTOS, conectar } from '../../lib/realtime';
 import { telefoneLegivel } from '../../lib/telefone';
 import type { Canal, Fila, Usuario } from '../../lib/types';
@@ -1079,6 +1080,7 @@ export function CanaisTab() {
         </div>
       )}
 
+      {WEBCHAT_ATIVO && (
       <Card
         titulo="Widget do site"
         descricao="Uma tag no site do cliente abre o Webchat como bolha flutuante"
@@ -1110,6 +1112,7 @@ export function CanaisTab() {
           <code>data-titulo="..."</code> troca o texto do botão.
         </p>
       </Card>
+      )}
     </div>
   );
 }

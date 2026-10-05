@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Alerta, Badge, Button, Card, Field, Select } from '../../components/ui';
 import { ApiError, api } from '../../lib/api';
+import { semWebchat } from '../../lib/recursos';
 import {
   CICLOS_DE_VIDA,
   LABEL_CICLO_DE_VIDA,
@@ -38,7 +39,7 @@ const SITUACOES: Array<{ valor: Situacao; label: string }> = [
  *    enviada nao volta atras.
  */
 
-const ORIGENS: Canal[] = ['WEBCHAT', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'EMAIL', 'VOZ'];
+const ORIGENS: Canal[] = semWebchat<Canal>(['WEBCHAT', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'EMAIL', 'VOZ'], (c) => c);
 
 const PAPEIS: PapelNaConta[] = [
   'SOCIO',

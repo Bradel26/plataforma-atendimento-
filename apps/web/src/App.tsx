@@ -13,6 +13,7 @@ import { LoginPage } from './pages/LoginPage';
 import { MonitoramentoPage } from './pages/MonitoramentoPage';
 import { DesempenhoPage } from './pages/DesempenhoPage';
 import { WebchatPage } from './pages/WebchatPage';
+import { WEBCHAT_ATIVO } from './lib/recursos';
 import { ConfiguracoesPage } from './pages/configuracoes/ConfiguracoesPage';
 import { CrmPage } from './pages/crm/CrmPage';
 import { EsteiraPage } from './pages/esteira/EsteiraPage';
@@ -39,7 +40,7 @@ const PAGINAS: Record<string, ComponentType> = {
 function RotasPublicas() {
   return (
     <>
-      <Route path="/webchat" element={<WebchatPage />} />
+      {WEBCHAT_ATIVO && <Route path="/webchat" element={<WebchatPage />} />}
       <Route path="/avaliacao/:token" element={<AvaliacaoPage />} />
     </>
   );

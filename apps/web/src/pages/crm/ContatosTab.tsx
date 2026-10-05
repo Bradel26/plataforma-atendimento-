@@ -4,6 +4,7 @@ import { BarraDeSelecao } from '../../components/ui/BarraDeSelecao';
 import { SkeletonBloco } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
 import { ApiError, api } from '../../lib/api';
+import { semWebchat } from '../../lib/recursos';
 import { mascararTelefoneBr } from '../../lib/telefone';
 import {
   AJUDA_CICLO_DE_VIDA,
@@ -22,7 +23,10 @@ import { FunilDeCicloDeVida } from './FunilDeCicloDeVida';
 import { UFS_ATENDIDAS } from '../esteira/ufs';
 import { AvatarConversa } from '../../features/atendimento/AvatarConversa';
 
-const ORIGENS: Canal[] = ['WEBCHAT', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'PROSPECCAO_ATIVA', 'INDICACAO'];
+const ORIGENS: Canal[] = semWebchat<Canal>(
+  ['WEBCHAT', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'PROSPECCAO_ATIVA', 'INDICACAO'],
+  (c) => c,
+);
 
 const VAZIO = {
   nome: '',

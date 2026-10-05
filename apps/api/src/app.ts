@@ -133,7 +133,7 @@ export function createApp() {
   });
 
   // Servido em /api para caber numa unica tag <script> no site do cliente.
-  app.use('/api', widgetRoutes);
+  if (env.WEBCHAT_ATIVO) app.use('/api', widgetRoutes);
   app.use('/api/arquivos', arquivosRoutes);
   app.use('/api/health', healthRoutes);
   app.use('/api/auth', authRoutes);
@@ -143,7 +143,7 @@ export function createApp() {
   app.use('/api/branding', brandingRoutes);
   app.use('/api/conversas', conversationsRoutes);
   app.use('/api/contatos', contactsRoutes);
-  app.use('/api/webchat', webchatRoutes);
+  if (env.WEBCHAT_ATIVO) app.use('/api/webchat', webchatRoutes);
   app.use('/api/contas', accountsRoutes);
   app.use('/api/leads', leadsRoutes);
   app.use('/api/tags', tagsRoutes);
