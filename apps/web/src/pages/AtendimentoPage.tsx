@@ -1,19 +1,25 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Alerta, Badge, Button, Card, Input } from '../components/ui';
+import { Alerta, Badge, Button, Card, Input, Select } from '../components/ui';
 import { ListaConversas } from '../features/atendimento/ListaConversas';
 import { PainelChat } from '../features/atendimento/PainelChat';
 import { PainelContato } from '../features/atendimento/PainelContato';
 import { useConversas } from '../features/atendimento/useConversas';
 import { upsertPrevia } from '../features/atendimento/previas';
-import { LABEL_VISAO_INBOX, VISOES_INBOX, type VisaoInbox } from '../features/atendimento/visao';
+import {
+  LABEL_VISAO_INBOX,
+  SEM_FILTRO_ACOMPANHAR,
+  visoesDisponiveis,
+  type FiltroAcompanhar,
+  type VisaoInbox,
+} from '../features/atendimento/visao';
 import { useAuth } from '../features/auth/AuthProvider';
 import { FiltroEtiquetas } from './crm/Etiquetas';
 import { ApiError, api, getAccessToken } from '../lib/api';
 import { EVENTOS, conectar } from '../lib/realtime';
 import { telefoneLegivel } from '../lib/telefone';
 import { useFaixaDeLargura } from '../lib/useFaixaDeLargura';
-import type { ConversaDetalhe, Previa, Usuario } from '../lib/types';
+import type { Acompanhaveis, ConversaDetalhe, Previa, Usuario } from '../lib/types';
 
 /**
  * Passo do fluxo em telas de uma coluna so (mobile): lista -> conversa ->
@@ -154,11 +160,15 @@ export function AtendimentoPage() {
     LARGURA_MAX_FICHA,
   );
   /**
-   * Visao da Inbox (Fase 11.3) — Minhas / Nao atribuidas / Todas. Comeca em
-   * "Nao atribuidas": e a fila que precisa de alguem pegando, o mesmo motivo
-   * que fazia `EM_ESPERA` ser a aba padrao antes desta fase.
+   * Aba do Atendimento (2026-10-05) — Minhas / Fila / Acompanhar, organizadas
+   * pelo numero de WhatsApp. Comeca em Fila: e onde ha conversa esperando
+   * alguem, o mesmo motivo que fazia "Nao atribuidas" ser a padrao antes.
    */
-  const [visao, setVisao] = useState<VisaoInbox>('NAO_ATRIBUIDAS');
+  const [visao, setVisao] = useState<VisaoInbox>('FILA');
+  /** ADMIN e SUPERVISOR acompanham outros numeros; a API recusa os demais. */
+  const podeAcompanhar = temPerfil('ADMIN', 'SUPERVISOR');
+  const [filtroAcompanhar, setFiltroAcompanhar] = useState<FiltroAcompanhar>(SEM_FILTRO_ACOMPANHAR);
+  const [acompanhaveis, setAcompanhaveis] = useState<Acompanhaveis | null>(null);
   const [busca, setBusca] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   /**
@@ -362,22 +372,24 @@ export function AtendimentoPage() {
     inscreverMensagens,
     focarConversa,
     recarregarContadores,
-  } = useConversas(visao, tags, usuario?.id ?? null);
+  } = useConversas(visao, tags, usuario?.id ?? null, filtroAcompanhar);
 
   /**
-   * Contador exibido em cada aba, so quando o backend fornece um numero exato
-   * para aquela visao — `GET /conversas/contadores` agrupa por `status`, sem
-   * separar "atribuida a mim" de "atribuida a outro agente". "Nao atribuidas"
-   * usa `contadores.EM_ESPERA` direto (a mesma contagem exata de antes desta
-   * fase); "Todas" soma os quatro status (tambem exato, ja escopado pela
-   * politica de visibilidade no backend). "Minhas" fica sem numero: inventar
-   * um contador que a API nao fornece pareceria dado, sem ser.
+   * Numero de cada aba, com o mesmo filtro da lista dela
+   * (`GET /conversas/contadores`). Fila conta so as em espera.
    */
-  const contadorDaVisao = (v: VisaoInbox): number | null => {
-    if (v === 'NAO_ATRIBUIDAS') return contadores.EM_ESPERA;
-    if (v === 'TODAS') return Object.values(contadores).reduce((soma, n) => soma + n, 0);
-    return null;
-  };
+  const contadorDaVisao = (v: VisaoInbox): number | null => contadores[v];
+
+  // Seletor de Acompanhar: so quem pode acompanhar pede a lista.
+  useEffect(() => {
+    if (!podeAcompanhar) return;
+    void api
+      .get<Acompanhaveis>('/conversas/acompanhaveis')
+      .then(setAcompanhaveis)
+      .catch(() => undefined);
+  }, [podeAcompanhar]);
+
+  const usuarioAcompanhado = acompanhaveis?.usuarios.find((u) => u.id === filtroAcompanhar.donoId) ?? null;
 
   // A lista de destinos de transferencia so e visivel para admin e supervisor.
   useEffect(() => {
@@ -557,7 +569,7 @@ export function AtendimentoPage() {
           </div>
 
           <nav className="flex border-b border-slate-200 text-xs">
-            {VISOES_INBOX.map((v) => (
+            {visoesDisponiveis(podeAcompanhar).map((v) => (
               <button
                 key={v}
                 type="button"
@@ -574,6 +586,38 @@ export function AtendimentoPage() {
             ))}
           </nav>
 
+          {visao === 'ACOMPANHAR' && (
+            <div className="flex flex-col gap-2 border-b border-slate-100 px-3 py-2">
+              <Select
+                aria-label="Acompanhar conversas de"
+                value={filtroAcompanhar.donoId ?? ''}
+                onChange={(e) => setFiltroAcompanhar({ donoId: e.target.value || null, canalConfigId: null })}
+              >
+                <option value="">Todos os usuários permitidos</option>
+                {acompanhaveis?.empresa && <option value="EMPRESA">Número da empresa</option>}
+                {acompanhaveis?.usuarios.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.nome}
+                  </option>
+                ))}
+              </Select>
+              {usuarioAcompanhado && usuarioAcompanhado.numeros.length > 1 && (
+                <Select
+                  aria-label="Número"
+                  value={filtroAcompanhar.canalConfigId ?? ''}
+                  onChange={(e) => setFiltroAcompanhar({ ...filtroAcompanhar, canalConfigId: e.target.value || null })}
+                >
+                  <option value="">Todos os números de {usuarioAcompanhado.nome}</option>
+                  {usuarioAcompanhado.numeros.map((n) => (
+                    <option key={n.id} value={n.id}>
+                      {n.nome}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </div>
+          )}
+
           {/*
             O filtro fica fora da area que rola, junto da busca e das abas: ele
             descreve o que a lista mostra, e rolar junto com o resultado o
@@ -588,10 +632,15 @@ export function AtendimentoPage() {
           <div className="min-h-0 flex-1 overflow-y-auto">
             {erro ? (
               <div className="p-4"><Alerta>{erro}</Alerta></div>
+            ) : visao === 'MINHAS' && !carregandoMinhaLinha && minhaLinha === null && !carregando && filtradas.length === 0 ? (
+              <p className="p-4 text-sm text-slate-500">
+                Você não tem um número de WhatsApp conectado. Use “Conectar WhatsApp” para trazer suas conversas para cá.
+              </p>
             ) : (
               <ListaConversas
                 conversas={filtradas}
-                previas={previas}
+                // Previa e o espelho do meu celular: pertence a Minhas.
+                previas={visao === 'MINHAS' ? previas : []}
                 onAbrirPrevia={(p) => void abrirPrevia(p)}
                 selecionadaId={aberta?.id ?? null}
                 onSelecionar={(id) => void abrir(id)}

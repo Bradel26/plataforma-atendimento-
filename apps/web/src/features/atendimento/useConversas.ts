@@ -98,8 +98,8 @@ export function useConversas(
         setConversas(lista.sort(porAtividade));
         setCursor(proximo);
         setErro(null);
-      } catch {
-        setErro('Não foi possível carregar as conversas');
+      } catch (erro) {
+        setErro(erro instanceof Error ? erro.message : 'Failed to load conversations');
       } finally {
         setCarregando(false);
       }
