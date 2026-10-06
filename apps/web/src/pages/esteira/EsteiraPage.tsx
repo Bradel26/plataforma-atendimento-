@@ -409,6 +409,25 @@ export function EsteiraPage() {
   const [importacaoAberta, setImportacaoAberta] = useState(false);
   const [processandoImportacao, setProcessandoImportacao] = useState(false);
   const [resumoLote, setResumoLote] = useState<ResumoLote | null>(null);
+  // Com centenas de cards, o quadro retraido limita a altura das colunas (rolagem
+  // interna) e o formulario de novo cadastro volta a ficar a vista.
+  const [quadroExpandido, setQuadroExpandido] = useState(() => {
+    try {
+      return localStorage.getItem('esteira:quadroExpandido') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const alternarQuadro = () => {
+    setQuadroExpandido((atual) => {
+      try {
+        localStorage.setItem('esteira:quadroExpandido', atual ? '0' : '1');
+      } catch {
+        // Sem armazenamento a preferencia vale so nesta visita.
+      }
+      return !atual;
+    });
+  };
 
   useEffect(() => {
     void api
@@ -619,7 +638,7 @@ export function EsteiraPage() {
               <p className="text-sm font-semibold text-slate-700">{coluna.estagio.nome}</p>
               <p className="text-xs text-slate-500">{coluna.total} parceiro(s)</p>
             </header>
-            <ul className="min-h-24 flex-1 space-y-2 p-2">
+            <ul className={`min-h-24 flex-1 space-y-2 p-2 ${quadroExpandido ? '' : 'max-h-[60vh] overflow-y-auto'}`}>
               {coluna.credenciamentos.map((c) => (
                 <CartaoCredenciamento
                   key={c.id}
@@ -635,6 +654,13 @@ export function EsteiraPage() {
           </div>
         ))}
       </div>
+      {total > 0 && (
+        <div className="flex justify-center">
+          <Button variante="neutro" onClick={alternarQuadro} aria-expanded={quadroExpandido}>
+            {quadroExpandido ? '▴ Retrair quadro' : '▾ Expandir quadro'}
+          </Button>
+        </div>
+      )}
 
       {pedidoExcecao && (
         <Card titulo="Marcar exceção" descricao="O card continua na etapa atual, marcado com a situação">
