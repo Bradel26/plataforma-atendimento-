@@ -480,7 +480,7 @@ contactsRoutes.patch(
     const id = param(req, 'id');
     const existe = await prisma.contact.findFirst({
       where: apenasVisivel(id, await filtroDe(politicaContatos)),
-      select: { id: true },
+      select: { id: true, segmentoParceiro: true },
     });
     if (!existe) throw notFound('Contato não encontrado');
     await exigirUsuarioDaOrganizacao((req.body as { responsavelId?: string | null }).responsavelId);
@@ -491,7 +491,13 @@ contactsRoutes.patch(
      * as tags do contato.
      */
     const corpo = req.body as z.infer<typeof atualizarSchema>;
-    const dados = corpo.tags === undefined ? corpo : { ...corpo, tags: normalizarTags(corpo.tags) };
+    const dados = corpo.tags === undefined ? { ...corpo } : { ...corpo, tags: normalizarTags(corpo.tags) };
+    // Observação nova com a origem da importação reconhece o segmento, se ninguém
+    // escolheu um. Segmento informado no corpo (inclusive null) sempre prevalece.
+    if (dados.segmentoParceiro === undefined && dados.observacoes && !existe.segmentoParceiro) {
+      const segmento = identificarSegmentoParceiro(null, dados.observacoes);
+      if (segmento) dados.segmentoParceiro = segmento;
+    }
 
     res.json({ contato: await prisma.contact.update({ where: { id }, data: dados }) });
   }),

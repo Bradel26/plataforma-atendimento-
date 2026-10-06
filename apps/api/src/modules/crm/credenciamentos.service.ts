@@ -4,7 +4,7 @@ import { filtroDe, politicaContas, politicaContatos, politicaCredenciamentos } f
 import { usuarioAtualOuNulo } from '../../lib/tenant';
 import { apenasVisivel } from '../../lib/visibilidade';
 import { badRequest, notFound } from '../../lib/errors';
-import { identificarSegmentoParceiro, type SegmentoParceiro } from './segmentoParceiro';
+import { SEGMENTOS_PARCEIRO, identificarSegmentoParceiro, type SegmentoParceiro } from './segmentoParceiro';
 import { diasDesde, papelDoEstagio } from './esteira';
 import { iniciarCiclos } from './cicloParceiro.service';
 import type {
@@ -220,10 +220,9 @@ export async function importarContatosClassificados(previa: boolean) {
         {
           OR: [
             { segmentoParceiro: { not: null } },
-            { observacoes: { contains: 'fonte:', mode: 'insensitive' } },
-            { observacoes: { contains: 'carteira', mode: 'insensitive' } },
-            { observacoes: { contains: 'CONTATOS STARLINK', mode: 'insensitive' } },
-            { observacoes: { contains: 'PDV TIM', mode: 'insensitive' } },
+            // Pré-filtro largo; quem decide é identificarSegmentoParceiro.
+            { observacoes: { contains: 'tim', mode: 'insensitive' } },
+            { observacoes: { contains: 'starlink', mode: 'insensitive' } },
           ],
         },
       ],
@@ -242,16 +241,42 @@ export async function importarContatosClassificados(previa: boolean) {
     ['STARLINK', funis.find((funil) => funil.nome.toLocaleLowerCase('pt-BR') === 'credenciamento starlink')],
   ]);
   const ids = classificados.map((contato) => contato.id);
-  const credenciamentosAbertos = ids.length
-    ? await prisma.credenciamento.findMany({
-        where: { contatoId: { in: ids }, situacaoExcecao: null },
-        select: { contatoId: true, funilId: true },
-      })
-    : [];
-  const porSegmento = {
-    TIM: { identificados: 0, paraEnviar: 0, jaNaEsteira: 0, emOutraEsteira: 0, semEsteiraConfigurada: 0, enviados: 0, erros: [] as Array<{ contato: string; motivo: string }> },
-    STARLINK: { identificados: 0, paraEnviar: 0, jaNaEsteira: 0, emOutraEsteira: 0, semEsteiraConfigurada: 0, enviados: 0, erros: [] as Array<{ contato: string; motivo: string }> },
-  };
+  const abertosPorContato = new Map<string, string[]>();
+  if (ids.length) {
+    const abertos = await prisma.credenciamento.findMany({
+      where: { contatoId: { in: ids }, situacaoExcecao: null },
+      select: { contatoId: true, funilId: true },
+    });
+    for (const item of abertos) {
+      abertosPorContato.set(item.contatoId, [...(abertosPorContato.get(item.contatoId) ?? []), item.funilId]);
+    }
+  }
+
+  // O segmento reconhecido fica gravado no contato mesmo para quem ja esta na
+  // esteira ou nao tem esteira configurada: a ficha e o envio manual dependem dele.
+  if (!previa) {
+    for (const segmento of SEGMENTOS_PARCEIRO) {
+      const semSegmento = classificados.filter((c) => c.segmento === segmento && c.segmentoParceiro !== segmento);
+      if (semSegmento.length) {
+        await prisma.contact.updateMany({
+          where: { id: { in: semSegmento.map((c) => c.id) } },
+          data: { segmentoParceiro: segmento },
+        });
+      }
+    }
+  }
+
+  const novoResumo = () => ({
+    identificados: 0,
+    paraEnviar: 0,
+    jaNaEsteira: 0,
+    emOutraEsteira: 0,
+    semEsteiraConfigurada: 0,
+    enviados: 0,
+    erros: [] as Array<{ contato: string; motivo: string }>,
+  });
+  const porSegmento = { TIM: novoResumo(), STARLINK: novoResumo() };
+  const envios: Array<{ contato: (typeof classificados)[number]; funilId: string }> = [];
 
   for (const contato of classificados) {
     const resumo = porSegmento[contato.segmento];
@@ -261,27 +286,35 @@ export async function importarContatosClassificados(previa: boolean) {
       resumo.semEsteiraConfigurada += 1;
       continue;
     }
-    const existentes = credenciamentosAbertos.filter((item) => item.contatoId === contato.id);
-    if (existentes.some((item) => item.funilId === funil.id)) {
+    const existentes = abertosPorContato.get(contato.id) ?? [];
+    if (existentes.includes(funil.id)) {
       resumo.jaNaEsteira += 1;
       continue;
     }
     if (existentes.length > 0) resumo.emOutraEsteira += 1;
     resumo.paraEnviar += 1;
-    if (previa) continue;
+    envios.push({ contato, funilId: funil.id });
+  }
 
-    try {
-      if (contato.segmentoParceiro !== contato.segmento) {
-        await prisma.contact.update({ where: { id: contato.id }, data: { segmentoParceiro: contato.segmento } });
+  if (!previa) {
+    // Poucos envios simultaneos: o lote pode ter milhares de contatos e cada
+    // um faz varias consultas, mas nao pode esgotar o pool do Prisma.
+    const fila = [...envios];
+    const trabalhar = async () => {
+      for (let item = fila.shift(); item; item = fila.shift()) {
+        const resumo = porSegmento[item.contato.segmento];
+        try {
+          await criarCredenciamento({ contatoId: item.contato.id, funilId: item.funilId });
+          resumo.enviados += 1;
+        } catch (erro) {
+          resumo.erros.push({
+            contato: item.contato.nome,
+            motivo: erro instanceof Error ? erro.message : 'Falha ao enviar para a esteira',
+          });
+        }
       }
-      await criarCredenciamento({ contatoId: contato.id, funilId: funil.id });
-      resumo.enviados += 1;
-    } catch (erro) {
-      resumo.erros.push({
-        contato: contato.nome,
-        motivo: erro instanceof Error ? erro.message : 'Falha ao enviar para a esteira',
-      });
-    }
+    };
+    await Promise.all(Array.from({ length: 4 }, trabalhar));
   }
 
   return { previa, totalIdentificados: classificados.length, porSegmento };

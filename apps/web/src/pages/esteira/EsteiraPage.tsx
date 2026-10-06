@@ -587,9 +587,12 @@ export function EsteiraPage() {
                     {!resumoLote.previa && (
                       <p className="mt-1 text-slate-600">{linha.enviados} enviados · {linha.erros.length} com erro · {linha.semEsteiraConfigurada} sem esteira ativa</p>
                     )}
-                    {linha.erros.slice(0, 10).map((item) => (
-                      <p key={`${segmento}-${item.contato}`} className="mt-1 text-xs text-red-700">{item.contato}: {item.motivo}</p>
+                    {linha.erros.slice(0, 10).map((item, indice) => (
+                      <p key={`${segmento}-${indice}`} className="mt-1 text-xs text-red-700">{item.contato}: {item.motivo}</p>
                     ))}
+                    {linha.erros.length > 10 && (
+                      <p className="mt-1 text-xs text-red-700">e mais {linha.erros.length - 10} com erro.</p>
+                    )}
                   </div>
                 );
               })}

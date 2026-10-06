@@ -2,9 +2,17 @@ export const SEGMENTOS_PARCEIRO = ['TIM', 'STARLINK'] as const;
 export type SegmentoParceiro = (typeof SEGMENTOS_PARCEIRO)[number];
 
 const normalizar = (valor: string) =>
-  valor.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleUpperCase('pt-BR');
+  valor.normalize('NFD').replace(/[̀-ͯ]/g, '').toLocaleUpperCase('pt-BR');
 
-/** Resolve o segmento explícito ou identifica as fontes usadas nas importações. */
+/**
+ * Resolve o segmento explícito ou identifica a origem gravada nas observações
+ * pelas importações: "Fonte: CONTATOS STARLINK", "Fonte: ... TIM",
+ * "Importado da carteira PDV TIM". Só a origem conta: "último contato" ou
+ * "estimativa" no resto do texto não fazem do contato um parceiro TIM.
+ *
+ * O backfill da migration 20261005193000_segmento_parceiro repete estas regras
+ * em SQL; mudou aqui, mude lá.
+ */
 export function identificarSegmentoParceiro(
   informado?: string | null,
   observacoes?: string | null,
@@ -12,8 +20,15 @@ export function identificarSegmentoParceiro(
   const valor = normalizar(informado ?? '').trim();
   if (valor === 'TIM' || valor === 'STARLINK') return valor;
 
-  const fonte = normalizar(observacoes ?? '');
-  if (/FONTE\s*:\s*CONTATOS?\s+STARLINK|IMPORTAD[OA].{0,60}STARLINK/.test(fonte)) return 'STARLINK';
-  if (/FONTE\s*:\s*.*\bTIM\b|CARTEIRA.{0,40}PDV.{0,12}\bTIM\b|PDV\s+TIM|CONTATOS\s+TIM/.test(fonte)) return 'TIM';
+  const texto = normalizar(observacoes ?? '');
+  // O valor da "Fonte:" vai até o próximo separador da observação.
+  const fonte = /FONTE\s*:([^;\n|]*)/.exec(texto)?.[1] ?? '';
+  if (/\bSTARLINK\b/.test(fonte)) return 'STARLINK';
+  if (/\bTIM\b/.test(fonte)) return 'TIM';
+
+  if (/\bIMPORTAD[OA]\b[^;\n|]{0,80}\bSTARLINK\b|\bCONTATOS?\s+STARLINK\b/.test(texto)) return 'STARLINK';
+  if (/\bIMPORTAD[OA]\b[^;\n|]{0,80}\bTIM\b|\bCARTEIRA\b[^;\n|]{0,40}\bTIM\b|\bPDV\s+TIM\b|\bCONTATOS?\s+TIM\b/.test(texto)) {
+    return 'TIM';
+  }
   return null;
 }
