@@ -34,6 +34,7 @@ type CanalConfig = {
   /** Ultimo status que a ponte avisou para esta linha. Nulo antes do primeiro aviso. */
   ponteStatus?: string | null;
   ponteStatusEm?: string | null;
+  espelharCelular?: boolean;
 };
 
 type IaDoNumero = { ativa: boolean; webhook: string | null; assinado: boolean };
@@ -53,6 +54,7 @@ const numeroVazio = {
   ponteSessao: '',
   filaId: '',
   ativo: true,
+  espelharCelular: true,
   iaAtiva: false,
   iaUrlWebhook: '',
   iaSegredo: '',
@@ -424,6 +426,7 @@ export function CanaisTab() {
       modo: numero.modo ?? 'OFICIAL',
       filaId: numero.fila?.id ?? '',
       ativo: numero.ativo,
+      espelharCelular: numero.espelharCelular ?? true,
       iaAtiva: ia?.ativa ?? false,
       iaUrlWebhook: ia?.webhook ?? '',
     });
@@ -444,6 +447,7 @@ export function CanaisTab() {
     setNumeroOcupado(true);
     try {
       const corpo: Record<string, unknown> = { ativo: numeroForm.ativo, modo: numeroForm.modo };
+      if (numeroForm.modo === 'NAO_OFICIAL') corpo.espelharCelular = numeroForm.espelharCelular;
       if (numeroForm.nome) corpo.nome = numeroForm.nome;
       if (numeroForm.donoId) corpo.donoId = numeroForm.donoId;
       if (numeroForm.filaId) corpo.filaId = numeroForm.filaId;
@@ -958,6 +962,22 @@ export function CanaisTab() {
                     onChange={(e) => setNumeroForm({ ...numeroForm, nome: e.target.value })}
                   />
                 </Field>
+                {numeroForm.modo === 'NAO_OFICIAL' && (
+                  <label className="flex items-start gap-2 text-sm text-slate-700 sm:col-span-2">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={numeroForm.espelharCelular}
+                      onChange={(e) => setNumeroForm({ ...numeroForm, espelharCelular: e.target.checked })}
+                    />
+                    <span>
+                      Espelhar mensagens enviadas pelo celular
+                      <span className="block text-xs text-slate-500">
+                        O que o dono do número digitar no celular ou no WhatsApp Web aparece no histórico como “Mensagem enviada por outro dispositivo”.
+                      </span>
+                    </span>
+                  </label>
+                )}
                 <div className="sm:col-span-2 rounded-lg border border-slate-200 p-3">
                   <p className="text-xs font-medium text-slate-700">Como este vendedor conecta</p>
                   <div className="mt-2 flex gap-4">

@@ -6,6 +6,7 @@ import { itemDaRota } from './nav';
 import { PaletaDeComando } from './PaletaDeComando';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
+import { AvisoLinhasDesconectadas } from './AvisoLinhasDesconectadas';
 
 export function AppShell() {
   const { pathname } = useLocation();
@@ -30,6 +31,7 @@ export function AppShell() {
           <Sidebar aberta={menuAberto} aoFechar={fecharMenu} />
           <div className="flex min-w-0 flex-1 flex-col">
             <Topbar titulo={atual?.label ?? 'Plataforma'} aoAbrirMenu={() => setMenuAberto(true)} />
+            <AvisoLinhasDesconectadas />
             <main className="flex-1 overflow-y-auto p-6">
               <Outlet />
             </main>
