@@ -23,6 +23,8 @@ export type MensagemRecebida = {
   anexoUrl?: string | null;
   tipoAnexo?: 'TEXTO' | 'IMAGEM' | 'AUDIO' | 'VIDEO' | 'ARQUIVO';
   anexoNome?: string | null;
+  /** true = digitada no celular/WhatsApp Web do proprio numero (fromMe), nao pelo cliente. */
+  propria?: boolean;
 };
 
 const BASE = `${config.plataformaUrl}/api/webhooks/ponte`;

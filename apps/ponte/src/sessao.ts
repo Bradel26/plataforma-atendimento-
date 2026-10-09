@@ -13,6 +13,7 @@ import { toDataURL } from 'qrcode';
 import { criarAuthStatePersistido } from './autenticacaoPostgres.js';
 import { bancoDeSessaoPg } from './banco.js';
 import { config } from './config.js';
+import { lembrarEnviadaPelaPlataforma } from './enviadas.js';
 import { extrair } from './recebida.js';
 
 /**
@@ -667,7 +668,9 @@ async function enviar(nome: string, destino: string, conteudo: AnyMessageContent
   }
 
   const enviada = await sessao.sock.sendMessage(await jid(sessao, destino), conteudo);
-  return enviada?.key?.id ?? null;
+  const id = enviada?.key?.id ?? null;
+  if (id) lembrarEnviadaPelaPlataforma(id);
+  return id;
 }
 
 export function enviarTexto(nome: string, destino: string, texto: string) {

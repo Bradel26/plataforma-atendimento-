@@ -74,3 +74,41 @@ describe('receber — contato enderecado por @lid', () => {
     expect(chamada.numero).toBe('5511999998888');
   });
 });
+
+import { lembrarEnviadaPelaPlataforma } from './enviadas.js';
+
+function msgPropria(id: string, texto: string): WAMessage {
+  return {
+    key: { remoteJid: '5562992197010@s.whatsapp.net', fromMe: true, id },
+    pushName: 'Guilherme (dono do numero)',
+    message: { conversation: texto },
+  } as unknown as WAMessage;
+}
+
+describe('receber — mensagem enviada pelo celular (fromMe)', () => {
+  it('repassa como propria, sem o pushName do dono', async () => {
+    entregarMock.mockClear();
+    await receber(sessaoComSock({} as Sessao['sock']), msgPropria('CEL-1', 'Meu celular'));
+    expect(entregarMock).toHaveBeenCalledTimes(1);
+    expect(entregarMock.mock.calls[0]?.[0]).toMatchObject({
+      numero: '5562992197010',
+      texto: 'Meu celular',
+      idExterno: 'CEL-1',
+      propria: true,
+      nome: null,
+    });
+  });
+
+  it('ignora o eco do que a propria plataforma enviou', async () => {
+    entregarMock.mockClear();
+    lembrarEnviadaPelaPlataforma('PLAT-1');
+    await receber(sessaoComSock({} as Sessao['sock']), msgPropria('PLAT-1', 'boa tarde'));
+    expect(entregarMock).not.toHaveBeenCalled();
+  });
+
+  it('mensagem do cliente continua sem propria', async () => {
+    entregarMock.mockClear();
+    await receber(sessaoComSock({} as Sessao['sock']), msgTexto('5562992197010@s.whatsapp.net', 'Oi'));
+    expect(entregarMock.mock.calls[0]?.[0]?.propria).toBe(false);
+  });
+});

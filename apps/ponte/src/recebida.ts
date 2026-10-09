@@ -1,5 +1,6 @@
 import { downloadMediaMessage, type WAMessage } from '@whiskeysockets/baileys';
 import { config } from './config.js';
+import { foiEnviadaPelaPlataforma } from './enviadas.js';
 import { guardar } from './midia.js';
 import { lembrarJid, numeroDoJid, type Sessao } from './sessao.js';
 import { entregar, type MensagemRecebida } from './plataforma.js';
@@ -132,9 +133,14 @@ export async function receber(sessao: Sessao, msg: WAMessage) {
   try {
     const remetente = msg.key?.remoteJid ?? '';
 
-    // Eco do que a propria plataforma mandou. Registrar de novo duplicaria a
-    // mensagem na conversa, como se o cliente tivesse escrito.
-    if (msg.key?.fromMe) return;
+    /*
+     * `fromMe` e o que o dono do numero digitou no celular ou no WhatsApp Web —
+     * vai para a plataforma como mensagem PROPRIA (auditoria do vendedor, PCM
+     * 04:00). O eco do que a propria plataforma enviou fica de fora: senao a
+     * resposta do atendente apareceria duas vezes.
+     */
+    const propria = Boolean(msg.key?.fromMe);
+    if (propria && msg.key?.id && foiEnviadaPelaPlataforma(msg.key.id)) return;
 
     /*
      * Grupo e lista de transmissao ficam de fora.
@@ -184,7 +190,10 @@ export async function receber(sessao: Sessao, msg: WAMessage) {
     await entregar({
       numero,
       sessao: sessao.nome,
-      nome: msg.pushName ?? null,
+      // O pushName de mensagem propria e o nome do DONO do numero: gravar
+      // renomearia o contato do cliente com o nome do vendedor.
+      nome: propria ? null : (msg.pushName ?? null),
+      propria,
       texto,
       idExterno,
       tipoAnexo: anexo ? extraido.tipo : 'TEXTO',
