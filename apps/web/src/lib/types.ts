@@ -127,7 +127,7 @@ export const COR_STATUS: Record<AgentStatus, string> = {
 
 export type ConversaStatus = 'EM_ESPERA' | 'ATRIBUIDO' | 'EM_ATENDIMENTO' | 'FINALIZADO';
 
-export type AutorMensagem = 'CLIENTE' | 'AGENTE' | 'SISTEMA';
+export type AutorMensagem = 'CLIENTE' | 'AGENTE' | 'SISTEMA' | 'BOT';
 export type EventoConversa = 'ACEITE' | 'TRANSFERENCIA' | 'ENCERRAMENTO';
 export type OrigemConversa = 'ATIVO' | 'RECEPTIVO';
 

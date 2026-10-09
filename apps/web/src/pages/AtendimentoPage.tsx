@@ -19,7 +19,7 @@ import { ApiError, api, getAccessToken } from '../lib/api';
 import { EVENTOS, conectar } from '../lib/realtime';
 import { telefoneLegivel } from '../lib/telefone';
 import { useFaixaDeLargura } from '../lib/useFaixaDeLargura';
-import type { Acompanhaveis, ConversaDetalhe, Previa, Usuario } from '../lib/types';
+import type { Acompanhaveis, ConversaDetalhe, Previa } from '../lib/types';
 
 /**
  * Passo do fluxo em telas de uma coluna so (mobile): lista -> conversa ->
@@ -190,7 +190,6 @@ export function AtendimentoPage() {
   const [versaoTags, setVersaoTags] = useState(0);
   const [aberta, setAberta] = useState<ConversaDetalhe | null>(null);
   const [erroAberta, setErroAberta] = useState<string | null>(null);
-  const [agentes, setAgentes] = useState<Usuario[]>([]);
   const [previas, setPrevias] = useState<Previa[]>([]);
   const abertaIdRef = useRef<string | null>(null);
 
@@ -390,15 +389,6 @@ export function AtendimentoPage() {
   }, [podeAcompanhar]);
 
   const usuarioAcompanhado = acompanhaveis?.usuarios.find((u) => u.id === filtroAcompanhar.donoId) ?? null;
-
-  // A lista de destinos de transferencia so e visivel para admin e supervisor.
-  useEffect(() => {
-    if (!temPerfil('ADMIN', 'SUPERVISOR')) return;
-    void api
-      .get<{ usuarios: Usuario[] }>('/usuarios?perfil=AGENTE')
-      .then(({ usuarios }) => setAgentes(usuarios))
-      .catch(() => undefined);
-  }, [temPerfil]);
 
   useEffect(() => {
     void api
@@ -666,7 +656,6 @@ export function AtendimentoPage() {
           ) : aberta ? (
             <PainelChat
               conversa={aberta}
-              agentes={agentes}
               onMudou={aoMudar}
               aoVoltarParaLista={emMobile ? () => setPassoMobile('lista') : undefined}
               aoAlternarFicha={faixa === 'desktop' ? undefined : alternarFicha}

@@ -1,11 +1,65 @@
-import { useEffect, useRef, useState } from 'react';
-import { Alerta, Badge, Button, Select } from '../../components/ui';
+import { Fragment, useEffect, useRef, useState } from 'react';
+import { Alerta, Badge, Button } from '../../components/ui';
+import { Dropdown } from '../../components/ui/Dropdown';
+import { useToast } from '../../components/ui/Toast';
 import { ApiError, api } from '../../lib/api';
-import { LABEL_CONVERSA_STATUS, type ConversaDetalhe, type Mensagem, type Usuario } from '../../lib/types';
+import { LABEL_CONVERSA_STATUS, type ConversaDetalhe, type Mensagem } from '../../lib/types';
 import { AvatarConversa } from './AvatarConversa';
+import { partesComLinks } from './links';
+import { useAtendimentosAnteriores, type BlocoAnterior } from './useAtendimentosAnteriores';
 
 const hora = (iso: string) =>
   new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+const dataHora = (iso: string) =>
+  new Date(iso).toLocaleString('pt-BR', {
+    day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit',
+  });
+
+function TextoComLinks({ texto }: { texto: string }) {
+  return (
+    <p className="whitespace-pre-wrap break-words">
+      {partesComLinks(texto).map((parte, i) =>
+        parte.href ? (
+          <a key={i} href={parte.href} target="_blank" rel="noopener noreferrer" className="text-sky-700 underline">
+            {parte.texto}
+          </a>
+        ) : (
+          <Fragment key={i}>{parte.texto}</Fragment>
+        ),
+      )}
+    </p>
+  );
+}
+
+function EventoConversa({ mensagem }: { mensagem: Mensagem }) {
+  return (
+    <li className="my-2 flex justify-center">
+      <span className="inline-flex flex-col items-center rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs text-slate-700 shadow-sm">
+        <span className="font-medium">{mensagem.conteudo}</span>
+        <span className="text-[10px] text-slate-400">{dataHora(mensagem.criadoEm)}</span>
+      </span>
+    </li>
+  );
+}
+
+function SeparadorAnterior({ bloco }: { bloco: BlocoAnterior }) {
+  const data = new Date(bloco.criadoEm).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+  return (
+    <li className="my-3 flex justify-center">
+      <span className="rounded-full bg-slate-200/80 px-3 py-1 text-xs text-slate-600">
+        {data} - Conversa anterior{bloco.protocolo ? ` - ${bloco.protocolo}` : ''}
+      </span>
+    </li>
+  );
+}
+
+function rotuloDoAutor(m: Mensagem): string | null {
+  if (m.enviadaPorDispositivo) return 'Mensagem enviada por outro dispositivo';
+  if (m.autor === 'BOT') return 'Mensagem do sistema';
+  if (m.autor === 'AGENTE') return m.autorNome;
+  return null;
+}
 
 /**
  * Midia recebida do cliente. A URL vem assinada pela API e expira; imagem
@@ -39,6 +93,7 @@ function Anexo({ mensagem }: { mensagem: Mensagem }) {
 
 function Bolha({ mensagem }: { mensagem: Mensagem }) {
   if (mensagem.autor === 'SISTEMA') {
+    if (mensagem.evento) return <EventoConversa mensagem={mensagem} />;
     return (
       <li className="my-2 text-center">
         <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-500">{mensagem.conteudo}</span>
@@ -50,29 +105,33 @@ function Bolha({ mensagem }: { mensagem: Mensagem }) {
     return (
       <li className="flex justify-end">
         <div className="max-w-[75%] rounded-2xl border border-amber-200 bg-amber-50 px-3.5 py-2 text-sm text-slate-800">
-          <p className="mb-1 text-xs font-semibold text-amber-700">Nota interna</p>
+          <p className="mb-1 text-xs font-semibold text-amber-700">
+            Nota interna{mensagem.autorNome ? ` · ${mensagem.autorNome}` : ''}
+          </p>
           <Anexo mensagem={mensagem} />
-          <p className="whitespace-pre-wrap break-words">{mensagem.conteudo}</p>
+          <TextoComLinks texto={mensagem.conteudo} />
           <p className="mt-1 text-right text-[10px] text-amber-700/70">{hora(mensagem.criadoEm)}</p>
         </div>
       </li>
     );
   }
 
-  const doAgente = mensagem.autor === 'AGENTE';
+  const daEmpresa = mensagem.autor !== 'CLIENTE';
+  const rotulo = rotuloDoAutor(mensagem);
   return (
-    <li className={`flex ${doAgente ? 'justify-end' : 'justify-start'}`}>
+    <li className={`flex ${daEmpresa ? 'justify-end' : 'justify-start'}`}>
       <div
         className={`max-w-[75%] rounded-2xl px-3.5 py-2 text-sm ${
-          doAgente ? 'text-slate-800' : 'border border-slate-200 bg-white text-slate-800'
+          daEmpresa ? 'text-slate-800' : 'border border-slate-200 bg-white text-slate-800'
         }`}
-        style={doAgente ? { backgroundColor: '#d9fdd3' } : undefined}
+        style={daEmpresa ? { backgroundColor: mensagem.autor === 'BOT' ? '#ffffff' : '#d9fdd3' } : undefined}
       >
+        {rotulo && <p className="mb-1 text-xs font-semibold text-slate-600">{rotulo}</p>}
         <Anexo mensagem={mensagem} />
-        <p className="whitespace-pre-wrap break-words">{mensagem.conteudo}</p>
+        <TextoComLinks texto={mensagem.conteudo} />
         <p className="mt-1 flex items-center justify-end gap-1 text-right text-[10px] text-slate-500">
           {hora(mensagem.criadoEm)}
-          {doAgente && (
+          {daEmpresa && (
             <svg width="14" height="10" viewBox="0 0 16 11" fill="none" aria-label="Enviada">
               <path
                 d="M1 5.5L4.5 9L11 1.5M5.5 5.5L9 9L15.5 1.5"
@@ -91,30 +150,35 @@ function Bolha({ mensagem }: { mensagem: Mensagem }) {
 
 export function PainelChat({
   conversa,
-  agentes,
   onMudou,
+  aoTransferir,
   aoVoltarParaLista,
   aoAlternarFicha,
   fichaAberta,
+  somenteLeitura = false,
 }: {
   conversa: ConversaDetalhe;
-  agentes: Usuario[];
   onMudou: (detalhe: ConversaDetalhe) => void;
+  aoTransferir?: () => void;
   /** So existe no passo mobile "chat": volta pra lista sem perder a conversa aberta. */
   aoVoltarParaLista?: () => void;
   /** So existe fora do desktop, onde a ficha e um drawer/passo em vez de coluna fixa. */
   aoAlternarFicha?: () => void;
   fichaAberta?: boolean;
+  somenteLeitura?: boolean;
 }) {
   const [texto, setTexto] = useState('');
   const [abaRodape, setAbaRodape] = useState<'responder' | 'privada'>('responder');
   const [textoPrivado, setTextoPrivado] = useState('');
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
-  const [anteriores, setAnteriores] = useState<Mensagem[]>([]);
+  const [anterioresDaConversa, setAnterioresDaConversa] = useState<Mensagem[]>([]);
   const [cursorHistorico, setCursorHistorico] = useState<string | null>(null);
   const [fimDoHistorico, setFimDoHistorico] = useState(false);
   const fim = useRef<HTMLDivElement>(null);
+  const topo = useRef<HTMLDivElement>(null);
+  const mostrar = useToast();
+  const atendimentosAnteriores = useAtendimentosAnteriores(conversa.id);
   const rascunhos = useRef<Map<string, { texto: string; textoPrivado: string }>>(new Map());
   const conversaIdAnterior = useRef(conversa.id);
 
@@ -125,7 +189,7 @@ export function PainelChat({
   // Trocar de conversa zera o historico carregado: sem isto, as mensagens
   // antigas de uma conversa apareceriam no topo da proxima.
   useEffect(() => {
-    setAnteriores([]);
+    setAnterioresDaConversa([]);
     setCursorHistorico(null);
     setFimDoHistorico(false);
   }, [conversa.id]);
@@ -176,6 +240,13 @@ export function PainelChat({
     }
   };
 
+  const encerrar = () =>
+    void executar(async () => {
+      const r = await api.post<{ conversa: ConversaDetalhe }>(`/conversas/${conversa.id}/finalizar`);
+      mostrar('sucesso', 'Chat encerrado com sucesso.');
+      return r;
+    });
+
   const enviar = async (e: React.FormEvent) => {
     e.preventDefault();
     // Guarda tambem contra o Enter do textarea, que chama `enviar` direto sem
@@ -212,7 +283,7 @@ export function PainelChat({
       const resp = await api.get<{ mensagens: Mensagem[]; proximoCursor: string | null }>(
         `/conversas/${conversa.id}/mensagens?cursor=${encodeURIComponent(cursor)}`,
       );
-      setAnteriores((atual) => [...resp.mensagens, ...atual]);
+      setAnterioresDaConversa((atual) => [...resp.mensagens, ...atual]);
       setCursorHistorico(resp.proximoCursor);
       setFimDoHistorico(resp.proximoCursor === null);
     } catch (err) {
@@ -221,6 +292,17 @@ export function PainelChat({
       setOcupado(false);
     }
   };
+
+  const historicoAtualEsgotado = !(conversa.temHistoricoAnterior ?? false) || fimDoHistorico;
+  useEffect(() => {
+    const alvo = topo.current;
+    if (!alvo || !historicoAtualEsgotado || atendimentosAnteriores.fim) return;
+    const observador = new IntersectionObserver((entradas) => {
+      if (entradas.some((entrada) => entrada.isIntersecting)) void atendimentosAnteriores.carregarMais();
+    });
+    observador.observe(alvo);
+    return () => observador.disconnect();
+  }, [historicoAtualEsgotado, atendimentosAnteriores.fim, atendimentosAnteriores.carregarMais, conversa.id]);
 
   /**
    * Anexo do agente. A legenda vai junto quando o campo de texto tem algo
@@ -274,10 +356,25 @@ export function PainelChat({
           <div className="min-w-0 flex-1">
             <p className="truncate font-medium text-slate-800">{conversa.contato.nome}</p>
             <p className="truncate text-xs text-slate-500">
-              {conversa.contato.email ?? conversa.contato.telefone ?? 'Sem contato informado'}
+              {conversa.contato.telefone ?? conversa.contato.email ?? 'Sem contato informado'}
+              {conversa.linha?.nome ? ` · ${conversa.linha.nome}` : ''}
               {conversa.fila ? ` · ${conversa.fila.nome}` : ''}
             </p>
           </div>
+
+          {conversa.protocolo && (
+            <button
+              type="button"
+              title="Copiar protocolo"
+              onClick={() => {
+                void navigator.clipboard?.writeText(conversa.protocolo!);
+                mostrar('info', `Protocolo ${conversa.protocolo} copiado`);
+              }}
+              className="shrink-0 rounded border border-slate-200 px-2 py-0.5 font-mono text-xs text-slate-600 hover:bg-slate-50"
+            >
+              {conversa.protocolo}
+            </button>
+          )}
 
           {/* So existe fora do desktop: la a ficha e coluna fixa e sempre
               visivel, entao um botao pra abrir o que ja esta aberto so
@@ -295,94 +392,45 @@ export function PainelChat({
           )}
         </div>
 
-        {/*
-          Linha compacta de status + acoes: junta status/transferir/resolver/
-          arquivar numa linha so sempre que a largura permitir (o Select de
-          transferencia cresce pra ocupar o espaco livre), so quebrando em
-          telas bem estreitas (`flex-wrap` como fallback, nao como padrao).
-        */}
         <div className="flex flex-wrap items-center gap-2">
           <Badge tom={finalizada ? 'neutro' : 'sucesso'}>{LABEL_CONVERSA_STATUS[conversa.status]}</Badge>
-          {/* Arquivamento e ortogonal ao status (Fase 11.9-B): a conversa pode
-              estar arquivada em qualquer um dos badges acima. */}
           {conversa.arquivada && <Badge tom="neutro">Arquivada</Badge>}
-
-          {conversa.status === 'EM_ESPERA' && (
-            <Button
-              disabled={ocupado}
-              onClick={() => void executar(() => api.post(`/conversas/${conversa.id}/assumir`))}
-            >
-              Assumir
-            </Button>
-          )}
-
-          {!finalizada && (
-            <>
-              <Select
-                aria-label="Transferir para agente"
-                disabled={ocupado}
-                value=""
-                onChange={(e) => {
-                  const agenteId = e.target.value;
-                  if (agenteId) {
-                    void executar(() => api.post(`/conversas/${conversa.id}/transferir`, { agenteId }));
-                  }
-                }}
-                className="min-w-[10rem] flex-1"
-              >
-                <option value="">Transferir para...</option>
-                {agentes
-                  .filter((a) => a.id !== conversa.agente?.id && a.ativo)
-                  .map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.nome}
-                    </option>
-                  ))}
-              </Select>
-
-              {conversa.fila && conversa.agente && (
-                <Button
-                  variante="neutro"
-                  disabled={ocupado}
-                  className="shrink-0"
-                  onClick={() =>
-                    void executar(() =>
-                      api.post(`/conversas/${conversa.id}/transferir`, { filaId: conversa.fila!.id }),
-                    )
-                  }
-                >
-                  Devolver a fila
+          <span className="text-xs text-slate-400">{conversa.origem === 'ATIVO' ? '↗ Ativo' : '↙ Receptivo'}</span>
+          {!somenteLeitura && (
+            <div className="ml-auto flex items-center gap-2">
+              {conversa.status === 'EM_ESPERA' && (
+                <Button disabled={ocupado} onClick={() => void executar(() => api.post(`/conversas/${conversa.id}/assumir`))}>
+                  Aceitar
                 </Button>
               )}
-
-              <Button
-                variante="perigo"
-                disabled={ocupado}
-                className="shrink-0"
-                onClick={() => void executar(() => api.post(`/conversas/${conversa.id}/finalizar`))}
-              >
-                Resolver
-              </Button>
-            </>
+              <Dropdown
+                rotulo={<span aria-label="Ações da conversa">⋮</span>}
+                itens={[
+                  ...(!finalizada
+                    ? [
+                        { chave: 'encerrar', rotulo: 'Encerrar', aoSelecionar: encerrar, desabilitado: ocupado },
+                        ...(aoTransferir ? [{ chave: 'transferir', rotulo: 'Transferir', aoSelecionar: aoTransferir, desabilitado: ocupado }] : []),
+                        ...(conversa.fila && conversa.agente
+                          ? [{
+                              chave: 'devolver',
+                              rotulo: `Devolver à equipe ${conversa.fila.nome}`,
+                              desabilitado: ocupado,
+                              aoSelecionar: () => void executar(() => api.post(`/conversas/${conversa.id}/transferir`, { filaId: conversa.fila!.id })),
+                            }]
+                          : []),
+                      ]
+                    : []),
+                  {
+                    chave: 'arquivar',
+                    rotulo: conversa.arquivada ? 'Desarquivar' : 'Arquivar',
+                    desabilitado: ocupado,
+                    aoSelecionar: () =>
+                      void executar(() => api.post(`/conversas/${conversa.id}/${conversa.arquivada ? 'desarquivar' : 'arquivar'}`)),
+                  },
+                ]}
+              />
+            </div>
           )}
-
-          {/*
-            Fora do `!finalizada`, de proposito: arquivar e ortogonal ao
-            status (Fase 11.9-A/B) — uma conversa finalizada continua
-            podendo ser arquivada/desarquivada.
-          */}
-          <Button
-            variante="neutro"
-            disabled={ocupado}
-            className="shrink-0"
-            onClick={() =>
-              void executar(() =>
-                api.post(`/conversas/${conversa.id}/${conversa.arquivada ? 'desarquivar' : 'arquivar'}`),
-              )
-            }
-          >
-            {conversa.arquivada ? 'Desarquivar' : 'Arquivar'}
-          </Button>
         </div>
       </header>
 
@@ -401,6 +449,10 @@ export function PainelChat({
         }}
       >
         <div className="mx-auto max-w-3xl">
+          <div ref={topo} aria-hidden="true" />
+          {atendimentosAnteriores.carregando && (
+            <p className="mb-2 text-center text-xs text-slate-500">Carregando atendimento anterior...</p>
+          )}
           {(conversa.temHistoricoAnterior ?? false) && !fimDoHistorico && (
             <button
               type="button"
@@ -413,7 +465,20 @@ export function PainelChat({
           )}
 
           <ul className="space-y-2">
-            {[...anteriores, ...conversa.mensagens].map((m) => (
+            {atendimentosAnteriores.blocos.map((bloco) => (
+              <Fragment key={bloco.id}>
+                <SeparadorAnterior bloco={bloco} />
+                {bloco.mensagens.map((m) => <Bolha key={m.id} mensagem={m} />)}
+              </Fragment>
+            ))}
+            {atendimentosAnteriores.blocos.length > 0 && (
+              <li className="my-3 flex justify-center">
+                <span className="rounded-full bg-slate-200/80 px-3 py-1 text-xs text-slate-600">
+                  Atendimento atual{conversa.protocolo ? ` - ${conversa.protocolo}` : ''}
+                </span>
+              </li>
+            )}
+            {[...anterioresDaConversa, ...conversa.mensagens].map((m) => (
               <Bolha key={m.id} mensagem={m} />
             ))}
           </ul>
@@ -421,7 +486,7 @@ export function PainelChat({
         </div>
       </div>
 
-      <footer className="border-t border-slate-200 bg-white p-4">
+      {!somenteLeitura && <footer className="border-t border-slate-200 bg-white p-4">
         <div className="mx-auto max-w-3xl">
         {erro && <div className="mb-3"><Alerta>{erro}</Alerta></div>}
         {finalizada ? (
@@ -551,7 +616,7 @@ export function PainelChat({
           </>
         )}
         </div>
-      </footer>
+      </footer>}
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { PainelChat } from './PainelChat';
 import type { ConversaDetalhe, Mensagem } from '../../lib/types';
+import { ToastProvider } from '../../components/ui/Toast';
 
 /**
  * Task 5 — botao "Resolver" (rebatizado de "Finalizar") e aba "Mensagem
@@ -71,28 +72,31 @@ function criarMensagemMock(overrides: Partial<Mensagem> = {}): Mensagem {
 
 function renderizar(props: Partial<Parameters<typeof PainelChat>[0]> = {}) {
   return renderToStaticMarkup(
-    createElement(PainelChat, {
-      conversa: criarConversaDetalheMock(),
-      agentes: [],
-      onMudou: () => {},
-      ...props,
-    }),
+    createElement(
+      ToastProvider,
+      null,
+      createElement(PainelChat, {
+        conversa: criarConversaDetalheMock(),
+        onMudou: () => {},
+        ...props,
+      }),
+    ),
   );
 }
 
-describe('PainelChat — botão Resolver (Task 5)', () => {
-  it('renderiza o botão como "Resolver" (não mais "Finalizar")', () => {
+describe('PainelChat — ações da conversa', () => {
+  it('renderiza o status e o menu de ações', () => {
     const html = renderizar();
-    expect(html).toContain('Resolver');
-    expect(html).not.toContain('Finalizar');
+    expect(html).toContain('Em atendimento');
+    expect(html).toContain('Ações da conversa');
   });
 
-  it('conversa finalizada não mostra nem "Resolver" nem "Finalizar"', () => {
+  it('conversa finalizada não mostra ações de conversa aberta', () => {
     const html = renderizar({
       conversa: criarConversaDetalheMock({ status: 'FINALIZADO', finalizadoEm: '2026-09-25T11:00:00.000Z' }),
     });
-    expect(html).not.toContain('Resolver');
-    expect(html).not.toContain('Finalizar');
+    expect(html).not.toContain('Encerrar');
+    expect(html).not.toContain('Aceitar');
   });
 });
 
