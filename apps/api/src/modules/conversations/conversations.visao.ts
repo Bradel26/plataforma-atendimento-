@@ -1,8 +1,8 @@
 import type { Prisma } from '@prisma/client';
 import { DO_NUMERO_DA_EMPRESA } from '../../lib/politicas';
 
-/** Abas do Atendimento, organizadas por numero de WhatsApp (2026-10-05). */
-export type VisaoInbox = 'MINHAS' | 'FILA' | 'ACOMPANHAR';
+/** Abas do Atendimento. A espera das filas saiu das abas para a Caixa de entrada (09/10/2026). */
+export type VisaoInbox = 'MINHAS' | 'ATRIBUIDAS' | 'ACOMPANHAR';
 
 /** Valor do seletor de Acompanhar para o Numero da empresa. */
 export const DONO_EMPRESA = 'EMPRESA';
@@ -36,13 +36,8 @@ export function filtroDaVisao(
       return {};
     case 'MINHAS':
       return { canalConfig: { donoId: eu.usuarioId } };
-    case 'FILA':
-      return {
-        AND: [
-          foraDosMeusNumeros(eu.usuarioId),
-          { OR: [{ agenteId: eu.usuarioId }, { status: 'EM_ESPERA', filaId: { in: eu.filaIds } }] },
-        ],
-      };
+    case 'ATRIBUIDAS':
+      return { AND: [foraDosMeusNumeros(eu.usuarioId), { agenteId: eu.usuarioId }] };
     case 'ACOMPANHAR': {
       const termos: Prisma.ConversationWhereInput[] = [foraDosMeusNumeros(eu.usuarioId)];
       if (f.donoId === DONO_EMPRESA) termos.push(DO_NUMERO_DA_EMPRESA);

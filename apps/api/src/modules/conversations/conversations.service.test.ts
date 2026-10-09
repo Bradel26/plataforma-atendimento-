@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { decidirDestino } from '../channels/inbound.service';
 import { comOrganizacao } from '../../lib/tenant';
 import {
@@ -12,6 +12,7 @@ import {
   finalizarConversa,
   iniciarConversa,
   listarAcompanhaveis,
+  listarCaixaEntrada,
   listarConversas,
   listarDestinosTransferencia,
   motivoSemTelefone,
@@ -556,16 +557,16 @@ describe('abas por numero (2026-10-05)', () => {
 
   it('donoId fora da aba Acompanhar e 400', async () => {
     await expect(
-      comoPerfil('ADMIN', () => listarConversas(SOLICITANTE, { limite: 50, tags: [], visao: 'FILA', donoId: 'u-x' })),
+      comoPerfil('ADMIN', () => listarConversas(SOLICITANTE, { limite: 50, tags: [], visao: 'ATRIBUIDAS', donoId: 'u-x' })),
     ).rejects.toMatchObject({ status: 400 });
   });
 
-  it('contadores: Fila conta so as em espera; Comercial nao tem Acompanhar', async () => {
+  it('contadores: Atribuidas conta as que estao comigo; Comercial nao tem Acompanhar', async () => {
     const r = await comoPerfil('COMERCIAL', () => contarPorVisao());
     expect(r.contadores.ACOMPANHAR).toBeNull();
     const wheres = conversationCount.mock.calls.map((c) => JSON.stringify(c[0].where));
     expect(wheres).toHaveLength(2);
-    expect(wheres[1]).toContain('"status":"EM_ESPERA"');
+    expect(wheres[1]).toContain('"agenteId":"user-1"');
   });
 
   it('acompanhaveis: Comercial recebe 403', async () => {
@@ -781,6 +782,40 @@ describe('assumirConversa — aceite atomico (primeiro que pega)', () => {
 
     expect(conversationUpdateMany).not.toHaveBeenCalled();
     expect(messageCreate).not.toHaveBeenCalled();
+  });
+});
+
+describe('listarCaixaEntrada', () => {
+  beforeEach(() => vi.clearAllMocks());
+  // clearAllMocks nao desfaz mockResolvedValue: devolve o padrao para nao vazar nos testes seguintes.
+  afterEach(() => queueAgentFindMany.mockResolvedValue([]));
+
+  it('agrupa a espera pelas filas do usuario; ADMIN ganha o grupo sem equipe primeiro', async () => {
+    queueAgentFindMany.mockResolvedValue([{ filaId: 'f-com' }]);
+    queueFindMany.mockResolvedValue([{ id: 'f-com', nome: 'Comercial' }]);
+    conversationFindMany.mockResolvedValue([
+      { id: 'c-1', filaId: 'f-com' },
+      { id: 'c-2', filaId: null },
+    ]);
+
+    const r = await comOrganizacao('org-1', () => listarCaixaEntrada(), { id: 'user-1', perfil: 'ADMIN' });
+
+    expect(r.grupos.map((g) => g.fila?.nome ?? null)).toEqual([null, 'Comercial']);
+    expect(r.grupos[0]?.conversas.map((c) => c.id)).toEqual(['c-2']);
+    expect(r.grupos[1]?.conversas.map((c) => c.id)).toEqual(['c-1']);
+    const where = conversationFindMany.mock.calls[0]?.[0]?.where;
+    expect(JSON.stringify(where)).toContain('"status":"EM_ESPERA"');
+    expect(conversationFindMany.mock.calls[0]?.[0]?.orderBy).toEqual([{ ultimaMensagemEm: 'asc' }, { id: 'asc' }]);
+  });
+
+  it('COMERCIAL nao ganha o grupo sem equipe', async () => {
+    queueAgentFindMany.mockResolvedValue([{ filaId: 'f-com' }]);
+    queueFindMany.mockResolvedValue([{ id: 'f-com', nome: 'Comercial' }]);
+    conversationFindMany.mockResolvedValue([]);
+
+    const r = await comOrganizacao('org-1', () => listarCaixaEntrada(), { id: 'user-1', perfil: 'COMERCIAL' });
+
+    expect(r.grupos.map((g) => g.fila?.nome ?? null)).toEqual(['Comercial']);
   });
 });
 

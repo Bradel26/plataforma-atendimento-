@@ -20,9 +20,9 @@ describe('filtroDaVisao', () => {
     expect(filtroDaVisao({ visao: 'MINHAS' }, EU)).toEqual({ canalConfig: { donoId: 'u-eu' } });
   });
 
-  it('Fila: fora dos meus numeros, atribuidas a mim ou em espera nas minhas filas', () => {
-    expect(filtroDaVisao({ visao: 'FILA' }, EU)).toEqual({
-      AND: [FORA_DOS_MEUS, { OR: [{ agenteId: 'u-eu' }, { status: 'EM_ESPERA', filaId: { in: ['f-comercial'] } }] }],
+  it('ATRIBUIDAS: so o que esta comigo e nao e de numero meu (a espera foi para a Caixa de entrada)', () => {
+    expect(filtroDaVisao({ visao: 'ATRIBUIDAS' }, EU)).toEqual({
+      AND: [FORA_DOS_MEUS, { agenteId: 'u-eu' }],
     });
   });
 

@@ -4,7 +4,7 @@ import { MAXIMO_POR_REGISTRO, TAMANHO_MAXIMO, normalizarTags } from '../../lib/t
 export const listarConversasSchema = z.object({
   status: z.enum(['EM_ESPERA', 'ATRIBUIDO', 'EM_ATENDIMENTO', 'FINALIZADO']).optional(),
   /** Aba do Atendimento. Sem ela, so a politica de visibilidade filtra. */
-  visao: z.enum(['MINHAS', 'FILA', 'ACOMPANHAR']).optional(),
+  visao: z.enum(['MINHAS', 'ATRIBUIDAS', 'ACOMPANHAR']).optional(),
   /** Seletor de Acompanhar: id do dono do numero, ou EMPRESA. */
   donoId: z.union([z.literal('EMPRESA'), z.string().uuid()]).optional(),
   /** Filtro por numero dentro de Acompanhar. */

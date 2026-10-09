@@ -185,12 +185,52 @@ export async function contarPorVisao() {
   const contar = (extra: Prisma.ConversationWhereInput) =>
     prisma.conversation.count({ where: { AND: [...base, extra] } });
 
-  const [MINHAS, FILA, ACOMPANHAR] = await Promise.all([
+  const [MINHAS, ATRIBUIDAS, ACOMPANHAR] = await Promise.all([
     contar(filtroDaVisao({ visao: 'MINHAS' }, ctx)),
-    contar({ AND: [filtroDaVisao({ visao: 'FILA' }, ctx), { status: 'EM_ESPERA' }] }),
+    contar(filtroDaVisao({ visao: 'ATRIBUIDAS' }, ctx)),
     podeAcompanhar(ctx.perfil) ? contar(filtroDaVisao({ visao: 'ACOMPANHAR' }, ctx)) : Promise.resolve(null),
   ]);
-  return { contadores: { MINHAS, FILA, ACOMPANHAR }, minhasFilaIds: ctx.filaIds };
+  return { contadores: { MINHAS, ATRIBUIDAS, ACOMPANHAR }, minhasFilaIds: ctx.filaIds };
+}
+
+/**
+ * Coluna "Caixa de entrada" (PCM 00:22): a espera das filas em que eu atuo,
+ * agrupada por equipe, a mais antiga primeiro. Quem pega primeiro leva
+ * (`assumirConversa`). ADMIN e SUPERVISOR veem tambem a espera sem equipe —
+ * a conversa que, sem eles, ninguem enxergaria.
+ */
+export async function listarCaixaEntrada() {
+  const ctx = await contextoVisibilidade();
+  const verSemEquipe = podeAcompanhar(ctx.perfil);
+
+  const [filas, conversas] = await Promise.all([
+    prisma.queue.findMany({
+      where: { id: { in: ctx.filaIds }, ativa: true },
+      select: { id: true, nome: true },
+      orderBy: { nome: 'asc' },
+    }),
+    prisma.conversation.findMany({
+      where: {
+        AND: [
+          await escopoVisivel(),
+          { arquivada: false, status: 'EM_ESPERA', agenteId: null },
+          { OR: [{ filaId: { in: ctx.filaIds } }, ...(verSemEquipe ? [{ filaId: null }] : [])] },
+        ],
+      },
+      include: inclusaoResumo,
+      orderBy: [{ ultimaMensagemEm: 'asc' }, { id: 'asc' }],
+      take: 200,
+    }),
+  ]);
+
+  type Grupo = { fila: { id: string; nome: string } | null; conversas: ReturnType<typeof toConversaResumo>[] };
+  const doGrupo = (filaId: string | null) => conversas.filter((c) => c.filaId === filaId).map(toConversaResumo);
+
+  const grupos: Grupo[] = [
+    ...(verSemEquipe ? [{ fila: null, conversas: doGrupo(null) }] : []),
+    ...filas.map((fila) => ({ fila, conversas: doGrupo(fila.id) })),
+  ];
+  return { grupos };
 }
 
 type LinhaComDono = {

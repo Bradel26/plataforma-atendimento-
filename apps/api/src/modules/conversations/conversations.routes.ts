@@ -19,6 +19,7 @@ import {
   assumirConversa,
   buscarFotoDaConversa,
   contarPorVisao,
+  listarCaixaEntrada,
   definirTags,
   desarquivarConversa,
   enviarArquivo,
@@ -93,6 +94,14 @@ conversationsRoutes.get(
   '/contadores',
   asyncHandler(async (_req, res) => {
     res.json(await contarPorVisao());
+  }),
+);
+
+/** Coluna Caixa de entrada — antes de `/:id`. */
+conversationsRoutes.get(
+  '/caixa-entrada',
+  asyncHandler(async (_req, res) => {
+    res.json(await listarCaixaEntrada());
   }),
 );
 
