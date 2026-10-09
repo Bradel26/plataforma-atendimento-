@@ -33,6 +33,7 @@ import {
 } from './conversations.serializer';
 import type { ListarConversasQuery, TransferirInput } from './conversations.schemas';
 import { filtroDaVisao } from './conversations.visao';
+import { reservarProtocolo } from './protocolo';
 
 export type Solicitante = { sub: string; perfil: Role; nome: string };
 
@@ -161,6 +162,7 @@ export async function listarMensagens(
     where: { conversaId: id, ...(apos('criadoEm', cursor) ?? {}) },
     orderBy: [{ criadoEm: 'desc' }, { id: 'desc' }],
     take: query.limite + 1,
+    include: { autorUsuario: { select: { nome: true } } },
   });
 
   const { itens, proximoCursor } = fatiar(registros, query.limite, (m) => m.criadoEm);
@@ -372,6 +374,9 @@ export async function iniciarConversa(solicitante: Solicitante, contatoId: strin
       atribuidoEm: destino.agenteId ? new Date() : null,
       canalConfigId: destino.canalConfigId,
       enderecoExterno,
+      origem: 'ATIVO',
+      protocolo: await reservarProtocolo(),
+      atendenteInicialId: destino.agenteId,
     },
   });
 
@@ -518,6 +523,7 @@ export async function enviarMensagem(
       idExterno: envio.idExterno,
       interno,
     },
+    include: { autorUsuario: { select: { nome: true } } },
   });
 
   await prisma.conversation.update({
@@ -582,6 +588,7 @@ export async function enviarArquivo(
       idExterno: envio.idExterno,
       interno,
     },
+    include: { autorUsuario: { select: { nome: true } } },
   });
 
   await prisma.conversation.update({

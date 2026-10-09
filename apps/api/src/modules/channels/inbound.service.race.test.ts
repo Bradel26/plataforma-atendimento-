@@ -45,6 +45,7 @@ vi.mock('../../lib/prisma', () => ({
   },
 }));
 
+vi.mock('../conversations/protocolo', () => ({ reservarProtocolo: vi.fn().mockResolvedValue('261009-00001') }));
 vi.mock('./channels.service', () => ({ configDoDestino: vi.fn() }));
 vi.mock('./chat-previews.service', () => ({ promoverPrevia: vi.fn() }));
 vi.mock('./media.service', () => ({ baixarAnexo: vi.fn().mockResolvedValue({ url: null, motivo: null }) }));

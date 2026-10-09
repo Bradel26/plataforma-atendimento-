@@ -29,12 +29,14 @@ vi.mock('../../../lib/prisma', () => ({
     contact: { findFirst: db.contactFindFirst, create: db.contactCreate, findUniqueOrThrow: vi.fn() },
     conversation: { findFirst: db.conversationFindFirst, create: db.conversationCreate, update: db.conversationUpdate },
     queue: { findFirst: db.queueFindFirst },
+    user: { findUnique: vi.fn().mockResolvedValue({ nome: 'Dono' }) },
     channelConfig: { findFirst: db.channelConfigFindFirst, update: db.channelConfigUpdate },
   },
   prismaSemIsolamento: { channelConfig: { findFirst: vi.fn() } },
 }));
 
 const { configDoDestino } = vi.hoisted(() => ({ configDoDestino: vi.fn() }));
+vi.mock('../../conversations/protocolo', () => ({ reservarProtocolo: vi.fn().mockResolvedValue('261009-00001') }));
 vi.mock('../channels.service', () => ({ configDoDestino }));
 vi.mock('../chat-previews.service', () => ({ promoverPrevia: vi.fn() }));
 vi.mock('../media.service', () => ({ baixarAnexo: vi.fn().mockResolvedValue({ url: null }) }));

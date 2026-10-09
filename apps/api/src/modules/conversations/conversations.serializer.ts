@@ -1,13 +1,16 @@
-import type { Prisma } from '@prisma/client';
+import type { Message, Prisma } from '@prisma/client';
 import { urlAssinada } from '../../lib/storage';
 import { codificarCursor } from '../../lib/paginacao';
+
+const autorDaMensagem = { autorUsuario: { select: { nome: true } } } satisfies Prisma.MessageInclude;
 
 export const inclusaoResumo = {
   contato: true,
   fila: { select: { id: true, nome: true } },
   agente: { select: { id: true, nome: true } },
-  canalConfig: { select: { id: true, donoId: true, iaAtiva: true } },
-  mensagens: { orderBy: { criadoEm: 'desc' }, take: 1 },
+  atendenteInicial: { select: { id: true, nome: true } },
+  canalConfig: { select: { id: true, donoId: true, iaAtiva: true, nome: true } },
+  mensagens: { orderBy: { criadoEm: 'desc' }, take: 1, include: autorDaMensagem },
 } satisfies Prisma.ConversationInclude;
 
 /** Ultimas mensagens da conversa. O resto vem por `GET /conversas/:id/mensagens`. */
@@ -17,26 +20,38 @@ export const inclusaoDetalhe = {
   contato: true,
   fila: { select: { id: true, nome: true } },
   agente: { select: { id: true, nome: true } },
-  canalConfig: { select: { id: true, donoId: true, iaAtiva: true } },
+  atendenteInicial: { select: { id: true, nome: true } },
+  canalConfig: { select: { id: true, donoId: true, iaAtiva: true, nome: true } },
   // Busca as mais recentes (desc) e inverte na serializacao: um atendimento com
   // dois anos de historico nao pode chegar inteiro a cada abertura do painel.
-  mensagens: { orderBy: [{ criadoEm: 'desc' }, { id: 'desc' }], take: MENSAGENS_NO_DETALHE + 1 },
+  mensagens: {
+    orderBy: [{ criadoEm: 'desc' }, { id: 'desc' }],
+    take: MENSAGENS_NO_DETALHE + 1,
+    include: autorDaMensagem,
+  },
 } satisfies Prisma.ConversationInclude;
+
+export { autorDaMensagem };
 
 type ConversaResumo = Prisma.ConversationGetPayload<{ include: typeof inclusaoResumo }>;
 type ConversaDetalhe = Prisma.ConversationGetPayload<{ include: typeof inclusaoDetalhe }>;
-type MensagemDb = ConversaDetalhe['mensagens'][number];
 
-export function toMensagem(m: MensagemDb) {
+/** Mensagem como sai do banco; `autorUsuario` so vem quando a consulta incluiu. */
+export type MensagemSerializavel = Message & { autorUsuario?: { nome: string } | null };
+
+export function toMensagem(m: MensagemSerializavel) {
   return {
     id: m.id,
     conversaId: m.conversaId,
     autor: m.autor,
     autorId: m.autorId,
+    autorNome: m.autorUsuario?.nome ?? null,
     conteudo: m.conteudo,
     tipoAnexo: m.tipoAnexo,
     anexoUrl: m.anexoUrl ? urlAssinada(m.anexoUrl) : null,
     interno: m.interno,
+    evento: m.evento,
+    enviadaPorDispositivo: m.enviadaPorDispositivo,
     criadoEm: m.criadoEm,
   };
 }
@@ -58,6 +73,9 @@ export function toConversaResumo(c: ConversaResumo) {
     atribuidoEm: c.atribuidoEm,
     finalizadoEm: c.finalizadoEm,
     ultimaMensagemEm: c.ultimaMensagemEm,
+    protocolo: c.protocolo,
+    origem: c.origem,
+    atendenteInicial: c.atendenteInicial,
     contato: { id: c.contato.id, nome: c.contato.nome, email: c.contato.email, telefone: c.contato.telefone },
     fila: c.fila,
     agente: c.agente,
@@ -66,7 +84,7 @@ export function toConversaResumo(c: ConversaResumo) {
     iaAtiva: c.canalConfig?.iaAtiva ?? null,
     // De qual numero a conversa e — decide a aba (Minhas/Fila/Acompanhar).
     // Nulo = Numero da empresa sem linha registrada.
-    linha: c.canalConfig ? { id: c.canalConfig.id, donoId: c.canalConfig.donoId } : null,
+    linha: c.canalConfig ? { id: c.canalConfig.id, donoId: c.canalConfig.donoId, nome: c.canalConfig.nome } : null,
     ultimaMensagem: ultima ? toMensagem(ultima) : null,
   };
 }
@@ -89,6 +107,9 @@ export function toConversaDetalhe(c: ConversaDetalhe) {
     atribuidoEm: c.atribuidoEm,
     finalizadoEm: c.finalizadoEm,
     ultimaMensagemEm: c.ultimaMensagemEm,
+    protocolo: c.protocolo,
+    origem: c.origem,
+    atendenteInicial: c.atendenteInicial,
     contato: c.contato,
     fila: c.fila,
     agente: c.agente,
@@ -97,7 +118,7 @@ export function toConversaDetalhe(c: ConversaDetalhe) {
     iaAtiva: c.canalConfig?.iaAtiva ?? null,
     // De qual numero a conversa e — decide a aba (Minhas/Fila/Acompanhar).
     // Nulo = Numero da empresa sem linha registrada.
-    linha: c.canalConfig ? { id: c.canalConfig.id, donoId: c.canalConfig.donoId } : null,
+    linha: c.canalConfig ? { id: c.canalConfig.id, donoId: c.canalConfig.donoId, nome: c.canalConfig.nome } : null,
     /**
      * Ordem cronologica para a tela. O registro extra (take + 1) nao vai para o
      * cliente: ele so serve para dizer se ha historico anterior.

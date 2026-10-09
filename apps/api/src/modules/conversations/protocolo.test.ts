@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { comOrganizacao } from '../../lib/tenant';
+import { diaDoProtocolo, formatarProtocolo, reservarProtocolo } from './protocolo';
 
 const { queryRaw } = vi.hoisted(() => ({ queryRaw: vi.fn() }));
 vi.mock('../../lib/prisma', () => ({ prisma: { $queryRaw: queryRaw } }));
 
-const { diaDoProtocolo, formatarProtocolo, reservarProtocolo } = await import('./protocolo');
 
 describe('diaDoProtocolo', () => {
   it('usa o dia de Brasilia, nao o de UTC (23:30 de 08/10 em Brasilia = 02:30 UTC de 09/10)', () => {

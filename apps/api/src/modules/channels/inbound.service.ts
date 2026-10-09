@@ -9,6 +9,7 @@ import { notificarConversaAtualizada, notificarConversaNova, notificarMensagem }
 import { responderAutomaticamente } from '../bots/bots.service';
 import { entregarParaIa } from '../bots/ia.service';
 import { inclusaoDetalhe, toConversaDetalhe, toMensagem } from '../conversations/conversations.serializer';
+import { reservarProtocolo } from '../conversations/protocolo';
 import type { MensagemNormalizada } from './meta.types';
 
 type DestinoConversa = { canalConfigId: string | null; filaId: string | null; agenteId: string | null };
@@ -135,6 +136,9 @@ export async function registrarMensagemEntrante(dados: MensagemNormalizada) {
         atribuidoEm: destino.agenteId ? new Date() : null,
         canalConfigId: destino.canalConfigId,
         enderecoExterno: dados.enderecoExterno,
+        origem: 'RECEPTIVO',
+        protocolo: await reservarProtocolo(),
+        atendenteInicialId: destino.agenteId,
       },
     }));
 
@@ -156,6 +160,15 @@ export async function registrarMensagemEntrante(dados: MensagemNormalizada) {
 
   const mensagem = await criarMensagemOuDetectarCorrida(conversa.id, dados, anexo);
   if (mensagem === null) return { duplicada: true as const };
+
+  // Linha pessoal: a conversa ja nasce do dono, como o "Aceito por" automatico
+  // da PCM quando o roteamento manda direto ao vendedor.
+  if (nova && destino.agenteId) {
+    const dono = await prisma.user.findUnique({ where: { id: destino.agenteId }, select: { nome: true } });
+    await prisma.message.create({
+      data: { conversaId: conversa.id, autor: 'SISTEMA', evento: 'ACEITE', conteudo: `Aceito por: ${dono?.nome ?? 'responsável do número'}` },
+    });
+  }
 
   const atualizada = await prisma.conversation.update({
     where: { id: conversa.id },

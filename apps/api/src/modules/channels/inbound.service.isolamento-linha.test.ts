@@ -36,9 +36,11 @@ vi.mock('../../lib/prisma', () => ({
     contact: { findFirst: contactFindFirst, findUniqueOrThrow: vi.fn(), create: vi.fn() },
     conversation: { findFirst: conversationFindFirst, create: conversationCreate, update: conversationUpdate },
     queue: { findFirst: vi.fn() },
+    user: { findUnique: vi.fn().mockResolvedValue({ nome: 'Dono' }) },
   },
 }));
 
+vi.mock('../conversations/protocolo', () => ({ reservarProtocolo: vi.fn().mockResolvedValue('261009-00001') }));
 vi.mock('./channels.service', () => ({ configDoDestino }));
 vi.mock('./chat-previews.service', () => ({ promoverPrevia: vi.fn() }));
 vi.mock('./media.service', () => ({ baixarAnexo: vi.fn().mockResolvedValue({ url: null, motivo: null }) }));

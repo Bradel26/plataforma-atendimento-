@@ -118,6 +118,7 @@ const { criarPesquisa, entregarPesquisa } = vi.hoisted(() => ({
   criarPesquisa: vi.fn().mockResolvedValue(undefined),
   entregarPesquisa: vi.fn().mockResolvedValue({ entregue: true }),
 }));
+vi.mock('./protocolo', () => ({ reservarProtocolo: vi.fn().mockResolvedValue('261009-00001') }));
 vi.mock('../surveys/surveys.service', () => ({
   TIPO_CONVITE_PESQUISA: 'pesquisa:convite',
   criarPesquisa,
