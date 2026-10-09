@@ -392,7 +392,33 @@ async function configWhatsappDoSolicitante(solicitante: Solicitante) {
  * contato no WhatsApp, devolve ela em vez de criar outra — reabrir a ficha e
  * clicar de novo nao pode duplicar o atendimento.
  */
-export async function iniciarConversa(solicitante: Solicitante, contatoId: string): Promise<{ id: string }> {
+const ondeSaem = (solicitante: Solicitante) => ({
+  canal: 'WHATSAPP' as const,
+  ativo: true,
+  OR: [{ donoId: solicitante.sub }, { donoId: null }],
+});
+
+export async function listarLinhasDeSaida(solicitante: Solicitante) {
+  const linhas = await prisma.channelConfig.findMany({
+    where: ondeSaem(solicitante),
+    select: { id: true, nome: true, modo: true, donoId: true, ponteSessao: true, phoneNumberId: true },
+    orderBy: [{ donoId: 'asc' }, { id: 'asc' }],
+  });
+  return {
+    linhas: linhas.map((linha) => ({
+      id: linha.id,
+      nome: linha.nome ?? linha.phoneNumberId ?? linha.ponteSessao ?? 'Número da empresa',
+      modo: linha.modo,
+      minha: linha.donoId === solicitante.sub,
+    })),
+  };
+}
+
+export async function iniciarConversa(
+  solicitante: Solicitante,
+  contatoId: string,
+  canalConfigId?: string,
+): Promise<{ id: string }> {
   const contato = await prisma.contact.findFirst({
     where: apenasVisivel(contatoId, await filtroDe(politicaContatos)),
   });
@@ -412,11 +438,14 @@ export async function iniciarConversa(solicitante: Solicitante, contatoId: strin
    * 23/09/2026, achado critico #1). Duas linhas diferentes falando com o
    * mesmo contato SAO duas conversas diferentes, uma por numero.
    */
-  const config = await configWhatsappDoSolicitante(solicitante);
-  const canalConfigId = config?.id ?? null;
+  const config = canalConfigId
+    ? await prisma.channelConfig.findFirst({ where: { id: canalConfigId, ...ondeSaem(solicitante) } })
+    : await configWhatsappDoSolicitante(solicitante);
+  if (canalConfigId && !config) throw notFound('Linha não encontrada');
+  const resolvedCanalConfigId = config?.id ?? null;
 
   const existente = await prisma.conversation.findFirst({
-    where: { contatoId, canal: 'WHATSAPP', canalConfigId, status: { not: 'FINALIZADO' } },
+    where: { contatoId, canal: 'WHATSAPP', canalConfigId: resolvedCanalConfigId, status: { not: 'FINALIZADO' } },
     orderBy: { criadoEm: 'desc' },
   });
   if (existente) {

@@ -16,6 +16,7 @@ import {
   criarNumero,
   excluirNumero,
   listarCanais,
+  listarLinhasDesconectadas,
   minhaLinhaWhatsapp,
   obterConfig,
   obterConfigPorId,
@@ -140,6 +141,7 @@ const atualizarNumeroSchema = z
     ...camposDoCanal,
     nome: z.string().trim().min(1).max(60).nullable().optional(),
     donoId: z.string().uuid().nullable().optional(),
+    espelharCelular: z.boolean().optional(),
   })
   .refine((d) => Object.keys(d).length > 0, naoVazio);
 
@@ -270,6 +272,14 @@ channelsRoutes.get(
       // ponte — detalhe de instalacao que ninguem ali deveria preencher.
       whatsappConexaoGlobal: !whatsAppProvider.credenciaisPorLinha,
     });
+  }),
+);
+
+channelsRoutes.get(
+  '/linhas-desconectadas',
+  requireRole('ADMIN', 'SUPERVISOR'),
+  asyncHandler(async (_req, res) => {
+    res.json(await listarLinhasDesconectadas());
   }),
 );
 

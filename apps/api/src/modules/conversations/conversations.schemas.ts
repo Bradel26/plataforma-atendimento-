@@ -60,6 +60,7 @@ export const enviarMensagemSchema = z.object({
 /** Iniciar conversa a partir de um Contato do CRM (botao "Iniciar conversa" na ficha). */
 export const iniciarConversaSchema = z.object({
   contatoId: z.string().uuid(),
+  canalConfigId: z.string().uuid().optional(),
 });
 
 export const transferirSchema = z

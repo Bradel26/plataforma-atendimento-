@@ -14,6 +14,7 @@ import {
   listarAcompanhaveis,
   listarAtendimentosAnteriores,
   listarCaixaEntrada,
+  listarLinhasDeSaida,
   listarConversas,
   listarDestinosTransferencia,
   motivoSemTelefone,
@@ -878,6 +879,41 @@ describe('listarCaixaEntrada', () => {
     const r = await comOrganizacao('org-1', () => listarCaixaEntrada(), { id: 'user-1', perfil: 'COMERCIAL' });
 
     expect(r.grupos.map((g) => g.fila?.nome ?? null)).toEqual(['Comercial']);
+  });
+});
+
+describe('listarLinhasDeSaida e iniciarConversa com linha escolhida', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('linhas de saída são as minhas e as da empresa, ativas e WhatsApp', async () => {
+    channelConfigFindMany.mockResolvedValue([
+      { id: 'cfg-minha', nome: 'Kaua', modo: 'NAO_OFICIAL', donoId: 'user-1', ponteSessao: 's1', phoneNumberId: null },
+      { id: 'cfg-emp', nome: null, modo: 'NAO_OFICIAL', donoId: null, ponteSessao: 's0', phoneNumberId: null },
+    ]);
+
+    const r = await comOrganizacao('org-1', () => listarLinhasDeSaida(SOLICITANTE), { id: 'user-1', perfil: 'ADMIN' });
+
+    expect(channelConfigFindMany.mock.calls[0]?.[0]?.where).toEqual({
+      canal: 'WHATSAPP',
+      ativo: true,
+      OR: [{ donoId: 'user-1' }, { donoId: null }],
+    });
+    expect(r.linhas).toEqual([
+      { id: 'cfg-minha', nome: 'Kaua', modo: 'NAO_OFICIAL', minha: true },
+      { id: 'cfg-emp', nome: 's0', modo: 'NAO_OFICIAL', minha: false },
+    ]);
+  });
+
+  it('iniciar conversa por linha de outro vendedor responde 404', async () => {
+    contactFindFirst.mockResolvedValue({ id: 'contato-x', telefone: '5562992197010' });
+    channelConfigFindFirst.mockResolvedValue(null);
+
+    await expect(
+      comOrganizacao('org-1', () => iniciarConversa(SOLICITANTE, 'contato-x', 'cfg-de-outro'), {
+        id: 'user-1',
+        perfil: 'ADMIN',
+      }),
+    ).rejects.toMatchObject({ status: 404 });
   });
 });
 

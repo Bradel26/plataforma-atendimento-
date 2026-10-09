@@ -103,6 +103,7 @@ export async function listarCanais() {
     /// mostra o badge quando ha algo para mostrar.
     ponteStatus: c.ponteStatus,
     ponteStatusEm: c.ponteStatusEm,
+    espelharCelular: c.espelharCelular,
     /*
      * Pronto para operar, por modo.
      *
@@ -116,6 +117,22 @@ export async function listarCanais() {
         ? Boolean(c.ponteUrl && c.ponteToken && c.ponteSegredo)
         : Boolean(c.accessToken && c.appSecret && c.verifyToken),
   }));
+}
+
+export async function listarLinhasDesconectadas() {
+  const linhas = await prisma.channelConfig.findMany({
+    where: { canal: 'WHATSAPP', modo: 'NAO_OFICIAL', ativo: true, ponteStatus: 'DESCONECTADO' },
+    select: { id: true, nome: true, ponteSessao: true, ponteStatusEm: true, dono: { select: { id: true, nome: true } } },
+    orderBy: { ponteStatusEm: 'asc' },
+  });
+  return {
+    linhas: linhas.map((linha) => ({
+      id: linha.id,
+      nome: linha.nome ?? linha.ponteSessao ?? 'Número',
+      dono: linha.dono,
+      desde: linha.ponteStatusEm,
+    })),
+  };
 }
 
 type SalvarCanalInput = {
@@ -136,7 +153,11 @@ type SalvarCanalInput = {
 };
 
 /** Campos aceitos so nas linhas pessoais — a de sempre nao tem dono nem rotulo. */
-type SalvarNumeroInput = SalvarCanalInput & { nome?: string | null; donoId?: string | null };
+type SalvarNumeroInput = SalvarCanalInput & {
+  nome?: string | null;
+  donoId?: string | null;
+  espelharCelular?: boolean;
+};
 
 type CredenciaisPonte = { ponteUrl: string | null; ponteToken: string | null; ponteSegredo: string | null };
 

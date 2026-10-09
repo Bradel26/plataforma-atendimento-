@@ -22,6 +22,7 @@ import {
   buscarFotoDaConversa,
   contarPorVisao,
   listarCaixaEntrada,
+  listarLinhasDeSaida,
   definirTags,
   desarquivarConversa,
   enviarArquivo,
@@ -70,7 +71,7 @@ conversationsRoutes.post(
   '/',
   validateBody(iniciarConversaSchema),
   asyncHandler(async (req, res) => {
-    res.status(201).json({ conversa: await iniciarConversa(quem(req), req.body.contatoId) });
+    res.status(201).json({ conversa: await iniciarConversa(quem(req), req.body.contatoId, req.body.canalConfigId) });
   }),
 );
 
@@ -113,6 +114,13 @@ conversationsRoutes.get(
   '/caixa-entrada',
   asyncHandler(async (_req, res) => {
     res.json(await listarCaixaEntrada());
+  }),
+);
+
+conversationsRoutes.get(
+  '/linhas-de-saida',
+  asyncHandler(async (req, res) => {
+    res.json(await listarLinhasDeSaida(quem(req)));
   }),
 );
 
