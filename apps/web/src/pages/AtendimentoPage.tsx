@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Alerta, Badge, Button, Card, Input, Select } from '../components/ui';
+import { useToast } from '../components/ui/Toast';
+import { CaixaEntradaEquipes } from '../features/atendimento/CaixaEntradaEquipes';
 import { ListaConversas } from '../features/atendimento/ListaConversas';
+import { ModalTransferir } from '../features/atendimento/ModalTransferir';
 import { PainelChat } from '../features/atendimento/PainelChat';
 import { PainelContato } from '../features/atendimento/PainelContato';
 import { useConversas } from '../features/atendimento/useConversas';
+import { useCaixaEntrada } from '../features/atendimento/useCaixaEntrada';
 import { upsertPrevia } from '../features/atendimento/previas';
 import {
   LABEL_VISAO_INBOX,
@@ -145,6 +149,7 @@ type QrDaPonte = {
 
 export function AtendimentoPage() {
   const { usuario, temPerfil } = useAuth();
+  const mostrar = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const { ref: containerRef, faixa } = useFaixaDeLargura<HTMLDivElement>();
   const listaAjustavel = useLarguraAjustavel(
@@ -189,6 +194,8 @@ export function AtendimentoPage() {
    */
   const [versaoTags, setVersaoTags] = useState(0);
   const [aberta, setAberta] = useState<ConversaDetalhe | null>(null);
+  const [aceitandoId, setAceitandoId] = useState<string | null>(null);
+  const [transferindo, setTransferindo] = useState(false);
   const [erroAberta, setErroAberta] = useState<string | null>(null);
   const [previas, setPrevias] = useState<Previa[]>([]);
   const abertaIdRef = useRef<string | null>(null);
@@ -372,6 +379,7 @@ export function AtendimentoPage() {
     focarConversa,
     recarregarContadores,
   } = useConversas(visao, tags, usuario?.id ?? null, filtroAcompanhar);
+  const caixa = useCaixaEntrada();
 
   /**
    * Numero de cada aba, com o mesmo filtro da lista dela
@@ -419,6 +427,25 @@ export function AtendimentoPage() {
       }
     },
     [aplicarEvento, focarConversa],
+  );
+
+  const aceitar = useCallback(
+    async (id: string) => {
+      setAceitandoId(id);
+      try {
+        const { conversa } = await api.post<{ conversa: ConversaDetalhe }>(`/conversas/${id}/assumir`);
+        mostrar('sucesso', 'Conversa movida para a lista de chats.');
+        aplicarEvento(conversa);
+        setVisao(conversa.linha?.donoId === usuario?.id ? 'MINHAS' : 'ATRIBUIDAS');
+        await abrir(id);
+      } catch (e) {
+        mostrar('erro', e instanceof ApiError ? e.message : 'Não foi possível aceitar a conversa');
+        void caixa.recarregar();
+      } finally {
+        setAceitandoId(null);
+      }
+    },
+    [abrir, aplicarEvento, caixa.recarregar, mostrar, usuario?.id],
   );
 
   /**
@@ -535,6 +562,17 @@ export function AtendimentoPage() {
 
   return (
     <div ref={containerRef} className="flex h-[calc(100vh-8rem)] gap-5">
+      {mostrarLista && !emMobile && (
+        <section className="flex w-60 shrink-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <CaixaEntradaEquipes
+            grupos={caixa.grupos}
+            carregando={caixa.carregando}
+            erro={caixa.erro}
+            aceitandoId={aceitandoId}
+            onAceitar={(id) => void aceitar(id)}
+          />
+        </section>
+      )}
       {mostrarLista && (
         <section
           className={`flex ${emDesktop ? '' : classesLista} flex-col overflow-hidden rounded-xl border border-slate-200 bg-white`}
@@ -557,6 +595,18 @@ export function AtendimentoPage() {
           <div className="border-b border-slate-100 p-3">
             <Input placeholder="Buscar por contato ou mensagem" value={busca} onChange={(e) => setBusca(e.target.value)} />
           </div>
+
+          {emMobile && caixa.total > 0 && (
+            <div className="max-h-56 overflow-y-auto border-b border-slate-100">
+              <CaixaEntradaEquipes
+                grupos={caixa.grupos.filter((grupo) => grupo.conversas.length > 0)}
+                carregando={false}
+                erro={caixa.erro}
+                aceitandoId={aceitandoId}
+                onAceitar={(id) => void aceitar(id)}
+              />
+            </div>
+          )}
 
           <nav className="flex border-b border-slate-200 text-xs">
             {visoesDisponiveis(podeAcompanhar).map((v) => (
@@ -657,6 +707,7 @@ export function AtendimentoPage() {
             <PainelChat
               conversa={aberta}
               onMudou={aoMudar}
+              aoTransferir={() => setTransferindo(true)}
               aoVoltarParaLista={emMobile ? () => setPassoMobile('lista') : undefined}
               aoAlternarFicha={faixa === 'desktop' ? undefined : alternarFicha}
               fichaAberta={fichaVisivel}
@@ -762,6 +813,15 @@ export function AtendimentoPage() {
             </div>
           )}
         </section>
+      )}
+
+      {aberta && (
+        <ModalTransferir
+          conversa={aberta}
+          aberto={transferindo}
+          aoFechar={() => setTransferindo(false)}
+          aoTransferir={aoMudar}
+        />
       )}
 
       {/*
