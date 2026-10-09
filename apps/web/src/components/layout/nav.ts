@@ -86,7 +86,7 @@ export function subrotaDaRota(pathname: string): { item: NavItem; sub: SubRota }
 /** Menu lateral fixo — ordem definida no SCOPE.md (Fase 0). */
 export const NAV: NavItem[] = [
   { rota: '/dashboards', label: 'Dashboards', icone: IconDashboards, perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR'], fase: 3 },
-  { rota: '/atendimento', label: 'Atendimento', icone: IconAtendimento, perfis: ['ADMIN', 'SUPERVISOR', 'AGENTE', 'COMERCIAL'], fase: 1 },
+  { rota: '/atendimento', label: 'Atendimento', icone: IconAtendimento, perfis: ['ADMIN', 'SUPERVISOR', 'AGENTE', 'COMERCIAL', 'SUPORTE'], fase: 1 },
   // Esteira de Credenciamento logo depois do Atendimento: e a ordem de trabalho
   // da operacao TIM/Starlink (SUGESTOES.docx). So aparece para a organizacao
   // que tem funil ESTEIRA — ver o filtro em Sidebar.tsx.

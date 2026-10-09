@@ -25,9 +25,10 @@ import {
   enviarMensagem,
   finalizarConversa,
   iniciarConversa,
-  listarConversas,
-  listarMensagens,
   listarAcompanhaveis,
+  listarConversas,
+  listarDestinosTransferencia,
+  listarMensagens,
   listarPrevias,
   marcarComoLida,
   obterConversa,
@@ -100,6 +101,14 @@ conversationsRoutes.get(
   '/acompanhaveis',
   asyncHandler(async (_req, res) => {
     res.json(await listarAcompanhaveis());
+  }),
+);
+
+/** Pessoas e equipes para o modal "Transferir conversa" — antes de `/:id`. */
+conversationsRoutes.get(
+  '/destinos-transferencia',
+  asyncHandler(async (_req, res) => {
+    res.json(await listarDestinosTransferencia());
   }),
 );
 

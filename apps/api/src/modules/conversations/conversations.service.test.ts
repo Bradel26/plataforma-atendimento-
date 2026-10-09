@@ -13,6 +13,7 @@ import {
   iniciarConversa,
   listarAcompanhaveis,
   listarConversas,
+  listarDestinosTransferencia,
   motivoSemTelefone,
   type Solicitante,
 } from './conversations.service';
@@ -83,6 +84,8 @@ const {
   messageCreate,
   messageFindUnique,
   messageUpdate,
+  userFindMany,
+  queueFindMany,
 } = vi.hoisted(() => ({
   contactFindFirst: vi.fn(),
   conversationFindFirst: vi.fn(),
@@ -100,6 +103,8 @@ const {
   messageCreate: vi.fn(),
   messageFindUnique: vi.fn(),
   messageUpdate: vi.fn(),
+  userFindMany: vi.fn(),
+  queueFindMany: vi.fn(),
 }));
 
 vi.mock('../../lib/prisma', () => ({
@@ -117,6 +122,8 @@ vi.mock('../../lib/prisma', () => ({
     channelConfig: { findFirst: channelConfigFindFirst, findMany: channelConfigFindMany },
     queueAgent: { findMany: queueAgentFindMany },
     message: { create: messageCreate, findUnique: messageFindUnique, update: messageUpdate },
+    user: { findMany: userFindMany },
+    queue: { findMany: queueFindMany },
   },
 }));
 
@@ -774,5 +781,24 @@ describe('assumirConversa — aceite atomico (primeiro que pega)', () => {
 
     expect(conversationUpdateMany).not.toHaveBeenCalled();
     expect(messageCreate).not.toHaveBeenCalled();
+  });
+});
+
+describe('listarDestinosTransferencia', () => {
+  it('lista usuarios ativos de todos os perfis que atendem (nao so AGENTE) e as filas ativas', async () => {
+    userFindMany.mockResolvedValue([{ id: 'u-2', nome: 'Viviane', perfil: 'SUPORTE', status: 'DISPONIVEL' }]);
+    queueFindMany.mockResolvedValue([{ id: 'f-1', nome: 'Suporte' }]);
+
+    const r = await comOrganizacao('org-1', () => listarDestinosTransferencia(), { id: 'user-1', perfil: 'COMERCIAL' });
+
+    expect(userFindMany.mock.calls[0]?.[0]?.where).toEqual({
+      ativo: true,
+      perfil: { in: ['SUPERVISOR', 'GESTOR', 'COMERCIAL', 'SUPORTE', 'AGENTE'] },
+    });
+    expect(queueFindMany.mock.calls[0]?.[0]?.where).toEqual({ ativa: true });
+    expect(r).toEqual({
+      usuarios: [{ id: 'u-2', nome: 'Viviane', perfil: 'SUPORTE', status: 'DISPONIVEL' }],
+      filas: [{ id: 'f-1', nome: 'Suporte' }],
+    });
   });
 });

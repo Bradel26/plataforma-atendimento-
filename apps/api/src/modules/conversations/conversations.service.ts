@@ -784,3 +784,24 @@ async function publicar(
 
   return detalhe;
 }
+
+/** Perfis que recebem atendimento por transferencia. ADMIN fica de fora (regra de `transferirConversa`). */
+export const PERFIS_QUE_ATENDEM: Role[] = ['SUPERVISOR', 'GESTOR', 'COMERCIAL', 'SUPORTE', 'AGENTE'];
+
+/**
+ * Para onde qualquer atendente pode transferir: pessoas e equipes (filas).
+ *
+ * Antes a tela pedia `/usuarios?perfil=AGENTE`, rota so de ADMIN/SUPERVISOR e
+ * perfil que a operacao nao usa — em producao a lista vinha vazia.
+ */
+export async function listarDestinosTransferencia() {
+  const [usuarios, filas] = await Promise.all([
+    prisma.user.findMany({
+      where: { ativo: true, perfil: { in: PERFIS_QUE_ATENDEM } },
+      select: { id: true, nome: true, perfil: true, status: true },
+      orderBy: { nome: 'asc' },
+    }),
+    prisma.queue.findMany({ where: { ativa: true }, select: { id: true, nome: true }, orderBy: { nome: 'asc' } }),
+  ]);
+  return { usuarios, filas };
+}
