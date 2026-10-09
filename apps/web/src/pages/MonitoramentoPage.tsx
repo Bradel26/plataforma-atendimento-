@@ -5,6 +5,7 @@ import { ApiError, api, getAccessToken } from '../lib/api';
 import { EVENTOS, conectar } from '../lib/realtime';
 import { COR_STATUS_AGENTE, duracao } from '../lib/viz';
 import { LABEL_PERFIL, LABEL_STATUS, type AgenteMonitorado } from '../lib/types';
+import { PainelEquipes } from '../features/monitor/PainelEquipes';
 
 /** Painel do supervisor: quem esta online, em que status e com quanta carga. */
 export function MonitoramentoPage() {
@@ -46,6 +47,7 @@ export function MonitoramentoPage() {
 
   return (
     <div className="space-y-5">
+      <PainelEquipes />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile rotulo="Disponíveis" valor={porStatus('DISPONIVEL')} estado={COR_STATUS_AGENTE.DISPONIVEL} />
         <StatTile rotulo="Em atendimento" valor={porStatus('EM_ATENDIMENTO')} estado={COR_STATUS_AGENTE.EM_ATENDIMENTO} />
