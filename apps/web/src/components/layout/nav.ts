@@ -98,6 +98,7 @@ export const NAV: NavItem[] = [
     fase: 5,
   },
   { rota: '/monitoramento', label: 'Monitoramento', icone: IconMonitoramento, perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR'], fase: 3 },
+  { rota: '/auditoria', label: 'Auditoria', icone: IconMonitoramento, perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR'], fase: 3 },
   { rota: '/gestao', label: 'Área da Gestão', icone: IconGestao, perfis: ['ADMIN', 'SUPERVISOR'], fase: 3 },
   // GESTOR e COMERCIAL entram aqui pelo mesmo motivo que entravam na aba Leads
   // do CRM antes dela mudar de casa: leitura/trabalho do proprio funil.

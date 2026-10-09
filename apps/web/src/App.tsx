@@ -4,6 +4,7 @@ import { AppShell } from './components/layout/AppShell';
 import { NAV } from './components/layout/nav';
 import { useAuth } from './features/auth/AuthProvider';
 import { AtendimentoPage } from './pages/AtendimentoPage';
+import { AuditoriaPage } from './pages/AuditoriaPage';
 import { AvaliacaoPage } from './pages/AvaliacaoPage';
 import { CampanhasPage } from './pages/CampanhasPage';
 import { ChamadoTiPage } from './pages/ChamadoTiPage';
@@ -25,6 +26,7 @@ import { EsteiraPage } from './pages/esteira/EsteiraPage';
 const PAGINAS: Record<string, ComponentType> = {
   '/dashboards': DashboardsPage,
   '/atendimento': AtendimentoPage,
+  '/auditoria': AuditoriaPage,
   '/chamado-ti': ChamadoTiPage,
   '/esteira': EsteiraPage,
   '/monitoramento': MonitoramentoPage,
