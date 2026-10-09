@@ -4,19 +4,19 @@ import type { ConversaResumo } from '../../lib/types';
  * Abas do Atendimento, organizadas pelo NUMERO de WhatsApp (2026-10-05), nao
  * pelo responsavel:
  *  - Minhas: conversas de qualquer numero meu
- *  - Fila: o que esta atribuido a mim de outros numeros + espera das minhas filas
+ *  - Atribuídas: o que está atribuído a mim de outros números
  *  - Acompanhar: o que posso ver dos outros numeros (ADMIN e SUPERVISOR)
  *
  * Uma camada ACIMA de `ConversaStatus`: o status continua com os quatro valores
  * de sempre, e a aba so escolhe como consultar/filtrar.
  */
-export type VisaoInbox = 'MINHAS' | 'FILA' | 'ACOMPANHAR';
+export type VisaoInbox = 'MINHAS' | 'ATRIBUIDAS' | 'ACOMPANHAR';
 
-export const VISOES_INBOX: readonly VisaoInbox[] = ['MINHAS', 'FILA', 'ACOMPANHAR'];
+export const VISOES_INBOX: readonly VisaoInbox[] = ['MINHAS', 'ATRIBUIDAS', 'ACOMPANHAR'];
 
 export const LABEL_VISAO_INBOX: Record<VisaoInbox, string> = {
   MINHAS: 'Minhas',
-  FILA: 'Fila',
+  ATRIBUIDAS: 'Atribuídas',
   ACOMPANHAR: 'Acompanhar',
 };
 
@@ -64,10 +64,8 @@ export function pertenceAVisao(conversa: Campos, visao: VisaoInbox, ctx: Context
   switch (visao) {
     case 'MINHAS':
       return doMeuNumero;
-    case 'FILA':
-      if (doMeuNumero) return false;
-      if (eu !== null && conversa.agente?.id === eu) return true;
-      return conversa.status === 'EM_ESPERA' && conversa.fila !== null && ctx.minhasFilaIds.includes(conversa.fila.id);
+    case 'ATRIBUIDAS':
+      return !doMeuNumero && eu !== null && conversa.agente?.id === eu;
     case 'ACOMPANHAR': {
       if (doMeuNumero) return false;
       const { donoId, canalConfigId } = ctx.filtro;

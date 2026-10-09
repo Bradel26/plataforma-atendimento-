@@ -7,7 +7,7 @@ import { parametrosDaVisao, pertenceALista, type FiltroAcompanhar, type VisaoInb
 
 type MensagemEvento = { conversaId: string; mensagem: Mensagem };
 
-const CONTADORES_ZERADOS: Contadores = { MINHAS: 0, FILA: 0, ACOMPANHAR: null };
+const CONTADORES_ZERADOS: Contadores = { MINHAS: 0, ATRIBUIDAS: 0, ACOMPANHAR: null };
 
 const SEM_FILTRO: FiltroAcompanhar = { donoId: null, canalConfigId: null };
 

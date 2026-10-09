@@ -128,16 +128,21 @@ export const COR_STATUS: Record<AgentStatus, string> = {
 export type ConversaStatus = 'EM_ESPERA' | 'ATRIBUIDO' | 'EM_ATENDIMENTO' | 'FINALIZADO';
 
 export type AutorMensagem = 'CLIENTE' | 'AGENTE' | 'SISTEMA';
+export type EventoConversa = 'ACEITE' | 'TRANSFERENCIA' | 'ENCERRAMENTO';
+export type OrigemConversa = 'ATIVO' | 'RECEPTIVO';
 
 export type Mensagem = {
   id: string;
   conversaId: string;
   autor: AutorMensagem;
   autorId: string | null;
+  autorNome: string | null;
   conteudo: string;
   tipoAnexo: 'TEXTO' | 'IMAGEM' | 'AUDIO' | 'VIDEO' | 'ARQUIVO';
   anexoUrl: string | null;
   interno: boolean;
+  evento: EventoConversa | null;
+  enviadaPorDispositivo: boolean;
   criadoEm: string;
 };
 
@@ -193,13 +198,16 @@ type ConversaBase = {
   atribuidoEm: string | null;
   finalizadoEm: string | null;
   ultimaMensagemEm: string;
+  protocolo: string | null;
+  origem: OrigemConversa;
+  atendenteInicial: { id: string; nome: string } | null;
   contato: Contato;
   fila: { id: string; nome: string } | null;
   agente: { id: string; nome: string } | null;
   /** Estado de IA do canal desta conversa. Null = conversa sem canal (ex. Webchat). */
   iaAtiva: boolean | null;
   /** De qual numero a conversa e (2026-10-05). Nulo = Numero da empresa sem linha registrada. */
-  linha: { id: string; donoId: string | null } | null;
+  linha: { id: string; donoId: string | null; nome: string | null } | null;
 };
 
 export type ConversaResumo = ConversaBase & { ultimaMensagem: Mensagem | null };
@@ -221,7 +229,7 @@ export type Previa = {
 };
 
 /** Contadores por aba. ACOMPANHAR nulo = o perfil nao tem essa aba. */
-export type Contadores = { MINHAS: number; FILA: number; ACOMPANHAR: number | null };
+export type Contadores = { MINHAS: number; ATRIBUIDAS: number; ACOMPANHAR: number | null };
 
 /** Quem posso acompanhar na aba Acompanhar, com os numeros de cada um. */
 export type Acompanhaveis = {

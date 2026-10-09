@@ -164,7 +164,7 @@ export function AtendimentoPage() {
    * pelo numero de WhatsApp. Comeca em Fila: e onde ha conversa esperando
    * alguem, o mesmo motivo que fazia "Nao atribuidas" ser a padrao antes.
    */
-  const [visao, setVisao] = useState<VisaoInbox>('FILA');
+  const [visao, setVisao] = useState<VisaoInbox>('MINHAS');
   /** ADMIN e SUPERVISOR acompanham outros numeros; a API recusa os demais. */
   const podeAcompanhar = temPerfil('ADMIN', 'SUPERVISOR');
   const [filtroAcompanhar, setFiltroAcompanhar] = useState<FiltroAcompanhar>(SEM_FILTRO_ACOMPANHAR);
