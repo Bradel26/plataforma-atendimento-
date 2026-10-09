@@ -1,4 +1,4 @@
-import type { AttachmentType, Prisma, Role } from '@prisma/client';
+import type { AttachmentType, EventoConversa, Prisma, Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import {
   PERFIS_ACOMPANHADOS_PELO_SUPERVISOR,
@@ -11,7 +11,7 @@ import { apenasVisivel, contextoVisibilidade } from '../../lib/visibilidade';
 import { salvar } from '../../lib/storage';
 import { apos, decodificarCursor, fatiar } from '../../lib/paginacao';
 import { normalizarTags } from '../../lib/tags';
-import { AppError, badRequest, forbidden, notFound } from '../../lib/errors';
+import { AppError, badRequest, conflict, forbidden, notFound } from '../../lib/errors';
 import { notificarConversaAtualizada, notificarConversaNova, notificarMensagem } from '../../realtime/hub';
 import { enviarArquivoParaCanal, enviarParaCanal, exigeEnvioExterno } from '../channels/outbound.service';
 import { obterConfig, obterConfigPorId } from '../channels/channels.service';
@@ -475,22 +475,40 @@ export const arquivarConversa = (solicitante: Solicitante, id: string) => defini
 export const desarquivarConversa = (solicitante: Solicitante, id: string) => definirArquivada(id, false);
 
 /** Registra evento do sistema no historico (atribuicao, transferencia, encerramento). */
-async function registrarEventoSistema(conversaId: string, texto: string) {
-  return prisma.message.create({ data: { conversaId, autor: 'SISTEMA', conteudo: texto } });
+async function registrarEventoSistema(conversaId: string, texto: string, evento?: EventoConversa) {
+  return prisma.message.create({
+    data: { conversaId, autor: 'SISTEMA', conteudo: texto, ...(evento ? { evento } : {}) },
+  });
 }
 
+/** Grava o primeiro atendente uma vez so; transferencias depois nao mudam. */
+async function marcarAtendenteInicial(conversaId: string, usuarioId: string) {
+  await prisma.conversation.updateMany({
+    where: { id: conversaId, atendenteInicialId: null },
+    data: { atendenteInicialId: usuarioId },
+  });
+}
+
+/**
+ * Aceite da caixa de entrada: o primeiro que pega leva (PCM, 31:10).
+ *
+ * A condicao vai NO update (`agenteId` nulo ou eu), nao numa leitura antes: com
+ * dois cliques simultaneos as duas leituras viam a conversa livre e o segundo
+ * update sobrescrevia o primeiro.
+ */
 export async function assumirConversa(solicitante: Solicitante, id: string) {
   const conversa = await carregarOuFalhar(id);
   if (conversa.status === 'FINALIZADO') throw badRequest('Conversa já finalizada');
-  if (conversa.agenteId && conversa.agenteId !== solicitante.sub) {
-    throw badRequest('Conversa já atribuída a outro agente');
-  }
+  if (conversa.agenteId === solicitante.sub) return toConversaDetalhe(conversa);
 
-  await prisma.conversation.update({
-    where: { id },
+  const { count } = await prisma.conversation.updateMany({
+    where: { id, status: { not: 'FINALIZADO' }, OR: [{ agenteId: null }, { agenteId: solicitante.sub }] },
     data: { agenteId: solicitante.sub, status: 'ATRIBUIDO', atribuidoEm: new Date() },
   });
-  await registrarEventoSistema(id, `${solicitante.nome} assumiu o atendimento.`);
+  if (count === 0) throw conflict('Outro atendente já assumiu esta conversa');
+
+  await marcarAtendenteInicial(id, solicitante.sub);
+  await registrarEventoSistema(id, `Aceito por: ${solicitante.nome}`, 'ACEITE');
 
   return publicar(id, { agenteAnteriorId: conversa.agenteId, filaAnteriorId: conversa.filaId });
 }
@@ -530,6 +548,7 @@ export async function enviarMensagem(
     where: { id },
     data: { ...assumir, status: 'EM_ATENDIMENTO', ultimaMensagemEm: mensagem.criadoEm },
   });
+  if (!conversa.agenteId) await marcarAtendenteInicial(id, solicitante.sub);
 
   const atualizada = await publicar(id, { filaAnteriorId: conversa.filaId });
   notificarMensagem(
@@ -595,6 +614,7 @@ export async function enviarArquivo(
     where: { id },
     data: { ...assumir, status: 'EM_ATENDIMENTO', ultimaMensagemEm: mensagem.criadoEm },
   });
+  if (!conversa.agenteId) await marcarAtendenteInicial(id, solicitante.sub);
 
   const atualizada = await publicar(id, { filaAnteriorId: conversa.filaId });
   notificarMensagem(
@@ -636,7 +656,8 @@ export async function transferirConversa(solicitante: Solicitante, id: string, i
       where: { id },
       data: { agenteId: destino.id, status: 'ATRIBUIDO', atribuidoEm: new Date() },
     });
-    await registrarEventoSistema(id, `${solicitante.nome} transferiu o atendimento para ${destino.nome}.${sufixo}`);
+    await registrarEventoSistema(id, `${solicitante.nome} transferiu o atendimento para ${destino.nome}.${sufixo}`, 'TRANSFERENCIA');
+    await marcarAtendenteInicial(id, destino.id);
   } else {
     const fila = await prisma.queue.findUnique({ where: { id: input.filaId! } });
     if (!fila) throw notFound('Fila de destino não encontrada');
@@ -646,7 +667,7 @@ export async function transferirConversa(solicitante: Solicitante, id: string, i
       where: { id },
       data: { filaId: fila.id, agenteId: null, status: 'EM_ESPERA', atribuidoEm: null },
     });
-    await registrarEventoSistema(id, `${solicitante.nome} devolveu o atendimento para a fila ${fila.nome}.${sufixo}`);
+    await registrarEventoSistema(id, `${solicitante.nome} transferiu o atendimento para a equipe ${fila.nome}.${sufixo}`, 'TRANSFERENCIA');
   }
 
   return publicar(id, { agenteAnteriorId: conversa.agenteId, filaAnteriorId: conversa.filaId });
@@ -660,7 +681,7 @@ export async function finalizarConversa(solicitante: Solicitante, id: string) {
     where: { id },
     data: { status: 'FINALIZADO', finalizadoEm: new Date() },
   });
-  await registrarEventoSistema(id, `${solicitante.nome} finalizou o atendimento.`);
+  await registrarEventoSistema(id, `${solicitante.nome} encerrou o atendimento.`, 'ENCERRAMENTO');
   // Pesquisa de satisfacao pos-atendimento (Fase 3): cria e entrega o link ao
   // cliente. entregarPesquisa nao lanca — finalizar o atendimento nao pode
   // falhar porque o canal recusou o convite.

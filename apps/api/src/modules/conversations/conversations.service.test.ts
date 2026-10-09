@@ -4,6 +4,7 @@ import { comOrganizacao } from '../../lib/tenant';
 import {
   agruparPorDono,
   arquivarConversa,
+  assumirConversa,
   contarPorVisao,
   desarquivarConversa,
   enviarMensagem,
@@ -72,6 +73,7 @@ const {
   conversationFindMany,
   conversationCreate,
   conversationUpdate,
+  conversationUpdateMany,
   conversationGroupBy,
   conversationCount,
   channelConfigFindFirst,
@@ -84,6 +86,7 @@ const {
   conversationFindMany: vi.fn(),
   conversationCreate: vi.fn(),
   conversationUpdate: vi.fn(),
+  conversationUpdateMany: vi.fn().mockResolvedValue({ count: 1 }),
   conversationGroupBy: vi.fn(),
   conversationCount: vi.fn().mockResolvedValue(0),
   channelConfigFindFirst: vi.fn(),
@@ -102,6 +105,7 @@ vi.mock('../../lib/prisma', () => ({
       findMany: conversationFindMany,
       create: conversationCreate,
       update: conversationUpdate,
+      updateMany: conversationUpdateMany,
       groupBy: conversationGroupBy,
       count: conversationCount,
     },
@@ -695,5 +699,44 @@ describe('enviarMensagem — nota interna', () => {
     // Mensagem normal continua indo para a sala da conversa, como sempre.
     const destinos = notificarMensagem.mock.calls[0]?.[1];
     expect(destinos).toMatchObject({ incluirSalaDaConversa: true });
+  });
+});
+
+describe('assumirConversa — aceite atomico (primeiro que pega)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const comoAgente = <T>(fn: () => Promise<T>) =>
+    comOrganizacao('org-1', fn, { id: 'user-1', perfil: 'ADMIN' });
+
+  it('perde a corrida: updateMany sem linha afetada vira 409 e nao grava evento', async () => {
+    conversationFindFirst.mockResolvedValueOnce({ id: 'c-1', status: 'EM_ESPERA', agenteId: null, atendenteInicialId: null, filaId: 'f-1' });
+    conversationUpdateMany.mockResolvedValueOnce({ count: 0 });
+
+    await expect(comoAgente(() => assumirConversa(SOLICITANTE, 'c-1'))).rejects.toMatchObject({ status: 409 });
+    expect(messageCreate).not.toHaveBeenCalled();
+  });
+
+  it('vence: condiciona o update a agenteId nulo e grava o evento ACEITE', async () => {
+    conversationFindFirst
+      .mockResolvedValueOnce({ id: 'c-1', status: 'EM_ESPERA', agenteId: null, atendenteInicialId: null, filaId: 'f-1' })
+      .mockResolvedValueOnce({ id: 'c-1', fila: { id: 'f-1' }, agente: { id: 'user-1' } });
+    conversationUpdateMany.mockResolvedValue({ count: 1 });
+
+    await comoAgente(() => assumirConversa(SOLICITANTE, 'c-1'));
+
+    const where = conversationUpdateMany.mock.calls[0]?.[0]?.where;
+    expect(where).toMatchObject({ id: 'c-1', OR: [{ agenteId: null }, { agenteId: 'user-1' }] });
+    expect(messageCreate).toHaveBeenCalledWith({
+      data: { conversaId: 'c-1', autor: 'SISTEMA', conteudo: 'Aceito por: Admin Teste', evento: 'ACEITE' },
+    });
+  });
+
+  it('conversa ja e do solicitante: nao escreve nada', async () => {
+    conversationFindFirst.mockResolvedValueOnce({ id: 'c-1', status: 'ATRIBUIDO', agenteId: 'user-1', atendenteInicialId: 'user-1', filaId: null });
+
+    await comoAgente(() => assumirConversa(SOLICITANTE, 'c-1'));
+
+    expect(conversationUpdateMany).not.toHaveBeenCalled();
+    expect(messageCreate).not.toHaveBeenCalled();
   });
 });
