@@ -5,6 +5,7 @@ import { useToast } from '../components/ui/Toast';
 import { CaixaEntradaEquipes } from '../features/atendimento/CaixaEntradaEquipes';
 import { ListaConversas } from '../features/atendimento/ListaConversas';
 import { ModalTransferir } from '../features/atendimento/ModalTransferir';
+import { ModalIniciarConversa } from '../features/atendimento/ModalIniciarConversa';
 import { PainelChat } from '../features/atendimento/PainelChat';
 import { PainelContato } from '../features/atendimento/PainelContato';
 import { useConversas } from '../features/atendimento/useConversas';
@@ -196,6 +197,7 @@ export function AtendimentoPage() {
   const [aberta, setAberta] = useState<ConversaDetalhe | null>(null);
   const [aceitandoId, setAceitandoId] = useState<string | null>(null);
   const [transferindo, setTransferindo] = useState(false);
+  const [iniciando, setIniciando] = useState(false);
   const [erroAberta, setErroAberta] = useState<string | null>(null);
   const [previas, setPrevias] = useState<Previa[]>([]);
   const abertaIdRef = useRef<string | null>(null);
@@ -592,8 +594,11 @@ export function AtendimentoPage() {
           )}
           {(!emDesktop || !listaAjustavel.recolhida) && (
           <>
-          <div className="border-b border-slate-100 p-3">
+          <div className="flex items-center gap-2 border-b border-slate-100 p-3">
             <Input placeholder="Buscar por contato ou mensagem" value={busca} onChange={(e) => setBusca(e.target.value)} />
+            <Button tamanho="sm" variante="neutro" title="Iniciar nova conversa" aria-label="Iniciar nova conversa" onClick={() => setIniciando(true)}>
+              +
+            </Button>
           </div>
 
           {emMobile && caixa.total > 0 && (
@@ -823,6 +828,7 @@ export function AtendimentoPage() {
           aoTransferir={aoMudar}
         />
       )}
+      <ModalIniciarConversa aberto={iniciando} aoFechar={() => setIniciando(false)} aoIniciar={(id) => void abrir(id)} />
 
       {/*
         Quem e essa pessoa, sem sair da conversa.
