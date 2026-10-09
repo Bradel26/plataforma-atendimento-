@@ -987,3 +987,19 @@ Ainda em aberto: confirmar que **não** vamos replicar Perfis configuráveis (F1
 5. **Notificações:** Telegram (sem dependência) já basta? Para e-mail é preciso um SMTP e a dependência `nodemailer`.
 6. **Caixa de entrada:** transformar a aba "Fila" em acordeões por equipe (recomendado) ou criar a coluna "Caixa de entrada" separada como na PCM.
 7. Confirmar que **não** vamos replicar Perfis configuráveis (F19), Template oficial (F12) e campos pessoais de contato (CPF, nome da mãe; F16).
+
+## 11. Entregue nas Fases 2 + 3
+
+Implementado nas Tasks 1–20 do plano `docs/superpowers/plans/2026-10-09-atendimento-estilo-pcm.md`:
+
+- Espelhamento de mensagens enviadas pelo celular, configurável por linha; protocolo sequencial; aceite atômico; histórico de atendimentos anteriores.
+- Transferência para usuários de todos os perfis que atendem e para equipes.
+- Caixa de entrada por equipe em coluna separada, aba Atribuídas, e modal para iniciar conversa escolhendo a linha.
+- Auditoria com filtros, paginação e visualizador somente leitura; monitoramento por equipe.
+- Aviso interno de WhatsApp desconectado para ADMIN/SUPERVISOR.
+
+Validação automatizada desta entrega: `npm test` (111 arquivos, 1.193 testes), `npm run typecheck`, `npm run build` e `npm run build:ponte` concluídos sem erros. O build web ainda exibe o aviso existente de chunk JavaScript acima de 500 kB.
+
+A verificação manual com WhatsApp/Baileys não foi executada: o plano exige banco isolado e ambiente de ponte de teste, que não foram preparados nesta sessão. Antes de produção, validar os roteiros da Task 21 nesse ambiente.
+
+Ficaram fora desta entrega: construtor visual de fluxos (Fase 4), Template oficial, campos pessoais como CPF/nome da mãe, suporte ao espelhamento em WAHA/GOWA/WPPConnect, emoji e gravação de áudio. O significado definido pela Bradel para `caixaEntrada` no Monitor é a soma das conversas em espera nas equipes selecionadas de que a pessoa participa. O filtro Usuário da Auditoria corresponde ao atendente inicial **ou** ao responsável atual.
