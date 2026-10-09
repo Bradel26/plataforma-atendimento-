@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { asyncHandler } from '../../http/async-handler';
 import { requireAuth, requireRole } from '../../http/middleware/auth';
 import { validateQuery } from '../../http/middleware/validate';
-import { assuntos, indicadores, monitoramentoAgentes } from './metrics.service';
+import { assuntos, indicadores, monitorEquipes, monitoramentoAgentes } from './metrics.service';
 
 export const metricsRoutes = Router();
 
@@ -52,5 +52,23 @@ metricsRoutes.get(
   requireRole('ADMIN', 'SUPERVISOR', 'GESTOR'),
   asyncHandler(async (_req, res) => {
     res.json({ agentes: await monitoramentoAgentes() });
+  }),
+);
+
+const equipesSchema = z.object({
+  filaId: z
+    .union([z.string().uuid(), z.array(z.string().uuid())])
+    .optional()
+    .transform((v) => (v === undefined ? [] : Array.isArray(v) ? v : [v])),
+});
+
+/** Monitor de equipes: presença, fila de espera e carga por atendente. */
+metricsRoutes.get(
+  '/equipes',
+  requireRole('ADMIN', 'SUPERVISOR', 'GESTOR'),
+  validateQuery(equipesSchema),
+  asyncHandler(async (_req, res) => {
+    const { filaId } = res.locals.query as z.infer<typeof equipesSchema>;
+    res.json({ equipes: await monitorEquipes(filaId) });
   }),
 );

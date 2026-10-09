@@ -1,3 +1,4 @@
+import { AgentStatus, ConversationStatus } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { indicadoresVoz } from '../voice/voice.service';
 import { organizacaoAtual } from '../../lib/tenant';
@@ -151,6 +152,83 @@ export async function assuntos(periodo: Periodo, limite = 20) {
   });
 
   return agruparAssuntos(conversas, limite);
+}
+
+type FilaComMembros = {
+  id: string;
+  nome: string;
+  agentes: Array<{ usuario: { id: string; nome: string; status: AgentStatus; ativo: boolean } }>;
+};
+type ContagemFila = { filaId: string | null; status: ConversationStatus; _count: { _all: number } };
+type ContagemAgente = { agenteId: string | null; _count: { _all: number } };
+
+/** Agrupa carga, espera e presença por equipe. */
+export function montarEquipes(filas: FilaComMembros[], contagens: ContagemFila[], chatsPorAgente: ContagemAgente[]) {
+  const aguardandoDaFila = (id: string) =>
+    contagens.filter((c) => c.filaId === id && c.status === 'EM_ESPERA').reduce((soma, c) => soma + c._count._all, 0);
+  const atendimentoDaFila = (id: string) =>
+    contagens
+      .filter((c) => c.filaId === id && (c.status === 'ATRIBUIDO' || c.status === 'EM_ATENDIMENTO'))
+      .reduce((soma, c) => soma + c._count._all, 0);
+  const chats = new Map(chatsPorAgente.map((c) => [c.agenteId, c._count._all]));
+  const filasDoUsuario = new Map<string, string[]>();
+  for (const fila of filas) {
+    for (const { usuario } of fila.agentes) {
+      filasDoUsuario.set(usuario.id, [...(filasDoUsuario.get(usuario.id) ?? []), fila.id]);
+    }
+  }
+
+  return filas.map((fila) => {
+    const membros = fila.agentes.map((a) => a.usuario).filter((usuario) => usuario.ativo);
+    const aguardando = aguardandoDaFila(fila.id);
+    const emAtendimento = atendimentoDaFila(fila.id);
+    return {
+      id: fila.id,
+      nome: fila.nome,
+      usuariosOnline: membros.filter((usuario) => usuario.status !== 'OFFLINE').length,
+      aguardando,
+      emAtendimento,
+      total: aguardando + emAtendimento,
+      usuarios: membros
+        .map((usuario) => ({
+          id: usuario.id,
+          nome: usuario.nome,
+          status: usuario.status,
+          caixaEntrada: (filasDoUsuario.get(usuario.id) ?? []).reduce((soma, id) => soma + aguardandoDaFila(id), 0),
+          chats: chats.get(usuario.id) ?? 0,
+        }))
+        .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')),
+    };
+  });
+}
+
+export async function monitorEquipes(filaIds: string[]) {
+  const filas = await prisma.queue.findMany({
+    where: { ativa: true, ...(filaIds.length ? { id: { in: filaIds } } : {}) },
+    select: {
+      id: true,
+      nome: true,
+      agentes: { select: { usuario: { select: { id: true, nome: true, status: true, ativo: true } } } },
+    },
+    orderBy: { nome: 'asc' },
+  });
+  const ids = filas.map((fila) => fila.id);
+  const usuarioIds = [...new Set(filas.flatMap((fila) => fila.agentes.map((a) => a.usuario.id)))];
+
+  const [contagens, chatsPorAgente] = await Promise.all([
+    prisma.conversation.groupBy({
+      by: ['filaId', 'status'],
+      where: { filaId: { in: ids }, status: { not: 'FINALIZADO' }, arquivada: false },
+      _count: { _all: true },
+    }),
+    prisma.conversation.groupBy({
+      by: ['agenteId'],
+      where: { agenteId: { in: usuarioIds }, status: { in: ['ATRIBUIDO', 'EM_ATENDIMENTO'] }, arquivada: false },
+      _count: { _all: true },
+    }),
+  ]);
+
+  return montarEquipes(filas, contagens, chatsPorAgente);
 }
 
 /** O que o agrupamento precisa saber de uma conversa. */
