@@ -561,12 +561,14 @@ describe('abas por numero (2026-10-05)', () => {
     ).rejects.toMatchObject({ status: 400 });
   });
 
-  it('contadores: Atribuidas conta as que estao comigo; Comercial nao tem Acompanhar', async () => {
-    const r = await comoPerfil('COMERCIAL', () => contarPorVisao());
-    expect(r.contadores.ACOMPANHAR).toBeNull();
+  it('contadores: Atribuidas aplica o filtro da aba sem depender da politica do perfil', async () => {
+    // ADMIN tem politica ampla; assim o agenteId e a exclusao dos numeros
+    // proprios abaixo so podem vir do filtro da aba ATRIBUIDAS.
+    await comoPerfil('ADMIN', () => contarPorVisao());
     const wheres = conversationCount.mock.calls.map((c) => JSON.stringify(c[0].where));
-    expect(wheres).toHaveLength(2);
+    expect(wheres).toHaveLength(3);
     expect(wheres[1]).toContain('"agenteId":"user-1"');
+    expect(wheres[1]).toContain('"donoId":{"not":"user-1"}');
   });
 
   it('acompanhaveis: Comercial recebe 403', async () => {
