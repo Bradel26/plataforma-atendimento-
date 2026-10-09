@@ -3,6 +3,7 @@ import { SkeletonBloco } from '../../components/ui/Skeleton';
 import { EtiquetasCompactas } from '../../pages/crm/Etiquetas';
 import type { ConversaResumo, Previa } from '../../lib/types';
 import { AvatarConversa } from './AvatarConversa';
+import { textoDaPrevia } from './previaTexto';
 
 /** Silhueta de um cartao de conversa: avatar, nome+hora, previa. */
 function SkeletonConversa() {
@@ -29,11 +30,14 @@ function horaCurta(iso: string) {
     : data.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 }
 
-function previa(conversa: ConversaResumo) {
-  const m = conversa.ultimaMensagem;
-  if (!m) return 'Sem mensagens';
-  const prefixo = m.autor === 'AGENTE' ? 'Você: ' : m.autor === 'SISTEMA' ? '' : '';
-  return `${prefixo}${m.conteudo}`;
+function SetaOrigem({ origem }: { origem: ConversaResumo['origem'] }) {
+  const ativa = origem === 'ATIVO';
+  const rotulo = ativa ? 'Iniciada pela empresa' : 'Iniciada pelo cliente';
+  return (
+    <span className="shrink-0 text-xs text-slate-400" title={rotulo} aria-label={rotulo}>
+      {ativa ? '↗' : '↙'}
+    </span>
+  );
 }
 
 type Item = { tipo: 'conversa'; dado: ConversaResumo } | { tipo: 'previa'; dado: Previa };
@@ -140,15 +144,22 @@ export function ListaConversas({
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="truncate text-sm font-medium text-slate-800">{c.contato.nome}</span>
-                  <span className="shrink-0 text-xs text-slate-500">{horaCurta(c.ultimaMensagemEm)}</span>
+                  <span className="flex shrink-0 items-baseline gap-1.5">
+                    <SetaOrigem origem={c.origem} />
+                    <span className="text-xs text-slate-500">{horaCurta(c.ultimaMensagemEm)}</span>
+                  </span>
                 </div>
-                <p className="mt-0.5 truncate text-xs text-slate-500">{previa(c)}</p>
+                <p className="mt-0.5 truncate text-xs text-slate-500">{textoDaPrevia(c.ultimaMensagem)}</p>
                 <div className="mt-1.5 flex items-center gap-1.5">
-                  <Badge tom="neutro">{c.canal}</Badge>
+                  <Badge tom="neutro">{c.linha?.nome ?? c.canal}</Badge>
                   {c.iaAtiva !== null && (
                     <Badge tom={c.iaAtiva ? 'sucesso' : 'neutro'}>{c.iaAtiva ? 'IA ON' : 'IA OFF'}</Badge>
                   )}
-                  {c.fila && <Badge tom="neutro">{c.fila.nome}</Badge>}
+                  {c.fila && (
+                    <span title={`Equipe: ${c.fila.nome}`}>
+                      <Badge tom="neutro">{c.fila.nome}</Badge>
+                    </span>
+                  )}
                   {c.agente && <Badge tom="marca">{c.agente.nome}</Badge>}
                   {c.naoLidas > 0 && (
                     <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-semibold texto-sobre-cor-fixa">
