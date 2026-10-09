@@ -4,6 +4,7 @@ import { configDoDestino } from './channels.service';
 import { promoverPrevia } from './chat-previews.service';
 import { prisma } from '../../lib/prisma';
 import { ufDoTelefone } from '../../lib/ddd';
+import { colidiuNoIdExterno } from '../../lib/erros-prisma';
 import { redigirTexto } from '../../lib/redacao';
 import { notificarConversaAtualizada, notificarConversaNova, notificarMensagem } from '../../realtime/hub';
 import { responderAutomaticamente } from '../bots/bots.service';
@@ -204,6 +205,83 @@ export async function registrarMensagemEntrante(dados: MensagemNormalizada) {
 }
 
 /**
+ * Mensagem que o DONO do numero digitou no celular ou no WhatsApp Web
+ * ("Mensagem enviada por outro dispositivo", PCM 04:00).
+ *
+ * Diferente da entrante em quatro pontos, todos de proposito:
+ * - respeita `espelharCelular` da linha (decisao de 09/10/2026);
+ * - nao conta como nao lida — foi a propria equipe que escreveu;
+ * - nao aciona IA nem bot;
+ * - conversa nova nasce ATIVA (a empresa falou primeiro).
+ */
+export async function registrarMensagemPropria(dados: MensagemNormalizada) {
+  const jaExiste = await prisma.message.findUnique({ where: { idExterno: dados.idExterno } });
+  if (jaExiste) return { duplicada: true as const };
+
+  const config = await configDoDestino(dados.canal, dados.identificadorDestino);
+  if (config && config.espelharCelular === false) return { ignorada: true as const };
+
+  // Sem nome de exibicao: o pushName de mensagem propria e o do dono do numero.
+  const contato = await encontrarOuCriarContato({ ...dados, nomeExibicao: null });
+  const canalConfigId = config?.id ?? null;
+
+  const emAberto = await prisma.conversation.findFirst({
+    where: { contatoId: contato.id, canal: dados.canal, canalConfigId, status: { not: 'FINALIZADO' } },
+    orderBy: { ultimaMensagemEm: 'desc' },
+  });
+
+  const nova = !emAberto;
+  let conversa = emAberto;
+  if (!conversa) {
+    const destino = await destinoParaConfig(dados.canal, config);
+    conversa = await prisma.conversation.create({
+      data: {
+        canal: dados.canal,
+        status: destino.agenteId ? 'EM_ATENDIMENTO' : 'EM_ESPERA',
+        contatoId: contato.id,
+        filaId: destino.filaId,
+        agenteId: destino.agenteId,
+        atribuidoEm: destino.agenteId ? new Date() : null,
+        atendenteInicialId: destino.agenteId,
+        canalConfigId: destino.canalConfigId,
+        enderecoExterno: dados.enderecoExterno,
+        origem: 'ATIVO',
+        protocolo: await reservarProtocolo(),
+      },
+    });
+  }
+
+  const anexo = await baixarAnexo(dados.canal, dados);
+  if (anexo.motivo) {
+    console.warn(`[anexo] ${dados.canal} ${dados.idExterno}: ${redigirTexto(anexo.motivo)}`);
+  }
+
+  const mensagem = await criarMensagemOuDetectarCorrida(conversa.id, dados, anexo, {
+    autor: 'AGENTE',
+    enviadaPorDispositivo: true,
+  });
+  if (mensagem === null) return { duplicada: true as const };
+
+  const atualizada = await prisma.conversation.update({
+    where: { id: conversa.id },
+    data: {
+      ultimaMensagemEm: mensagem.criadoEm,
+      arquivada: false,
+      ...(conversa.status === 'ATRIBUIDO' ? { status: 'EM_ATENDIMENTO' as const } : {}),
+    },
+    include: inclusaoDetalhe,
+  });
+
+  const detalhe = toConversaDetalhe(atualizada);
+  const destinos = { conversaId: conversa.id, filaId: atualizada.filaId, agenteId: atualizada.agenteId };
+  notificarMensagem({ conversaId: conversa.id, mensagem: toMensagem(mensagem) }, destinos);
+  if (nova) notificarConversaNova(detalhe, destinos);
+  else notificarConversaAtualizada(detalhe, destinos);
+
+  return { duplicada: false as const, conversaId: conversa.id, mensagemId: mensagem.id };
+}
+
+/**
  * Cria a Message, tratando a corrida entre o `findUnique` de topo de
  * `registrarMensagemEntrante` e este `create`: duas requisicoes com o mesmo
  * `idExterno` podem passar as duas pelo `findUnique` (nenhuma via ainda
@@ -228,12 +306,14 @@ async function criarMensagemOuDetectarCorrida(
   conversaId: string,
   dados: MensagemNormalizada,
   anexo: { url?: string | null },
+  autoria: { autor: 'CLIENTE' | 'AGENTE'; enviadaPorDispositivo?: boolean } = { autor: 'CLIENTE' },
 ) {
   try {
     return await prisma.message.create({
       data: {
         conversaId,
-        autor: 'CLIENTE',
+        autor: autoria.autor,
+        enviadaPorDispositivo: autoria.enviadaPorDispositivo ?? false,
         conteudo: dados.conteudo,
         tipoAnexo: dados.tipoAnexo,
         anexoUrl: anexo.url ?? dados.anexoUrl,
@@ -241,13 +321,7 @@ async function criarMensagemOuDetectarCorrida(
       },
     });
   } catch (erro) {
-    const alvo = erro instanceof Prisma.PrismaClientKnownRequestError ? erro.meta?.target : undefined;
-    const textoDoAlvo = typeof alvo === 'string' ? alvo : Array.isArray(alvo) ? alvo.join(',') : '';
-    const colidiuNoIdExterno =
-      erro instanceof Prisma.PrismaClientKnownRequestError &&
-      erro.code === 'P2002' &&
-      (textoDoAlvo.includes('id_externo') || textoDoAlvo.includes('idExterno'));
-    if (!colidiuNoIdExterno) throw erro;
+    if (!colidiuNoIdExterno(erro)) throw erro;
 
     // Mesmo `findUnique` do topo da funcao: tenant-scoped pela extensao do
     // Prisma. Se a Message vencedora for de outra organizacao (idExterno e

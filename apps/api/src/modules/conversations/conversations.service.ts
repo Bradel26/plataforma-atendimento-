@@ -11,6 +11,7 @@ import { apenasVisivel, contextoVisibilidade } from '../../lib/visibilidade';
 import { salvar } from '../../lib/storage';
 import { apos, decodificarCursor, fatiar } from '../../lib/paginacao';
 import { normalizarTags } from '../../lib/tags';
+import { colidiuNoIdExterno } from '../../lib/erros-prisma';
 import { AppError, badRequest, conflict, forbidden, notFound } from '../../lib/errors';
 import { notificarConversaAtualizada, notificarConversaNova, notificarMensagem } from '../../realtime/hub';
 import { enviarArquivoParaCanal, enviarParaCanal, exigeEnvioExterno } from '../channels/outbound.service';
@@ -513,6 +514,32 @@ export async function assumirConversa(solicitante: Solicitante, id: string) {
   return publicar(id, { agenteAnteriorId: conversa.agenteId, filaAnteriorId: conversa.filaId });
 }
 
+/**
+ * Grava a mensagem do agente. Corrida inversa: o eco do celular (ponte) pode
+ * chegar a `registrarMensagemPropria` antes deste create e gravar o mesmo
+ * `idExterno`; entao o create estoura P2002. A mensagem ja saiu, por isso o
+ * agente nao pode levar 500: promove a existente a autoria do agente.
+ */
+async function criarMensagemDoAgente(
+  solicitante: Solicitante,
+  idExterno: string | null,
+  interno: boolean,
+  data: Prisma.MessageUncheckedCreateInput,
+) {
+  try {
+    return await prisma.message.create({ data, include: { autorUsuario: { select: { nome: true } } } });
+  } catch (erro) {
+    if (idExterno === null || !colidiuNoIdExterno(erro)) throw erro;
+    const existente = await prisma.message.findUnique({ where: { idExterno } });
+    if (!existente) throw erro;
+    return prisma.message.update({
+      where: { id: existente.id },
+      data: { autor: 'AGENTE', autorId: solicitante.sub, enviadaPorDispositivo: false, interno },
+      include: { autorUsuario: { select: { nome: true } } },
+    });
+  }
+}
+
 export async function enviarMensagem(
   solicitante: Solicitante,
   id: string,
@@ -532,16 +559,13 @@ export async function enviarMensagem(
       ? await enviarParaCanal(conversa.canal, conversa.enderecoExterno, conteudo, conversa.canalConfigId)
       : { idExterno: null };
 
-  const mensagem = await prisma.message.create({
-    data: {
-      conversaId: id,
-      autor: 'AGENTE',
-      autorId: solicitante.sub,
-      conteudo,
-      idExterno: envio.idExterno,
-      interno,
-    },
-    include: { autorUsuario: { select: { nome: true } } },
+  const mensagem = await criarMensagemDoAgente(solicitante, envio.idExterno, interno, {
+    conversaId: id,
+    autor: 'AGENTE',
+    autorId: solicitante.sub,
+    conteudo,
+    idExterno: envio.idExterno,
+    interno,
   });
 
   await prisma.conversation.update({
@@ -596,18 +620,15 @@ export async function enviarArquivo(
   const salvo = await salvar(arquivo);
   const assumir = conversa.agenteId ? {} : { agenteId: solicitante.sub, atribuidoEm: new Date() };
 
-  const mensagem = await prisma.message.create({
-    data: {
-      conversaId: id,
-      autor: 'AGENTE',
-      autorId: solicitante.sub,
-      conteudo: legenda?.trim() || salvo.nome,
-      tipoAnexo: tipoAnexoDe(salvo.tipo),
-      anexoUrl: salvo.url,
-      idExterno: envio.idExterno,
-      interno,
-    },
-    include: { autorUsuario: { select: { nome: true } } },
+  const mensagem = await criarMensagemDoAgente(solicitante, envio.idExterno, interno, {
+    conversaId: id,
+    autor: 'AGENTE',
+    autorId: solicitante.sub,
+    conteudo: legenda?.trim() || salvo.nome,
+    tipoAnexo: tipoAnexoDe(salvo.tipo),
+    anexoUrl: salvo.url,
+    idExterno: envio.idExterno,
+    interno,
   });
 
   await prisma.conversation.update({

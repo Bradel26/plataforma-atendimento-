@@ -6,7 +6,7 @@ import { prisma, prismaSemIsolamento } from '../../lib/prisma';
 import { notificarStatusCanal } from '../../realtime/hub';
 import { comOrganizacao, semOrganizacao } from '../../lib/tenant';
 import { assinaturaValida, configDoDestino, importarContatos } from './channels.service';
-import { registrarMensagemEntrante } from './inbound.service';
+import { registrarMensagemEntrante, registrarMensagemPropria } from './inbound.service';
 import { modoEfetivo, numeroNormalizado } from './whatsapp.modo';
 import { salvarPrevia } from './chat-previews.service';
 
@@ -56,6 +56,8 @@ const mensagemSchema = z.object({
   anexoUrl: z.string().trim().url().nullable().optional(),
   tipoAnexo: z.enum(['TEXTO', 'IMAGEM', 'AUDIO', 'VIDEO', 'ARQUIVO']).optional(),
   anexoNome: z.string().trim().max(200).nullable().optional(),
+  /** true = digitada no celular/WhatsApp Web do numero (fromMe), espelhada para auditoria. */
+  propria: z.boolean().optional(),
 });
 
 /**
@@ -172,10 +174,12 @@ ponteRoutes.post(
       if (!numero) throw badRequest(`Número "${corpo.numero}" não parece um telefone`);
 
       const tipoAnexo = corpo.tipoAnexo ?? (corpo.anexoUrl ? 'ARQUIVO' : 'TEXTO');
-      const conteudo = corpo.texto?.trim() || (corpo.anexoUrl ? '[arquivo recebido]' : '');
+      const conteudo =
+        corpo.texto?.trim() || (corpo.anexoUrl ? (corpo.propria ? '[arquivo enviado]' : '[arquivo recebido]') : '');
       if (!conteudo) throw badRequest('Informe texto ou anexo');
 
-      const resultado = await registrarMensagemEntrante({
+      const registrar = corpo.propria ? registrarMensagemPropria : registrarMensagemEntrante;
+      const resultado = await registrar({
         canal: 'WHATSAPP',
         // O endereco externo e o numero normalizado: e ele que o envio usa de
         // volta, e guardar formatos diferentes na ida e na volta faria a resposta

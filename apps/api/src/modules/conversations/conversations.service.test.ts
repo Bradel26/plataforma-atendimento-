@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { decidirDestino } from '../channels/inbound.service';
 import { comOrganizacao } from '../../lib/tenant';
@@ -80,6 +81,8 @@ const {
   channelConfigFindMany,
   queueAgentFindMany,
   messageCreate,
+  messageFindUnique,
+  messageUpdate,
 } = vi.hoisted(() => ({
   contactFindFirst: vi.fn(),
   conversationFindFirst: vi.fn(),
@@ -95,6 +98,8 @@ const {
   // filas tambem para ADMIN/SUPERVISOR (aba Fila).
   queueAgentFindMany: vi.fn().mockResolvedValue([]),
   messageCreate: vi.fn(),
+  messageFindUnique: vi.fn(),
+  messageUpdate: vi.fn(),
 }));
 
 vi.mock('../../lib/prisma', () => ({
@@ -111,7 +116,7 @@ vi.mock('../../lib/prisma', () => ({
     },
     channelConfig: { findFirst: channelConfigFindFirst, findMany: channelConfigFindMany },
     queueAgent: { findMany: queueAgentFindMany },
-    message: { create: messageCreate },
+    message: { create: messageCreate, findUnique: messageFindUnique, update: messageUpdate },
   },
 }));
 
@@ -699,6 +704,37 @@ describe('enviarMensagem — nota interna', () => {
     // Mensagem normal continua indo para a sala da conversa, como sempre.
     const destinos = notificarMensagem.mock.calls[0]?.[1];
     expect(destinos).toMatchObject({ incluirSalaDaConversa: true });
+  });
+
+  it('corrida inversa: eco do celular gravou o idExterno antes — promove a mensagem a AGENTE sem lancar', async () => {
+    const conversa = criarConversaMock();
+    conversationFindFirst.mockResolvedValue(conversa);
+    exigeEnvioExterno.mockReturnValue(true);
+    enviarParaCanal.mockResolvedValue({ idExterno: 'ext-9' });
+    messageCreate.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: 'test',
+        meta: { target: ['id_externo'] },
+      }),
+    );
+    messageFindUnique.mockResolvedValueOnce({ id: 'm-eco' });
+    messageUpdate.mockResolvedValueOnce(criarMensagemMock({ conteudo: 'oi', interno: false }));
+
+    await expect(
+      comOrganizacao('org-1', () => enviarMensagem(SOLICITANTE, conversa.id, 'oi'), {
+        id: 'user-1',
+        perfil: 'ADMIN',
+      }),
+    ).resolves.toBeDefined();
+
+    expect(messageFindUnique).toHaveBeenCalledWith({ where: { idExterno: 'ext-9' } });
+    expect(messageUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'm-eco' },
+        data: { autor: 'AGENTE', autorId: SOLICITANTE.sub, enviadaPorDispositivo: false, interno: false },
+      }),
+    );
   });
 });
 
