@@ -820,6 +820,8 @@ describe('listarCaixaEntrada', () => {
 });
 
 describe('listarDestinosTransferencia', () => {
+  beforeEach(() => vi.clearAllMocks());
+
   it('lista usuarios ativos de todos os perfis que atendem (nao so AGENTE) e as filas ativas', async () => {
     userFindMany.mockResolvedValue([{ id: 'u-2', nome: 'Viviane', perfil: 'SUPORTE', status: 'DISPONIVEL' }]);
     queueFindMany.mockResolvedValue([{ id: 'f-1', nome: 'Suporte' }]);
