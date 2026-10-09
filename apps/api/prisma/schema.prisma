@@ -62,39 +62,40 @@ model Organizacao {
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
-  usuarios           User[]
-  tokensIntegracao   IntegrationToken[]
-  contatos           Contact[]
-  conversas          Conversation[]
-  filas              Queue[]
-  canais             ChannelConfig[]
-  contas             Account[]
-  leads              Lead[]
-  funis              Funnel[]
-  oportunidades      Opportunity[]
-  credenciamentos    Credenciamento[]
-  ciclosParceiro     CicloParceiro[]
-  metasOperacionais  MetaOperacional[]
-  produtos           Product[]
-  catalogos          PriceCatalog[]
-  protocolos         Ticket[]
-  campanhas          Campaign[]
-  bots               Bot[]
-  escalas            WorkShift[]
-  branding           Branding?
-  politicaRetencao   RetentionPolicy?
-  vozConfig          VoiceConfig?
-  mensagens          Message[]
-  chamadas           Call[]
-  pesquisas          Survey[]
-  atividades         Activity[]
-  registrosLgpd      LgpdLog[]
-  metas              Meta[]
-  consumoIa          ConsumoIA[]
-  produtosDoCliente  ProdutoDoCliente[]
-  visoesSalvas       VisaoSalva[]
-  filiais            Filial[]
-  camposCustomizados CampoCustomizado[]
+  usuarios            User[]
+  tokensIntegracao    IntegrationToken[]
+  contatos            Contact[]
+  conversas           Conversation[]
+  contadoresProtocolo ContadorProtocolo[]
+  filas               Queue[]
+  canais              ChannelConfig[]
+  contas              Account[]
+  leads               Lead[]
+  funis               Funnel[]
+  oportunidades       Opportunity[]
+  credenciamentos     Credenciamento[]
+  ciclosParceiro      CicloParceiro[]
+  metasOperacionais   MetaOperacional[]
+  produtos            Product[]
+  catalogos           PriceCatalog[]
+  protocolos          Ticket[]
+  campanhas           Campaign[]
+  bots                Bot[]
+  escalas             WorkShift[]
+  branding            Branding?
+  politicaRetencao    RetentionPolicy?
+  vozConfig           VoiceConfig?
+  mensagens           Message[]
+  chamadas            Call[]
+  pesquisas           Survey[]
+  atividades          Activity[]
+  registrosLgpd       LgpdLog[]
+  metas               Meta[]
+  consumoIa           ConsumoIA[]
+  produtosDoCliente   ProdutoDoCliente[]
+  visoesSalvas        VisaoSalva[]
+  filiais             Filial[]
+  camposCustomizados  CampoCustomizado[]
 
   @@map("organizacoes")
 }
@@ -146,7 +147,8 @@ model User {
   atualizadoEm    DateTime    @updatedAt @map("atualizado_em")
 
   filas                   QueueAgent[]
-  conversas               Conversation[]
+  conversas               Conversation[]            @relation("ConversaAgente")
+  conversasIniciadas      Conversation[]            @relation("ConversaAtendenteInicial")
   mensagensEnviadas       Message[]
   leads                   Lead[]
   oportunidades           Opportunity[]
@@ -289,6 +291,20 @@ enum MessageAuthor {
   BOT
 }
 
+/// Quem comecou o atendimento: a empresa (ativo) ou o cliente (receptivo).
+enum ConversaOrigem {
+  ATIVO
+  RECEPTIVO
+}
+
+/// Evento do historico que muda de quem e o atendimento. Mensagem SISTEMA sem
+/// evento continua sendo aviso comum (ex.: falha da pesquisa de satisfacao).
+enum EventoConversa {
+  ACEITE
+  TRANSFERENCIA
+  ENCERRAMENTO
+}
+
 enum AttachmentType {
   TEXTO
   IMAGEM
@@ -299,27 +315,27 @@ enum AttachmentType {
 
 /// Contato/cliente final. Base do CRM (expandido na Fase 2 com Conta, Lead e Oportunidade).
 model Contact {
-  id              String    @id @default(uuid())
-  organizacaoId   String    @default("") @map("organizacao_id")
-  nome            String
-  telefone        String?
-  email           String?
-  canalOrigem     Channel   @default(WEBCHAT) @map("canal_origem")
-  tags            String[]  @default([])
-  observacoes     String?
+  id               String    @id @default(uuid())
+  organizacaoId    String    @default("") @map("organizacao_id")
+  nome             String
+  telefone         String?
+  email            String?
+  canalOrigem      Channel   @default(WEBCHAT) @map("canal_origem")
+  tags             String[]  @default([])
+  observacoes      String?
   /// Linha de negócio reconhecida na importação: TIM ou Starlink.
-  segmentoParceiro String?  @map("segmento_parceiro")
+  segmentoParceiro String?   @map("segmento_parceiro")
   /// Estado (UF, duas letras maiusculas) e cidade do parceiro. Alimentam o
   /// "parceiros por estado/regiao" do Dashboard e o filtro de publico de
   /// campanha. Anulaveis: o contato que nasce no webchat nao tem endereco.
-  uf              String?   @db.VarChar(2)
-  cidade          String?
+  uf               String?   @db.VarChar(2)
+  cidade           String?
   /// Momento em que o titular aceitou o aviso de privacidade (LGPD art. 8).
-  consentimentoEm DateTime? @map("consentimento_em")
+  consentimentoEm  DateTime? @map("consentimento_em")
   /// Preenchido quando os dados pessoais foram substituidos por placeholders.
-  anonimizadoEm   DateTime? @map("anonimizado_em")
-  criadoEm        DateTime  @default(now()) @map("criado_em")
-  atualizadoEm    DateTime  @updatedAt @map("atualizado_em")
+  anonimizadoEm    DateTime? @map("anonimizado_em")
+  criadoEm         DateTime  @default(now()) @map("criado_em")
+  atualizadoEm     DateTime  @updatedAt @map("atualizado_em")
 
   contaId         String?       @map("conta_id")
   /// Papel desta pessoa na conta (item 5.2). Nulo = ninguem classificou ainda.
@@ -397,18 +413,26 @@ model Conversation {
   /// "2a via do boleto" sao a mesma coisa para quem le e tres linhas diferentes
   /// em qualquer relatorio. A etiqueta e a dimensao que agrupa; as duas
   /// coexistem porque respondem perguntas diferentes.
-  tags String[] @default([])
+  tags               String[]       @default([])
+  /// Ativo (empresa iniciou) ou receptivo (cliente iniciou). Seta na lista e na auditoria.
+  origem             ConversaOrigem @default(RECEPTIVO)
+  /// Primeiro usuario que ficou com o atendimento. Nao muda em transferencia.
+  atendenteInicialId String?        @map("atendente_inicial_id")
+  /// Protocolo legivel do atendimento: AAMMDD-NNNNN (ver conversations/protocolo.ts).
+  protocolo          String?
 
-  contato     Contact        @relation(fields: [contatoId], references: [id], onDelete: Cascade)
-  fila        Queue?         @relation(fields: [filaId], references: [id], onDelete: SetNull)
-  agente      User?          @relation(fields: [agenteId], references: [id], onDelete: SetNull)
-  canalConfig ChannelConfig? @relation(fields: [canalConfigId], references: [id], onDelete: SetNull)
-  mensagens   Message[]
-  protocolos  Ticket[]
-  pesquisa    Survey?
-  chamadas    Call[]
-  organizacao Organizacao    @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  contato          Contact        @relation(fields: [contatoId], references: [id], onDelete: Cascade)
+  fila             Queue?         @relation(fields: [filaId], references: [id], onDelete: SetNull)
+  agente           User?          @relation("ConversaAgente", fields: [agenteId], references: [id], onDelete: SetNull)
+  atendenteInicial User?          @relation("ConversaAtendenteInicial", fields: [atendenteInicialId], references: [id], onDelete: SetNull)
+  canalConfig      ChannelConfig? @relation(fields: [canalConfigId], references: [id], onDelete: SetNull)
+  mensagens        Message[]
+  protocolos       Ticket[]
+  pesquisa         Survey?
+  chamadas         Call[]
+  organizacao      Organizacao    @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
+  @@unique([organizacaoId, protocolo])
   @@index([organizacaoId, status, ultimaMensagemEm])
   @@index([organizacaoId, agenteId, status])
   @@index([organizacaoId, filaId, status])
@@ -416,22 +440,40 @@ model Conversation {
   @@map("conversas")
 }
 
+/// Sequencial diario do protocolo de conversa, por organizacao. Escrito so por SQL cru (protocolo.ts).
+model ContadorProtocolo {
+  organizacaoId String @default("") @map("organizacao_id")
+  /// AAMMDD no fuso America/Sao_Paulo.
+  dia           String
+  ultimo        Int    @default(0)
+
+  organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+
+  @@id([organizacaoId, dia])
+  @@index([organizacaoId, dia])
+  @@map("contadores_protocolo")
+}
+
 model Message {
-  id            String         @id @default(uuid())
-  organizacaoId String         @default("") @map("organizacao_id")
-  conversaId    String         @map("conversa_id")
-  autor         MessageAuthor
+  id                    String          @id @default(uuid())
+  organizacaoId         String          @default("") @map("organizacao_id")
+  conversaId            String          @map("conversa_id")
+  autor                 MessageAuthor
   /// Preenchido quando autor = AGENTE.
-  autorId       String?        @map("autor_id")
-  conteudo      String
-  tipoAnexo     AttachmentType @default(TEXTO) @map("tipo_anexo")
-  anexoUrl      String?        @map("anexo_url")
+  autorId               String?         @map("autor_id")
+  conteudo              String
+  tipoAnexo             AttachmentType  @default(TEXTO) @map("tipo_anexo")
+  anexoUrl              String?         @map("anexo_url")
   /// Id da mensagem no provedor externo. Unico: o webhook da Meta reentrega.
-  idExterno     String?        @unique @map("id_externo")
+  idExterno             String?         @unique @map("id_externo")
   /// true = nota interna, visivel so a equipe; nunca sai pelo canal externo.
   /// Mesmo campo/semantica de TicketComment.interno, agora tambem em Message.
-  interno       Boolean        @default(false)
-  criadoEm      DateTime       @default(now()) @map("criado_em")
+  interno               Boolean         @default(false)
+  /// Evento que mudou o responsavel (aceite, transferencia, encerramento). So em autor SISTEMA.
+  evento                EventoConversa?
+  /// true = digitada no celular/WhatsApp Web do numero, espelhada pela ponte (autor AGENTE, autorId nulo).
+  enviadaPorDispositivo Boolean         @default(false) @map("enviada_por_dispositivo")
+  criadoEm              DateTime        @default(now()) @map("criado_em")
 
   conversa     Conversation @relation(fields: [conversaId], references: [id], onDelete: Cascade)
   autorUsuario User?        @relation(fields: [autorId], references: [id], onDelete: SetNull)
@@ -1786,6 +1828,9 @@ model ChannelConfig {
    * canal compartilhado.
    */
   donoId String? @map("dono_id")
+
+  /// Espelha no historico o que o dono do numero digita no proprio celular/WhatsApp Web.
+  espelharCelular Boolean @default(true) @map("espelhar_celular")
 
   /// Entrega as mensagens deste canal ao motor de IA externo (ver ia.service).
   iaAtiva      Boolean @default(false) @map("ia_ativa")

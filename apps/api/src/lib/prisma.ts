@@ -16,6 +16,7 @@ const COM_ORGANIZACAO = new Set([
   'IntegrationToken',
   'Contact',
   'Conversation',
+  'ContadorProtocolo',
   'Queue',
   'ChannelConfig',
   'Account',
