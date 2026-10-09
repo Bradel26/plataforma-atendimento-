@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { asyncHandler } from '../../http/async-handler';
-import { requireAuth } from '../../http/middleware/auth';
+import { requireAuth, requireRole } from '../../http/middleware/auth';
 import { param } from '../../http/params';
 import { badRequest } from '../../lib/errors';
 import { limiteBytes } from '../../lib/storage';
 import { validateBody, validateQuery } from '../../http/middleware/validate';
 import {
+  anterioresSchema,
   definirTagsSchema,
   enviarMensagemSchema,
   iniciarConversaSchema,
@@ -14,6 +15,7 @@ import {
   listarMensagensSchema,
   transferirSchema,
 } from './conversations.schemas';
+import { auditoriaSchema, listarAuditoria, opcoesDaAuditoria } from './conversations.auditoria';
 import {
   arquivarConversa,
   assumirConversa,
@@ -27,6 +29,7 @@ import {
   finalizarConversa,
   iniciarConversa,
   listarAcompanhaveis,
+  listarAtendimentosAnteriores,
   listarConversas,
   listarDestinosTransferencia,
   listarMensagens,
@@ -79,6 +82,14 @@ conversationsRoutes.get(
   }),
 );
 
+conversationsRoutes.get(
+  '/:id/anteriores',
+  validateQuery(anterioresSchema),
+  asyncHandler(async (req, res) => {
+    res.json(await listarAtendimentosAnteriores(quem(req), param(req, 'id'), res.locals.query));
+  }),
+);
+
 /**
  * Previas de chat da linha pessoal do proprio solicitante — antes de
  * `/:id` para nao ser engolida por ela.
@@ -110,6 +121,24 @@ conversationsRoutes.get(
   '/acompanhaveis',
   asyncHandler(async (_req, res) => {
     res.json(await listarAcompanhaveis());
+  }),
+);
+
+/** Auditoria restrita à gestão; a consulta preserva políticaConversas. */
+conversationsRoutes.get(
+  '/auditoria',
+  requireRole('ADMIN', 'SUPERVISOR', 'GESTOR'),
+  validateQuery(auditoriaSchema),
+  asyncHandler(async (_req, res) => {
+    res.json(await listarAuditoria(res.locals.query));
+  }),
+);
+
+conversationsRoutes.get(
+  '/auditoria/opcoes',
+  requireRole('ADMIN', 'SUPERVISOR', 'GESTOR'),
+  asyncHandler(async (_req, res) => {
+    res.json(await opcoesDaAuditoria());
   }),
 );
 

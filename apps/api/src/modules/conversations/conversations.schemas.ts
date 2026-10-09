@@ -50,6 +50,8 @@ export const listarMensagensSchema = z.object({
   cursor: z.string().optional(),
 });
 
+export const anterioresSchema = z.object({ cursor: z.string().optional() });
+
 export const enviarMensagemSchema = z.object({
   conteudo: z.string().trim().min(1, 'Escreva uma mensagem').max(4000),
   interno: z.boolean().optional().default(false),

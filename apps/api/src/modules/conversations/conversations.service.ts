@@ -9,7 +9,7 @@ import {
 } from '../../lib/politicas';
 import { apenasVisivel, contextoVisibilidade } from '../../lib/visibilidade';
 import { salvar } from '../../lib/storage';
-import { apos, decodificarCursor, fatiar } from '../../lib/paginacao';
+import { apos, codificarCursor, decodificarCursor, fatiar } from '../../lib/paginacao';
 import { normalizarTags } from '../../lib/tags';
 import { colidiuNoIdExterno } from '../../lib/erros-prisma';
 import { AppError, badRequest, conflict, forbidden, notFound } from '../../lib/errors';
@@ -27,6 +27,7 @@ import { enfileirar } from '../../lib/fila';
 import {
   inclusaoDetalhe,
   inclusaoResumo,
+  autorDaMensagem,
   semNotasInternas,
   toConversaDetalhe,
   toConversaResumo,
@@ -169,6 +170,55 @@ export async function listarMensagens(
   const { itens, proximoCursor } = fatiar(registros, query.limite, (m) => m.criadoEm);
   // Devolve em ordem cronologica: quem consome so precisa colar no inicio da lista.
   return { mensagens: itens.reverse().map(toMensagem), proximoCursor };
+}
+
+/**
+ * Atendimento anterior do mesmo contato na mesma linha. Uma chamada devolve
+ * um atendimento, do mais recente para o mais antigo, sempre dentro do escopo.
+ */
+export async function listarAtendimentosAnteriores(
+  solicitante: Solicitante,
+  id: string,
+  query: { cursor?: string },
+) {
+  const atual = await carregarOuFalhar(id);
+  const cursor = decodificarCursor(query.cursor);
+  const anterior = await prisma.conversation.findFirst({
+    where: {
+      AND: [
+        await escopoVisivel(),
+        {
+          contatoId: atual.contatoId,
+          canal: atual.canal,
+          canalConfigId: atual.canalConfigId,
+          id: { not: atual.id },
+          criadoEm: { lt: atual.criadoEm },
+        },
+        apos('criadoEm', cursor) ?? {},
+      ],
+    },
+    orderBy: [{ criadoEm: 'desc' }, { id: 'desc' }],
+    include: {
+      mensagens: {
+        orderBy: [{ criadoEm: 'asc' }, { id: 'asc' }],
+        take: 300,
+        include: autorDaMensagem,
+      },
+    },
+  });
+
+  if (!anterior) return { atendimento: null, proximoCursor: null };
+
+  return {
+    atendimento: {
+      id: anterior.id,
+      protocolo: anterior.protocolo,
+      criadoEm: anterior.criadoEm,
+      finalizadoEm: anterior.finalizadoEm,
+      mensagens: anterior.mensagens.map(toMensagem),
+    },
+    proximoCursor: codificarCursor({ valor: anterior.criadoEm, id: anterior.id }),
+  };
 }
 
 /**

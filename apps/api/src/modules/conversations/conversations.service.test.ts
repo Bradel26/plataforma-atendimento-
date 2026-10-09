@@ -12,6 +12,7 @@ import {
   finalizarConversa,
   iniciarConversa,
   listarAcompanhaveis,
+  listarAtendimentosAnteriores,
   listarCaixaEntrada,
   listarConversas,
   listarDestinosTransferencia,
@@ -173,6 +174,7 @@ vi.mock('../../realtime/hub', () => ({ notificarConversaNova, notificarConversaA
 // evento sai, nao o formato exato do payload (ja coberto onde o serializer e
 // testado). `toConversaDetalhe` passa o registro adiante como veio.
 vi.mock('./conversations.serializer', () => ({
+  autorDaMensagem: {},
   toConversaDetalhe: (c: unknown) => c,
   toConversaResumo: (c: unknown) => c,
   toMensagem: (m: unknown) => m,
@@ -196,6 +198,64 @@ const CONFIG_OFICIAL_BASE = {
   ponteUrl: null,
   ponteToken: null,
 };
+
+describe('listarAtendimentosAnteriores', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('busca so na mesma linha e contato, antes da conversa atual, dentro do escopo', async () => {
+    const criadoEm = new Date('2026-10-08T18:00:00Z');
+    conversationFindFirst
+      .mockResolvedValueOnce({
+        id: 'c-atual',
+        contatoId: 'k-1',
+        canal: 'WHATSAPP',
+        canalConfigId: 'cfg-1',
+        criadoEm,
+      })
+      .mockResolvedValueOnce({
+        id: 'c-velha',
+        protocolo: '261006-00004',
+        criadoEm: new Date('2026-10-06T13:00:00Z'),
+        finalizadoEm: new Date('2026-10-06T13:30:00Z'),
+        mensagens: [{ id: 'm-1' }],
+      });
+
+    const r = await comOrganizacao(
+      'org-1',
+      () => listarAtendimentosAnteriores(SOLICITANTE, 'c-atual', {}),
+      { id: 'user-1', perfil: 'ADMIN' },
+    );
+
+    const where = conversationFindFirst.mock.calls[1]?.[0]?.where;
+    expect(JSON.stringify(where)).toContain('"canalConfigId":"cfg-1"');
+    expect(JSON.stringify(where)).toContain('"contatoId":"k-1"');
+    expect(JSON.stringify(where)).toContain('"id":{"not":"c-atual"}');
+    expect(JSON.stringify(where)).toContain('"criadoEm":{"lt":"2026-10-08T18:00:00.000Z"}');
+    expect(r.atendimento?.protocolo).toBe('261006-00004');
+    expect(r.atendimento?.mensagens).toEqual([{ id: 'm-1' }]);
+    expect(r.proximoCursor).toEqual(expect.any(String));
+  });
+
+  it('sem atendimento anterior devolve nulo e cursor nulo', async () => {
+    conversationFindFirst
+      .mockResolvedValueOnce({
+        id: 'c-atual',
+        contatoId: 'k-1',
+        canal: 'WHATSAPP',
+        canalConfigId: 'cfg-1',
+        criadoEm: new Date(),
+      })
+      .mockResolvedValueOnce(null);
+
+    const r = await comOrganizacao(
+      'org-1',
+      () => listarAtendimentosAnteriores(SOLICITANTE, 'c-atual', {}),
+      { id: 'user-1', perfil: 'ADMIN' },
+    );
+
+    expect(r).toEqual({ atendimento: null, proximoCursor: null });
+  });
+});
 
 describe('iniciarConversa — publicacao em tempo real (Fase 11.2)', () => {
   beforeEach(() => {
