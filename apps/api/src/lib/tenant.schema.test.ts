@@ -45,6 +45,8 @@ const FILHAS: Record<string, string> = {
   OpportunityAudit: 'Opportunity',
   CatalogItem: 'PriceCatalog',
   CampaignItem: 'Campaign',
+  CampaignAttachment: 'Campaign',
+  PartnerCampaignAttachment: 'PartnerCampaign',
   BotStep: 'Bot',
   TicketComment: 'Ticket',
   TicketAttachment: 'Ticket',

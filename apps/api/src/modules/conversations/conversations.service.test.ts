@@ -86,6 +86,7 @@ const {
   queueAgentFindMany,
   messageCreate,
   messageFindUnique,
+  messageFindFirst,
   messageUpdate,
   userFindMany,
   queueFindMany,
@@ -105,6 +106,7 @@ const {
   queueAgentFindMany: vi.fn().mockResolvedValue([]),
   messageCreate: vi.fn(),
   messageFindUnique: vi.fn(),
+  messageFindFirst: vi.fn().mockResolvedValue({ criadoEm: new Date() }),
   messageUpdate: vi.fn(),
   userFindMany: vi.fn(),
   queueFindMany: vi.fn(),
@@ -124,7 +126,7 @@ vi.mock('../../lib/prisma', () => ({
     },
     channelConfig: { findFirst: channelConfigFindFirst, findMany: channelConfigFindMany },
     queueAgent: { findMany: queueAgentFindMany },
-    message: { create: messageCreate, findUnique: messageFindUnique, update: messageUpdate },
+    message: { create: messageCreate, findUnique: messageFindUnique, findFirst: messageFindFirst, update: messageUpdate },
     user: { findMany: userFindMany },
     queue: { findMany: queueFindMany },
   },
@@ -147,6 +149,8 @@ vi.mock('../../lib/fila', () => ({ enfileirar: vi.fn() }));
 
 const { obterConfig } = vi.hoisted(() => ({ obterConfig: vi.fn() }));
 vi.mock('../channels/channels.service', () => ({ obterConfig }));
+
+vi.mock('../fluxos/fluxos.service', () => ({ registrarAceiteFluxo: vi.fn() }));
 
 const { promoverPrevia } = vi.hoisted(() => ({ promoverPrevia: vi.fn() }));
 vi.mock('../channels/chat-previews.service', () => ({ promoverPrevia }));

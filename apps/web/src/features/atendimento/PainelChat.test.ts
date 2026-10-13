@@ -1,9 +1,11 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { PainelChat } from './PainelChat';
 import type { ConversaDetalhe, Mensagem } from '../../lib/types';
 import { ToastProvider } from '../../components/ui/Toast';
+
+vi.mock('../auth/AuthProvider', () => ({ useAuth: () => ({ usuario: { nome: 'Fulano' } }) }));
 
 /**
  * Task 5 — botao "Resolver" (rebatizado de "Finalizar") e aba "Mensagem

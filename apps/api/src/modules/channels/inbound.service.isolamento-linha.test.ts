@@ -34,7 +34,7 @@ vi.mock('../../lib/prisma', () => ({
   prisma: {
     message: { findUnique: messageFindUnique, create: messageCreate },
     contact: { findFirst: contactFindFirst, findUniqueOrThrow: vi.fn(), create: vi.fn() },
-    conversation: { findFirst: conversationFindFirst, create: conversationCreate, update: conversationUpdate },
+    conversation: { findFirst: conversationFindFirst, findMany: vi.fn().mockResolvedValue([]), create: conversationCreate, update: conversationUpdate },
     queue: { findFirst: vi.fn() },
     user: { findUnique: vi.fn().mockResolvedValue({ nome: 'Dono' }) },
   },

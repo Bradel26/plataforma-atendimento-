@@ -31,10 +31,12 @@ vi.mock('../../lib/prisma', () => ({
   prisma: {
     message: { findUnique: messageFindUnique, create: messageCreate },
     contact: { findFirst: contactFindFirst, findUniqueOrThrow: vi.fn(), create: vi.fn() },
-    conversation: { findFirst: conversationFindFirst, create: conversationCreate, update: vi.fn() },
+    conversation: { findFirst: conversationFindFirst, findMany: vi.fn().mockResolvedValue([]), create: conversationCreate, update: vi.fn() },
     queue: { findFirst: vi.fn() },
   },
 }));
+
+vi.mock('./channels.service', () => ({ configDoDestino: vi.fn().mockResolvedValue(null) }));
 
 import { registrarMensagemEntrante } from './inbound.service';
 
