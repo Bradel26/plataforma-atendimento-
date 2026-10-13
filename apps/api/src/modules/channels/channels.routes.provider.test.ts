@@ -16,6 +16,7 @@ const configFalsa = {
   modo: 'NAO_OFICIAL' as const,
   donoId: null as string | null,
   ponteSessao: null as string | null,
+  ponteConectadoEm: new Date('2026-10-13T15:00:00.000Z'),
   ponteUrl: 'http://ponte:3000/api',
   ponteToken: 'token',
 };

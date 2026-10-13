@@ -125,12 +125,12 @@ describe('lerEstadoDaPonte', () => {
     expect(lerEstadoDaPonte({ state: 'open' }).situacao).toBe('CONECTADO');
   });
 
-  it('entende as formas comuns de "desconectado"', () => {
+  it('separa uma sessao aguardando QR de uma sessao desconectada', () => {
     expect(lerEstadoDaPonte({ connected: false }).situacao).toBe('DESCONECTADO');
     expect(lerEstadoDaPonte({ state: 'close' }).situacao).toBe('DESCONECTADO');
-    // Sessao esperando QR nao esta conectada: quem le precisa saber que ha
-    // trabalho manual a fazer.
-    expect(lerEstadoDaPonte({ status: 'qrcode' }).situacao).toBe('DESCONECTADO');
+    // Aguardando o primeiro pareamento nao e uma queda: ainda nao ha conexao
+    // que precise ser reconectada.
+    expect(lerEstadoDaPonte({ status: 'qrcode' }).situacao).toBe('AGUARDANDO_QR');
   });
 
   it('formato desconhecido e DESCONHECIDO, e nao desconectado', () => {
