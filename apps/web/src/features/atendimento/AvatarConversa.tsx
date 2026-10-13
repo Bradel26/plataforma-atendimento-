@@ -33,7 +33,11 @@ export function AvatarConversa({ conversaId, nome, className, avatarPath }: {
   avatarPath?: string;
 }) {
   const ref = useRef<HTMLSpanElement | null>(null);
-  const [url, setUrl] = useState<string | null>(null);
+  // Vincula a imagem ao caminho do contato. Sem isso, quando o React mantém
+  // este componente e troca suas props, o estado pode exibir por um instante
+  // a foto que pertencia ao contato anterior enquanto a nova imagem carrega.
+  const caminhoAtual = avatarPath ?? `/conversas/${conversaId}/avatar`;
+  const [imagem, setImagem] = useState<{ caminho: string; url: string } | null>(null);
 
   useEffect(() => {
     const elemento = ref.current;
@@ -42,7 +46,7 @@ export function AvatarConversa({ conversaId, nome, className, avatarPath }: {
     let objectUrl: string | null = null;
     let tentativa: number | null = null;
     const carregar = () => {
-      const caminho = avatarPath ?? `/conversas/${conversaId}/avatar`;
+      const caminho = caminhoAtual;
       void imagemEmCache(caminho, caminho).then((blob) => {
         if (cancelado) return;
         if (!blob) {
@@ -50,7 +54,7 @@ export function AvatarConversa({ conversaId, nome, className, avatarPath }: {
           return;
         }
         objectUrl = URL.createObjectURL(blob);
-        setUrl(objectUrl);
+        setImagem({ caminho, url: objectUrl });
       });
     };
     const observar = typeof IntersectionObserver === 'undefined'
@@ -78,7 +82,9 @@ export function AvatarConversa({ conversaId, nome, className, avatarPath }: {
       style={{ backgroundColor: 'var(--brand-primary-soft)', color: 'var(--brand-primary)' }}
       aria-hidden="true"
     >
-      {url ? <img src={url} alt="" className="h-full w-full object-cover" /> : nome.charAt(0).toUpperCase()}
+      {imagem?.caminho === caminhoAtual
+        ? <img src={imagem.url} alt="" className="h-full w-full object-cover" />
+        : nome.charAt(0).toUpperCase()}
     </span>
   );
 }
