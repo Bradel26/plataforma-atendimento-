@@ -40,7 +40,7 @@ export const MODELO_LEADS_CSV = gerarCsv([...COLUNAS_LEAD], [
   },
 ]);
 
-const COLUNAS_CONTATO = ['nome', 'email', 'telefone', 'conta', 'canal_origem', 'segmento_parceiro', 'observacoes'] as const;
+const COLUNAS_CONTATO = ['nome', 'email', 'telefone', 'conta', 'canal_origem', 'origem_importacao', 'segmento_parceiro', 'observacoes'] as const;
 
 export const MODELO_CONTATOS_CSV = gerarCsv([...COLUNAS_CONTATO], [
   {
@@ -49,6 +49,7 @@ export const MODELO_CONTATOS_CSV = gerarCsv([...COLUNAS_CONTATO], [
     telefone: '11988880000',
     conta: 'Empresa Exemplo',
     canal_origem: 'WHATSAPP',
+    origem_importacao: 'Base exemplo TIM',
     segmento_parceiro: '',
     observacoes: 'Indicado por cliente atual',
   },
@@ -266,7 +267,7 @@ async function executarImportacao(
  * telefone em vez de duplicar — quem reenvia a mesma planilha corrigida nao
  * quer ver o cliente aparecer duas vezes.
  */
-export async function importarContatos(texto: string, dryRun: boolean): Promise<ResultadoImportacao> {
+export async function importarContatos(texto: string, dryRun: boolean, origemArquivo?: string): Promise<ResultadoImportacao> {
   return executarImportacao(texto, 'nome', async (linha, dry) => {
     const nome = normalizar(linha.nome ?? '');
     if (nome.length < 2) throw new Error('Coluna "nome" vazia ou muito curta');
@@ -274,14 +275,31 @@ export async function importarContatos(texto: string, dryRun: boolean): Promise<
     const email = normalizar(linha.email ?? '').toLowerCase();
     const telefone = normalizar(linha.telefone ?? '');
     const observacoes = normalizar(linha.observacoes ?? '') || null;
-    const segmentoParceiro = identificarSegmentoParceiro(linha.segmento_parceiro, observacoes);
+    const origemImportacao = normalizar(linha.origem_importacao?.trim() || origemArquivo || '') || null;
+    const mapeamento = origemImportacao ? await prisma.importSourceMapping.findFirst({
+      where: { origem: { equals: origemImportacao, mode: 'insensitive' } }, select: { operacao: true },
+    }) : null;
+    if (origemImportacao && !mapeamento) throw new Error(`Origem "${origemImportacao}" sem mapeamento TIM/Starlink. Cadastre o mapeamento antes de importar.`);
+    const segmentoParceiro = (mapeamento?.operacao as 'TIM' | 'STARLINK' | undefined) ?? identificarSegmentoParceiro(linha.segmento_parceiro, observacoes);
 
     const existente = email
       ? await prisma.contact.findFirst({ where: { email } })
       : telefone
         ? await prisma.contact.findFirst({ where: { telefone } })
         : null;
-    if (existente) throw new Error(`Contato já existe (${email || telefone})`);
+    if (existente) {
+      // Reimportar o parceiro na outra operação acrescenta a associação ao
+      // mesmo contato. Sem identidade de operação explícita, preserva o aviso
+      // de duplicidade para revisão humana.
+      if (!segmentoParceiro) throw new Error(`Contato já existe (${email || telefone})`);
+      if (!dry) await prisma.contactOperation.upsert({
+        where: { contatoId_operacao: { contatoId: existente.id, operacao: segmentoParceiro } },
+        create: { contatoId: existente.id, operacao: segmentoParceiro },
+        update: {},
+      });
+      if (!dry && origemImportacao && !existente.origemImportacao) await prisma.contact.update({ where: { id: existente.id }, data: { origemImportacao } });
+      return;
+    }
 
     const nomeConta = normalizar(linha.conta ?? '');
     const conta = nomeConta ? await prisma.account.findFirst({ where: { nome: nomeConta } }) : null;
@@ -289,17 +307,23 @@ export async function importarContatos(texto: string, dryRun: boolean): Promise<
 
     if (dry) return;
 
-    await prisma.contact.create({
+    const contato = await prisma.contact.create({
       data: {
         nome,
         email: email || null,
         telefone: telefone || null,
         uf: ufDoTelefone(telefone),
         canalOrigem: enumOu(CANAIS, linha.canal_origem ?? '', 'EMAIL'),
+        origemImportacao,
         contaId: conta?.id ?? null,
         segmentoParceiro,
         observacoes,
       },
+    });
+    if (segmentoParceiro) await prisma.contactOperation.upsert({
+      where: { contatoId_operacao: { contatoId: contato.id, operacao: segmentoParceiro } },
+      create: { contatoId: contato.id, operacao: segmentoParceiro },
+      update: {},
     });
   }, dryRun);
 }
@@ -459,13 +483,14 @@ export async function exportarContatos() {
   });
 
   return gerarCsv(
-    ['nome', 'email', 'telefone', 'conta', 'canal_origem', 'segmento_parceiro', 'conversas', 'criado_em'],
+    ['nome', 'email', 'telefone', 'conta', 'canal_origem', 'origem_importacao', 'segmento_parceiro', 'conversas', 'criado_em'],
     contatos.map((c) => ({
       nome: c.nome,
       email: c.email ?? '',
       telefone: c.telefone ?? '',
       conta: c.conta?.nome ?? '',
       canal_origem: c.canalOrigem,
+      origem_importacao: c.origemImportacao ?? '',
       segmento_parceiro: c.segmentoParceiro ?? '',
       conversas: c._count.conversas,
       criado_em: dataBr(c.criadoEm),

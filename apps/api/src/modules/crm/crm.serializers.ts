@@ -44,7 +44,7 @@ export function toLead(l: LeadDb) {
 export const inclusaoOportunidade = {
   conta: { select: { id: true, nome: true } },
   funil: { select: { id: true, nome: true } },
-  estagio: { select: { id: true, nome: true, ordem: true, probabilidade: true, tarefaObrigatoria: true } },
+  estagio: { select: { id: true, nome: true, ordem: true, probabilidade: true, tarefaObrigatoria: true, roteiroVendas: true, perguntasGpct: true } },
   responsavel: { select: { id: true, nome: true } },
   aprovadoPor: { select: { id: true, nome: true } },
   itens: { include: { produto: { select: { id: true, nome: true, sku: true } } } },

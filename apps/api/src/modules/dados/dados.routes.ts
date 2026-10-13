@@ -4,6 +4,7 @@ import { asyncHandler } from '../../http/async-handler';
 import { requireAuth, requireRole } from '../../http/middleware/auth';
 import { validateBody } from '../../http/middleware/validate';
 import { badRequest, notFound } from '../../lib/errors';
+import { prisma } from '../../lib/prisma';
 import {
   MODELO_CONTAS_CSV,
   MODELO_CONTATOS_CSV,
@@ -47,7 +48,27 @@ const importarSchema = z.object({
   csv: z.string().min(1, 'Envie o conteúdo do CSV'),
   /** Valida sem gravar nada — util para conferir a planilha antes. */
   dryRun: z.boolean().default(false),
+  origemImportacao: z.string().trim().max(120).optional(),
 });
+
+const mapeamentosSchema = z.object({
+  mapeamentos: z.array(z.object({ origem: z.string().trim().min(2).max(120), operacao: z.enum(['TIM', 'STARLINK']) })).max(100),
+});
+
+dadosRoutes.get('/mapeamentos-origem', requireRole('ADMIN', 'SUPERVISOR'), asyncHandler(async (_req, res) => {
+  res.json({ mapeamentos: await prisma.importSourceMapping.findMany({ orderBy: { origem: 'asc' } }) });
+}));
+
+dadosRoutes.put('/mapeamentos-origem', requireRole('ADMIN', 'SUPERVISOR'), validateBody(mapeamentosSchema), asyncHandler(async (req, res) => {
+  const { mapeamentos } = req.body as z.infer<typeof mapeamentosSchema>;
+  const chaves = mapeamentos.map((m) => m.origem.trim().toLocaleLowerCase('pt-BR'));
+  if (new Set(chaves).size !== chaves.length) throw badRequest('Há origens repetidas no mapeamento');
+  await prisma.$transaction(async (tx) => {
+    await tx.importSourceMapping.deleteMany();
+    if (mapeamentos.length) await tx.importSourceMapping.createMany({ data: mapeamentos.map((m) => ({ origem: m.origem.trim(), operacao: m.operacao })) });
+  });
+  res.json({ mapeamentos: await prisma.importSourceMapping.findMany({ orderBy: { origem: 'asc' } }) });
+}));
 
 /** Modelo em branco para o usuario preencher. */
 dadosRoutes.get('/modelos/:recurso.csv', (req, res) => {
@@ -85,6 +106,9 @@ dadosRoutes.post(
     const item = IMPORTACOES[recurso];
     if (!item) throw notFound(`Importação "${recurso}" não existe. Disponíveis: ${Object.keys(IMPORTACOES).join(', ')}`);
     if (req.body.csv.length > 2_000_000) throw badRequest('Arquivo muito grande (limite de 2 MB)');
-    res.json({ resultado: await item.importar(req.body.csv, req.body.dryRun) });
+    const resultado = recurso === 'contatos'
+      ? await importarContatos(req.body.csv, req.body.dryRun, req.body.origemImportacao)
+      : await item.importar(req.body.csv, req.body.dryRun);
+    res.json({ resultado });
   }),
 );

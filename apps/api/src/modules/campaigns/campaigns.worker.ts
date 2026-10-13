@@ -1,8 +1,10 @@
+import { readFile } from 'node:fs/promises';
 import { AppError } from '../../lib/errors';
 import { aguardarVaga, registrarHandler } from '../../lib/fila';
 import { prisma } from '../../lib/prisma';
-import { enviarParaCanal } from '../channels/outbound.service';
+import { enviarArquivoParaCanal, enviarParaCanal } from '../channels/outbound.service';
 import { TIPO_ITEM_CAMPANHA, renderizar } from './campaigns.service';
+import { caminhoDe } from '../../lib/storage';
 
 /** Envios por segundo, por canal. Abaixo do limite da Cloud API, com folga. */
 const POR_SEGUNDO = 10;
@@ -17,7 +19,7 @@ const POR_SEGUNDO = 10;
 registrarHandler<{ itemId: string }>(TIPO_ITEM_CAMPANHA, async ({ itemId }, ctx) => {
   const item = await prisma.campaignItem.findUnique({
     where: { id: itemId },
-    include: { contato: true, campanha: true },
+    include: { contato: true, campanha: { include: { anexos: { orderBy: { criadoEm: 'asc' } } } } },
   });
 
   // Item ja processado, campanha pausada ou apagada: nada a fazer. Pausar uma
@@ -36,7 +38,33 @@ registrarHandler<{ itemId: string }>(TIPO_ITEM_CAMPANHA, async ({ itemId }, ctx)
   await aguardarVaga(item.campanha.canal, POR_SEGUNDO);
 
   try {
-    await enviarParaCanal(item.campanha.canal, item.contato.telefone, renderizar(item.campanha.mensagem, item.contato));
+    if (item.campanha.anexos.length > 0 && !['WHATSAPP', 'FACEBOOK'].includes(item.campanha.canal)) {
+      throw new AppError(422, 'ANEXO_NAO_SUPORTADO', `O canal ${item.campanha.canal} não aceita anexos nesta campanha`);
+    }
+
+    if (!item.textoEnviadoEm) {
+      const texto = renderizar(item.campanha.mensagem, item.contato);
+      if (texto.trim()) {
+        await enviarParaCanal(item.campanha.canal, item.contato.telefone, texto);
+        await prisma.campaignItem.update({ where: { id: item.id }, data: { textoEnviadoEm: new Date() } });
+      }
+    }
+
+    for (const anexo of item.campanha.anexos) {
+      if (item.anexosEnviados.includes(anexo.id)) continue;
+      const chave = anexo.url.replace(/^\/api\/arquivos\//, '');
+      const buffer = await readFile(caminhoDe(chave));
+      await enviarArquivoParaCanal(item.campanha.canal, item.contato.telefone, {
+        buffer,
+        nome: anexo.nome,
+        tipo: anexo.tipo,
+      });
+      await prisma.campaignItem.update({
+        where: { id: item.id },
+        data: { anexosEnviados: { push: anexo.id } },
+      });
+    }
+
     await prisma.campaignItem.update({
       where: { id: item.id },
       data: { status: 'ENVIADO', enviadoEm: new Date(), erro: null },
@@ -45,7 +73,7 @@ registrarHandler<{ itemId: string }>(TIPO_ITEM_CAMPANHA, async ({ itemId }, ctx)
   } catch (err) {
     const motivo = err instanceof Error ? err.message : 'Erro desconhecido';
     // Recusa da Meta e definitiva; erro de rede ou canal fora do ar, nao.
-    const permanente = err instanceof AppError && err.code === 'ENVIO_RECUSADO';
+    const permanente = err instanceof AppError && ['ENVIO_RECUSADO', 'ANEXO_NAO_SUPORTADO'].includes(err.code);
 
     if (permanente || ctx.ultimaTentativa) {
       await prisma.campaignItem.update({

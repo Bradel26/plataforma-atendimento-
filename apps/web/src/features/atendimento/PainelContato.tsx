@@ -7,6 +7,7 @@ import { RegistrarAtividade } from '../../pages/crm/ficha/RegistrarAtividade';
 import { EditorEtiquetas, ETIQUETAS_CONTATO, ETIQUETAS_CONVERSA } from '../../pages/crm/Etiquetas';
 import { LABEL_TIPO_ATIVIDADE, type Atividade, type ConversaDetalhe, type FichaContato as Ficha } from '../../lib/types';
 import { api } from '../../lib/api'; import { AvatarConversa } from './AvatarConversa';
+import { RegistroManual } from '../../pages/crm/ficha/RegistroManual';
 
 /**
  * Quem e essa pessoa, sem sair da conversa — e o que fazer a respeito dela.
@@ -43,6 +44,7 @@ export function PainelContato({
 }) {
   const [ficha, setFicha] = useState<Ficha | null>(null);
   const [mostrarRegistro, setMostrarRegistro] = useState(false);
+  const [registroManualAberto, setRegistroManualAberto] = useState(false);
 
   const carregar = useCallback(() => {
     return api
@@ -66,7 +68,7 @@ export function PainelContato({
     };
   }, [contatoId]);
 
-  const registrarEEsconder = (_atividade: Atividade) => {
+  const registrarEEsconder = (_atividade?: Atividade) => {
     setMostrarRegistro(false);
     void carregar();
   };
@@ -96,7 +98,7 @@ export function PainelContato({
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="border-b border-slate-100 p-4">
+      <div className="min-h-0 flex-1 overflow-y-auto border-b border-slate-100 p-4">
         <div className="flex items-start gap-3">
           <AvatarConversa conversaId={conversaId ?? contatoId} nome={contato.nome} className="h-11 w-11" avatarPath={`/contatos/${contatoId}/avatar`} />
           <div className="min-w-0 flex-1">
@@ -171,14 +173,19 @@ export function PainelContato({
             componente que a ficha completa usa — so entra escondido porque o
             formulario aberto tomaria a altura toda deste painel estreito. */}
         <div className="mt-3">
-          <Button
-            variante="neutro"
-            tamanho="sm"
-            aria-expanded={mostrarRegistro}
-            onClick={() => setMostrarRegistro((v) => !v)}
-          >
-            {mostrarRegistro ? 'Fechar registro' : 'Registrar / agendar'}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variante="neutro"
+              tamanho="sm"
+              aria-expanded={mostrarRegistro}
+              onClick={() => setMostrarRegistro((v) => !v)}
+            >
+              {mostrarRegistro ? 'Fechar registro' : 'Registrar / agendar'}
+            </Button>
+            <Button variante="neutro" tamanho="sm" onClick={() => setRegistroManualAberto(true)}>
+              Novo registro manual
+            </Button>
+          </div>
         </div>
 
         {mostrarRegistro && (
@@ -227,6 +234,14 @@ export function PainelContato({
           Ver ficha completa
         </Link>
       </div>
+      <RegistroManual
+        contatoId={contatoId}
+        contatoNome={contato.nome}
+        empresa={contato.conta?.nome}
+        aberto={registroManualAberto}
+        aoFechar={() => setRegistroManualAberto(false)}
+        aoSalvar={() => registrarEEsconder()}
+      />
     </div>
   );
 }

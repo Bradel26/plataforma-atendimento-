@@ -15,6 +15,8 @@ import { CamposCustomizadosCampos } from '../CamposCustomizados';
 import { CheckinDeVisita } from './CheckinDeVisita';
 import { EditorDaOportunidade } from './EditorDaOportunidade';
 import { EditorDeItens } from './EditorDeItens';
+import { QualificacaoGPCT } from './QualificacaoGPCT';
+import { AnaliseDaOportunidade } from './AnaliseDaOportunidade';
 import { fraseDoEvento, rotuloDoEvento } from './auditoria';
 import { LABEL_CANAL_ORIGEM, LABEL_TEMPERATURA } from '../temperatura';
 
@@ -102,9 +104,13 @@ export function FichaOportunidade({ oportunidadeId }: { oportunidadeId: string }
    * "aprovado" sem o nome de quem aprovou.
    */
   const concluir = async (id: string) => {
+    const justificativa = window.prompt('Justificativa para concluir esta atividade:');
+    if (!justificativa?.trim()) return;
+    const resultado = window.prompt('Qual foi o resultado?');
+    if (!resultado?.trim()) return;
     setConcluindo(id);
     try {
-      await api.post(`/atividades/${id}/concluir`, {});
+      await api.post(`/atividades/${id}/concluir`, { justificativa: justificativa.trim(), resultado: resultado.trim() });
       // Recarrega a ficha inteira: concluir a tarefa da etapa destrava o avanco,
       // e o aviso de bloqueio tem de sair da tela junto.
       await carregar();
@@ -154,6 +160,16 @@ export function FichaOportunidade({ oportunidadeId }: { oportunidadeId: string }
       setErro(e instanceof ApiError ? e.message : 'Falha ao decidir o desconto');
     } finally {
       setDecidindo(false);
+    }
+  };
+
+  const reabrir = async () => {
+    setErro(null);
+    try {
+      await api.post(`/oportunidades/${oportunidadeId}/reabrir`, {});
+      await carregar();
+    } catch (e) {
+      setErro(e instanceof ApiError ? e.message : 'Falha ao reabrir a oportunidade');
     }
   };
 
@@ -296,9 +312,22 @@ export function FichaOportunidade({ oportunidadeId }: { oportunidadeId: string }
             </Button>
           </div>
         )}
+        {o.status === 'PERDIDA' && (
+          <div className="mt-4">
+            <Button variante="neutro" onClick={() => void reabrir()}>Reabrir oportunidade</Button>
+          </div>
+        )}
         </>
         )}
       </Card>
+
+      <QualificacaoGPCT oportunidade={o} aoSalvar={() => void carregar()} />
+      {o.estagio.roteiroVendas && (
+        <Card titulo={`Roteiro: ${o.estagio.nome}`} descricao="Orientações da gestão para esta etapa">
+          <p className="whitespace-pre-wrap text-sm text-slate-700">{o.estagio.roteiroVendas}</p>
+        </Card>
+      )}
+      {temPerfil('ADMIN', 'SUPERVISOR', 'GESTOR') && <AnaliseDaOportunidade oportunidadeId={oportunidadeId} aoCriarTarefa={() => void carregar()} />}
 
       {o.camposCustomizados && o.camposCustomizados.length > 0 && (
         <Card titulo="Campos customizados">

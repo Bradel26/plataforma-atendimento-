@@ -15,8 +15,9 @@ import { createHmac } from 'node:crypto';
 import Redis from 'ioredis';
 
 const raiz = join(dirname(fileURLToPath(import.meta.url)), '..');
+const arquivoEnv = process.env.SMOKE_API ? '.env.smoke' : '.env';
 const env = Object.fromEntries(
-  readFileSync(join(raiz, 'apps/api/.env'), 'utf8')
+  readFileSync(join(raiz, `apps/api/${arquivoEnv}`), 'utf8')
     .split('\n')
     .filter((l) => l.trim() && !l.trim().startsWith('#') && l.includes('='))
     .map((l) => {
@@ -25,7 +26,7 @@ const env = Object.fromEntries(
     }),
 );
 
-const API = 'http://localhost:3333/api';
+const API = process.env.SMOKE_API ?? 'http://localhost:3333/api';
 const APP_SECRET = 'segredo-de-teste-do-app-meta';
 const TOKEN_FALSO = 'EAAG-token-falso-para-teste-de-erro';
 const EXECUCAO = Date.now().toString(36);

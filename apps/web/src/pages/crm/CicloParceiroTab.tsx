@@ -68,6 +68,39 @@ export function CicloParceiroTab() {
     <div className="space-y-5">
       {erro && <Alerta>{erro}</Alerta>}
 
+      <Card titulo="Jornada do parceiro" descricao="Visão educativa do caminho típico. Os prazos são referências e não alteram os dados nem movimentam parceiros automaticamente.">
+        <div className="overflow-x-auto pb-2">
+          <div className="min-w-[1120px] rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <div className="mb-2 flex items-center justify-between text-xs font-semibold uppercase tracking-wide">
+              <span className="text-blue-700">1ª fase · Credenciamento TIM</span>
+              <span className="text-emerald-700">2ª fase · Ativação e ciclo comercial</span>
+            </div>
+            <svg viewBox="0 0 1200 360" role="img" aria-label="Exemplo ilustrativo das fases de credenciamento e ciclo comercial do parceiro" className="h-[350px] w-full">
+              <defs>
+                <linearGradient id="jornadaCred" x1="0" x2="1"><stop stopColor="#93c5fd"/><stop offset="1" stopColor="#2563eb"/></linearGradient>
+                <linearGradient id="jornadaComercial" x1="0" x2="1"><stop stopColor="#6ee7b7"/><stop offset="1" stopColor="#f59e0b"/></linearGradient>
+              </defs>
+              <path d="M35 290 C100 290 115 238 175 238 S260 205 310 205 S400 160 450 160 S540 110 590 110" fill="none" stroke="url(#jornadaCred)" strokeWidth="7" strokeLinecap="round"/>
+              <path d="M630 110 C690 110 710 160 750 160 S820 115 870 115 S940 155 990 190 S1060 235 1100 235 S1150 195 1180 195" fill="none" stroke="url(#jornadaComercial)" strokeWidth="7" strokeLinecap="round"/>
+              <path d="M610 82 V320" stroke="#94a3b8" strokeDasharray="6 7" strokeWidth="2"/>
+              <text x="610" y="345" textAnchor="middle" fontSize="12" fill="#475569">Parceiro apto para vender</text>
+              {[
+                [45,290,'Em negociação'],[175,238,'Credenciamento em andamento'],[310,205,'Documentação'],[450,160,'Credenciamento OK'],[575,110,'Apto para venda'],
+                [660,130,'Aguardando ativação operacional'],[790,150,'Primeiras vendas'],[900,115,'Parceiro ativo'],[1015,200,'Em risco · 30 dias sem vendas'],[1110,235,'Parceiro inativo'],[1170,195,'Oportunidade de reativação'],
+              ].map(([x,y,label],index) => <g key={String(label)}>
+                <circle cx={Number(x)} cy={Number(y)} r="8" fill={index < 5 ? '#2563eb' : index < 8 ? '#059669' : '#d97706'} stroke="white" strokeWidth="3"/>
+                <text x={Number(x)} y={Number(y) + (index % 2 ? 29 : -17)} textAnchor="middle" fontSize="11" fontWeight="600" fill="#334155">
+                  {String(label).split(' · ').map((line, lineIndex) => <tspan key={line} x={Number(x)} dy={lineIndex === 0 ? 0 : 14}>{line}</tspan>)}
+                </text>
+              </g>)}
+              <text x="835" y="310" textAnchor="middle" fontSize="11" fill="#64748b">Ativação varia por operação; chip ou sistemas são exemplos</text>
+              <text x="600" y="20" textAnchor="middle" fontSize="12" fontWeight="700" fill="#475569">Exemplo ilustrativo — sem dados reais</text>
+            </svg>
+            <p className="mt-1 text-xs text-slate-500">Diagrama estático e didático. Não representa parceiros, vendas ou status reais, nem alimenta indicadores. Risco e inatividade são estados de referência, não etapas obrigatórias.</p>
+          </div>
+        </div>
+      </Card>
+
       <Card
         titulo="Ciclo de vida do parceiro"
         descricao="Como esta a relação com cada parceiro depois de credenciado. Não mede vendas: ainda não há produção por parceiro no CRM."

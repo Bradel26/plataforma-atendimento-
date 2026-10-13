@@ -148,18 +148,33 @@ function fontes(raiz: Raiz) {
       'ATIVIDADE',
       Prisma.sql`
         SELECT 'ATIVIDADE' AS tipo, at.id,
-               COALESCE(at.concluido_em, at.prazo, at.criado_em) AS ocorrido_em,
-               at.titulo, at.descricao AS detalhe,
-               at.tipo::text AS canal,
-               CASE WHEN at.concluido_em IS NOT NULL THEN 'CONCLUIDA'
+               COALESCE(at.ocorrido_em, at.concluido_em, at.prazo, at.criado_em) AS ocorrido_em,
+               at.titulo,
+               concat_ws(E'\\n', NULLIF(at.descricao, ''),
+                 CASE WHEN at.resultado IS NOT NULL THEN 'Resultado: ' || at.resultado END,
+                 CASE WHEN at.justificativa_conclusao IS NOT NULL THEN 'Justificativa de conclusão: ' || at.justificativa_conclusao END,
+                 CASE WHEN at.resultado_conclusao IS NOT NULL THEN 'Resultado da conclusão: ' || at.resultado_conclusao END,
+                 CASE WHEN tarefa.id IS NOT NULL THEN 'Próxima ação: ' || tarefa.titulo || ' · ' ||
+                   to_char(tarefa.prazo AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY HH24:MI') || ' · ' ||
+                   CASE WHEN tarefa.concluido_em IS NOT NULL THEN 'Concluída'
+                        WHEN tarefa.cancelado_em IS NOT NULL THEN 'Cancelada'
+                        WHEN tarefa.prazo < now() THEN 'Atrasada'
+                        ELSE 'Pendente' END END) AS detalhe,
+               CASE at.canal_manual::text WHEN 'TELEFONE' THEN 'Ligação manual'
+                    WHEN 'VISITA' THEN 'Visita presencial' WHEN 'OUTRO' THEN 'Outro canal manual'
+                    ELSE at.tipo::text END AS canal,
+               CASE WHEN at.canal_manual IS NOT NULL THEN 'REGISTRO MANUAL'
+                    WHEN at.concluido_em IS NOT NULL THEN 'CONCLUIDA'
                     WHEN at.prazo IS NULL THEN 'REGISTRO'
                     WHEN at.prazo < now() THEN 'ATRASADA'
                     ELSE 'PENDENTE' END AS situacao,
                NULL::numeric AS valor, at.id AS referencia,
-               ${escopo('at.contato_id')} AS escopo, u.nome AS usuario_nome
+               ${escopo('at.contato_id')} AS escopo, COALESCE(uc.nome, u.nome) AS usuario_nome
           FROM atividades at
           LEFT JOIN usuarios u ON u.id = at.responsavel_id
-         WHERE at.contato_id = ${c} OR at.conta_id = ${a}`,
+          LEFT JOIN usuarios uc ON uc.id = at.concluido_por_id
+          LEFT JOIN atividades tarefa ON tarefa.registro_pai_id = at.id
+         WHERE (at.contato_id = ${c} OR at.conta_id = ${a}) AND at.registro_pai_id IS NULL`,
     ],
     [
       'PROTOCOLO',
@@ -337,13 +352,13 @@ export async function fichaContato(contatoId: string) {
   // A ficha e a porta de entrada do registro: se ele nao esta no escopo de quem
   // pediu, nem os indicadores devem ser calculados. 404, nao 403.
   const contato = await prisma.contact.findFirst({
-    where: apenasVisivel(contatoId, await filtroDe(politicaContatos)),
-    include: { conta: true },
+    where: { AND: [apenasVisivel(contatoId, await filtroDe(politicaContatos)), { excluidoEm: null }] },
+    include: { conta: true, operacoes: { select: { operacao: true } } },
   });
   if (!contato) throw notFound('Contato não encontrado');
 
   const raiz: Raiz = { contatoId, contaId: contato.contaId };
-  const [indicadores, atividades] = await Promise.all([
+  const [indicadores, atividades, solicitacoesExclusao] = await Promise.all([
     resumo(raiz),
     prisma.activity.findMany({
       where: { concluidoEm: null, prazo: { not: null }, contatoId },
@@ -351,21 +366,26 @@ export async function fichaContato(contatoId: string) {
       take: 20,
       include: { responsavel: { select: { id: true, nome: true } } },
     }),
+    prisma.contactDeletionRequest.findMany({
+      where: { contatoId }, orderBy: { solicitadoEm: 'desc' }, take: 20,
+      include: { solicitadoPor: { select: { id: true, nome: true } }, aprovadoPor: { select: { id: true, nome: true } } },
+    }),
   ]);
 
   const temPreviaWhatsapp = contato.telefone
     ? (await prisma.chatPreview.count({ where: { numero: contato.telefone } })) > 0
     : false;
 
-  return { contato, indicadores, atividadesAbertas: atividades, temPreviaWhatsapp };
+  return { contato, indicadores, atividadesAbertas: atividades, temPreviaWhatsapp, solicitacoesExclusao };
 }
 
 export async function fichaConta(contaId: string) {
   const conta = await prisma.account.findFirst({
     where: apenasVisivel(contaId, await filtroDe(politicaContas)),
     include: {
+      operacoes: { select: { operacao: true } },
       contatos: {
-        where: await filtroDe(politicaContatos),
+        where: { AND: [await filtroDe(politicaContatos), { excluidoEm: null }] },
         select: { id: true, nome: true, telefone: true, email: true, segmentoParceiro: true },
         orderBy: { nome: 'asc' },
       },

@@ -22,6 +22,16 @@ import { discordanciaDaTemperatura, etiquetasDoCartao } from './temperatura';
 import { VisoesSalvas } from './VisoesSalvas';
 
 const MOTIVOS: MotivoPerda[] = ['PRECO', 'SEM_INTERESSE', 'CONCORRENTE', 'SEM_BUDGET', 'SEM_RESPOSTA', 'OUTRO'];
+type PerguntasGpct = NonNullable<Funil['estagios'][number]['perguntasGpct']>;
+const PERGUNTAS_GPCT: PerguntasGpct = {
+  goals: 'O que o cliente quer alcançar?',
+  plans: 'Como pretende chegar lá?',
+  challenges: 'O que impede o avanço?',
+  timeline: 'Quando precisa do resultado?',
+};
+const EIXOS_GPCT = [
+  ['goals', 'Objetivos'], ['plans', 'Planos'], ['challenges', 'Desafios'], ['timeline', 'Prazo'],
+] as const;
 
 type Kanban = { funil: { id: string; nome: string }; colunas: ColunaFunil[] };
 
@@ -213,7 +223,13 @@ export function OportunidadesTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   const [novosCampos, setNovosCampos] = useState<Record<string, unknown>>({});
   /** Rascunho do processo por etapa (item 3.1), so para quem pode editar. */
   const [exigencia, setExigencia] = useState<Record<string, string>>({});
+  const [roteiro, setRoteiro] = useState<Record<string, string>>({});
   const [salvandoEtapa, setSalvandoEtapa] = useState<string | null>(null);
+  const [salvandoRoteiro, setSalvandoRoteiro] = useState<string | null>(null);
+  const [perguntasPorEtapa, setPerguntasPorEtapa] = useState<Record<string, PerguntasGpct>>({});
+  const [salvandoPerguntas, setSalvandoPerguntas] = useState<string | null>(null);
+  const [reativacaoDias, setReativacaoDias] = useState('');
+  const [salvandoReativacao, setSalvandoReativacao] = useState(false);
   const { temPerfil } = useAuth();
   /**
    * Busca por titulo ou conta (Fase 7, item 3): Contatos, Contas e Leads ja
@@ -287,6 +303,56 @@ export function OportunidadesTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
     }
   };
 
+  const salvarReativacao = async () => {
+    if (!funilAtual) return;
+    setSalvandoReativacao(true);
+    try {
+      await api.patch(`/funis/${funilAtual.id}/reativacao`, {
+        dias: reativacaoDias.trim() ? Number(reativacaoDias) : null,
+      });
+      await carregarFunis();
+      setErro(null);
+    } catch (e) {
+      setErro(e instanceof ApiError ? e.message : 'Falha ao salvar o prazo de retomada');
+    } finally {
+      setSalvandoReativacao(false);
+    }
+  };
+
+  const salvarRoteiro = async (estagioId: string) => {
+    if (!funilAtual) return;
+    setSalvandoRoteiro(estagioId);
+    try {
+      await api.patch(`/funis/${funilAtual.id}/estagios/${estagioId}/roteiro`, {
+        roteiroVendas: roteiro[estagioId]?.trim() || null,
+      });
+      await carregarFunis();
+      setErro(null);
+    } catch (e) {
+      setErro(e instanceof ApiError ? e.message : 'Falha ao salvar o roteiro');
+    } finally {
+      setSalvandoRoteiro(null);
+    }
+  };
+
+  const salvarPerguntas = async (estagioId: string, perguntas: PerguntasGpct | null) => {
+    if (!funilAtual) return;
+    setSalvandoPerguntas(estagioId);
+    try {
+      await api.patch(`/funis/${funilAtual.id}/estagios/${estagioId}/perguntas-gpct`, { perguntas });
+      setPerguntasPorEtapa((atuais) => {
+        const { [estagioId]: _removidas, ...resto } = atuais;
+        return resto;
+      });
+      await carregarFunis();
+      setErro(null);
+    } catch (e) {
+      setErro(e instanceof ApiError ? e.message : 'Falha ao salvar as perguntas GPCT');
+    } finally {
+      setSalvandoPerguntas(null);
+    }
+  };
+
   /**
    * Move uma oportunidade para outro estagio — usada pelo soltar do arraste
    * E pelo seletor "Mover para" do cartao (alternativa por teclado/tela
@@ -353,6 +419,9 @@ export function OportunidadesTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   // padrao. Sem o segundo caso, o card de processo desapareceria justamente na
   // situacao mais comum — ninguem escolheu funil nenhum.
   const funilAtual = funis.find((f) => f.id === (funilId || kanban?.funil.id));
+  useEffect(() => {
+    setReativacaoDias(funilAtual?.reativacaoDias?.toString() ?? '');
+  }, [funilAtual?.id, funilAtual?.reativacaoDias]);
 
   /*
    * As probabilidades das etapas DESTE funil, para o cartao saber o que e
@@ -582,6 +651,50 @@ export function OportunidadesTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
               );
             })}
           </ul>
+          <div className="mt-5 space-y-3 border-t border-slate-100 pt-4">
+            <h3 className="text-sm font-semibold text-slate-700">Roteiro de vendas por etapa</h3>
+            {funilAtual.estagios.map((e) => (
+              <div key={e.id} className="grid gap-2 sm:grid-cols-[10rem_1fr_auto] sm:items-end">
+                <label htmlFor={`roteiro-${e.id}`} className="text-sm text-slate-600">{e.ordem}. {e.nome}</label>
+                <textarea id={`roteiro-${e.id}`} maxLength={4000} className="min-h-20 rounded-lg border border-slate-300 p-2 text-sm" value={roteiro[e.id] ?? e.roteiroVendas ?? ''} onChange={(ev) => setRoteiro((r) => ({ ...r, [e.id]: ev.target.value }))} />
+                <Button variante="neutro" onClick={() => void salvarRoteiro(e.id)} disabled={salvandoRoteiro === e.id}>{salvandoRoteiro === e.id ? 'Salvando...' : 'Salvar'}</Button>
+              </div>
+            ))}
+          </div>
+          <div className="mt-5 space-y-2 border-t border-slate-100 pt-4">
+            <h3 className="text-sm font-semibold text-slate-700">Perguntas de qualificação por etapa</h3>
+            {funilAtual.estagios.map((e) => (
+              <details key={e.id} className="rounded-lg border border-slate-200 p-3">
+                <summary className="cursor-pointer text-sm font-medium text-slate-700">{e.ordem}. {e.nome}</summary>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  {EIXOS_GPCT.map(([chave, titulo]) => (
+                    <Field key={chave} label={titulo}>
+                      <Input
+                        maxLength={160}
+                        value={perguntasPorEtapa[e.id]?.[chave] ?? e.perguntasGpct?.[chave] ?? PERGUNTAS_GPCT[chave]}
+                        onChange={(ev) => setPerguntasPorEtapa((atual) => ({
+                          ...atual,
+                          [e.id]: { ...(atual[e.id] ?? e.perguntasGpct ?? PERGUNTAS_GPCT), [chave]: ev.target.value },
+                        }))}
+                      />
+                    </Field>
+                  ))}
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <Button variante="neutro" disabled={salvandoPerguntas === e.id} onClick={() => void salvarPerguntas(e.id, perguntasPorEtapa[e.id] ?? e.perguntasGpct ?? PERGUNTAS_GPCT)}>Salvar perguntas</Button>
+                  <Button variante="neutro" disabled={salvandoPerguntas === e.id} onClick={() => void salvarPerguntas(e.id, null)}>Usar padrão</Button>
+                </div>
+              </details>
+            ))}
+          </div>
+          <div className="mt-5 flex flex-wrap items-end gap-2 border-t border-slate-100 pt-4">
+            <Field label="Retomar oportunidades perdidas após (dias)" hint="Em branco desliga a tarefa automática. Nenhuma mensagem é enviada ao cliente.">
+              <Input type="number" min={1} max={365} placeholder={funilAtual.reativacaoDias?.toString() ?? 'Desligado'} value={reativacaoDias} onChange={(e) => setReativacaoDias(e.target.value)} />
+            </Field>
+            <Button variante="neutro" onClick={() => void salvarReativacao()} disabled={salvandoReativacao}>
+              {salvandoReativacao ? 'Salvando...' : 'Salvar retomada'}
+            </Button>
+          </div>
           <p className="mt-3 text-xs text-slate-500">
             A tarefa e criada quando o negócio entra na etapa, com o responsável da oportunidade, e o cartão não
             avanca enquanto ela estiver aberta. Voltar o cartão para tras continua livre. Desligar a exigência não

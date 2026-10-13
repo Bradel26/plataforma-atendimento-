@@ -12,7 +12,7 @@
  */
 import { io } from 'socket.io-client';
 
-const API = 'http://localhost:3333';
+const API = process.env.SMOKE_API ? new URL(process.env.SMOKE_API).origin : 'http://localhost:3333';
 const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function post(caminho, corpo, token) {

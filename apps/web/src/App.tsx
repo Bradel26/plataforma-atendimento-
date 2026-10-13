@@ -18,6 +18,7 @@ import { WEBCHAT_ATIVO } from './lib/recursos';
 import { ConfiguracoesPage } from './pages/configuracoes/ConfiguracoesPage';
 import { CrmPage } from './pages/crm/CrmPage';
 import { EsteiraPage } from './pages/esteira/EsteiraPage';
+import { EditorFluxoPage } from './pages/fluxos/EditorFluxoPage';
 
 /**
  * Pagina de cada rota do menu. Os perfis com acesso vivem em NAV, entao a mesma
@@ -74,6 +75,7 @@ function AppRoutes() {
     <Routes>
       {RotasPublicas()}
       <Route path="/login" element={<Navigate to={inicial} replace />} />
+      <Route path="/configuracoes/fluxos/:id" element={temPerfil('ADMIN') ? <EditorFluxoPage /> : <Navigate to="/configuracoes" replace />} />
       <Route path="/protocolo" element={<Navigate to="/chamado-ti" replace />} />
       <Route element={<AppShell />}>
         {permitidos.flatMap(({ rota, subrotas }) => {

@@ -2,8 +2,77 @@ import { AgentStatus, ConversationStatus } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { indicadoresVoz } from '../voice/voice.service';
 import { organizacaoAtual } from '../../lib/tenant';
+import { filtroDe, politicaConversas } from '../../lib/politicas';
+import { notFound } from '../../lib/errors';
 
 const ABERTOS_TICKET = ['ABERTO', 'EM_ANDAMENTO', 'AGUARDANDO_CLIENTE'] as const;
+
+export type ConfiguracaoMonitoramento = {
+  alertaRespostaMinutos: number;
+  criticoRespostaMinutos: number;
+};
+
+export async function obterConfiguracaoMonitoramento(): Promise<ConfiguracaoMonitoramento> {
+  const organizacao = await prisma.organizacao.findUnique({
+    where: { id: organizacaoAtual() },
+    select: { alertaRespostaMinutos: true, criticoRespostaMinutos: true },
+  });
+  if (!organizacao) throw notFound('Organização do monitoramento não encontrada');
+  return organizacao;
+}
+
+export async function salvarConfiguracaoMonitoramento(config: ConfiguracaoMonitoramento) {
+  return prisma.organizacao.update({
+    where: { id: organizacaoAtual() },
+    data: config,
+    select: { alertaRespostaMinutos: true, criticoRespostaMinutos: true },
+  });
+}
+
+/** Conversas atribuÃ­das em que a Ãºltima fala externa ainda Ã© do cliente. */
+export async function conversasAguardandoResposta() {
+  const agora = Date.now();
+  const conversas = await prisma.conversation.findMany({
+    where: {
+      AND: [
+        await filtroDe(politicaConversas),
+        {
+          status: { in: ['ATRIBUIDO', 'EM_ATENDIMENTO'] },
+          arquivada: false,
+          agenteId: { not: null },
+          mensagens: { some: { autor: 'CLIENTE', interno: false } },
+        },
+      ],
+    },
+    select: {
+      id: true,
+      protocolo: true,
+      criadoEm: true,
+      contato: { select: { nome: true } },
+      agente: { select: { id: true, nome: true } },
+      fila: { select: { id: true, nome: true } },
+      mensagens: {
+        where: { interno: false, autor: { in: ['CLIENTE', 'AGENTE', 'BOT'] } },
+        orderBy: [{ criadoEm: 'desc' }, { id: 'desc' }],
+        take: 1,
+        select: { autor: true, criadoEm: true },
+      },
+    },
+  });
+
+  return conversas
+    .filter((conversa) => conversa.agente && conversa.mensagens[0]?.autor === 'CLIENTE')
+    .map((conversa) => ({
+      id: conversa.id,
+      protocolo: conversa.protocolo,
+      contato: conversa.contato.nome,
+      agente: conversa.agente!,
+      fila: conversa.fila,
+      aguardandoDesde: conversa.mensagens[0]!.criadoEm,
+      atrasoSegundos: Math.max(0, Math.floor((agora - conversa.mensagens[0]!.criadoEm.getTime()) / 1000)),
+    }))
+    .sort((a, b) => b.atrasoSegundos - a.atrasoSegundos);
+}
 
 /**
  * Media de segundos entre dois instantes, calculada no banco.

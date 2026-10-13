@@ -6,9 +6,12 @@ import { EVENTOS, conectar } from '../lib/realtime';
 import { COR_STATUS_AGENTE, duracao } from '../lib/viz';
 import { LABEL_PERFIL, LABEL_STATUS, type AgenteMonitorado } from '../lib/types';
 import { PainelEquipes } from '../features/monitor/PainelEquipes';
+import { AlertasResposta } from '../features/monitor/AlertasResposta';
+import { useAuth } from '../features/auth/AuthProvider';
 
 /** Painel do supervisor: quem esta online, em que status e com quanta carga. */
 export function MonitoramentoPage() {
+  const { temPerfil } = useAuth();
   const [agentes, setAgentes] = useState<AgenteMonitorado[]>([]);
   const [erro, setErro] = useState<string | null>(null);
   const [atualizadoEm, setAtualizadoEm] = useState<Date | null>(null);
@@ -48,6 +51,7 @@ export function MonitoramentoPage() {
   return (
     <div className="space-y-5">
       <PainelEquipes />
+      {temPerfil('ADMIN', 'SUPERVISOR') && <AlertasResposta />}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile rotulo="Disponíveis" valor={porStatus('DISPONIVEL')} estado={COR_STATUS_AGENTE.DISPONIVEL} />
         <StatTile rotulo="Em atendimento" valor={porStatus('EM_ATENDIMENTO')} estado={COR_STATUS_AGENTE.EM_ATENDIMENTO} />

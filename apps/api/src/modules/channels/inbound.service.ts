@@ -9,6 +9,7 @@ import { redigirTexto } from '../../lib/redacao';
 import { notificarConversaAtualizada, notificarConversaNova, notificarMensagem } from '../../realtime/hub';
 import { responderAutomaticamente } from '../bots/bots.service';
 import { entregarParaIa } from '../bots/ia.service';
+import { processarMensagemDeFluxo } from '../fluxos/fluxos.service';
 import { inclusaoDetalhe, toConversaDetalhe, toMensagem } from '../conversations/conversations.serializer';
 import { reservarProtocolo } from '../conversations/protocolo';
 import type { MensagemNormalizada } from './meta.types';
@@ -94,8 +95,6 @@ export async function registrarMensagemEntrante(dados: MensagemNormalizada) {
   const jaExiste = await prisma.message.findUnique({ where: { idExterno: dados.idExterno } });
   if (jaExiste) return { duplicada: true as const };
 
-  const contato = await encontrarOuCriarContato(dados);
-
   /*
    * A linha que recebeu esta mensagem tem de ser resolvida ANTES de procurar
    * uma conversa aberta, e entrar no filtro da busca. Sem isso, um contato
@@ -107,6 +106,7 @@ export async function registrarMensagemEntrante(dados: MensagemNormalizada) {
    */
   const config = await configDoDestino(dados.canal, dados.identificadorDestino);
   const canalConfigId = config?.id ?? null;
+  const contato = await encontrarOuCriarContato(dados, canalConfigId);
 
   const emAberto = await prisma.conversation.findFirst({
     where: {
@@ -199,7 +199,17 @@ export async function registrarMensagemEntrante(dados: MensagemNormalizada) {
   // respondendo a mesma mensagem e pior que nenhum. Entregar nao lanca — canal
   // com IA fora do ar cai no bot local, e a mensagem do cliente ja esta gravada.
   const ia = await entregarParaIa(mensagem, atualizada);
-  if (!ia.entregue) await responderAutomaticamente(conversa.id, dados.conteudo);
+  if (!ia.entregue) {
+    try {
+      const fluxo = await processarMensagemDeFluxo(conversa.id, dados.conteudo);
+      if (!fluxo.tratada) await responderAutomaticamente(conversa.id, dados.conteudo);
+    } catch (erro) {
+      // Nao falhe o webhook apos gravar a mensagem do cliente: o provedor pode
+      // repetir a entrega e disparar duas acoes. Tambem nao caia no bot legado
+      // depois de um fluxo parcialmente executado.
+      console.error(`[fluxo] falha ao processar conversa ${conversa.id}`, erro);
+    }
+  }
 
   return { duplicada: false as const, conversaId: conversa.id, mensagemId: mensagem.id };
 }
@@ -221,9 +231,38 @@ export async function registrarMensagemPropria(dados: MensagemNormalizada) {
   const config = await configDoDestino(dados.canal, dados.identificadorDestino);
   if (config && config.espelharCelular === false) return { ignorada: true as const };
 
+  // WPPConnect/WWebJS pode devolver no envio o ID curto (ex.: `3EB0...`), mas
+  // publicar no webhook o ID serializado (`true_<chat>_3EB0...`). Sem esta
+  // equivalencia, a mesma mensagem enviada pelo painel voltava como uma nova
+  // mensagem "enviada por outro dispositivo". Só reconciliamos pelo sufixo
+  // aleatório do ID e pela mesma linha de WhatsApp.
+  const partesId = dados.idExterno.split('_');
+  const idCurto = dados.canal !== 'WHATSAPP'
+    ? null
+    : partesId[0] === 'true' && partesId.length >= 3
+      ? partesId.at(-1) ?? null
+      : /^[a-f0-9]{16,}$/i.test(dados.idExterno)
+        ? dados.idExterno
+        : null;
+  if (idCurto) {
+    const ecoDoEnvio = await prisma.message.findFirst({
+      where: {
+        autor: 'AGENTE',
+        enviadaPorDispositivo: false,
+        conversa: { is: { canal: dados.canal, canalConfigId: config?.id ?? null } },
+        OR: [
+          { idExterno: idCurto },
+          { idExterno: { startsWith: 'true_', endsWith: `_${idCurto}` } },
+        ],
+      },
+      select: { id: true },
+    });
+    if (ecoDoEnvio) return { duplicada: true as const };
+  }
+
   // Sem nome de exibicao: o pushName de mensagem propria e o do dono do numero.
-  const contato = await encontrarOuCriarContato({ ...dados, nomeExibicao: null });
   const canalConfigId = config?.id ?? null;
+  const contato = await encontrarOuCriarContato({ ...dados, nomeExibicao: null }, canalConfigId);
 
   const emAberto = await prisma.conversation.findFirst({
     where: { contatoId: contato.id, canal: dados.canal, canalConfigId, status: { not: 'FINALIZADO' } },
@@ -333,13 +372,64 @@ async function criarMensagemOuDetectarCorrida(
   }
 }
 
-async function encontrarOuCriarContato(dados: MensagemNormalizada) {
+/**
+ * O nono digito movel do Brasil pode aparecer de forma diferente entre um
+ * cadastro legado e o JID que o WhatsApp devolve. So tratamos os dois formatos
+ * como candidatos aqui; a associacao so ocorre se houver uma unica conversa
+ * aberta, na mesma linha, aguardando resposta nas ultimas 24 horas.
+ */
+function numeroBrAlternativo(numero: string): string | null {
+  if (!numero.startsWith('55')) return null;
+  const ddd = numero.slice(2, 4);
+  const local = numero.slice(4);
+  if (local.length === 8) return `55${ddd}9${local}`;
+  if (local.length === 9 && local.startsWith('9')) return `55${ddd}${local.slice(1)}`;
+  return null;
+}
+
+async function encontrarOuCriarContato(dados: MensagemNormalizada, canalConfigId: string | null) {
   // O endereco externo e a chave estavel; o telefone e a forma legivel dele no WhatsApp.
   const porConversa = await prisma.conversation.findFirst({
-    where: { enderecoExterno: dados.enderecoExterno, canal: dados.canal },
-    orderBy: { criadoEm: 'desc' },
-    select: { contatoId: true },
+    where: {
+      enderecoExterno: dados.enderecoExterno,
+      canal: dados.canal,
+      canalConfigId,
+      status: { not: 'FINALIZADO' },
+    },
+    orderBy: { ultimaMensagemEm: 'desc' },
+    select: { contatoId: true, ultimaMensagemEm: true },
   });
+  const alternativo = numeroBrAlternativo(dados.enderecoExterno);
+  if (alternativo) {
+    const candidatos = await prisma.conversation.findMany({
+      where: {
+        canal: dados.canal,
+        canalConfigId,
+        status: { not: 'FINALIZADO' },
+        enderecoExterno: alternativo,
+        ultimaMensagemEm: { gte: new Date(Date.now() - 24 * 60 * 60_000) },
+      },
+      orderBy: { ultimaMensagemEm: 'desc' },
+      take: 3,
+      select: {
+        contatoId: true,
+        ultimaMensagemEm: true,
+        mensagens: { orderBy: { criadoEm: 'desc' }, take: 1, select: { autor: true, interno: true } },
+      },
+    });
+    const aguardandoResposta = candidatos.filter(
+      (c) => c.mensagens[0]?.autor === 'AGENTE' && !c.mensagens[0].interno,
+    );
+    const candidata = aguardandoResposta[0];
+    if (
+      aguardandoResposta.length === 1 &&
+      candidata &&
+      (!porConversa || candidata.ultimaMensagemEm > porConversa.ultimaMensagemEm)
+    ) {
+      return prisma.contact.findUniqueOrThrow({ where: { id: candidata.contatoId } });
+    }
+  }
+
   if (porConversa) {
     return prisma.contact.findUniqueOrThrow({ where: { id: porConversa.contatoId } });
   }

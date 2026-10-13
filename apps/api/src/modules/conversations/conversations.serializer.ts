@@ -9,7 +9,7 @@ export const inclusaoResumo = {
   fila: { select: { id: true, nome: true } },
   agente: { select: { id: true, nome: true } },
   atendenteInicial: { select: { id: true, nome: true } },
-  canalConfig: { select: { id: true, donoId: true, iaAtiva: true, nome: true } },
+  canalConfig: { select: { id: true, donoId: true, iaAtiva: true, nome: true, modo: true } },
   mensagens: { orderBy: { criadoEm: 'desc' }, take: 1, include: autorDaMensagem },
 } satisfies Prisma.ConversationInclude;
 
@@ -21,7 +21,7 @@ export const inclusaoDetalhe = {
   fila: { select: { id: true, nome: true } },
   agente: { select: { id: true, nome: true } },
   atendenteInicial: { select: { id: true, nome: true } },
-  canalConfig: { select: { id: true, donoId: true, iaAtiva: true, nome: true } },
+  canalConfig: { select: { id: true, donoId: true, iaAtiva: true, nome: true, modo: true } },
   // Busca as mais recentes (desc) e inverte na serializacao: um atendimento com
   // dois anos de historico nao pode chegar inteiro a cada abertura do painel.
   mensagens: {
@@ -82,6 +82,7 @@ export function toConversaResumo(c: ConversaResumo) {
     // null = conversa sem canal configurado (ex. Webchat) — nao confundir
     // com false ("IA desligada"), que so se aplica quando ha canal.
     iaAtiva: c.canalConfig?.iaAtiva ?? null,
+    modoWhatsApp: c.canal === 'WHATSAPP' ? (c.canalConfig?.modo ?? 'OFICIAL') : null,
     // De qual numero a conversa e — decide a aba (Minhas/Fila/Acompanhar).
     // Nulo = Numero da empresa sem linha registrada.
     linha: c.canalConfig ? { id: c.canalConfig.id, donoId: c.canalConfig.donoId, nome: c.canalConfig.nome } : null,
@@ -116,6 +117,7 @@ export function toConversaDetalhe(c: ConversaDetalhe) {
     // null = conversa sem canal configurado (ex. Webchat) — nao confundir
     // com false ("IA desligada"), que so se aplica quando ha canal.
     iaAtiva: c.canalConfig?.iaAtiva ?? null,
+    modoWhatsApp: c.canal === 'WHATSAPP' ? (c.canalConfig?.modo ?? 'OFICIAL') : null,
     // De qual numero a conversa e — decide a aba (Minhas/Fila/Acompanhar).
     // Nulo = Numero da empresa sem linha registrada.
     linha: c.canalConfig ? { id: c.canalConfig.id, donoId: c.canalConfig.donoId, nome: c.canalConfig.nome } : null,

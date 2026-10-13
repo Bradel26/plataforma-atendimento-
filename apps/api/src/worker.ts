@@ -20,10 +20,13 @@ import { redis } from './lib/redis';
 import './modules/campaigns/campaigns.worker';
 import './modules/surveys/surveys.worker';
 import './modules/voice/voice.worker';
+import './modules/fluxos/fluxos.worker';
 import { agendarExpurgo } from './modules/lgpd/agendador';
 import { agendarCampanhas } from './modules/campaigns/agendador';
 import { agendarEncerramentoDePresenca } from './modules/users/presenca.agendador';
 import { agendarCicloParceiro } from './modules/crm/cicloParceiro.agendador';
+import { agendarReativacao } from './modules/crm/reativacao.agendador';
+import { agendarExpansaoDeSeries } from './modules/crm/seriesAtividades.agendador';
 
 avisarChaveDerivada();
 
@@ -34,6 +37,8 @@ agendarExpurgo();
 agendarCampanhas();
 agendarEncerramentoDePresenca();
 agendarCicloParceiro();
+agendarReativacao();
+agendarExpansaoDeSeries();
 
 const pararWorker = iniciarWorker();
 

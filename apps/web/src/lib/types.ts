@@ -152,10 +152,13 @@ export type Contato = {
   email: string | null;
   telefone: string | null;
   canalOrigem?: Canal;
+  origemImportacao?: string | null;
   tags?: string[];
   observacoes?: string | null;
   /** Operação de credenciamento reconhecida na importação. */
   segmentoParceiro?: 'TIM' | 'STARLINK' | null;
+  operacoes?: Array<{ operacao: 'TIM' | 'STARLINK' }>;
+  excluidoEm?: string | null;
   criadoEm?: string;
   atualizadoEm?: string;
   totalConversas?: number;
@@ -206,6 +209,8 @@ type ConversaBase = {
   agente: { id: string; nome: string } | null;
   /** Estado de IA do canal desta conversa. Null = conversa sem canal (ex. Webchat). */
   iaAtiva: boolean | null;
+  /** Modo do WhatsApp usado para aplicar a janela Meta de 24h. */
+  modoWhatsApp?: 'OFICIAL' | 'NAO_OFICIAL' | null;
   /** De qual numero a conversa e (2026-10-05). Nulo = Numero da empresa sem linha registrada. */
   linha: { id: string; donoId: string | null; nome: string | null } | null;
 };
@@ -294,6 +299,22 @@ export type Conta = {
   nome: string;
   cnpj: string | null;
   segmento: string | null;
+  operacoes?: Array<{ operacao: 'TIM' | 'STARLINK' }>;
+  nomeFantasia?: string | null;
+  inscricaoEstadual?: string | null;
+  cidade?: string | null;
+  uf?: string | null;
+  cep?: string | null;
+  logradouro?: string | null;
+  numero?: string | null;
+  complemento?: string | null;
+  bairro?: string | null;
+  responsavelNome?: string | null;
+  responsavelCpf?: string | null;
+  responsavelId?: string | null;
+  responsavel?: { id: string; nome: string } | null;
+  origemCadastro?: string | null;
+  cnaeSecundario?: string[];
   /** Etiquetas do cliente, independentes das do contato. */
   tags?: string[];
   site: string | null;
@@ -381,12 +402,15 @@ export type Estagio = {
    * Nulo = etapa sem exigencia. Ausente = API antiga.
    */
   tarefaObrigatoria?: string | null;
+  roteiroVendas?: string | null;
+  perguntasGpct?: { goals: string; plans: string; challenges: string; timeline: string } | null;
 };
 
 export type Funil = {
   id: string;
   nome: string;
   ativo: boolean;
+  reativacaoDias?: number | null;
   estagios: Estagio[];
   totalOportunidades?: number;
 };
@@ -439,6 +463,7 @@ export type Oportunidade = {
   valor: number;
   status: OportunidadeStatus;
   motivoPerda: MotivoPerda | null;
+  qualificacao?: { goals: string; plans: string; challenges: string; timeline: string } | null;
   previsaoFechamento: string | null;
   criadoEm: string;
   fechadoEm: string | null;
@@ -942,8 +967,10 @@ export type CampanhaItemStatus = 'PENDENTE' | 'ENVIADO' | 'FALHOU' | 'RESPONDIDO
 export type Campanha = {
   id: string;
   nome: string;
+  assunto?: string | null;
   canal: Canal;
   mensagem: string;
+  anexos?: Array<{ id: string; nome: string; tipo: string; tamanho: number; url: string }>;
   status: CampanhaStatus;
   fila: { id: string; nome: string } | null;
   criadoPor: { id: string; nome: string } | null;
@@ -979,7 +1006,7 @@ export type Bot = {
   id: string;
   nome: string;
   ativo: boolean;
-  canal: Canal | null;
+  canal: Canal;
   mensagemBoasVindas: string;
   fallback: string;
   limiteSemResposta: number;
@@ -1251,7 +1278,8 @@ export type EventoFicha = {
   ocorridoEm: string;
   titulo: string;
   detalhe: string | null;
-  canal: Canal | null;
+  /** Inclui canais de interação manual além dos canais de conversa. */
+  canal: string | null;
   situacao: string | null;
   valor: number | null;
   referencia: string | null;
@@ -1360,6 +1388,11 @@ export type FichaContato = {
   indicadores: IndicadoresFicha;
   atividadesAbertas: Atividade[];
   temPreviaWhatsapp: boolean;
+  solicitacoesExclusao: Array<{
+    id: string; motivo: string; status: 'PENDENTE' | 'APROVADA' | 'REJEITADA' | 'CANCELADA';
+    solicitadoEm: string; decididoEm: string | null; motivoDecisao: string | null;
+    solicitadoPor: { id: string; nome: string }; aprovadoPor: { id: string; nome: string } | null;
+  }>;
 };
 
 /* ── Ponte com o motor de IA externo ──────────────────────────────────── */
@@ -1628,7 +1661,7 @@ export type FunilDeCicloDeVida = {
   }>;
 };
 
-export type VendedorOpcao = { id: string; nome: string };
+export type VendedorOpcao = { id: string; nome: string; perfil?: Perfil };
 
 export type ResumoVendedor = {
   vendedor: { id: string; nome: string };

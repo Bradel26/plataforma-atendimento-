@@ -9,12 +9,14 @@ import {
   criarFunilSchema,
   criarOportunidadeSchema,
   fecharOportunidadeSchema,
+  qualificacaoSchema,
   itensSchema,
   listarOportunidadesSchema,
   tarefaDaEtapaSchema,
 } from './opportunities.schemas';
 import { getBranding } from '../branding/branding.service';
 import { gerarPropostaPdf } from './proposta.pdf';
+import { analisarOportunidade, ultimaAnaliseDaOportunidade } from './oportunidade-ia.service';
 import {
   atualizarOportunidade,
   auditoriaDaOportunidade,
@@ -23,6 +25,9 @@ import {
   criarOportunidade,
   decidirDesconto,
   definirItens,
+  definirPrazoDeReativacao,
+  definirRoteiroDeVendas,
+  definirPerguntasGpct,
   definirTarefaDaEtapa,
   fecharOportunidade,
   funilKanban,
@@ -30,6 +35,8 @@ import {
   listarOportunidades,
   obterOportunidade,
   registrarPropostaGerada,
+  reabrirOportunidade,
+  salvarQualificacao,
 } from './opportunities.service';
 
 export const opportunitiesRoutes = Router();
@@ -63,6 +70,40 @@ funnelsRoutes.post(
   validateBody(criarFunilSchema),
   asyncHandler(async (req, res) => {
     res.status(201).json({ funil: await criarFunil(req.body) });
+  }),
+);
+
+funnelsRoutes.patch(
+  '/:id/reativacao',
+  requireRole('ADMIN', 'SUPERVISOR'),
+  validateBody(z.object({ dias: z.number().int().min(1).max(365).nullable() })),
+  asyncHandler(async (req, res) => {
+    res.json({ funil: await definirPrazoDeReativacao(param(req, 'id'), req.body.dias) });
+  }),
+);
+
+funnelsRoutes.patch(
+  '/:funilId/estagios/:estagioId/roteiro',
+  requireRole('ADMIN', 'SUPERVISOR'),
+  validateBody(z.object({ roteiroVendas: z.string().trim().max(4000).nullable() })),
+  asyncHandler(async (req, res) => {
+    res.json({ estagio: await definirRoteiroDeVendas(param(req, 'funilId'), param(req, 'estagioId'), req.body.roteiroVendas) });
+  }),
+);
+
+funnelsRoutes.patch(
+  '/:funilId/estagios/:estagioId/perguntas-gpct',
+  requireRole('ADMIN', 'SUPERVISOR'),
+  validateBody(z.object({
+    perguntas: z.object({
+      goals: z.string().trim().min(2).max(160),
+      plans: z.string().trim().min(2).max(160),
+      challenges: z.string().trim().min(2).max(160),
+      timeline: z.string().trim().min(2).max(160),
+    }).nullable(),
+  })),
+  asyncHandler(async (req, res) => {
+    res.json({ estagio: await definirPerguntasGpct(param(req, 'funilId'), param(req, 'estagioId'), req.body.perguntas) });
   }),
 );
 
@@ -108,6 +149,22 @@ opportunitiesRoutes.get(
   '/:id',
   asyncHandler(async (req, res) => {
     res.json({ oportunidade: await obterOportunidade(param(req, 'id')) });
+  }),
+);
+
+opportunitiesRoutes.get(
+  '/:id/analise-ia',
+  requireRole('ADMIN', 'SUPERVISOR', 'GESTOR'),
+  asyncHandler(async (req, res) => {
+    res.json({ analise: await ultimaAnaliseDaOportunidade(param(req, 'id')) });
+  }),
+);
+
+opportunitiesRoutes.post(
+  '/:id/analise-ia',
+  requireRole('ADMIN', 'SUPERVISOR', 'GESTOR'),
+  asyncHandler(async (req, res) => {
+    res.status(201).json({ analise: await analisarOportunidade(param(req, 'id')) });
   }),
 );
 
@@ -167,6 +224,21 @@ opportunitiesRoutes.post(
   validateBody(fecharOportunidadeSchema),
   asyncHandler(async (req, res) => {
     res.json({ oportunidade: await fecharOportunidade(param(req, 'id'), req.body) });
+  }),
+);
+
+opportunitiesRoutes.post(
+  '/:id/reabrir',
+  asyncHandler(async (req, res) => {
+    res.json({ oportunidade: await reabrirOportunidade(param(req, 'id')) });
+  }),
+);
+
+opportunitiesRoutes.put(
+  '/:id/qualificacao',
+  validateBody(qualificacaoSchema),
+  asyncHandler(async (req, res) => {
+    res.json({ oportunidade: await salvarQualificacao(param(req, 'id'), req.body) });
   }),
 );
 

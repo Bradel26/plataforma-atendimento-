@@ -13,6 +13,8 @@ import { agendarExpurgo } from './modules/lgpd/agendador';
 import { agendarCampanhas } from './modules/campaigns/agendador';
 import { agendarEncerramentoDePresenca } from './modules/users/presenca.agendador';
 import { agendarCicloParceiro } from './modules/crm/cicloParceiro.agendador';
+import { agendarReativacao } from './modules/crm/reativacao.agendador';
+import { agendarExpansaoDeSeries } from './modules/crm/seriesAtividades.agendador';
 import { criarServidorRealtime } from './realtime/server';
 
 // O Socket.IO precisa do servidor HTTP cru, por isso nao usamos app.listen().
@@ -25,7 +27,7 @@ avisarChaveDerivada();
 // desligado, quem consome a fila e dist/src/worker.js, e o expurgo da LGPD vai
 // com ele — sao os dois trabalhos de fundo.
 const pararWorker = env.WORKER_EMBUTIDO
-  ? (agendarExpurgo(), agendarCampanhas(), agendarEncerramentoDePresenca(), agendarCicloParceiro(), iniciarWorker())
+  ? (agendarExpurgo(), agendarCampanhas(), agendarEncerramentoDePresenca(), agendarCicloParceiro(), agendarReativacao(), agendarExpansaoDeSeries(), iniciarWorker())
   : async () => {};
 
 if (!env.WORKER_EMBUTIDO) console.log('Worker embutido desligado: suba o processo do worker separadamente.');

@@ -68,7 +68,7 @@ const ABAS = [
   // Mesmo corte de leitura de metas e produtividade: e painel de gestao. COMERCIAL
   // entra tambem porque, ao contrario das outras tres, esta aba serve para a propria
   // pessoa ver o proprio resumo — nao so para quem gerencia.
-  { id: 'painel-vendedor', label: 'Painel do vendedor', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'] },
+  { id: 'painel-vendedor', label: 'Painel do Consultor', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'] },
   // Renomear e remover etiqueta alcancam registros que quem clica nao ve, entao
   // a aba segue o mesmo perfil da rota: ADMIN e SUPERVISOR.
   { id: 'dados', label: 'Importar / Exportar', perfis: ['ADMIN', 'SUPERVISOR'] },

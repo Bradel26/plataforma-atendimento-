@@ -16,6 +16,7 @@ export function AgendarRetorno({ aoAgendar }: { aoAgendar: () => void }) {
   const [achados, setAchados] = useState<Contato[]>([]);
   const [contato, setContato] = useState<Contato | null>(null);
   const [form, setForm] = useState({ tipo: 'RETORNO' as TipoAtividade, titulo: '', prazo: '' });
+  const [recorrencia, setRecorrencia] = useState({ frequencia: '', fimEm: '', diasSemana: [] as number[] });
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const horaAgendada = form.prazo.slice(11, 16);
@@ -46,8 +47,16 @@ export function AgendarRetorno({ aoAgendar }: { aoAgendar: () => void }) {
         titulo: form.titulo.trim(),
         prazo: new Date(form.prazo).toISOString(),
         contatoId: contato.id,
+        ...(recorrencia.frequencia ? {
+          recorrencia: {
+            frequencia: recorrencia.frequencia,
+            ...(recorrencia.fimEm ? { fimEm: new Date(`${recorrencia.fimEm}T23:59:00`).toISOString() } : {}),
+            diasSemana: recorrencia.diasSemana,
+          },
+        } : {}),
       });
       setForm({ tipo: 'RETORNO', titulo: '', prazo: '' });
+      setRecorrencia({ frequencia: '', fimEm: '', diasSemana: [] });
       setContato(null);
       setBusca('');
       aoAgendar();
@@ -61,7 +70,8 @@ export function AgendarRetorno({ aoAgendar }: { aoAgendar: () => void }) {
   return (
     <Card titulo="Agendar retorno ou atividade">
       {erro && <Alerta>{erro}</Alerta>}
-      <form onSubmit={enviar} className="grid gap-3 md:grid-cols-[1.2fr_160px_1.5fr_190px_auto] md:items-end">
+      <form onSubmit={enviar} className="space-y-3">
+        <div className="grid gap-3 md:grid-cols-[1.2fr_160px_1.5fr_190px_auto] md:items-end">
         <Field label="Parceiro">
           <Input
             required
@@ -122,6 +132,17 @@ export function AgendarRetorno({ aoAgendar }: { aoAgendar: () => void }) {
         <Button type="submit" disabled={ocupado || !contato || !form.titulo.trim() || !form.prazo || !horarioPermitido}>
           {ocupado ? 'Agendando...' : 'Agendar'}
         </Button>
+        </div>
+        <div className="flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <Field label="Repetição">
+            <Select value={recorrencia.frequencia} onChange={(e) => setRecorrencia({ ...recorrencia, frequencia: e.target.value, diasSemana: e.target.value === 'SEMANAL' ? recorrencia.diasSemana : [] })}>
+              <option value="">Não repetir</option><option value="DIARIA">Diariamente</option><option value="SEMANAL">Semanalmente</option><option value="MENSAL">Mensalmente</option>
+            </Select>
+          </Field>
+          {recorrencia.frequencia && <Field label="Encerrar em (opcional)"><Input type="date" value={recorrencia.fimEm} onChange={(e) => setRecorrencia({ ...recorrencia, fimEm: e.target.value })} /></Field>}
+          {recorrencia.frequencia === 'SEMANAL' && <fieldset className="flex flex-wrap gap-2 text-xs"><legend className="mb-1 text-slate-600">Dias da semana</legend>{['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((label, dia) => <label key={dia} className="flex items-center gap-1"><input type="checkbox" checked={recorrencia.diasSemana.includes(dia)} onChange={(e) => setRecorrencia({ ...recorrencia, diasSemana: e.target.checked ? [...recorrencia.diasSemana, dia] : recorrencia.diasSemana.filter((x) => x !== dia) })} />{label}</label>)}</fieldset>}
+          {recorrencia.frequencia && <p className="max-w-sm text-xs text-slate-500">Sem data final, a série continua ativa e o sistema cria as próximas ocorrências automaticamente. Cada ocorrência tem horário, responsável e conclusão próprios; você pode editar uma ocorrência ou as próximas da série.</p>}
+        </div>
       </form>
     </Card>
   );

@@ -134,7 +134,7 @@ contactsRoutes.get(
     const { busca, tags, limite, cursor, ciclo, uf, ddd } = res.locals.query as z.infer<typeof listarSchema>;
     // O escopo entra como primeiro filtro, e nao como `undefined` quando nao ha
     // busca: `where: undefined` e "sem restricao", que aqui seria a base inteira.
-    const filtros: Prisma.ContactWhereInput[] = [await filtroDe(politicaContatos)];
+    const filtros: Prisma.ContactWhereInput[] = [await filtroDe(politicaContatos), { excluidoEm: null }];
 
     if (busca) {
       filtros.push({
@@ -255,13 +255,22 @@ contactsRoutes.get(
   }),
 );
 
+// Rota estática antes de `/:id`, para não interpretar o caminho como contato.
+contactsRoutes.get('/solicitacoes-exclusao', requireRole('ADMIN', 'SUPERVISOR'), asyncHandler(async (_req, res) => {
+  const solicitacoes = await prisma.contactDeletionRequest.findMany({
+    orderBy: { solicitadoEm: 'desc' }, take: 200,
+    include: { contato: { select: { id: true, nome: true, telefone: true } }, solicitadoPor: { select: { id: true, nome: true } }, aprovadoPor: { select: { id: true, nome: true } } },
+  });
+  res.json({ solicitacoes });
+}));
+
 /** Ficha do contato com o historico de conversas — CRM basico da Fase 1. */
 contactsRoutes.get(
   '/:id/avatar',
   asyncHandler(async (req, res) => {
     const id = param(req, 'id');
     const contato = await prisma.contact.findFirst({
-      where: apenasVisivel(id, await filtroDe(politicaContatos)),
+      where: { AND: [apenasVisivel(id, await filtroDe(politicaContatos)), { excluidoEm: null }] },
       select: { id: true, telefone: true },
     });
     if (!contato) throw notFound('Contato não encontrado');
@@ -329,7 +338,7 @@ contactsRoutes.get(
     const id = param(req, 'id');
     // Mesmo filtro da listagem: contato fora do escopo responde 404, nao 403.
     const contato = await prisma.contact.findFirst({
-      where: apenasVisivel(id, await filtroDe(politicaContatos)),
+      where: { AND: [apenasVisivel(id, await filtroDe(politicaContatos)), { excluidoEm: null }] },
     });
     if (!contato) throw notFound('Contato não encontrado');
 
@@ -445,6 +454,14 @@ contactsRoutes.post(
           dados.segmentoParceiro ?? identificarSegmentoParceiro(null, dados.observacoes),
       },
     });
+    const operacaoReconhecida = (contato.segmentoParceiro ?? '').toUpperCase();
+    if (operacaoReconhecida === 'TIM' || operacaoReconhecida === 'STARLINK') {
+      await prisma.contactOperation.upsert({
+        where: { contatoId_operacao: { contatoId: contato.id, operacao: operacaoReconhecida } },
+        create: { contatoId: contato.id, operacao: operacaoReconhecida },
+        update: {},
+      });
+    }
     res.status(201).json({ contato, possivelDuplicado: duplicado, contaCriada });
   }),
 );
@@ -479,7 +496,7 @@ contactsRoutes.patch(
   asyncHandler(async (req, res) => {
     const id = param(req, 'id');
     const existe = await prisma.contact.findFirst({
-      where: apenasVisivel(id, await filtroDe(politicaContatos)),
+      where: { AND: [apenasVisivel(id, await filtroDe(politicaContatos)), { excluidoEm: null }] },
       select: { id: true, segmentoParceiro: true },
     });
     if (!existe) throw notFound('Contato não encontrado');
@@ -511,17 +528,63 @@ contactsRoutes.patch(
  *
  * Mesmo padrao de `accountsRoutes.delete('/:id', ...)`: restrito a ADMIN.
  */
-contactsRoutes.delete(
-  '/:id',
-  requireRole('ADMIN'),
+contactsRoutes.post(
+  '/:id/exclusao',
+  validateBody(z.object({ motivo: z.string().trim().min(8).max(1000) })),
   asyncHandler(async (req, res) => {
     const id = param(req, 'id');
     const existe = await prisma.contact.findFirst({
-      where: apenasVisivel(id, await filtroDe(politicaContatos)),
+      where: { AND: [apenasVisivel(id, await filtroDe(politicaContatos)), { excluidoEm: null }] },
       select: { id: true },
     });
     if (!existe) throw notFound('Contato não encontrado');
-    await prisma.contact.delete({ where: { id } });
-    res.status(204).end();
+    const pendente = await prisma.contactDeletionRequest.findFirst({ where: { contatoId: id, status: 'PENDENTE' } });
+    if (pendente) throw badRequest('Já existe uma solicitação de exclusão aguardando aprovação');
+    const solicitacao = await prisma.contactDeletionRequest.create({ data: { contatoId: id, solicitadoPorId: req.user!.sub, motivo: req.body.motivo } });
+    res.status(202).json({ solicitacao });
   }),
 );
+
+contactsRoutes.post('/:id/exclusao/aprovar', requireRole('ADMIN', 'SUPERVISOR'), asyncHandler(async (req, res) => {
+  const id = param(req, 'id');
+  const solicitacao = await prisma.contactDeletionRequest.findFirst({ where: { id, status: 'PENDENTE' } });
+  if (!solicitacao) throw notFound('Solicitação pendente não encontrada');
+  if (solicitacao.solicitadoPorId === req.user!.sub) throw badRequest('Quem solicitou não pode aprovar a própria exclusão');
+  const justificativa = z.string().trim().min(3).max(1000).parse(req.body?.justificativa);
+  const resultado = await prisma.$transaction(async (tx) => {
+    const decisao = await tx.contactDeletionRequest.update({ where: { id }, data: { status: 'APROVADA', aprovadoPorId: req.user!.sub, motivoDecisao: justificativa, decididoEm: new Date() } });
+    await tx.contact.update({ where: { id: solicitacao.contatoId }, data: { nome: 'Contato removido', telefone: null, email: null, observacoes: null, tags: [], segmentoParceiro: null, uf: null, cidade: null, contaId: null, responsavelId: null, papelNaConta: null, qualificacaoQsa: null, excluidoEm: new Date(), anonimizadoEm: new Date() } });
+    return decisao;
+  });
+  res.json({ solicitacao: resultado });
+}));
+
+contactsRoutes.post('/:id/exclusao/rejeitar', requireRole('ADMIN', 'SUPERVISOR'), validateBody(z.object({ justificativa: z.string().trim().min(3).max(1000) })), asyncHandler(async (req, res) => {
+  const id = param(req, 'id');
+  const solicitacao = await prisma.contactDeletionRequest.findFirst({ where: { id, status: 'PENDENTE' } });
+  if (!solicitacao) throw notFound('Solicitação pendente não encontrada');
+  if (solicitacao.solicitadoPorId === req.user!.sub) throw badRequest('Quem solicitou não pode decidir a própria solicitação');
+  res.json({ solicitacao: await prisma.contactDeletionRequest.update({ where: { id }, data: { status: 'REJEITADA', aprovadoPorId: req.user!.sub, motivoDecisao: req.body.justificativa, decididoEm: new Date() } }) });
+}));
+
+contactsRoutes.post('/solicitacoes-exclusao/:id/cancelar', validateBody(z.object({ justificativa: z.string().trim().min(3).max(1000) })), asyncHandler(async (req, res) => {
+  const id = param(req, 'id');
+  const solicitacao = await prisma.contactDeletionRequest.findFirst({ where: { id, status: 'PENDENTE' } });
+  if (!solicitacao) throw notFound('Solicitação pendente não encontrada');
+  if (solicitacao.solicitadoPorId !== req.user!.sub) throw badRequest('Somente quem solicitou pode cancelar o pedido');
+  const atualizada = await prisma.contactDeletionRequest.update({
+    where: { id }, data: { status: 'CANCELADA', motivoDecisao: req.body.justificativa, decididoEm: new Date() },
+  });
+  res.json({ solicitacao: atualizada });
+}));
+
+contactsRoutes.put('/:id/operacoes', validateBody(z.object({ operacoes: z.array(z.enum(['TIM', 'STARLINK'])).max(2) })), asyncHandler(async (req, res) => {
+  const id = param(req, 'id');
+  const contato = await prisma.contact.findFirst({ where: { AND: [apenasVisivel(id, await filtroDe(politicaContatos)), { excluidoEm: null }] }, select: { id: true } });
+  if (!contato) throw notFound('Contato não encontrado');
+  await prisma.$transaction(async (tx) => {
+    await tx.contactOperation.deleteMany({ where: { contatoId: id } });
+    await tx.contactOperation.createMany({ data: req.body.operacoes.map((operacao: string) => ({ contatoId: id, operacao })) });
+  });
+  res.json({ operacoes: req.body.operacoes });
+}));

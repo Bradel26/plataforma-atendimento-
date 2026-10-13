@@ -37,6 +37,7 @@ import {
   listarPrevias,
   marcarComoLida,
   obterConversa,
+  obterJanelaWhatsApp,
   transferirConversa,
   type Solicitante,
 } from './conversations.service';
@@ -178,6 +179,13 @@ conversationsRoutes.get(
   '/:id',
   asyncHandler(async (req, res) => {
     res.json({ conversa: await obterConversa(quem(req), param(req, 'id')) });
+  }),
+);
+
+conversationsRoutes.get(
+  '/:id/janela-whatsapp',
+  asyncHandler(async (req, res) => {
+    res.json({ janela: await obterJanelaWhatsApp(quem(req), param(req, 'id')) });
   }),
 );
 

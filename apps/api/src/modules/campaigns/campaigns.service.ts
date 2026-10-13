@@ -4,11 +4,13 @@ import { badRequest, notFound } from '../../lib/errors';
 import { exigeEnvioExterno } from '../channels/outbound.service';
 import { enfileirar } from '../../lib/fila';
 import { organizacaoAtual } from '../../lib/tenant';
+import { urlAssinada } from '../../lib/storage';
 
 const inclusao = {
   fila: { select: { id: true, nome: true } },
   criadoPor: { select: { id: true, nome: true } },
   _count: { select: { itens: true } },
+  anexos: { orderBy: { criadoEm: 'asc' } },
 } satisfies Prisma.CampaignInclude;
 
 type CampanhaDb = Prisma.CampaignGetPayload<{ include: typeof inclusao }>;
@@ -28,6 +30,7 @@ async function serialize(c: CampanhaDb) {
   return {
     id: c.id,
     nome: c.nome,
+    assunto: c.assunto,
     canal: c.canal,
     mensagem: c.mensagem,
     status: c.status,
@@ -38,6 +41,7 @@ async function serialize(c: CampanhaDb) {
     concluidaEm: c.concluidaEm,
     criadoEm: c.criadoEm,
     total: c._count.itens,
+    anexos: c.anexos.map((a) => ({ ...a, url: urlAssinada(a.url) })),
     contagens: {
       PENDENTE: contagens.PENDENTE ?? 0,
       ENVIADO: contagens.ENVIADO ?? 0,
@@ -138,6 +142,7 @@ export async function cancelarCampanha(id: string) {
 
 export async function criarCampanha(input: {
   nome: string;
+  assunto?: string | null;
   canal: 'WEBCHAT' | 'WHATSAPP' | 'INSTAGRAM' | 'FACEBOOK' | 'EMAIL' | 'VOZ';
   mensagem: string;
   filaId?: string | null;

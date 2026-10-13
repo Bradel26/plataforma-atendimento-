@@ -11,7 +11,7 @@ import {
   type OperacaoEsteira,
   type SituacaoExcecao,
 } from '../../lib/types';
-import { UFS } from './ufs';
+import { UFS_ATENDIDAS } from './ufs';
 import { EmpresaInput, type EmpresaEscolhida } from '../crm/EmpresaInput';
 import { PainelDoCiclo } from '../crm/PainelDoCiclo';
 
@@ -374,8 +374,8 @@ function NovoParceiro({ funilId, aoCriar }: { funilId: string; aoCriar: () => vo
             <Field label="UF">
               <Select value={novo.uf} onChange={(e) => setNovo({ ...novo, uf: e.target.value })}>
                 <option value="">—</option>
-                {UFS.map((uf) => (
-                  <option key={uf} value={uf}>{uf}</option>
+                {UFS_ATENDIDAS.map(({ sigla, nome }) => (
+                  <option key={sigla} value={sigla}>{sigla} — {nome}</option>
                 ))}
               </Select>
             </Field>
@@ -516,6 +516,10 @@ export function EsteiraPage() {
   }
 
   const total = (kanban?.colunas ?? []).reduce((acc, c) => acc + c.total, 0);
+  const nomeOperacao = operacoes.find((o) => o.id === funilId)?.nome ?? '';
+  const etapasOperacao = nomeOperacao.toLocaleLowerCase('pt-BR').includes('starlink')
+    ? 'Preencher o VSM → Contrato assinado → Treinamento realizado → Pronto para venda'
+    : 'Em negociação → Credenciamento em andamento → Documentação → Credenciamento OK → Apto para venda';
 
   return (
     <div className="space-y-4">
@@ -546,8 +550,8 @@ export function EsteiraPage() {
           <Field label="UF">
             <Select value={filtro.uf} onChange={(e) => setFiltro({ ...filtro, uf: e.target.value })}>
               <option value="">Todas</option>
-              {UFS.map((uf) => (
-                <option key={uf} value={uf}>{uf}</option>
+              {UFS_ATENDIDAS.map(({ sigla, nome }) => (
+                <option key={sigla} value={sigla}>{sigla} — {nome}</option>
               ))}
             </Select>
           </Field>
@@ -566,8 +570,7 @@ export function EsteiraPage() {
 
       <div className="flex justify-end"><Button variante="neutro" onClick={() => { setImportacaoAberta((aberta) => !aberta); setResumoLote(null); }}>Importar contatos TIM / Starlink</Button></div>
       <p className="text-xs text-slate-500">
-        {total} parceiro(s) · Novo cadastro → Pendência → Aprovação → Credenciado → Ativo · Reprovado, Cancelado e
-        Inativado ficam marcados no card, sem virar coluna.
+        {total} parceiro(s) · {etapasOperacao} · Reprovado, Cancelado e Inativado ficam marcados no card, sem virar coluna.
       </p>
 
       {importacaoAberta && (

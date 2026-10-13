@@ -35,6 +35,13 @@ const schema = z.object({
    * em WEB_ORIGIN, que e o certo quando front e API estao no mesmo dominio.
    */
   PUBLIC_URL: z.string().default(''),
+  /** Motor interno que recebe contexto comercial e devolve analise estruturada. */
+  OPORTUNIDADE_IA_URL: z.string().url().optional(),
+  OPORTUNIDADE_IA_TOKEN: z.string().min(16).optional(),
+  /** Ollama na rede privada; quando definido, substitui o motor HTTP externo. */
+  OPORTUNIDADE_IA_OLLAMA_URL: z.string().url().optional(),
+  OPORTUNIDADE_IA_OLLAMA_MODELO: z.string().min(1).default('qwen3:4b'),
+  OPORTUNIDADE_IA_ORGANIZACAO_ID: z.string().uuid().optional(),
   /**
    * Pasta do front compilado, relativa ao cwd da API. Quando ela existe, a
    * propria API serve o site — util onde outro proxy e o dono das portas e nao

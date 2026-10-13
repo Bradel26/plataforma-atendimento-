@@ -28,6 +28,7 @@ type ItemAgenda = {
   tipo: string;
   prazo: string | null;
   concluidoEm: string | null;
+  serieId?: string | null;
   obrigatoria?: boolean;
   responsavel?: { id: string; nome: string } | null;
   contato?: { id: string; nome: string } | null;
@@ -96,14 +97,51 @@ export function AgendaDaSemana() {
   }, [carregar]);
 
   const concluir = async (id: string) => {
+    const justificativa = window.prompt('Justificativa para concluir esta atividade:');
+    if (!justificativa?.trim()) return;
+    const resultado = window.prompt('Qual foi o resultado?');
+    if (!resultado?.trim()) return;
     setConcluindo(id);
     try {
-      await api.post(`/atividades/${id}/concluir`, {});
+      await api.post(`/atividades/${id}/concluir`, { justificativa: justificativa.trim(), resultado: resultado.trim() });
       await carregar();
     } catch (e) {
       setErro(e instanceof ApiError ? e.message : 'Falha ao concluir a tarefa');
     } finally {
       setConcluindo(null);
+    }
+  };
+
+  const cancelar = async (item: ItemAgenda) => {
+    const serie = Boolean(item.serieId);
+    if (!window.confirm(serie ? 'Cancelar todas as próximas ocorrências desta série?' : 'Cancelar esta ocorrência?')) return;
+    try {
+      await api.post(`/atividades/${serie ? item.serieId : item.id}/${serie ? 'cancelar-serie' : 'cancelar'}`, {});
+      await carregar();
+    } catch (e) { setErro(e instanceof ApiError ? e.message : 'Falha ao cancelar a atividade'); }
+  };
+
+  const editar = async (item: ItemAgenda) => {
+    const titulo = window.prompt('Descrição da atividade:', item.titulo);
+    if (titulo === null || !titulo.trim()) return;
+    const prazoAtual = item.prazo ? new Date(new Date(item.prazo).getTime() - new Date(item.prazo).getTimezoneOffset() * 60_000).toISOString().slice(0, 16) : '';
+    const prazoTexto = window.prompt('Data e hora (AAAA-MM-DDTHH:mm):', prazoAtual);
+    if (prazoTexto === null) return;
+    const prazo = new Date(prazoTexto);
+    if (Number.isNaN(prazo.getTime())) {
+      setErro('Informe uma data e hora válidas no formato AAAA-MM-DDTHH:mm.');
+      return;
+    }
+    const editarSerie = Boolean(item.serieId) && window.confirm('Aplicar a alteração às próximas ocorrências da série? Se escolher Cancelar, a alteração será apenas nesta ocorrência.');
+    try {
+      if (editarSerie && item.serieId) {
+        await api.patch(`/atividades/${item.serieId}/serie`, { titulo: titulo.trim(), prazo: prazo.toISOString() });
+      } else {
+        await api.patch(`/atividades/${item.id}`, { titulo: titulo.trim(), prazo: prazo.toISOString() });
+      }
+      await carregar();
+    } catch (e) {
+      setErro(e instanceof ApiError ? e.message : 'Falha ao editar a atividade');
     }
   };
 
@@ -170,6 +208,8 @@ export function AgendaDaSemana() {
       {/* Concluir da propria agenda: abrir a ficha para marcar uma tarefa feita
           e o tipo de passo que faz a agenda ser abandonada. */}
       {!item.concluidoEm && (
+        <div className="flex shrink-0 gap-2">
+        <button type="button" onClick={() => void editar(item)} className="text-xs text-slate-500 underline-offset-2 hover:underline">editar</button>
         <button
           type="button"
           onClick={() => void concluir(item.id)}
@@ -178,6 +218,8 @@ export function AgendaDaSemana() {
         >
           concluir
         </button>
+        <button type="button" onClick={() => void cancelar(item)} className="text-xs text-slate-500 underline-offset-2 hover:underline">cancelar</button>
+        </div>
       )}
     </li>
   );

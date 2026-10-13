@@ -37,6 +37,10 @@ export function RegistrarAtividade({ contatoId, contaId, aoRegistrar }: Props) {
   const [expandido, setExpandido] = useState(false);
 
   const enviar = async () => {
+    if (contatoId && !form.prazo) {
+      setErro('Informe a data e a hora da próxima tarefa antes de salvar o registro.');
+      return;
+    }
     setSalvando(true);
     setErro(null);
     try {
@@ -93,9 +97,19 @@ export function RegistrarAtividade({ contatoId, contaId, aoRegistrar }: Props) {
         </Field>
 
         <Button type="submit" disabled={salvando || form.titulo.trim().length < 2}>
-          {salvando ? 'Registrando...' : form.prazo ? 'Criar tarefa' : 'Registrar'}
+          {salvando ? 'Salvando...' : contatoId ? 'Agendar tarefa' : form.prazo ? 'Criar tarefa' : 'Registrar'}
         </Button>
       </div>
+
+      {contatoId && (
+        <Field label="Data e hora da próxima tarefa" hint="Obrigatória para salvar este registro. A tarefa ficará vinculada ao contato e ao usuário logado.">
+          <Input
+            type="datetime-local"
+            value={form.prazo}
+            onChange={(e) => setForm({ ...form, prazo: e.target.value })}
+          />
+        </Field>
+      )}
 
       <button
         type="button"
@@ -117,14 +131,14 @@ export function RegistrarAtividade({ contatoId, contaId, aoRegistrar }: Props) {
             />
           </Field>
 
-          <Field label="Prazo" hint="Preencha para virar tarefa. Vazio, e só registro.">
+          {!contatoId && <Field label="Prazo" hint="Preencha para virar tarefa. Vazio, e só registro.">
             <Input
               type="datetime-local"
               className="sm:max-w-[240px]"
               value={form.prazo}
               onChange={(e) => setForm({ ...form, prazo: e.target.value })}
             />
-          </Field>
+          </Field>}
         </div>
       )}
 

@@ -27,6 +27,15 @@ async function registroDe(url: string) {
   const mensagem = await prisma.message.findFirst({ where: { anexoUrl: url }, select: { id: true } });
   if (mensagem) return { tipo: null, nome: null };
 
+  const midiaFluxo = await prisma.midiaFluxo.findFirst({ where: { url }, select: { tipo: true, nome: true } });
+  if (midiaFluxo) return midiaFluxo;
+
+  const anexoCampanha = await prisma.campaignAttachment.findFirst({ where: { url }, select: { tipo: true, nome: true } });
+  if (anexoCampanha) return anexoCampanha;
+
+  const anexoCampanhaParceiro = await prisma.partnerCampaignAttachment.findFirst({ where: { url }, select: { tipo: true, nome: true } });
+  if (anexoCampanhaParceiro) return anexoCampanhaParceiro;
+
   // Gravacao de chamada tambem e arquivo servido por aqui.
   const chamada = await prisma.call.findFirst({ where: { gravacaoUrl: url }, select: { id: true } });
   return chamada ? { tipo: null, nome: null } : null;

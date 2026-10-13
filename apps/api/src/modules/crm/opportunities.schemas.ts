@@ -95,6 +95,14 @@ export const fecharOportunidadeSchema = z
     path: ['motivoPerda'],
   });
 
+/** GPCT inicial: perguntas curtas e respostas livres, sem bloquear o fechamento. */
+export const qualificacaoSchema = z.object({
+  goals: z.string().trim().max(2000),
+  plans: z.string().trim().max(2000),
+  challenges: z.string().trim().max(2000),
+  timeline: z.string().trim().max(2000),
+});
+
 export const listarOportunidadesSchema = z.object({
   funilId: z.string().uuid().optional(),
   estagioId: z.string().uuid().optional(),

@@ -43,6 +43,11 @@ model Organizacao {
   /// aprovacao a si mesmo.
   descontoMaximoPercentual Int @default(100) @map("desconto_maximo_percentual")
 
+  /// Limite para alerta de demora em conversas atribuídas sem resposta do agente.
+  alertaRespostaMinutos  Int @default(10) @map("alerta_resposta_minutos")
+  /// Limite crítico para destacar uma conversa ainda sem resposta do agente.
+  criticoRespostaMinutos Int @default(20) @map("critico_resposta_minutos")
+
   /// Teto mensal de gasto com IA, em reais (item 6.8). Nulo = sem teto.
   ///
   /// Nulo e nao zero: zero significaria "nao pode gastar nada", e teto ausente e
@@ -62,40 +67,50 @@ model Organizacao {
   criadoEm     DateTime @default(now()) @map("criado_em")
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
-  usuarios            User[]
-  tokensIntegracao    IntegrationToken[]
-  contatos            Contact[]
-  conversas           Conversation[]
-  contadoresProtocolo ContadorProtocolo[]
-  filas               Queue[]
-  canais              ChannelConfig[]
-  contas              Account[]
-  leads               Lead[]
-  funis               Funnel[]
-  oportunidades       Opportunity[]
-  credenciamentos     Credenciamento[]
-  ciclosParceiro      CicloParceiro[]
-  metasOperacionais   MetaOperacional[]
-  produtos            Product[]
-  catalogos           PriceCatalog[]
-  protocolos          Ticket[]
-  campanhas           Campaign[]
-  bots                Bot[]
-  escalas             WorkShift[]
-  branding            Branding?
-  politicaRetencao    RetentionPolicy?
-  vozConfig           VoiceConfig?
-  mensagens           Message[]
-  chamadas            Call[]
-  pesquisas           Survey[]
-  atividades          Activity[]
-  registrosLgpd       LgpdLog[]
-  metas               Meta[]
-  consumoIa           ConsumoIA[]
-  produtosDoCliente   ProdutoDoCliente[]
-  visoesSalvas        VisaoSalva[]
-  filiais             Filial[]
-  camposCustomizados  CampoCustomizado[]
+  usuarios                    User[]
+  tokensIntegracao            IntegrationToken[]
+  contatos                    Contact[]
+  conversas                   Conversation[]
+  contadoresProtocolo         ContadorProtocolo[]
+  filas                       Queue[]
+  canais                      ChannelConfig[]
+  contas                      Account[]
+  leads                       Lead[]
+  funis                       Funnel[]
+  oportunidades               Opportunity[]
+  credenciamentos             Credenciamento[]
+  ciclosParceiro              CicloParceiro[]
+  metasOperacionais           MetaOperacional[]
+  produtos                    Product[]
+  catalogos                   PriceCatalog[]
+  protocolos                  Ticket[]
+  campanhas                   Campaign[]
+  campanhasParceiros          PartnerCampaign[]
+  operacoesContato            ContactOperation[]
+  operacoesConta              AccountOperation[]
+  mapeamentosOrigemImportacao ImportSourceMapping[]
+  solicitacoesExclusaoContato ContactDeletionRequest[]
+  bots                        Bot[]
+  fluxos                      Fluxo[]
+  execucoesFluxo              ExecucaoFluxo[]
+  midiasFluxo                 MidiaFluxo[]
+  escalas                     WorkShift[]
+  branding                    Branding?
+  politicaRetencao            RetentionPolicy?
+  vozConfig                   VoiceConfig?
+  mensagens                   Message[]
+  chamadas                    Call[]
+  pesquisas                   Survey[]
+  atividades                  Activity[]
+  seriesAtividade             ActivitySeries[]
+  registrosLgpd               LgpdLog[]
+  metas                       Meta[]
+  consumoIa                   ConsumoIA[]
+  produtosDoCliente           ProdutoDoCliente[]
+  visoesSalvas                VisaoSalva[]
+  filiais                     Filial[]
+  camposCustomizados          CampoCustomizado[]
+  mensagensRapidas            MensagemRapida[]
 
   @@map("organizacoes")
 }
@@ -146,50 +161,54 @@ model User {
   criadoEm        DateTime    @default(now()) @map("criado_em")
   atualizadoEm    DateTime    @updatedAt @map("atualizado_em")
 
-  filas                   QueueAgent[]
-  conversas               Conversation[]            @relation("ConversaAgente")
-  conversasIniciadas      Conversation[]            @relation("ConversaAtendenteInicial")
-  mensagensEnviadas       Message[]
-  leads                   Lead[]
-  oportunidades           Opportunity[]
-  protocolos              Ticket[]
-  escalas                 WorkShift[]
-  presenca                PresenceLog[]
-  campanhas               Campaign[]
-  comentarios             TicketComment[]
-  anexos                  TicketAttachment[]
-  agendamentos            TicketSchedule[]
-  registrosLgpd           LgpdLog[]
-  chamadas                Call[]
-  atividades              Activity[]                @relation("AtividadeResponsavel")
-  atividadesCriadas       Activity[]                @relation("AtividadeAutor")
-  mudancasEstagio         OpportunityStageLog[]
-  auditoriasFeitas        OpportunityAudit[]
-  descontosAprovados      Opportunity[]             @relation("DescontoAprovador")
-  tokensIntegracao        IntegrationToken[]
+  filas                       QueueAgent[]
+  conversas                   Conversation[]            @relation("ConversaAgente")
+  conversasIniciadas          Conversation[]            @relation("ConversaAtendenteInicial")
+  mensagensEnviadas           Message[]
+  leads                       Lead[]
+  oportunidades               Opportunity[]
+  protocolos                  Ticket[]
+  escalas                     WorkShift[]
+  presenca                    PresenceLog[]
+  campanhas                   Campaign[]
+  comentarios                 TicketComment[]
+  anexos                      TicketAttachment[]
+  agendamentos                TicketSchedule[]
+  registrosLgpd               LgpdLog[]
+  chamadas                    Call[]
+  atividades                  Activity[]                @relation("AtividadeResponsavel")
+  atividadesCriadas           Activity[]                @relation("AtividadeAutor")
+  atividadesConcluidas        Activity[]                @relation("AtividadeConcluidaPor")
+  mudancasEstagio             OpportunityStageLog[]
+  auditoriasFeitas            OpportunityAudit[]
+  descontosAprovados          Opportunity[]             @relation("DescontoAprovador")
+  tokensIntegracao            IntegrationToken[]
   /// Numeros de canal (ex.: WhatsApp) cadastrados como linha pessoal deste usuario.
-  canaisProprios          ChannelConfig[]
-  propostasGeradas        PropostaGerada[]
-  credenciamentos         Credenciamento[]
-  historicoCredenciamento CredenciamentoHistorico[] @relation("CredHistoricoUsuario")
-  cicloParceiroHistorico  CicloParceiroHistorico[]  @relation("CicloHistoricoUsuario")
-  cicloParceiroEtapas     CicloParceiroEtapa[]      @relation("CicloEtapaUsuario")
-  metasOperacionais       MetaOperacional[]
-  organizacao             Organizacao               @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  canaisProprios              ChannelConfig[]
+  propostasGeradas            PropostaGerada[]
+  credenciamentos             Credenciamento[]
+  solicitacoesExclusaoContato ContactDeletionRequest[]  @relation("SolicitacaoExclusaoAutor")
+  aprovacoesExclusaoContato   ContactDeletionRequest[]  @relation("SolicitacaoExclusaoAprovador")
+  campanhasParceiros          PartnerCampaign[]
+  historicoCredenciamento     CredenciamentoHistorico[] @relation("CredHistoricoUsuario")
+  cicloParceiroHistorico      CicloParceiroHistorico[]  @relation("CicloHistoricoUsuario")
+  cicloParceiroEtapas         CicloParceiroEtapa[]      @relation("CicloEtapaUsuario")
+  metasOperacionais           MetaOperacional[]
+  organizacao                 Organizacao               @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
   /// SetNull: desligar o gestor nao pode apagar a equipe dele.
-  gestor                  User?                     @relation("Equipe", fields: [gestorId], references: [id], onDelete: SetNull)
-  equipe                  User[]                    @relation("Equipe")
+  gestor                      User?                     @relation("Equipe", fields: [gestorId], references: [id], onDelete: SetNull)
+  equipe                      User[]                    @relation("Equipe")
   /// SetNull: remover a filial nao pode apagar as pessoas dela.
-  filial                  Filial?                   @relation(fields: [filialId], references: [id], onDelete: SetNull)
-  contatos                Contact[]                 @relation("ContatoResponsavel")
-  contas                  Account[]                 @relation("ContaResponsavel")
-  metas                   Meta[]
+  filial                      Filial?                   @relation(fields: [filialId], references: [id], onDelete: SetNull)
+  contatos                    Contact[]                 @relation("ContatoResponsavel")
+  contas                      Account[]                 @relation("ContaResponsavel")
+  metas                       Meta[]
   /// Ligacoes que esta pessoa classificou (item 6.6).
-  chamadasClassificadas   Call[]                    @relation("ChamadaClassificador")
-  acoesDescartadas        CallSuggestedAction[]     @relation("AcaoDescartadaPor")
+  chamadasClassificadas       Call[]                    @relation("ChamadaClassificador")
+  acoesDescartadas            CallSuggestedAction[]     @relation("AcaoDescartadaPor")
   /// Visoes salvas que esta pessoa criou (item 6.1) — autoria, nao dono exclusivo:
   /// a visao e compartilhada com a organizacao inteira, como o funil.
-  visoesSalvas            VisaoSalva[]
+  visoesSalvas                VisaoSalva[]
 
   /// E-mail unico POR ORGANIZACAO. A mesma pessoa em duas empresas sao dois
   /// registros, com senhas independentes — vinculo N-para-N e troca de
@@ -321,6 +340,7 @@ model Contact {
   telefone         String?
   email            String?
   canalOrigem      Channel   @default(WEBCHAT) @map("canal_origem")
+  origemImportacao String?   @map("origem_importacao")
   tags             String[]  @default([])
   observacoes      String?
   /// Linha de negócio reconhecida na importação: TIM ou Starlink.
@@ -334,6 +354,7 @@ model Contact {
   consentimentoEm  DateTime? @map("consentimento_em")
   /// Preenchido quando os dados pessoais foram substituidos por placeholders.
   anonimizadoEm    DateTime? @map("anonimizado_em")
+  excluidoEm       DateTime? @map("excluido_em")
   criadoEm         DateTime  @default(now()) @map("criado_em")
   atualizadoEm     DateTime  @updatedAt @map("atualizado_em")
 
@@ -355,16 +376,18 @@ model Contact {
   /// responsavel da conta nao propaga.
   responsavelId   String?       @map("responsavel_id")
 
-  conta           Account?         @relation(fields: [contaId], references: [id], onDelete: SetNull)
-  responsavel     User?            @relation("ContatoResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
-  conversas       Conversation[]
-  leads           Lead[]
-  protocolos      Ticket[]
-  itensCampanha   CampaignItem[]
-  chamadas        Call[]
-  atividades      Activity[]
-  credenciamentos Credenciamento[]
-  organizacao     Organizacao      @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  conta                Account?                 @relation(fields: [contaId], references: [id], onDelete: SetNull)
+  responsavel          User?                    @relation("ContatoResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+  conversas            Conversation[]
+  leads                Lead[]
+  protocolos           Ticket[]
+  itensCampanha        CampaignItem[]
+  chamadas             Call[]
+  atividades           Activity[]
+  credenciamentos      Credenciamento[]
+  organizacao          Organizacao              @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  operacoes            ContactOperation[]
+  solicitacoesExclusao ContactDeletionRequest[]
 
   @@index([organizacaoId, email])
   @@index([organizacaoId, telefone])
@@ -374,6 +397,79 @@ model Contact {
   @@index([organizacaoId, contaId, papelNaConta])
   @@index([tags], type: Gin)
   @@map("contatos")
+}
+
+/// Uma pessoa pode atuar nas duas operações, sem duplicar o contato.
+model ContactOperation {
+  id            String      @id @default(uuid())
+  organizacaoId String      @default("") @map("organizacao_id")
+  contatoId     String      @map("contato_id")
+  operacao      String
+  criadoEm      DateTime    @default(now()) @map("criado_em")
+  organizacao   Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  contato       Contact     @relation(fields: [contatoId], references: [id], onDelete: Cascade)
+
+  @@unique([contatoId, operacao])
+  @@index([organizacaoId, operacao])
+  @@map("contatos_operacoes")
+}
+
+/// Regra configurável: identifica a operação padrão associada a uma origem de CSV.
+model ImportSourceMapping {
+  id            String      @id @default(uuid())
+  organizacaoId String      @default("") @map("organizacao_id")
+  origem        String
+  operacao      String
+  criadoEm      DateTime    @default(now()) @map("criado_em")
+  atualizadoEm  DateTime    @updatedAt @map("atualizado_em")
+  organizacao   Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+
+  @@unique([organizacaoId, origem])
+  @@index([organizacaoId, operacao])
+  @@map("mapeamentos_origem_importacao")
+}
+
+enum ContactDeletionStatus {
+  PENDENTE
+  APROVADA
+  REJEITADA
+  CANCELADA
+}
+
+/// Exclusão em duas etapas, com autor distinto do aprovador.
+model ContactDeletionRequest {
+  id              String                @id @default(uuid())
+  organizacaoId   String                @default("") @map("organizacao_id")
+  contatoId       String                @map("contato_id")
+  solicitadoPorId String                @map("solicitado_por_id")
+  aprovadoPorId   String?               @map("aprovado_por_id")
+  motivo          String
+  motivoDecisao   String?               @map("motivo_decisao")
+  status          ContactDeletionStatus @default(PENDENTE)
+  solicitadoEm    DateTime              @default(now()) @map("solicitado_em")
+  decididoEm      DateTime?             @map("decidido_em")
+  organizacao     Organizacao           @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  contato         Contact               @relation(fields: [contatoId], references: [id], onDelete: Cascade)
+  solicitadoPor   User                  @relation("SolicitacaoExclusaoAutor", fields: [solicitadoPorId], references: [id], onDelete: Restrict)
+  aprovadoPor     User?                 @relation("SolicitacaoExclusaoAprovador", fields: [aprovadoPorId], references: [id], onDelete: SetNull)
+
+  @@index([organizacaoId, status, solicitadoEm])
+  @@map("solicitacoes_exclusao_contato")
+}
+
+/// Empresa também pode atuar nas duas operações em paralelo.
+model AccountOperation {
+  id            String      @id @default(uuid())
+  organizacaoId String      @default("") @map("organizacao_id")
+  contaId       String      @map("conta_id")
+  operacao      String
+  criadoEm      DateTime    @default(now()) @map("criado_em")
+  organizacao   Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  conta         Account     @relation(fields: [contaId], references: [id], onDelete: Cascade)
+
+  @@unique([contaId, operacao])
+  @@index([organizacaoId, operacao])
+  @@map("contas_operacoes")
 }
 
 model Conversation {
@@ -430,6 +526,7 @@ model Conversation {
   protocolos       Ticket[]
   pesquisa         Survey?
   chamadas         Call[]
+  execucaoFluxo    ExecucaoFluxo?
   organizacao      Organizacao    @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
   @@unique([organizacaoId, protocolo])
@@ -481,6 +578,26 @@ model Message {
 
   @@index([organizacaoId, conversaId, criadoEm])
   @@map("mensagens")
+}
+
+/// Respostas prontas compartilhadas por todos os usuarios da organizacao.
+model MensagemRapida {
+  id            String   @id @default(uuid())
+  organizacaoId String   @default("") @map("organizacao_id")
+  titulo        String
+  atalho        String?
+  conteudo      String
+  categoria     String   @default("Geral")
+  ativo         Boolean  @default(true)
+  criadoPorId   String?  @map("criado_por_id")
+  criadoEm      DateTime @default(now()) @map("criado_em")
+  atualizadoEm  DateTime @updatedAt @map("atualizado_em")
+
+  organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+
+  @@unique([organizacaoId, atalho])
+  @@index([organizacaoId, ativo, categoria])
+  @@map("mensagens_rapidas")
 }
 
 // ---------------------------------------------------------------------------
@@ -558,6 +675,19 @@ model Account {
    * cadastral "BAIXADA" e o tipo de coisa que muda uma negociacao.
    */
   razaoSocial        String?   @map("razao_social")
+  nomeFantasia       String?   @map("nome_fantasia")
+  inscricaoEstadual  String?   @map("inscricao_estadual")
+  cnaeSecundario     String[]  @default([]) @map("cnae_secundario")
+  cidade             String?
+  uf                 String?   @db.VarChar(2)
+  cep                String?
+  logradouro         String?
+  numero             String?
+  complemento        String?
+  bairro             String?
+  responsavelNome    String?   @map("responsavel_nome")
+  responsavelCpf     String?   @map("responsavel_cpf")
+  origemCadastro     String?   @map("origem_cadastro")
   situacaoCadastral  String?   @map("situacao_cadastral")
   atividadePrincipal String?   @map("atividade_principal")
   /// Quando a consulta publica foi feita. Nulo = nunca enriquecida.
@@ -573,6 +703,7 @@ model Account {
   atualizadoEm       DateTime  @updatedAt @map("atualizado_em")
 
   contatos           Contact[]
+  operacoes          AccountOperation[]
   leads              Lead[]
   oportunidades      Opportunity[]
   protocolos         Ticket[]
@@ -594,6 +725,23 @@ model Account {
   @@index([organizacaoId, filialId])
   @@index([tags], type: Gin)
   @@map("contas")
+}
+
+/// Retrato imutavel da analise comercial gerada sob demanda.
+model OpportunityAnalysis {
+  id             String   @id @default(uuid())
+  oportunidadeId String   @map("oportunidade_id")
+  motor          String
+  versao         String
+  resultado      Json
+  unidades       Int?
+  custo          Decimal? @db.Decimal(12, 6)
+  criadoEm       DateTime @default(now()) @map("criado_em")
+
+  oportunidade Opportunity @relation(fields: [oportunidadeId], references: [id], onDelete: Cascade)
+
+  @@index([oportunidadeId, criadoEm])
+  @@map("oportunidade_analises_ia")
 }
 
 model Lead {
@@ -635,12 +783,14 @@ enum FunnelTipo {
 
 /// Funil customizavel de oportunidades.
 model Funnel {
-  id            String     @id @default(uuid())
-  organizacaoId String     @default("") @map("organizacao_id")
-  nome          String
-  tipo          FunnelTipo @default(COMERCIAL)
-  ativo         Boolean    @default(true)
-  criadoEm      DateTime   @default(now()) @map("criado_em")
+  id             String     @id @default(uuid())
+  organizacaoId  String     @default("") @map("organizacao_id")
+  nome           String
+  tipo           FunnelTipo @default(COMERCIAL)
+  ativo          Boolean    @default(true)
+  /// Prazo para criar tarefa interna de retomada. Nulo desliga a automacao.
+  reativacaoDias Int?       @default(30) @map("reativacao_dias")
+  criadoEm       DateTime   @default(now()) @map("criado_em")
 
   estagios        FunnelStage[]
   oportunidades   Opportunity[]
@@ -667,6 +817,10 @@ model FunnelStage {
   /// criada na entrada ("Registrar a visita tecnica"), e nao um "sim/nao": um
   /// booleano obrigaria o vendedor a adivinhar o que falta fazer.
   tarefaObrigatoria String? @map("tarefa_obrigatoria")
+  /// Orientacoes comerciais mostradas enquanto a oportunidade esta nesta etapa.
+  roteiroVendas     String? @map("roteiro_vendas")
+  /// Enunciados GPCT desta etapa; nulo usa as perguntas padrao da ficha.
+  perguntasGpct     Json?   @map("perguntas_gpct")
 
   funil           Funnel                    @relation(fields: [funilId], references: [id], onDelete: Cascade)
   oportunidades   Opportunity[]
@@ -765,6 +919,8 @@ model Opportunity {
   aprovadoEm         DateTime?          @map("aprovado_em")
   status             OportunidadeStatus @default(ABERTA)
   motivoPerda        MotivoPerda?       @map("motivo_perda")
+  /// Respostas GPCT da qualificacao comercial, editaveis sem bloquear o funil.
+  qualificacao       Json?              @map("qualificacao")
   previsaoFechamento DateTime?          @map("previsao_fechamento")
   criadoEm           DateTime           @default(now()) @map("criado_em")
   atualizadoEm       DateTime           @updatedAt @map("atualizado_em")
@@ -782,6 +938,7 @@ model Opportunity {
   itens              OpportunityItem[]
   atividades         Activity[]
   historicoEstagio   OpportunityStageLog[]
+  analisesIa         OpportunityAnalysis[]
   auditoria          OpportunityAudit[]
   organizacao        Organizacao                         @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
   /// Campos customizados (item 6.4): apagar a oportunidade apaga os valores junto.
@@ -818,12 +975,40 @@ enum TipoAtividade {
   OUTRO
 }
 
+enum CanalInteracaoManual {
+  TELEFONE
+  VISITA
+  OUTRO
+}
+
+enum FrequenciaAtividade {
+  DIARIA
+  SEMANAL
+  MENSAL
+}
+
+model ActivitySeries {
+  id            String              @id @default(uuid())
+  organizacaoId String              @default("") @map("organizacao_id")
+  frequencia    FrequenciaAtividade
+  diasSemana    Int[]               @default([]) @map("dias_semana")
+  inicioEm      DateTime            @map("inicio_em")
+  fimEm         DateTime?           @map("fim_em")
+  canceladoEm   DateTime?           @map("cancelado_em")
+  criadoEm      DateTime            @default(now()) @map("criado_em")
+  organizacao   Organizacao         @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  atividades    Activity[]
+
+  @@index([organizacaoId, fimEm, canceladoEm])
+  @@map("series_atividades")
+}
+
 /// Atividade comercial: ou um registro do que aconteceu, ou uma tarefa com prazo.
 /// A diferenca e o campo `prazo` — nulo significa "so registrei", preenchido
 /// significa "tenho que fazer". Um mesmo modelo para os dois porque a linha do
 /// tempo do cliente mostra os dois lado a lado, na mesma ordem cronologica.
 model Activity {
-  id            String        @id @default(uuid())
+  id                     String                @id @default(uuid())
   /// Atividade e o unico caso em que a coluna existe apesar de a tabela ser filha.
   ///
   /// Ela se liga a contato, conta, oportunidade OU protocolo, e a regra "ao menos
@@ -831,14 +1016,26 @@ model Activity {
   /// escrita cruzada que nenhum filtro de LEITURA pega: uma atividade com o
   /// contato de uma empresa e a oportunidade de outra era aceita pelo Postgres.
   /// O `smoke:tenant` provou o furo antes de existir cliente para sofrer com ele.
-  organizacaoId String        @default("") @map("organizacao_id")
-  tipo          TipoAtividade
-  titulo        String
-  descricao     String?
-  prazo         DateTime?
-  concluidoEm   DateTime?     @map("concluido_em")
-  responsavelId String?       @map("responsavel_id")
-  criadoPorId   String?       @map("criado_por_id")
+  organizacaoId          String                @default("") @map("organizacao_id")
+  tipo                   TipoAtividade
+  titulo                 String
+  descricao              String?
+  prazo                  DateTime?
+  concluidoEm            DateTime?             @map("concluido_em")
+  concluidoPorId         String?               @map("concluido_por_id")
+  justificativaConclusao String?               @map("justificativa_conclusao")
+  resultadoConclusao     String?               @map("resultado_conclusao")
+  canceladoEm            DateTime?             @map("cancelado_em")
+  responsavelId          String?               @map("responsavel_id")
+  criadoPorId            String?               @map("criado_por_id")
+  /// Chave estavel da tarefa criada por automacao; evita duplicatas entre workers.
+  automacaoChave         String?               @unique @map("automacao_chave")
+  /// Campos exclusivos de interações registradas manualmente fora do WhatsApp.
+  canalManual            CanalInteracaoManual? @map("canal_manual")
+  ocorridoEm             DateTime?             @map("ocorrido_em")
+  resultado              String?
+  registroPaiId          String?               @unique @map("registro_pai_id")
+  serieId                String?               @map("serie_id")
 
   /// Ao menos um vinculo e obrigatorio; validado na camada de servico, nao no
   /// banco, porque Prisma nao expressa "um destes quatro nao nulo".
@@ -878,6 +1075,8 @@ model Activity {
 
   responsavel   User?                @relation("AtividadeResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
   criadoPor     User?                @relation("AtividadeAutor", fields: [criadoPorId], references: [id], onDelete: SetNull)
+  concluidoPor  User?                @relation("AtividadeConcluidaPor", fields: [concluidoPorId], references: [id], onDelete: SetNull)
+  serie         ActivitySeries?      @relation(fields: [serieId], references: [id], onDelete: SetNull)
   contato       Contact?             @relation(fields: [contatoId], references: [id], onDelete: Cascade)
   conta         Account?             @relation(fields: [contaId], references: [id], onDelete: Cascade)
   oportunidade  Opportunity?         @relation(fields: [oportunidadeId], references: [id], onDelete: Cascade)
@@ -886,12 +1085,15 @@ model Activity {
   /// A sugestao de ligacao que originou esta tarefa, quando foi o caso (item E.2).
   acaoDeLigacao CallSuggestedAction?
   estagio       FunnelStage?         @relation(fields: [estagioId], references: [id], onDelete: SetNull)
+  registroPai   Activity?            @relation("TarefaDoRegistroManual", fields: [registroPaiId], references: [id], onDelete: SetNull)
+  tarefaGerada  Activity?            @relation("TarefaDoRegistroManual")
 
   @@index([organizacaoId, contatoId, criadoEm])
   @@index([organizacaoId, contaId, criadoEm])
   @@index([organizacaoId, oportunidadeId, criadoEm])
   @@index([organizacaoId, responsavelId, prazo])
   @@index([organizacaoId, prazo])
+  @@unique([serieId, prazo])
   /// A pergunta do bloqueio: "esta oportunidade tem tarefa de etapa em aberto?"
   @@index([organizacaoId, oportunidadeId, obrigatoria, concluidoEm])
   /// "Que visitas estao em andamento agora?" — check-in feito, check-out nao.
@@ -1090,15 +1292,8 @@ enum RecursoIA {
 
 /// Consumo de IA, um registro por uso (item 6.8).
 ///
-/// **Nada escreve aqui hoje**, e isso e uma afirmacao sobre a plataforma, nao um
-/// esquecimento: nenhum recurso de IA esta ligado — nao ha provedor configurado,
-/// e a coluna `transcricao` de `Call` nunca e preenchida. O proprio plano
-/// registra que o item "so faz sentido se a IA for ligada de verdade".
-///
-/// A tabela e o `registrarConsumo` existem porque medir no momento do uso e caro
-/// de acrescentar depois: se a IA entrar e ninguem medir, a primeira fatura e uma
-/// surpresa. A tela diz que nada esta ligado, em vez de mostrar zeros — um
-/// mostrador em "R$ 0,00" convidaria a acreditar que a IA roda e e de graca.
+/// Recebe usos informados pelos motores externos de conversa, voz e oportunidade.
+/// Custo nulo significa que o motor nao informou valor; nunca equivale a zero.
 model ConsumoIA {
   id            String    @id @default(uuid())
   organizacaoId String    @default("") @map("organizacao_id")
@@ -1841,11 +2036,13 @@ model ChannelConfig {
 
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
-  fila        Queue?         @relation(fields: [filaId], references: [id], onDelete: SetNull)
-  dono        User?          @relation(fields: [donoId], references: [id], onDelete: SetNull)
-  organizacao Organizacao    @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
-  conversas   Conversation[]
-  previasChat ChatPreview[]
+  fila           Queue?         @relation(fields: [filaId], references: [id], onDelete: SetNull)
+  dono           User?          @relation(fields: [donoId], references: [id], onDelete: SetNull)
+  organizacao    Organizacao    @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  conversas      Conversation[]
+  previasChat    ChatPreview[]
+  fluxo          Fluxo?         @relation("FluxoPublicadoCanal")
+  fluxosRascunho Fluxo[]        @relation("FluxoRascunhoCanal")
 
   /**
    * Antes, um canal de cada tipo POR ORGANIZACAO (`@@unique([organizacaoId,
@@ -2023,6 +2220,7 @@ model Campaign {
   id            String         @id @default(uuid())
   organizacaoId String         @default("") @map("organizacao_id")
   nome          String
+  assunto       String?
   canal         Channel        @default(WHATSAPP)
   /// Template da mensagem. Suporta {{nome}}, {{email}} e {{telefone}}.
   mensagem      String
@@ -2035,25 +2233,42 @@ model Campaign {
   criadoEm      DateTime       @default(now()) @map("criado_em")
   atualizadoEm  DateTime       @updatedAt @map("atualizado_em")
 
-  fila        Queue?         @relation(fields: [filaId], references: [id], onDelete: SetNull)
-  criadoPor   User?          @relation(fields: [criadoPorId], references: [id], onDelete: SetNull)
+  fila        Queue?               @relation(fields: [filaId], references: [id], onDelete: SetNull)
+  criadoPor   User?                @relation(fields: [criadoPorId], references: [id], onDelete: SetNull)
   itens       CampaignItem[]
-  organizacao Organizacao    @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  anexos      CampaignAttachment[]
+  organizacao Organizacao          @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
   @@index([organizacaoId, status])
   @@map("campanhas")
 }
 
+model CampaignAttachment {
+  id         String   @id @default(uuid())
+  campanhaId String   @map("campanha_id")
+  url        String
+  nome       String
+  tipo       String
+  tamanho    Int
+  criadoEm   DateTime @default(now()) @map("criado_em")
+  campanha   Campaign @relation(fields: [campanhaId], references: [id], onDelete: Cascade)
+
+  @@index([campanhaId, criadoEm])
+  @@map("campanha_anexos")
+}
+
 model CampaignItem {
-  id           String             @id @default(uuid())
-  campanhaId   String             @map("campanha_id")
-  contatoId    String             @map("contato_id")
-  status       CampanhaItemStatus @default(PENDENTE)
+  id             String             @id @default(uuid())
+  campanhaId     String             @map("campanha_id")
+  contatoId      String             @map("contato_id")
+  status         CampanhaItemStatus @default(PENDENTE)
   /// Motivo da falha, para o operador corrigir sem abrir log.
-  erro         String?
-  conversaId   String?            @map("conversa_id")
-  enviadoEm    DateTime?          @map("enviado_em")
-  respondidoEm DateTime?          @map("respondido_em")
+  erro           String?
+  conversaId     String?            @map("conversa_id")
+  enviadoEm      DateTime?          @map("enviado_em")
+  respondidoEm   DateTime?          @map("respondido_em")
+  textoEnviadoEm DateTime?          @map("texto_enviado_em")
+  anexosEnviados String[]           @default([]) @map("anexos_enviados")
 
   campanha Campaign @relation(fields: [campanhaId], references: [id], onDelete: Cascade)
   contato  Contact  @relation(fields: [contatoId], references: [id], onDelete: Cascade)
@@ -2061,6 +2276,53 @@ model CampaignItem {
   @@unique([campanhaId, contatoId])
   @@index([campanhaId, status])
   @@map("campanha_itens")
+}
+
+enum PartnerCampaignStatus {
+  RASCUNHO
+  AGENDADA
+  VIGENTE
+  ENCERRADA
+  CANCELADA
+}
+
+/// Campanha/incentivo para parceiros; não participa do disparo de mensagens.
+model PartnerCampaign {
+  id               String                      @id @default(uuid())
+  organizacaoId    String                      @default("") @map("organizacao_id")
+  nome             String
+  operacao         String
+  descricao        String?
+  produtosServicos String[]                    @default([]) @map("produtos_servicos")
+  incentivos       String[]                    @default([])
+  criterios        String?
+  materiais        Json                        @default("[]")
+  status           PartnerCampaignStatus       @default(RASCUNHO)
+  inicioEm         DateTime?                   @map("inicio_em")
+  fimEm            DateTime?                   @map("fim_em")
+  criadoPorId      String?                     @map("criado_por_id")
+  criadoEm         DateTime                    @default(now()) @map("criado_em")
+  atualizadoEm     DateTime                    @updatedAt @map("atualizado_em")
+  organizacao      Organizacao                 @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  criadoPor        User?                       @relation(fields: [criadoPorId], references: [id], onDelete: SetNull)
+  anexos           PartnerCampaignAttachment[]
+
+  @@index([organizacaoId, status, operacao])
+  @@map("campanhas_parceiros")
+}
+
+model PartnerCampaignAttachment {
+  id         String          @id @default(uuid())
+  campanhaId String          @map("campanha_id")
+  url        String
+  nome       String
+  tipo       String
+  tamanho    Int
+  criadoEm   DateTime        @default(now()) @map("criado_em")
+  campanha   PartnerCampaign @relation(fields: [campanhaId], references: [id], onDelete: Cascade)
+
+  @@index([campanhaId, criadoEm])
+  @@map("campanhas_parceiros_anexos")
 }
 
 enum BotAcao {
@@ -2107,6 +2369,82 @@ model BotStep {
 
   @@unique([botId, ordem])
   @@map("bot_passos")
+}
+
+/// Fluxo visual do roteamento de atendimento. O grafo publicado e congelado
+/// separadamente do rascunho para execucoes em andamento nao mudarem ao editar.
+model Fluxo {
+  id                    String    @id @default(uuid())
+  organizacaoId         String    @default("") @map("organizacao_id")
+  nome                  String
+  rascunho              Json      @default("{}")
+  publicado             Json?
+  versao                Int       @default(0)
+  ativo                 Boolean   @default(false)
+  publicadoEm           DateTime? @map("publicado_em")
+  canalConfigId         String?   @unique @map("canal_config_id")
+  canalConfigRascunhoId String?   @map("canal_config_rascunho_id")
+  criadoEm              DateTime  @default(now()) @map("criado_em")
+  atualizadoEm          DateTime  @updatedAt @map("atualizado_em")
+
+  organizacao         Organizacao     @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  canalConfig         ChannelConfig?  @relation("FluxoPublicadoCanal", fields: [canalConfigId], references: [id], onDelete: SetNull)
+  canalConfigRascunho ChannelConfig?  @relation("FluxoRascunhoCanal", fields: [canalConfigRascunhoId], references: [id], onDelete: SetNull)
+  execucoes           ExecucaoFluxo[]
+  midias              MidiaFluxo[]
+
+  @@index([organizacaoId, ativo])
+  @@index([organizacaoId, canalConfigRascunhoId])
+  @@map("fluxos")
+}
+
+enum EstadoExecucaoFluxo {
+  AGUARDANDO_RESPOSTA
+  AGUARDANDO_TIMEOUT
+  ENCERRADA
+}
+
+/// Estado duravel por conversa. O snapshot `grafo` preserva a versao publicada
+/// que iniciou o atendimento, inclusive depois de uma nova publicacao.
+model ExecucaoFluxo {
+  id            String              @id @default(uuid())
+  organizacaoId String              @default("") @map("organizacao_id")
+  conversaId    String              @unique @map("conversa_id")
+  fluxoId       String?             @map("fluxo_id")
+  versao        Int
+  grafo         Json
+  noAtualId     String              @map("no_atual_id")
+  estado        EstadoExecucaoFluxo @default(AGUARDANDO_RESPOSTA)
+  expiraEm      DateTime?           @map("expira_em")
+  tentativas    Int                 @default(0)
+  encerradaEm   DateTime?           @map("encerrada_em")
+  criadoEm      DateTime            @default(now()) @map("criado_em")
+  atualizadoEm  DateTime            @updatedAt @map("atualizado_em")
+
+  organizacao Organizacao  @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  conversa    Conversation @relation(fields: [conversaId], references: [id], onDelete: Cascade)
+  fluxo       Fluxo?       @relation(fields: [fluxoId], references: [id], onDelete: SetNull)
+
+  @@index([organizacaoId, estado, expiraEm])
+  @@map("execucoes_fluxo")
+}
+
+/// Arquivos enviados para uso nos blocos de mídia dos fluxos.
+model MidiaFluxo {
+  id            String   @id @default(uuid())
+  organizacaoId String   @default("") @map("organizacao_id")
+  fluxoId       String?  @map("fluxo_id")
+  nome          String
+  tipo          String
+  url           String   @unique
+  tamanho       Int
+  criadoEm      DateTime @default(now()) @map("criado_em")
+
+  organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  fluxo       Fluxo?      @relation(fields: [fluxoId], references: [id], onDelete: SetNull)
+
+  @@index([organizacaoId, fluxoId])
+  @@map("midias_fluxo")
 }
 
 /// Politica de retencao de dados (LGPD). Registro unico, id "default".

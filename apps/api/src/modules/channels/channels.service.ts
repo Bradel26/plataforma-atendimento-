@@ -599,6 +599,23 @@ export async function configDoDestino(canal: Channel, identificador: string | nu
 }
 
 /**
+ * Resolve avisos de estado da Ponte sem deixar uma sessao desconhecida cair
+ * numa linha pessoal qualquer. Sessao exata ganha; o fallback so atende a
+ * linha compartilhada legada que usa a sessao padrao sem `ponteSessao` salvo.
+ */
+export async function configDaSessaoPonte(sessao: string) {
+  const exata = await prisma.channelConfig.findFirst({
+    where: { canal: 'WHATSAPP', ponteSessao: sessao },
+  });
+  if (exata) return aberto(exata);
+
+  const compartilhadaLegada = await prisma.channelConfig.findFirst({
+    where: { canal: 'WHATSAPP', donoId: null, ponteSessao: null },
+  });
+  return compartilhadaLegada ? aberto(compartilhadaLegada) : null;
+}
+
+/**
  * Monta os campos do `Contact` a criar a partir de um contato importado da
  * ponte. Pura — nenhuma chamada ao banco — para dar para testar sem Prisma;
  * `importarContatos`, logo abaixo, decide se ja existe (findFirst) e chama o

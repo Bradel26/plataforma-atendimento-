@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alerta, Badge, Button, Card, Field, Select } from '../../components/ui';
 import { ApiError, api, baixarCsv } from '../../lib/api';
 
@@ -8,6 +8,7 @@ type Resultado = {
   ignorados: number;
   erros: Array<{ linha: number; motivo: string }>;
 };
+type MapeamentoOrigem = { id?: string; origem: string; operacao: 'TIM' | 'STARLINK' };
 
 const EXPORTACOES = [
   { recurso: 'leads', label: 'Leads' },
@@ -27,7 +28,7 @@ const IMPORTACOES = [
   {
     recurso: 'contatos',
     label: 'Contatos',
-    colunas: 'nome (obrigatória), email, telefone, conta, canal_origem, segmento_parceiro (TIM ou STARLINK), observações',
+    colunas: 'nome (obrigatória), email, telefone, conta, canal_origem, origem_importacao, segmento_parceiro, observações',
   },
   {
     recurso: 'contas',
@@ -52,6 +53,12 @@ export function DadosTab() {
   const [importado, setImportado] = useState<Resultado | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  const [origemImportacao, setOrigemImportacao] = useState('');
+  const [mapeamentos, setMapeamentos] = useState<MapeamentoOrigem[]>([]);
+
+  useEffect(() => {
+    void api.get<{ mapeamentos: MapeamentoOrigem[] }>('/dados/mapeamentos-origem').then(({ mapeamentos: lista }) => setMapeamentos(lista)).catch(() => undefined);
+  }, []);
 
   const importacaoAtual = IMPORTACOES.find((i) => i.recurso === recurso)!;
 
@@ -78,7 +85,7 @@ export function DadosTab() {
     setErro(null);
     setOcupado(true);
     try {
-      const { resultado } = await api.post<{ resultado: Resultado }>(`/dados/importar/${recurso}`, { csv, dryRun });
+      const { resultado } = await api.post<{ resultado: Resultado }>(`/dados/importar/${recurso}`, { csv, dryRun, ...(recurso === 'contatos' && origemImportacao ? { origemImportacao } : {}) });
       if (dryRun) {
         setPrevia(resultado);
         setImportado(null);
@@ -87,6 +94,7 @@ export function DadosTab() {
         setPrevia(null);
         setCsv('');
         setNomeArquivo('');
+        setOrigemImportacao('');
       }
     } catch (e) {
       setErro(e instanceof ApiError ? e.message : 'Falha ao processar o CSV');
@@ -102,6 +110,16 @@ export function DadosTab() {
     } catch (e) {
       setErro(e instanceof ApiError ? e.message : 'Falha ao baixar o arquivo');
     }
+  };
+
+  const salvarMapeamentos = async () => {
+    setErro(null); setOcupado(true);
+    try {
+      const limpos = mapeamentos.map(({ origem, operacao }) => ({ origem: origem.trim(), operacao })).filter((x) => x.origem);
+      const r = await api.put<{ mapeamentos: MapeamentoOrigem[] }>('/dados/mapeamentos-origem', { mapeamentos: limpos });
+      setMapeamentos(r.mapeamentos);
+    } catch (e) { setErro(e instanceof ApiError ? e.message : 'Falha ao salvar os mapeamentos'); }
+    finally { setOcupado(false); }
   };
 
   const Resumo = ({ dados, titulo }: { dados: Resultado; titulo: string }) => (
@@ -172,6 +190,10 @@ export function DadosTab() {
             />
           </Field>
 
+          {recurso === 'contatos' && <Field label="Origem desta planilha" hint="A origem precisa estar mapeada para TIM ou Starlink antes da importação.">
+            <Select value={origemImportacao} onChange={(e) => setOrigemImportacao(e.target.value)}><option value="">Sem origem da planilha</option>{mapeamentos.map((m) => <option key={m.id ?? m.origem} value={m.origem}>{m.origem} · {m.operacao}</option>)}</Select>
+          </Field>}
+
           {nomeArquivo && (
             <p className="text-xs text-slate-500">
               {nomeArquivo} · {csv.split('\n').filter((l) => l.trim()).length - 1} linha(s) de dados
@@ -189,6 +211,18 @@ export function DadosTab() {
 
           {previa && <Resumo dados={previa} titulo="Prévia da validação (nada foi gravado)" />}
           {importado && <Resumo dados={importado} titulo="Importação concluída" />}
+        </div>
+      </Card>
+
+      <Card titulo="Origens de importação de contatos" descricao="Cada origem mapeada classifica novos contatos e associa a operação ao contato já existente. A origem original fica preservada na ficha.">
+        <div className="space-y-2">
+          {mapeamentos.map((m, i) => <div key={m.id ?? i} className="grid gap-2 sm:grid-cols-[1fr_180px_auto]">
+            <Field label="Nome da origem"><input className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" value={m.origem} onChange={(e) => setMapeamentos((atual) => atual.map((x, n) => n === i ? { ...x, origem: e.target.value } : x))} /></Field>
+            <Field label="Operação padrão"><Select value={m.operacao} onChange={(e) => setMapeamentos((atual) => atual.map((x, n) => n === i ? { ...x, operacao: e.target.value as 'TIM' | 'STARLINK' } : x))}><option value="TIM">TIM</option><option value="STARLINK">Starlink</option></Select></Field>
+            <Button variante="neutro" onClick={() => setMapeamentos((atual) => atual.filter((_, n) => n !== i))}>Remover</Button>
+          </div>)}
+          <div className="flex gap-2"><Button variante="neutro" onClick={() => setMapeamentos((atual) => [...atual, { origem: '', operacao: 'TIM' }])}>Adicionar origem</Button><Button onClick={() => void salvarMapeamentos()} disabled={ocupado}>{ocupado ? 'Salvando…' : 'Salvar mapeamentos'}</Button></div>
+          <p className="text-xs text-slate-500">Cadastre, por exemplo, “Planilha TIM 2026” → TIM. Reimportar a mesma pessoa para outra operação associa a operação sem duplicar o contato; origem inicial não restringe edição posterior.</p>
         </div>
       </Card>
     </div>

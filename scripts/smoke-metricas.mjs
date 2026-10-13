@@ -13,7 +13,7 @@
  *
  * Uso: npm run smoke:metricas  (com a API de pe e o seed aplicado)
  */
-const API = 'http://localhost:3333/api';
+const API = process.env.SMOKE_API ?? 'http://localhost:3333/api';
 const EXECUCAO = Date.now().toString(36);
 
 let falhas = 0;

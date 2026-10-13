@@ -79,7 +79,16 @@ vozRoutes.get(
   requireAuth,
   validateQuery(listarSchema),
   asyncHandler(async (_req, res) => {
-    res.json(await listarChamadas(res.locals.query));
+    const gestor = _req.user?.perfil === 'ADMIN' || _req.user?.perfil === 'SUPERVISOR';
+    const resultado = await listarChamadas({
+      ...res.locals.query,
+      ...(!gestor ? { agenteId: _req.user!.sub } : {}),
+    });
+    res.json(gestor ? resultado : {
+      ...resultado,
+      chamadas: resultado.chamadas
+        .map((c) => ({ ...c, transcricao: null, gravacaoUrl: null })),
+    });
   }),
 );
 
@@ -110,9 +119,9 @@ vozRoutes.patch(
     }),
   ),
   asyncHandler(async (req, res) => {
-    res.json({
-      chamada: await classificarChamada(param(req, 'id'), req.body.classificacao, req.user!.sub),
-    });
+    const gestor = req.user!.perfil === 'ADMIN' || req.user!.perfil === 'SUPERVISOR';
+    const chamada = await classificarChamada(param(req, 'id'), req.body.classificacao, req.user!.sub, gestor);
+    res.json({ chamada: gestor ? chamada : { ...chamada, transcricao: null, gravacaoUrl: null } });
   }),
 );
 
@@ -127,7 +136,10 @@ vozRoutes.get(
   '/chamadas/:id/analise',
   requireAuth,
   asyncHandler(async (req, res) => {
-    res.json({ analise: await analiseDaChamada(param(req, 'id')) });
+    res.json({ analise: await analiseDaChamada(param(req, 'id'), {
+      usuarioId: req.user!.sub,
+      gestor: req.user!.perfil === 'ADMIN' || req.user!.perfil === 'SUPERVISOR',
+    }) });
   }),
 );
 
@@ -142,6 +154,10 @@ vozRoutes.post(
   '/chamadas/:id/acoes/:acaoId/tarefa',
   requireAuth,
   asyncHandler(async (req, res) => {
+    await analiseDaChamada(param(req, 'id'), {
+      usuarioId: req.user!.sub,
+      gestor: req.user!.perfil === 'ADMIN' || req.user!.perfil === 'SUPERVISOR',
+    });
     res
       .status(201)
       .json(await acaoViraTarefa(param(req, 'id'), param(req, 'acaoId'), req.user!.sub));
@@ -153,8 +169,14 @@ vozRoutes.post(
   '/chamadas/:id/acoes/:acaoId/descartar',
   requireAuth,
   asyncHandler(async (req, res) => {
+    const gestor = req.user!.perfil === 'ADMIN' || req.user!.perfil === 'SUPERVISOR';
+    await analiseDaChamada(param(req, 'id'), {
+      usuarioId: req.user!.sub,
+      gestor,
+    });
     res.json({
-      analise: await descartarAcao(param(req, 'id'), param(req, 'acaoId'), req.user!.sub),
+      analise: await descartarAcao(param(req, 'id'), param(req, 'acaoId'), req.user!.sub).then((a) =>
+        gestor ? a : { ...a, transcricao: null }),
     });
   }),
 );

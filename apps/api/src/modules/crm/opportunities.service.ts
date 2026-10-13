@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { prisma, type ClienteDeEscrita } from '../../lib/prisma';
 import { exigirUsuarioDaOrganizacao, filtroDe, politicaContas, politicaOportunidades } from '../../lib/politicas';
 import { apenasVisivel } from '../../lib/visibilidade';
@@ -242,7 +242,22 @@ export async function obterOportunidade(id: string) {
     comSinalDeTarefa([toOportunidade(o)], await tarefasPorOportunidade([o.id])),
     await tarefasDeEtapaAbertas([o.id]),
   );
-  return { ...comSinal!, camposCustomizados: await valoresDoRegistro('OPORTUNIDADE', o.id) };
+  return { ...comSinal!, qualificacao: o.qualificacao, camposCustomizados: await valoresDoRegistro('OPORTUNIDADE', o.id) };
+}
+
+/** Salva as quatro respostas GPCT apenas em oportunidade visivel e aberta. */
+export async function salvarQualificacao(
+  id: string,
+  respostas: { goals: string; plans: string; challenges: string; timeline: string },
+) {
+  const atual = await prisma.opportunity.findFirst({
+    where: apenasVisivel(id, await filtroDe(politicaOportunidades)),
+    select: { id: true, status: true },
+  });
+  if (!atual) throw notFound('Oportunidade não encontrada');
+  if (atual.status !== 'ABERTA') throw badRequest('Oportunidade fechada não pode ser alterada');
+  await prisma.opportunity.update({ where: { id }, data: { qualificacao: respostas } });
+  return obterOportunidade(id);
 }
 
 export async function criarOportunidade(input: CriarOportunidadeInput, usuarioId?: string) {
@@ -663,6 +678,28 @@ export async function fecharOportunidade(id: string, input: FecharOportunidadeIn
   return toOportunidade(fechada);
 }
 
+/** Reabre uma perda e encerra os lembretes automáticos ainda pendentes. */
+export async function reabrirOportunidade(id: string) {
+  const atual = await prisma.opportunity.findFirst({
+    where: apenasVisivel(id, await filtroDe(politicaOportunidades)),
+    select: { id: true, status: true },
+  });
+  if (!atual) throw notFound('Oportunidade não encontrada');
+  if (atual.status !== 'PERDIDA') throw badRequest('Somente oportunidade perdida pode ser reaberta');
+  const agora = new Date();
+  await prisma.$transaction(async (tx) => {
+    await tx.opportunity.update({
+      where: { id }, data: { status: 'ABERTA', motivoPerda: null, fechadoEm: null },
+    });
+    await tx.activity.updateMany({
+      where: { oportunidadeId: id, automacaoChave: { startsWith: `reativacao:${id}:` }, concluidoEm: null },
+      data: { canceladoEm: agora, concluidoEm: agora },
+    });
+    await registrarAuditoria(tx, id, [{ campo: 'STATUS', de: 'PERDIDA', para: 'ABERTA' }]);
+  });
+  return obterOportunidade(id);
+}
+
 /** Substitui os itens e recalcula o valor da oportunidade. */
 export async function definirItens(id: string, input: ItensInput) {
   const atual = await prisma.opportunity.findFirst({
@@ -819,6 +856,8 @@ export async function funilKanban(funilId?: string) {
           // "exige: visita tecnica" no cabecalho e diferente de descobrir o
           // bloqueio ao arrastar.
           tarefaObrigatoria: estagio.tarefaObrigatoria,
+          roteiroVendas: estagio.roteiroVendas,
+          perguntasGpct: estagio.perguntasGpct,
         },
         oportunidades: itens,
         total: itens.length,
@@ -837,6 +876,36 @@ export async function listarFunis(tipo?: 'COMERCIAL' | 'ESTEIRA') {
     orderBy: { criadoEm: 'asc' },
   });
   return funis.map(({ _count, ...f }) => ({ ...f, totalOportunidades: _count.oportunidades }));
+}
+
+/** Nulo desliga a retomada; 1 a 365 dias limitam o volume de tarefas antigas. */
+export async function definirPrazoDeReativacao(funilId: string, dias: number | null) {
+  const funil = await prisma.funnel.findFirst({ where: { id: funilId, tipo: 'COMERCIAL' } });
+  if (!funil) throw notFound('Funil comercial não encontrado');
+  return prisma.funnel.update({ where: { id: funil.id }, data: { reativacaoDias: dias } });
+}
+
+export async function definirRoteiroDeVendas(funilId: string, estagioId: string, roteiroVendas: string | null) {
+  const funil = await prisma.funnel.findFirst({ where: { id: funilId, tipo: 'COMERCIAL' }, select: { id: true } });
+  if (!funil) throw notFound('Funil comercial não encontrado');
+  const estagio = await prisma.funnelStage.findFirst({ where: { id: estagioId, funilId: funil.id } });
+  if (!estagio) throw notFound('Etapa não encontrada neste funil');
+  return prisma.funnelStage.update({ where: { id: estagio.id }, data: { roteiroVendas: roteiroVendas?.trim() || null } });
+}
+
+export async function definirPerguntasGpct(
+  funilId: string,
+  estagioId: string,
+  perguntas: { goals: string; plans: string; challenges: string; timeline: string } | null,
+) {
+  const funil = await prisma.funnel.findFirst({ where: { id: funilId, tipo: 'COMERCIAL' }, select: { id: true } });
+  if (!funil) throw notFound('Funil comercial não encontrado');
+  const estagio = await prisma.funnelStage.findFirst({ where: { id: estagioId, funilId: funil.id } });
+  if (!estagio) throw notFound('Etapa não encontrada neste funil');
+  return prisma.funnelStage.update({
+    where: { id: estagio.id },
+    data: { perguntasGpct: perguntas ?? Prisma.JsonNull },
+  });
 }
 
 /**

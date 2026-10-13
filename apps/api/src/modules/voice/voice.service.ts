@@ -313,8 +313,8 @@ function serializar(c: ChamadaDb) {
  * lancada por engano ficaria para sempre, e nao ha valor que signifique "retiro
  * o que eu disse" — zero seria uma nota, nao a ausencia dela.
  */
-export async function classificarChamada(id: string, classificacao: number | null, usuarioId: string) {
-  const chamada = await prisma.call.findFirst({ where: { id }, select: { id: true } });
+export async function classificarChamada(id: string, classificacao: number | null, usuarioId: string, gestor = false) {
+  const chamada = await prisma.call.findFirst({ where: { id, ...(!gestor ? { agenteId: usuarioId } : {}) }, select: { id: true } });
   if (!chamada) throw notFound('Chamada não encontrada');
 
   return serializar(

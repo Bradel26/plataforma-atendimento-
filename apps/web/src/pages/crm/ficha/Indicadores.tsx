@@ -1,4 +1,4 @@
-import { moeda, type IndicadoresFicha } from '../../../lib/types';
+import { type IndicadoresFicha } from '../../../lib/types';
 
 /**
  * Os numeros do topo da ficha, do contato ou da conta.
@@ -35,8 +35,8 @@ export function Indicadores({ dados, escopo }: { dados: IndicadoresFicha; escopo
       <Indicador rotulo="Jornadas" valor={String(dados.oportunidadesAbertas)} detalhe="em aberto" />
       <Indicador
         rotulo="Já comprou"
-        valor={moeda(dados.valorGanho)}
-        detalhe={`${dados.oportunidadesGanhas} ganha(s)`}
+        valor={String(dados.oportunidadesGanhas)}
+        detalhe="jornada(s) ganha(s)"
       />
       <Indicador rotulo="Tarefas" valor={String(dados.atividadesAbertas)} detalhe="em aberto" />
     </div>

@@ -1,7 +1,9 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Alerta, Badge, Button } from '../../components/ui';
 import { Dropdown } from '../../components/ui/Dropdown';
 import { useToast } from '../../components/ui/Toast';
+import { useAuth } from '../auth/AuthProvider';
 import { ApiError, api } from '../../lib/api';
 import { LABEL_CONVERSA_STATUS, type ConversaDetalhe, type Mensagem } from '../../lib/types';
 import { AvatarConversa } from './AvatarConversa';
@@ -167,20 +169,51 @@ export function PainelChat({
   fichaAberta?: boolean;
   somenteLeitura?: boolean;
 }) {
+  type RespostaRapida = { id: string; titulo: string; atalho: string | null; conteudo: string; categoria: string };
   const [texto, setTexto] = useState('');
   const [abaRodape, setAbaRodape] = useState<'responder' | 'privada'>('responder');
   const [textoPrivado, setTextoPrivado] = useState('');
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  const enviandoMensagem = useRef(false);
+  const [respostasRapidas, setRespostasRapidas] = useState<RespostaRapida[]>([]);
+  const [janelaFechada, setJanelaFechada] = useState(false);
+  const [seletorRapido, setSeletorRapido] = useState<{ inicio: number; fim: number; busca: string } | null>(null);
+  const textareaResposta = useRef<HTMLTextAreaElement>(null);
   const [anterioresDaConversa, setAnterioresDaConversa] = useState<Mensagem[]>([]);
   const [cursorHistorico, setCursorHistorico] = useState<string | null>(null);
   const [fimDoHistorico, setFimDoHistorico] = useState(false);
   const fim = useRef<HTMLDivElement>(null);
   const topo = useRef<HTMLDivElement>(null);
   const mostrar = useToast();
+  const { usuario } = useAuth();
   const atendimentosAnteriores = useAtendimentosAnteriores(conversa.id);
   const rascunhos = useRef<Map<string, { texto: string; textoPrivado: string }>>(new Map());
   const conversaIdAnterior = useRef(conversa.id);
+
+  useEffect(() => {
+    let ativo = true;
+    void api.get<{ mensagens: RespostaRapida[] }>('/mensagens-rapidas')
+      .then(({ mensagens }) => { if (ativo) setRespostasRapidas(mensagens); })
+      .catch(() => undefined);
+    return () => { ativo = false; };
+  }, []);
+
+  useEffect(() => {
+    let ativo = true;
+    setJanelaFechada(false);
+    const carregarJanela = async () => {
+      try {
+        const { janela } = await api.get<{ janela: { aplica: boolean; aberta: boolean } }>(`/conversas/${conversa.id}/janela-whatsapp`);
+        if (ativo) setJanelaFechada(janela.aplica && !janela.aberta);
+      } catch {
+        if (ativo) setJanelaFechada(false);
+      }
+    };
+    void carregarJanela();
+    const intervalo = window.setInterval(() => void carregarJanela(), 60_000);
+    return () => { ativo = false; window.clearInterval(intervalo); };
+  }, [conversa.id, conversa.mensagens[conversa.mensagens.length - 1]?.id]);
 
   useEffect(() => {
     fim.current?.scrollIntoView({ block: 'end' });
@@ -227,6 +260,29 @@ export function PainelChat({
 
   const finalizada = conversa.status === 'FINALIZADO';
 
+  const visiveisRapidas = respostasRapidas.filter((item) =>
+    `${item.titulo} ${item.atalho ?? ''} ${item.categoria} ${item.conteudo}`.toLocaleLowerCase('pt-BR')
+      .includes((seletorRapido?.busca ?? '').replace(/^\//, '').toLocaleLowerCase('pt-BR')),
+  );
+
+  const escolherRapida = (item: RespostaRapida) => {
+    if (!seletorRapido) return;
+    const antes = texto.slice(0, seletorRapido.inicio);
+    const depois = texto.slice(seletorRapido.fim);
+    const conteudo = item.conteudo
+      .replace(/\{\{\s*nome_contato\s*\}\}/gi, conversa.contato.nome)
+      .replace(/\{\{\s*atendente\s*\}\}/gi, usuario?.nome ?? '')
+      .replace(/\{\{\s*protocolo\s*\}\}/gi, conversa.protocolo ?? '');
+    const proximo = `${antes}${conteudo}${depois}`;
+    const cursor = antes.length + conteudo.length;
+    setTexto(proximo);
+    setSeletorRapido(null);
+    requestAnimationFrame(() => {
+      textareaResposta.current?.focus();
+      textareaResposta.current?.setSelectionRange(cursor, cursor);
+    });
+  };
+
   const executar = async (acao: () => Promise<{ conversa: ConversaDetalhe }>) => {
     setErro(null);
     setOcupado(true);
@@ -252,9 +308,14 @@ export function PainelChat({
     // Guarda tambem contra o Enter do textarea, que chama `enviar` direto sem
     // passar pelo `disabled` do botao — sem isto da pra disparar um envio
     // duplicado/concorrente pelo teclado com um envio ja em voo.
-    if (ocupado) return;
+    if (enviandoMensagem.current) return;
+    if (janelaFechada) {
+      setErro('A janela de 24 horas do WhatsApp está fechada. Envie um template aprovado pela Meta e aguarde o cliente responder.');
+      return;
+    }
     const conteudo = texto.trim();
     if (!conteudo) return;
+    enviandoMensagem.current = true;
     setErro(null);
     setOcupado(true);
     try {
@@ -267,6 +328,7 @@ export function PainelChat({
     } catch (err) {
       setErro(err instanceof ApiError ? err.message : 'Falha ao enviar');
     } finally {
+      enviandoMensagem.current = false;
       setOcupado(false);
     }
   };
@@ -523,20 +585,64 @@ export function PainelChat({
             </div>
 
             {abaRodape === 'responder' ? (
-              <form onSubmit={enviar} className="flex items-end gap-2">
+              <>
+              {janelaFechada && (
+                <div role="status" className="mb-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                  Janela de 24 horas fechada. Texto livre e mensagens rápidas estão bloqueados. Envie um template aprovado pelo WhatsApp Manager e aguarde a resposta do cliente para reabrir a janela. O envio de templates ainda não está disponível nesta tela.
+                </div>
+              )}
+              <form onSubmit={enviar} className="flex min-w-0 items-end gap-2">
+                <div className="relative min-w-0 flex-1">
+                {seletorRapido && (
+                  <div role="listbox" aria-label="Mensagens rápidas" className="absolute bottom-full left-0 z-20 mb-2 max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-xl">
+                    {visiveisRapidas.length ? visiveisRapidas.map((item) => (
+                      <button key={item.id} type="button" role="option" onMouseDown={(e) => e.preventDefault()} onClick={() => escolherRapida(item)} className="block w-full rounded-lg px-3 py-2 text-left hover:bg-slate-50">
+                        <span className="flex items-center justify-between gap-2 text-sm font-medium text-slate-800"><span>{item.titulo}</span><span className="text-xs font-normal text-slate-400">{item.categoria}{item.atalho ? ` · /${item.atalho}` : ''}</span></span>
+                        <span className="mt-0.5 block truncate text-xs text-slate-500">{item.conteudo}</span>
+                      </button>
+                    )) : respostasRapidas.length === 0 ? (
+                      <p className="px-3 py-2 text-sm text-slate-500">
+                        Nenhuma mensagem rápida cadastrada.{' '}
+                        <Link to="/configuracoes?aba=mensagens-rapidas" className="font-medium text-[var(--brand-primary)] underline">Cadastre em Configurações → Mensagens rápidas</Link>.
+                      </p>
+                    ) : <p className="px-3 py-2 text-sm text-slate-500">Nenhuma mensagem encontrada. Esc para fechar.</p>}
+                  </div>
+                )}
                 <textarea
+                  ref={textareaResposta}
                   value={texto}
-                  onChange={(e) => setTexto(e.target.value)}
+                  onChange={(e) => {
+                    const valor = e.target.value;
+                    const caret = e.target.selectionStart;
+                    setTexto(valor);
+                    const trecho = valor.slice(0, caret);
+                    const gatilho = /(?:^|\s)\/([^\s]*)$/.exec(trecho);
+                    if (gatilho) {
+                      const token = gatilho[0];
+                      setSeletorRapido({ inicio: caret - token.length, fim: caret, busca: gatilho[1] ?? '' });
+                    } else setSeletorRapido(null);
+                  }}
                   onKeyDown={(e) => {
+                    if (seletorRapido && e.key === 'Escape') { e.preventDefault(); setSeletorRapido(null); return; }
+                    if (seletorRapido && e.key === 'Enter' && visiveisRapidas[0]) { e.preventDefault(); escolherRapida(visiveisRapidas[0]); return; }
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
                       void enviar(e);
                     }
                   }}
                   rows={2}
-                  placeholder="Escreva sua resposta... (Enter envia, Shift+Enter quebra linha)"
-                  className="max-h-32 min-h-[44px] flex-1 resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[var(--brand-primary)]"
+                  disabled={janelaFechada || ocupado}
+                  placeholder={janelaFechada ? 'Janela fechada — texto livre indisponível' : 'Escreva sua resposta... (Enter envia, Shift+Enter quebra linha)'}
+                  className="max-h-32 min-h-[44px] w-full min-w-0 resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[var(--brand-primary)]"
                 />
+                </div>
+                <Button type="button" variante="neutro" disabled={janelaFechada || ocupado || respostasRapidas.length === 0} title="Inserir mensagem rápida" onClick={() => {
+                  const campo = textareaResposta.current;
+                  const pos = campo?.selectionStart ?? texto.length;
+                  const fim = campo?.selectionEnd ?? pos;
+                  setSeletorRapido({ inicio: pos, fim, busca: '' });
+                  campo?.focus();
+                }}>⚡ Rápidas</Button>
                 <label
                   title="Anexar arquivo"
                   className="flex h-[44px] cursor-pointer items-center rounded-lg border border-slate-300 px-3 text-sm text-slate-600 hover:bg-slate-50"
@@ -545,7 +651,7 @@ export function PainelChat({
                   <input
                     type="file"
                     className="hidden"
-                    disabled={ocupado}
+                    disabled={ocupado || janelaFechada}
                     onChange={(e) => {
                       const arquivo = e.target.files?.[0];
                       e.target.value = '';
@@ -553,10 +659,11 @@ export function PainelChat({
                     }}
                   />
                 </label>
-                <Button type="submit" disabled={ocupado || !texto.trim()}>
+                <Button type="submit" disabled={ocupado || janelaFechada || !texto.trim()}>
                   Enviar
                 </Button>
               </form>
+              </>
             ) : (
               <form
                 onSubmit={async (e) => {

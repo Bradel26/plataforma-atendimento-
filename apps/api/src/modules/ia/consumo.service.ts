@@ -5,10 +5,8 @@ import { agregarConsumo, projetarCiclo, type RecursoIA } from './consumo';
 /**
  * Medidor de consumo de IA: consultas e registro (item 6.8).
  *
- * **Nada chama `registrarConsumo` hoje**, e a frase é sobre a plataforma, não
- * sobre o código: nenhum recurso de IA está ligado. A função existe porque medir
- * no momento do uso é caro de acrescentar depois — se a IA entrar e ninguém
- * medir, a primeira fatura é uma surpresa.
+ * Os motores externos informam unidades e custo quando publicam uma análise.
+ * Custo ausente fica nulo para não sugerir que o uso foi gratuito.
  */
 
 /** Primeiro dia do mês da competência, em UTC. */

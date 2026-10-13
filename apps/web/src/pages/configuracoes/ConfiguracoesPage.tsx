@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { BotsTab } from './BotsTab';
+import { FluxosTab } from './FluxosTab';
 import { CamposCustomizadosTab } from './CamposCustomizadosTab';
 import { CanaisTab } from './CanaisTab';
 import { FilaTab } from './FilaTab';
@@ -7,6 +9,7 @@ import { FilasTab } from './FilasTab';
 import { FiliaisTab } from './FiliaisTab';
 import { IaTab } from './IaTab';
 import { LgpdTab } from './LgpdTab';
+import { MensagensRapidasTab } from './MensagensRapidasTab';
 import { UsuariosTab } from './UsuariosTab';
 import { VozTab } from './VozTab';
 import { WhiteLabelTab } from './WhiteLabelTab';
@@ -17,7 +20,9 @@ const ABAS = [
   { id: 'campos-customizados', label: 'Campos customizados' },
   { id: 'filas', label: 'Filas' },
   { id: 'canais', label: 'Canais' },
+  { id: 'mensagens-rapidas', label: 'Mensagens rápidas' },
   { id: 'bots', label: 'Chatbot' },
+  { id: 'fluxos', label: 'Fluxos' },
   { id: 'ia', label: 'IA (motor externo)' },
   { id: 'whitelabel', label: 'White Label' },
   { id: 'voz', label: 'Voz' },
@@ -28,7 +33,16 @@ const ABAS = [
 type AbaId = (typeof ABAS)[number]['id'];
 
 export function ConfiguracoesPage() {
-  const [aba, setAba] = useState<AbaId>('usuarios');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const abaInicial = ABAS.some(({ id }) => id === searchParams.get('aba'))
+    ? searchParams.get('aba') as AbaId
+    : 'usuarios';
+  const [aba, setAba] = useState<AbaId>(abaInicial);
+
+  const selecionarAba = (id: AbaId) => {
+    setAba(id);
+    setSearchParams(id === 'usuarios' ? {} : { aba: id }, { replace: true });
+  };
 
   return (
     <div className="space-y-5">
@@ -37,7 +51,7 @@ export function ConfiguracoesPage() {
           <button
             key={id}
             type="button"
-            onClick={() => setAba(id)}
+            onClick={() => selecionarAba(id)}
             className={`-mb-px border-b-2 px-4 py-2.5 text-sm transition ${
               aba === id
                 ? 'border-[var(--brand-primary)] font-medium text-[var(--brand-primary)]'
@@ -54,7 +68,9 @@ export function ConfiguracoesPage() {
       {aba === 'campos-customizados' && <CamposCustomizadosTab />}
       {aba === 'filas' && <FilasTab />}
       {aba === 'canais' && <CanaisTab />}
+      {aba === 'mensagens-rapidas' && <MensagensRapidasTab />}
       {aba === 'bots' && <BotsTab />}
+      {aba === 'fluxos' && <FluxosTab />}
       {aba === 'ia' && <IaTab />}
       {aba === 'whitelabel' && <WhiteLabelTab />}
       {aba === 'voz' && <VozTab />}

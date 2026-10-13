@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Alerta, Badge, Button, Card, EmptyState, Field, Input, Select, Textarea } from '../../../components/ui';
-import { useConfirm } from '../../../components/ui/ConfirmDialog';
 import { ApiError, api } from '../../../lib/api';
 import { useAuth } from '../../../features/auth/AuthProvider';
 import { mascararTelefoneBr } from '../../../lib/telefone';
@@ -17,6 +16,7 @@ import { Indicadores } from './Indicadores';
 import { LinhaDoTempo } from './LinhaDoTempo';
 import { CheckinDeVisita } from './CheckinDeVisita';
 import { RegistrarAtividade } from './RegistrarAtividade';
+import { RegistroManual } from './RegistroManual';
 import { EditorEtiquetas, ETIQUETAS_CONTATO } from '../Etiquetas';
 import { LABEL_CANAL_ORIGEM } from '../temperatura';
 
@@ -50,17 +50,17 @@ type FichaProps = {
   aoExcluir?: () => void;
 };
 
-export function FichaContato({ contatoId, aoMudarEtiquetas, aoExcluir }: FichaProps) {
+export function FichaContato({ contatoId, aoMudarEtiquetas }: FichaProps) {
   const navigate = useNavigate();
-  const confirmar = useConfirm();
-  const { temPerfil } = useAuth();
+  const { usuario } = useAuth();
   const [ficha, setFicha] = useState<Ficha | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [avisoSolicitacao, setAvisoSolicitacao] = useState<string | null>(null);
   const [excluindo, setExcluindo] = useState(false);
   const [iniciando, setIniciando] = useState(false);
   const [editando, setEditando] = useState(false);
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
-  const [edicao, setEdicao] = useState({ nome: '', email: '', telefone: '', observacoes: '', uf: '', cidade: '', segmentoParceiro: '' as '' | 'TIM' | 'STARLINK' });
+  const [edicao, setEdicao] = useState({ nome: '', email: '', telefone: '', observacoes: '', uf: '', cidade: '', segmentoParceiro: '' as '' | 'TIM' | 'STARLINK', operacoes: [] as Array<'TIM' | 'STARLINK'> });
   // Contador de recargas: mudar este numero e o sinal para a linha do tempo
   // buscar de novo. Guardar a lista aqui para repassar seria duplicar o estado
   // dela — e a paginacao por cursor mora la dentro.
@@ -71,6 +71,7 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoExcluir }: FichaPr
    */
   const [contas, setContas] = useState<Conta[] | null>(null);
   const [vinculando, setVinculando] = useState(false);
+  const [registroManualAberto, setRegistroManualAberto] = useState(false);
 
   /** 404 tem tela propria; qualquer outra falha vira alerta. */
   const [naoEncontrado, setNaoEncontrado] = useState(false);
@@ -131,30 +132,28 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoExcluir }: FichaPr
     }
   };
 
-  /**
-   * Botao "Excluir contato": apaga o registro e tudo que so pertence a ele
-   * (conversas, mensagens, candidaturas de campanha). Restrito a ADMIN, mesma
-   * regra do backend (`DELETE /contatos/:id`) — o botao nem aparece para quem
-   * nao tem perfil pra usa-lo.
-   */
-  const excluir = (nome: string) => {
-    confirmar({
-      titulo: `Excluir ${nome}?`,
-      descricao: 'Não pode ser desfeito. Conversas e mensagens deste contato também são apagadas.',
-      variante: 'perigo',
-      rotuloConfirmar: 'Excluir',
-      aoConfirmar: async () => {
-        setExcluindo(true);
-        try {
-          await api.del(`/contatos/${contatoId}`);
-          aoExcluir?.();
-        } catch (e) {
-          setErro(e instanceof ApiError ? e.message : 'Falha ao excluir o contato');
-        } finally {
-          setExcluindo(false);
-        }
-      },
-    });
+  const excluir = async () => {
+    const motivo = window.prompt('Explique por que este cadastro deve ser removido. A solicitação precisa da aprovação de outra pessoa:');
+    if (!motivo?.trim()) return;
+    setExcluindo(true); setErro(null); setAvisoSolicitacao(null);
+    try {
+      await api.post(`/contatos/${contatoId}/exclusao`, { motivo: motivo.trim() });
+      setAvisoSolicitacao('Solicitação enviada. O cadastro será removido após aprovação de outra pessoa; o histórico será preservado.');
+      await carregar();
+    } catch (e) { setErro(e instanceof ApiError ? e.message : 'Falha ao solicitar a remoção'); }
+    finally { setExcluindo(false); }
+  };
+
+  const cancelarSolicitacao = async (id: string) => {
+    const justificativa = window.prompt('Por que deseja cancelar esta solicitação?');
+    if (!justificativa?.trim()) return;
+    try {
+      await api.post(`/contatos/solicitacoes-exclusao/${id}/cancelar`, { justificativa: justificativa.trim() });
+      setAvisoSolicitacao('Solicitação cancelada.');
+      await carregar();
+    } catch (e) {
+      setErro(e instanceof ApiError ? e.message : 'Falha ao cancelar a solicitação');
+    }
   };
 
   /** Abre o formulario de edicao com os dados atuais do contato. */
@@ -167,6 +166,7 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoExcluir }: FichaPr
       uf: c.uf ?? '',
       cidade: c.cidade ?? '',
       segmentoParceiro: c.segmentoParceiro ?? '',
+      operacoes: c.operacoes?.map((x) => x.operacao) ?? (c.segmentoParceiro ? [c.segmentoParceiro] : []),
     });
     setEditando(true);
   };
@@ -189,8 +189,9 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoExcluir }: FichaPr
         observacoes: edicao.observacoes.trim() || null,
         uf: edicao.uf || null,
         cidade: edicao.cidade.trim() || null,
-        segmentoParceiro: edicao.segmentoParceiro || null,
+        segmentoParceiro: edicao.operacoes.length === 1 ? edicao.operacoes[0] : null,
       });
+      await api.put(`/contatos/${contatoId}/operacoes`, { operacoes: edicao.operacoes });
       setEditando(false);
       atualizar();
     } catch (e) {
@@ -214,8 +215,12 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoExcluir }: FichaPr
   };
 
   const concluir = async (atividade: Atividade) => {
+    const justificativa = window.prompt('Justificativa para concluir esta atividade:');
+    if (!justificativa?.trim()) return;
+    const resultado = window.prompt('Qual foi o resultado?');
+    if (!resultado?.trim()) return;
     try {
-      await api.post(`/atividades/${atividade.id}/concluir`, {});
+      await api.post(`/atividades/${atividade.id}/concluir`, { justificativa: justificativa.trim(), resultado: resultado.trim() });
       atualizar();
     } catch (e) {
       setErro(e instanceof ApiError ? e.message : 'Falha ao concluir a tarefa');
@@ -292,11 +297,9 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoExcluir }: FichaPr
                 Editar contato
               </Button>
             )}
-            {temPerfil('ADMIN') && (
-              <Button variante="perigo" onClick={() => excluir(contato.nome)} disabled={excluindo}>
-                {excluindo ? 'Excluindo...' : 'Excluir contato'}
-              </Button>
-            )}
+            <Button variante="perigo" onClick={() => void excluir()} disabled={excluindo || Boolean(contato.excluidoEm)}>
+              {excluindo ? 'Solicitando...' : 'Solicitar remoção'}
+            </Button>
           </div>
         }
       >
@@ -354,13 +357,7 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoExcluir }: FichaPr
                 maxLength={2000}
               />
             </Field>
-            <Field label="Segmento do parceiro">
-              <Select value={edicao.segmentoParceiro} onChange={(e) => setEdicao({ ...edicao, segmentoParceiro: e.target.value as '' | 'TIM' | 'STARLINK' })}>
-                <option value="">Sem classificação</option>
-                <option value="TIM">TIM</option>
-                <option value="STARLINK">Starlink</option>
-              </Select>
-            </Field>
+            <fieldset className="space-y-2 text-sm"><legend className="mb-1 text-xs text-slate-500">Operações do parceiro</legend>{(['TIM', 'STARLINK'] as const).map((op) => <label key={op} className="mr-4 inline-flex items-center gap-2"><input type="checkbox" checked={edicao.operacoes.includes(op)} onChange={(e) => setEdicao({ ...edicao, operacoes: e.target.checked ? [...edicao.operacoes, op] : edicao.operacoes.filter((x) => x !== op) })} />{op === 'STARLINK' ? 'Starlink' : op}</label>)}</fieldset>
             <div className="flex gap-2">
               <Button onClick={() => void salvarEdicao()} disabled={salvandoEdicao || !edicao.nome.trim()}>
                 {salvandoEdicao ? 'Salvando...' : 'Salvar'}
@@ -385,12 +382,13 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoExcluir }: FichaPr
             <dd className="text-slate-800">{[contato.cidade, contato.uf].filter(Boolean).join(' / ') || '—'}</dd>
           </div>
           <div>
-            <dt className="text-xs text-slate-500">Origem</dt>
+            <dt className="text-xs text-slate-500">Canal de origem</dt>
             <dd className="text-slate-800">{contato.canalOrigem ? LABEL_CANAL_ORIGEM[contato.canalOrigem] : '—'}</dd>
           </div>
+          <div><dt className="text-xs text-slate-500">Origem da importação</dt><dd className="text-slate-800">{contato.origemImportacao ?? 'Cadastro fora de importação'}</dd></div>
           <div>
-            <dt className="text-xs text-slate-500">Segmento do parceiro</dt>
-            <dd className="text-slate-800">{contato.segmentoParceiro === 'TIM' ? 'TIM' : contato.segmentoParceiro === 'STARLINK' ? 'Starlink' : 'Sem classificação'}</dd>
+            <dt className="text-xs text-slate-500">Operações</dt>
+            <dd className="flex flex-wrap gap-1">{(contato.operacoes?.length ? contato.operacoes.map((x) => x.operacao) : contato.segmentoParceiro ? [contato.segmentoParceiro] : []).map((op) => <Badge key={op} tom="marca">{op === 'STARLINK' ? 'Starlink' : op}</Badge>)}{!contato.operacoes?.length && !contato.segmentoParceiro && <span className="text-slate-800">Sem classificação</span>}</dd>
           </div>
           <div>
             <dt className="text-xs text-slate-500">Cliente desde</dt>
@@ -425,6 +423,27 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoExcluir }: FichaPr
           <p className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">{contato.observacoes}</p>
         )}
         {erro && <div className="mt-3"><Alerta>{erro}</Alerta></div>}
+        {avisoSolicitacao && <div className="mt-3"><Alerta>{avisoSolicitacao}</Alerta></div>}
+        {ficha.solicitacoesExclusao.length > 0 && (
+          <div className="mt-4 rounded-lg border border-slate-200 p-3">
+            <p className="text-xs font-semibold text-slate-700">Histórico de solicitações de exclusão</p>
+            <ul className="mt-2 space-y-2">
+              {ficha.solicitacoesExclusao.map((s) => (
+                <li key={s.id} className="flex flex-wrap items-start justify-between gap-2 text-xs">
+                  <span className="text-slate-600">
+                    <Badge tom={s.status === 'PENDENTE' ? 'alerta' : s.status === 'APROVADA' ? 'sucesso' : 'neutro'}>{s.status}</Badge>
+                    {' '}{new Date(s.solicitadoEm).toLocaleString('pt-BR')} · por {s.solicitadoPor.nome} · {s.motivo}
+                    {s.aprovadoPor && <> · decisão de {s.aprovadoPor.nome}</>}
+                    {s.motivoDecisao && <> · justificativa: {s.motivoDecisao}</>}
+                  </span>
+                  {s.status === 'PENDENTE' && s.solicitadoPor.id === usuario?.id && (
+                    <Button tamanho="sm" variante="neutro" onClick={() => void cancelarSolicitacao(s.id)}>Cancelar pedido</Button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </Card>
 
       <CicloDoParceiro contatoId={contatoId} segmentoParceiro={ficha?.contato.segmentoParceiro ?? null} />
@@ -460,9 +479,22 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoExcluir }: FichaPr
         </Card>
       )}
 
-      <Card titulo="Registrar" descricao="Fica na linha do tempo na hora">
+      <Card
+        titulo="Registrar"
+        descricao="Registre ou agende a próxima ação. Interações manuais geram uma tarefa vinculada."
+        acao={<Button variante="neutro" onClick={() => setRegistroManualAberto(true)}>Novo registro manual</Button>}
+      >
         <RegistrarAtividade contatoId={contatoId} aoRegistrar={atualizar} />
       </Card>
+
+      <RegistroManual
+        contatoId={contatoId}
+        contatoNome={contato.nome}
+        empresa={contato.conta?.nome}
+        aberto={registroManualAberto}
+        aoFechar={() => setRegistroManualAberto(false)}
+        aoSalvar={atualizar}
+      />
 
       <Card titulo="Linha do tempo" descricao="Tudo que aconteceu com este cliente e com a empresa dele">
         <LinhaDoTempo base={`/ficha/contato/${contatoId}`} raizId={contatoId} recarregar={versao} />

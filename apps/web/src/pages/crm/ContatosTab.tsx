@@ -22,6 +22,7 @@ import { Etiquetas, FiltroEtiquetas } from './Etiquetas';
 import { FunilDeCicloDeVida } from './FunilDeCicloDeVida';
 import { UFS_ATENDIDAS } from '../esteira/ufs';
 import { AvatarConversa } from '../../features/atendimento/AvatarConversa';
+import { SolicitacoesExclusaoContatos } from './SolicitacoesExclusaoContatos';
 
 const ORIGENS: Canal[] = semWebchat<Canal>(
   ['WEBCHAT', 'WHATSAPP', 'INSTAGRAM', 'FACEBOOK', 'PROSPECCAO_ATIVA', 'INDICACAO'],
@@ -693,6 +694,7 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
 
   return (
     <div ref={containerRef}>
+      {!selecionado && <div className="mb-5"><SolicitacoesExclusaoContatos /></div>}
       {ladoALado ? (
         <div className="grid gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
           {painelLista}

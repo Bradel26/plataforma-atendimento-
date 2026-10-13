@@ -33,6 +33,7 @@ const FILHAS: Record<string, string> = {
   FunnelStage: 'Funnel',
   OpportunityItem: 'Opportunity',
   OpportunityStageLog: 'Opportunity',
+  OpportunityAnalysis: 'Opportunity',
   CredenciamentoHistorico: 'Credenciamento',
   // Ciclo do parceiro: etapas e historico chegam sempre pelo ciclo, que ja
   // carrega a organizacao e so e lido depois de conferir o credenciamento visivel.

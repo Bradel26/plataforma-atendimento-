@@ -15,11 +15,15 @@ const COM_ORGANIZACAO = new Set([
   'User',
   'IntegrationToken',
   'Contact',
+  'ContactOperation',
+  'ContactDeletionRequest',
+  'ImportSourceMapping',
   'Conversation',
   'ContadorProtocolo',
   'Queue',
   'ChannelConfig',
   'Account',
+  'AccountOperation',
   'Lead',
   'Funnel',
   'Opportunity',
@@ -27,8 +31,12 @@ const COM_ORGANIZACAO = new Set([
   'PriceCatalog',
   'Ticket',
   'Campaign',
+  'PartnerCampaign',
   'ChatPreview',
   'Bot',
+  'Fluxo',
+  'ExecucaoFluxo',
+  'MidiaFluxo',
   'WorkShift',
   'Branding',
   'RetentionPolicy',
@@ -38,6 +46,7 @@ const COM_ORGANIZACAO = new Set([
   'Survey',
   'LgpdLog',
   'Activity',
+  'ActivitySeries',
   // Meta e tabela raiz (item 4.1): carrega organizacao e CHECK proprio.
   'Meta',
   // Consumo de IA (item 6.8): tabela raiz, com organizacao e CHECK proprio.
@@ -50,6 +59,8 @@ const COM_ORGANIZACAO = new Set([
   'Filial',
   // Campos customizados (item 6.4): tabela raiz, com organizacao e CHECK proprio.
   'CampoCustomizado',
+  // Mensagens rápidas: respostas compartilhadas, isoladas por organização.
+  'MensagemRapida',
   // Esteira de credenciamento: tabela raiz, com organizacao e CHECK proprio.
   'Credenciamento',
   // Ciclo de vida do parceiro: tabela raiz, com organizacao e CHECK proprio.

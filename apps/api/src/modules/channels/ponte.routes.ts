@@ -5,7 +5,7 @@ import { badRequest } from '../../lib/errors';
 import { prisma, prismaSemIsolamento } from '../../lib/prisma';
 import { notificarStatusCanal } from '../../realtime/hub';
 import { comOrganizacao, semOrganizacao } from '../../lib/tenant';
-import { assinaturaValida, configDoDestino, importarContatos } from './channels.service';
+import { assinaturaValida, configDaSessaoPonte, configDoDestino, importarContatos } from './channels.service';
 import { registrarMensagemEntrante, registrarMensagemPropria } from './inbound.service';
 import { modoEfetivo, numeroNormalizado } from './whatsapp.modo';
 import { salvarPrevia } from './chat-previews.service';
@@ -258,7 +258,15 @@ ponteRoutes.post(
           ? (corpoJson as { sessao: string }).sessao.trim()
           : null;
 
-      const config = await configDoDestino('WHATSAPP', sessaoBruta);
+      if (!sessaoBruta) throw badRequest('Corpo invalido: sessao ausente');
+      const config = await configDaSessaoPonte(sessaoBruta);
+
+      // Ignora sessao sem linha correspondente. O fallback geral escolheria
+      // uma linha pessoal e poderia exibir uma queda que pertence a "padrao".
+      if (!config) {
+        res.json({ ok: true, ignorado: true });
+        return;
+      }
 
       if (!config?.ativo || modoEfetivo(config.modo) !== 'NAO_OFICIAL') {
         res.status(503).json({

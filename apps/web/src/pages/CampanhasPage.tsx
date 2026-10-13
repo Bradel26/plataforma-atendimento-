@@ -6,6 +6,7 @@ import { useSearchParams } from 'react-router-dom';
 import { MontarPublico } from './campanhas/MontarPublico';
 import { CAMPANHAS_DEMO, ITENS_DEMO, RESULTADO_DEMO } from './campanhas/dadosDemo';
 import { LeadsTab } from './crm/LeadsTab';
+import { CampanhasParceirosTab } from './campanhas/CampanhasParceirosTab';
 import { useAuth } from '../features/auth/AuthProvider';
 import { ApiError, api } from '../lib/api';
 import { ESTADO } from '../lib/viz';
@@ -60,7 +61,8 @@ const paraCampoLocal = (d: Date) => {
 
 /** Leads mudou do CRM para ca: mesmo funil de captacao que as campanhas alimentam. */
 const SUBABAS = [
-  { chave: 'campanhas', rotulo: 'Campanhas' },
+  { chave: 'campanhas', rotulo: 'Comunicados de marketing' },
+  { chave: 'parceiros', rotulo: 'Campanhas para parceiros' },
   { chave: 'leads', rotulo: 'Leads' },
 ] as const;
 type SubAba = (typeof SUBABAS)[number]['chave'];
@@ -72,17 +74,22 @@ export function CampanhasPage() {
   // devolveria 403 antes de a pessoa sequer ver a aba Leads.
   const { temPerfil } = useAuth();
   const podeVerCampanhas = temPerfil('ADMIN', 'SUPERVISOR');
+  const podeGerirCampanhasParceiros = temPerfil('ADMIN');
   // Dados ficticios para conferir o layout; nao chama a API nem grava nada. Ligado
   // por `?demo=1` e, no `npm run dev`, por padrao (`?demo=0` mostra as campanhas reais).
   // O build de producao so os mostra com `?demo=1`.
   const demoParam = useSearchParams()[0].get('demo');
   const demo = demoParam === '1' || (import.meta.env.DEV && demoParam !== '0');
-  const subAbasVisiveis = SUBABAS.filter((s) => s.chave !== 'campanhas' || podeVerCampanhas);
+  const subAbasVisiveis = SUBABAS.filter((s) =>
+    s.chave === 'campanhas' ? podeVerCampanhas : s.chave === 'parceiros' ? podeGerirCampanhasParceiros : true,
+  );
 
   const [subAba, setSubAba] = useState<SubAba>(podeVerCampanhas ? 'campanhas' : 'leads');
   const [campanhas, setCampanhas] = useState<Campanha[]>([]);
   const [aberta, setAberta] = useState<Aberta | null>(null);
-  const [nova, setNova] = useState({ nome: '', canal: 'WHATSAPP' as Canal, mensagem: '' });
+  const [nova, setNova] = useState({ nome: '', assunto: '', canal: 'WHATSAPP' as Canal, mensagem: '' });
+  const [arquivosNovos, setArquivosNovos] = useState<File[]>([]);
+  const [edicao, setEdicao] = useState({ nome: '', assunto: '', mensagem: '' });
   const [agendarPara, setAgendarPara] = useState('');
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
@@ -155,8 +162,12 @@ export function CampanhasPage() {
   const criar = async (e: React.FormEvent) => {
     e.preventDefault();
     await agir(async () => {
-      const { campanha } = await api.post<{ campanha: Campanha }>('/campanhas', nova);
-      setNova({ nome: '', canal: 'WHATSAPP', mensagem: '' });
+      const { campanha } = await api.post<{ campanha: Campanha }>('/campanhas', { ...nova, assunto: nova.assunto || null });
+      for (const arquivo of arquivosNovos) {
+        await api.upload(`/campanhas/${campanha.id}/anexos`, arquivo);
+      }
+      setArquivosNovos([]);
+      setNova({ nome: '', assunto: '', canal: 'WHATSAPP', mensagem: '' });
       await abrir(campanha.id);
     });
   };
@@ -179,11 +190,16 @@ export function CampanhasPage() {
   const c = aberta?.campanha;
   const pendentes = c?.contagens.PENDENTE ?? 0;
 
+  useEffect(() => {
+    if (c) setEdicao({ nome: c.nome, assunto: c.assunto ?? '', mensagem: c.mensagem });
+  }, [c?.id, c?.nome, c?.assunto, c?.mensagem]);
+
   return (
     <div className="space-y-5">
       <Tabs itens={subAbasVisiveis} ativo={subAba} aoSelecionar={(chave) => setSubAba(chave as SubAba)} />
 
       {subAba === 'leads' && <LeadsTab />}
+      {subAba === 'parceiros' && podeGerirCampanhasParceiros && <CampanhasParceirosTab />}
 
       {subAba === 'campanhas' && (
         <div className="grid gap-5 lg:grid-cols-[380px_1fr]">
@@ -249,6 +265,14 @@ export function CampanhasPage() {
                     onChange={(e) => setNova({ ...nova, nome: e.target.value })}
                   />
                 </Field>
+                <Field label="Assunto (opcional)" hint="Usado em comunicados por e-mail; os demais canais enviam a mensagem abaixo">
+                  <Input
+                    maxLength={180}
+                    value={nova.assunto}
+                    onChange={(e) => setNova({ ...nova, assunto: e.target.value })}
+                    placeholder="Novidades e condições deste mês"
+                  />
+                </Field>
                 <Field label="Canal">
                   <Select value={nova.canal} onChange={(e) => setNova({ ...nova, canal: e.target.value as Canal })}>
                     {CANAIS.map((o) => (
@@ -264,6 +288,16 @@ export function CampanhasPage() {
                     onChange={(e) => setNova({ ...nova, mensagem: e.target.value })}
                     className="w-full resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[var(--brand-primary)]"
                   />
+                </Field>
+                <Field label="Anexos" hint="Até 20 MB por arquivo. Os destinatários receberão links seguros para baixar os materiais.">
+                  <input
+                    type="file"
+                    multiple
+                    accept=".jpg,.jpeg,.png,.webp,.gif,.mp3,.ogg,.opus,.m4a,.aac,.weba,.mp4,.webm,.pdf,.doc,.docx,.xls,.xlsx,.zip,.csv,.txt"
+                    onChange={(e) => setArquivosNovos(Array.from(e.target.files ?? []))}
+                    className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2"
+                  />
+                  {arquivosNovos.length > 0 && <p className="mt-1 text-xs text-slate-500">{arquivosNovos.map((f) => f.name).join(' · ')}</p>}
                 </Field>
                 {nova.mensagem.trim() && (
                   <div>
@@ -301,11 +335,43 @@ export function CampanhasPage() {
                     <Alerta tipo="sucesso">{aviso}</Alerta>
                   </div>
                 )}
+
+                {c.status === 'RASCUNHO' && (
+                  <div className="mb-4 space-y-3 rounded-lg border border-slate-200 p-3">
+                    <p className="text-sm font-medium text-slate-700">Editar comunicado</p>
+                    <Field label="Nome"><Input value={edicao.nome} onChange={(e) => setEdicao({ ...edicao, nome: e.target.value })} /></Field>
+                    <Field label="Assunto (opcional)"><Input maxLength={180} value={edicao.assunto} onChange={(e) => setEdicao({ ...edicao, assunto: e.target.value })} /></Field>
+                    <Field label="Mensagem"><textarea rows={4} value={edicao.mensagem} onChange={(e) => setEdicao({ ...edicao, mensagem: e.target.value })} className="w-full resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[var(--brand-primary)]" /></Field>
+                    <Button variante="neutro" disabled={ocupado || !edicao.nome.trim() || !edicao.mensagem.trim()} onClick={() => void agir(() => api.patch(`/campanhas/${c.id}`, { nome: edicao.nome, assunto: edicao.assunto || null, mensagem: edicao.mensagem }), c.id)}>Salvar edição</Button>
+                  </div>
+                )}
     
                 <p className="text-xs font-medium text-slate-500">Pré-visualização da mensagem</p>
                 <p className="mt-1 whitespace-pre-wrap rounded-lg bg-emerald-50 p-3 text-sm text-slate-800">
                   {previa(c.mensagem)}
                 </p>
+                {c.anexos && c.anexos.length > 0 && (
+                  <div className="mt-3 rounded-lg border border-slate-200 p-3">
+                    <p className="mb-2 text-xs font-medium text-slate-500">Materiais anexados</p>
+                    <ul className="space-y-1 text-sm">
+                      {c.anexos.map((anexo) => <li key={anexo.id} className="flex items-center justify-between gap-2"><a className="truncate text-blue-700 underline" href={anexo.url} target="_blank" rel="noreferrer">{anexo.nome}</a>{c.status === 'RASCUNHO' && <button type="button" className="text-xs text-red-600" disabled={ocupado} onClick={() => void agir(() => api.del(`/campanhas/${c.id}/anexos/${anexo.id}`), c.id)}>Remover</button>}</li>)}
+                    </ul>
+                  </div>
+                )}
+                {c.status === 'RASCUNHO' && (
+                  <div className="mt-3">
+                    <Field label="Adicionar materiais" hint="Os destinatários recebem links seguros para baixar.">
+                      <input type="file" multiple accept=".jpg,.jpeg,.png,.webp,.gif,.mp3,.ogg,.opus,.m4a,.aac,.weba,.mp4,.webm,.pdf,.doc,.docx,.xls,.xlsx,.zip,.csv,.txt" onChange={(e) => {
+                        const selecionados = Array.from(e.target.files ?? []);
+                        e.target.value = '';
+                        if (!selecionados.length) return;
+                        void agir(async () => {
+                          for (const arquivo of selecionados) await api.upload(`/campanhas/${c.id}/anexos`, arquivo);
+                        }, c.id);
+                      }} className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2" />
+                    </Field>
+                  </div>
+                )}
     
                 {c.status !== 'CONCLUIDA' && (
                   <div className="mt-4 space-y-3">

@@ -24,9 +24,12 @@ import {
   type ProdutoInstalado,
   type FiltroContaSalvo,
   type ValorCampoCustomizado,
+  type VendedorOpcao,
 } from '../../lib/types';
 import { useFaixaDeLargura } from '../../lib/useFaixaDeLargura';
+import { UFS_ATENDIDAS } from '../esteira/ufs';
 import { CamposCustomizadosCampos } from './CamposCustomizados';
+import { StatTile } from '../../components/viz/StatTile';
 import { BaseInstalada } from './ficha/BaseInstalada';
 import { CredenciamentosDaEmpresa } from './ficha/CredenciamentosDaEmpresa';
 import { VisoesSalvas } from './VisoesSalvas';
@@ -40,6 +43,14 @@ type Ficha = {
   oportunidades: Oportunidade[];
   produtosInstalados: ProdutoInstalado[];
   camposCustomizados: ValorCampoCustomizado[];
+};
+
+type ResumoEmpresas = {
+  empresas: number;
+  empresasComContatos: number;
+  empresasSemContatos: number;
+  porOperacao: { tim: number; starlink: number; ambas: number; somenteTim: number; somenteStarlink: number };
+  contatos: { total: number; tim: number; starlink: number };
 };
 
 const mascararCnpj = (cnpj: string | null) =>
@@ -56,6 +67,7 @@ type Props = {
 
 export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   const [contas, setContas] = useState<Conta[]>([]);
+  const [resumoEmpresas, setResumoEmpresas] = useState<ResumoEmpresas | null>(null);
   const [filiais, setFiliais] = useState<Filial[]>([]);
   const [busca, setBusca] = useState('');
   /** Etiquetas ligadas no filtro. Semantica E, igual a aba de contatos. */
@@ -63,8 +75,11 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   /** Muda quando a ficha grava etiquetas: e o sinal para o filtro rebuscar. */
   const [versaoTags, setVersaoTags] = useState(0);
   const [ficha, setFicha] = useState<Ficha | null>(null);
+  const [editandoCadastro, setEditandoCadastro] = useState(false);
+  const [cadastroConta, setCadastroConta] = useState({ nome: '', razaoSocial: '', nomeFantasia: '', cnpj: '', inscricaoEstadual: '', atividadePrincipal: '', cnaeSecundario: '', cidade: '', uf: '', cep: '', logradouro: '', numero: '', complemento: '', bairro: '', responsavelNome: '', responsavelCpf: '', telefone: '', email: '', responsavelId: '', origemCadastro: '', observacoes: '' });
   const [erro, setErro] = useState<string | null>(null);
-  const [nova, setNova] = useState({ nome: '', cnpj: '', segmento: '', filialId: '' });
+  const [nova, setNova] = useState({ nome: '', nomeFantasia: '', cnpj: '', inscricaoEstadual: '', atividadePrincipal: '', cnaeSecundario: '', cidade: '', uf: '', cep: '', logradouro: '', numero: '', complemento: '', bairro: '', responsavelNome: '', responsavelCpf: '', telefone: '', email: '', responsavelId: '', origemCadastro: '', observacoes: '', segmento: '', filialId: '', operacoes: [] as Array<'TIM' | 'STARLINK'> });
+  const [consultores, setConsultores] = useState<VendedorOpcao[]>([]);
   /** Campos customizados (item 6.4) da "Nova conta". */
   const [camposDef, setCamposDef] = useState<CampoCustomizadoDef[]>([]);
   const [novosCampos, setNovosCampos] = useState<Record<string, unknown>>({});
@@ -149,10 +164,18 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   }, [carregar]);
 
   useEffect(() => {
+    void api.get<ResumoEmpresas>('/contas/resumo').then(setResumoEmpresas).catch(() => undefined);
+  }, [contas.length]);
+
+  useEffect(() => {
     void api
       .get<{ filiais: Filial[] }>('/filiais')
       .then(({ filiais: lista }) => setFiliais(lista))
       .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    void api.get<{ vendedores: VendedorOpcao[] }>('/vendedores').then(({ vendedores }) => setConsultores(vendedores)).catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -247,6 +270,31 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
     }
   };
 
+  const definirOperacoes = async (operacoes: Array<'TIM' | 'STARLINK'>) => {
+    if (!ficha) return;
+    setErro(null); setSalvandoCampo('operacoes');
+    try { await api.put(`/contas/${ficha.conta.id}/operacoes`, { operacoes }); await abrir(ficha.conta.id); mostrarToast('sucesso', 'Operações atualizadas.'); }
+    catch (e) { setErro(e instanceof ApiError ? e.message : 'Falha ao atualizar as operações'); }
+    finally { setSalvandoCampo(null); }
+  };
+
+  const abrirEdicaoCadastro = () => {
+    if (!ficha) return;
+    const c = ficha.conta;
+    setCadastroConta({ nome: c.nome, razaoSocial: c.razaoSocial ?? '', nomeFantasia: c.nomeFantasia ?? '', cnpj: c.cnpj ?? '', inscricaoEstadual: c.inscricaoEstadual ?? '', atividadePrincipal: c.atividadePrincipal ?? '', cnaeSecundario: (c.cnaeSecundario ?? []).join('\n'), cidade: c.cidade ?? '', uf: c.uf ?? '', cep: c.cep ?? '', logradouro: c.logradouro ?? '', numero: c.numero ?? '', complemento: c.complemento ?? '', bairro: c.bairro ?? '', responsavelNome: c.responsavelNome ?? '', responsavelCpf: c.responsavelCpf ?? '', telefone: c.telefone ?? '', email: c.email ?? '', responsavelId: c.responsavelId ?? '', origemCadastro: c.origemCadastro ?? '', observacoes: c.observacoes ?? '' });
+    setEditandoCadastro(true);
+  };
+
+  const salvarCadastroConta = async () => {
+    if (!ficha) return;
+    setSalvandoCampo('cadastro'); setErro(null);
+    try {
+      await api.patch(`/contas/${ficha.conta.id}`, { ...cadastroConta, cnaeSecundario: cadastroConta.cnaeSecundario.split(/[\n,;]/).map((x) => x.trim()).filter(Boolean), cnpj: cadastroConta.cnpj || null, nomeFantasia: cadastroConta.nomeFantasia || null, inscricaoEstadual: cadastroConta.inscricaoEstadual || null, atividadePrincipal: cadastroConta.atividadePrincipal || null, cidade: cadastroConta.cidade || null, uf: cadastroConta.uf || null, cep: cadastroConta.cep || null, logradouro: cadastroConta.logradouro || null, numero: cadastroConta.numero || null, complemento: cadastroConta.complemento || null, bairro: cadastroConta.bairro || null, responsavelNome: cadastroConta.responsavelNome || null, responsavelCpf: cadastroConta.responsavelCpf || null, telefone: cadastroConta.telefone || null, email: cadastroConta.email || null, responsavelId: cadastroConta.responsavelId || null, origemCadastro: cadastroConta.origemCadastro || null, observacoes: cadastroConta.observacoes || null });
+      setEditandoCadastro(false); await abrir(ficha.conta.id); mostrarToast('sucesso', 'Cadastro da empresa atualizado.');
+    } catch (e) { setErro(e instanceof ApiError ? e.message : 'Falha ao atualizar a empresa'); }
+    finally { setSalvandoCampo(null); }
+  };
+
   /** Grava um campo customizado (item 6.4) da conta aberta. */
   const mudarCampoCustomizado = async (chave: string, valor: string | number | boolean | null) => {
     if (!ficha) return;
@@ -308,15 +356,36 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   const criar = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.post('/contas', {
+      const criada = await api.post<{ conta: { id: string } }>('/contas', {
+        cadastroCompleto: true,
         nome: nova.nome,
-        ...(nova.cnpj.trim() ? { cnpj: nova.cnpj } : {}),
+        razaoSocial: nova.nome,
+        nomeFantasia: nova.nomeFantasia || null,
+        cnpj: nova.cnpj,
+        inscricaoEstadual: nova.inscricaoEstadual || null,
+        atividadePrincipal: nova.atividadePrincipal || null,
+        cnaeSecundario: nova.cnaeSecundario.split(/[\n,;]/).map((x) => x.trim()).filter(Boolean),
+        cidade: nova.cidade,
+        uf: nova.uf,
+        cep: nova.cep || null,
+        logradouro: nova.logradouro || null,
+        numero: nova.numero || null,
+        complemento: nova.complemento || null,
+        bairro: nova.bairro || null,
+        responsavelNome: nova.responsavelNome,
+        responsavelCpf: nova.responsavelCpf || null,
+        telefone: nova.telefone || null,
+        email: nova.email || null,
+        responsavelId: nova.responsavelId,
+        origemCadastro: nova.origemCadastro || null,
+        observacoes: nova.observacoes || null,
         ...(nova.segmento.trim() ? { segmento: nova.segmento } : {}),
         ...(nova.filialId ? { filialId: nova.filialId } : {}),
         ...(Object.keys(novosCampos).length ? { camposCustomizados: novosCampos } : {}),
       });
+      if (nova.operacoes.length) await api.put(`/contas/${criada.conta.id}/operacoes`, { operacoes: nova.operacoes });
       const nomeCriada = nova.nome;
-      setNova({ nome: '', cnpj: '', segmento: '', filialId: '' });
+      setNova({ nome: '', nomeFantasia: '', cnpj: '', inscricaoEstadual: '', atividadePrincipal: '', cnaeSecundario: '', cidade: '', uf: '', cep: '', logradouro: '', numero: '', complemento: '', bairro: '', responsavelNome: '', responsavelCpf: '', telefone: '', email: '', responsavelId: '', origemCadastro: '', observacoes: '', segmento: '', filialId: '', operacoes: [] });
       setNovosCampos({});
       await carregar();
       mostrarToast('sucesso', `${nomeCriada} cadastrada.`);
@@ -417,7 +486,17 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   };
 
   const painelLista = (
-    <Card titulo="Empresas" descricao={`${contas.length} encontrada(s)`}>
+    <Card titulo="Empresas" descricao={`${resumoEmpresas?.empresas ?? contas.length} empresa(s) única(s) cadastrada(s); a lista pode estar filtrada.`}>
+      {resumoEmpresas && <div className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
+        <StatTile rotulo="Empresas únicas" valor={resumoEmpresas.empresas} />
+        <StatTile rotulo="Empresas com contatos" valor={resumoEmpresas.empresasComContatos} />
+        <StatTile rotulo="Empresas sem contatos" valor={resumoEmpresas.empresasSemContatos} />
+        <StatTile rotulo="TIM / ambas" valor={`${resumoEmpresas.porOperacao.somenteTim} / ${resumoEmpresas.porOperacao.ambas}`} />
+        <StatTile rotulo="Starlink / ambas" valor={`${resumoEmpresas.porOperacao.somenteStarlink} / ${resumoEmpresas.porOperacao.ambas}`} />
+        <StatTile rotulo="Contatos (total)" valor={resumoEmpresas.contatos.total} />
+        <StatTile rotulo="Contatos TIM" valor={resumoEmpresas.contatos.tim} />
+        <StatTile rotulo="Contatos Starlink" valor={resumoEmpresas.contatos.starlink} />
+      </div>}
       <div className="mb-3">
         <VisoesSalvas<FiltroContaSalvo>
           entidade="CONTA"
@@ -585,17 +664,28 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   const painelFormulario = (
     <Card titulo="Nova empresa">
       <form onSubmit={criar} className="space-y-3">
-        <Field label="Nome">
-          <Input
-            ref={nomeNovaContaRef}
-            required
-            value={nova.nome}
-            onChange={(e) => setNova({ ...nova, nome: e.target.value })}
-          />
-        </Field>
-        <Field label="CNPJ" hint="Com ou sem mascara">
-          <Input value={nova.cnpj} onChange={(e) => setNova({ ...nova, cnpj: e.target.value })} />
-        </Field>
+        <Field label="Razão social"><Input ref={nomeNovaContaRef} required value={nova.nome} onChange={(e) => setNova({ ...nova, nome: e.target.value })} /></Field>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Field label="Nome fantasia"><Input value={nova.nomeFantasia} onChange={(e) => setNova({ ...nova, nomeFantasia: e.target.value })} /></Field>
+          <Field label="CNPJ" hint="Com ou sem máscara"><Input required value={nova.cnpj} onChange={(e) => setNova({ ...nova, cnpj: e.target.value })} /></Field>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Field label="Inscrição estadual"><Input value={nova.inscricaoEstadual} onChange={(e) => setNova({ ...nova, inscricaoEstadual: e.target.value })} /></Field>
+          <Field label="CNAE principal (código e descrição)"><Input value={nova.atividadePrincipal} onChange={(e) => setNova({ ...nova, atividadePrincipal: e.target.value })} /></Field>
+        </div>
+        <Field label="CNAEs secundários" hint="Um por linha ou separados por vírgula"><textarea className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" rows={2} value={nova.cnaeSecundario} onChange={(e) => setNova({ ...nova, cnaeSecundario: e.target.value })} /></Field>
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="Cidade"><Input required value={nova.cidade} onChange={(e) => setNova({ ...nova, cidade: e.target.value })} /></Field>
+          <Field label="UF atendida pela Bradel"><Select required value={nova.uf} onChange={(e) => setNova({ ...nova, uf: e.target.value })}><option value="">Selecione</option>{UFS_ATENDIDAS.map((x) => <option key={x.sigla} value={x.sigla}>{x.sigla} · {x.nome}</option>)}</Select></Field>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2"><Field label="CEP"><Input value={nova.cep} onChange={(e) => setNova({ ...nova, cep: e.target.value })} /></Field><Field label="Telefone"><Input value={nova.telefone} onChange={(e) => setNova({ ...nova, telefone: e.target.value })} /></Field></div>
+        <Field label="E-mail comercial"><Input type="email" value={nova.email} onChange={(e) => setNova({ ...nova, email: e.target.value })} /></Field>
+        <div className="grid gap-2 sm:grid-cols-2"><Field label="Responsável pela empresa"><Input value={nova.responsavelNome} onChange={(e) => setNova({ ...nova, responsavelNome: e.target.value })} /></Field><Field label="CPF do responsável (opcional)"><Input value={nova.responsavelCpf} onChange={(e) => setNova({ ...nova, responsavelCpf: e.target.value })} /></Field></div>
+        <Field label="Consultor responsável"><Select required value={nova.responsavelId} onChange={(e) => { const consultor = consultores.find((x) => x.id === e.target.value); setNova({ ...nova, responsavelId: e.target.value, responsavelNome: nova.responsavelNome || consultor?.nome || '' }); }}><option value="">Selecione o consultor</option>{consultores.map((u) => <option key={u.id} value={u.id}>{u.nome}{u.perfil ? ` · ${u.perfil === 'SUPORTE' ? 'Suporte' : 'Comercial'}` : ''}</option>)}</Select></Field>
+        <div className="grid gap-2 sm:grid-cols-2"><Field label="Logradouro"><Input value={nova.logradouro} onChange={(e) => setNova({ ...nova, logradouro: e.target.value })} /></Field><Field label="Número"><Input value={nova.numero} onChange={(e) => setNova({ ...nova, numero: e.target.value })} /></Field><Field label="Bairro"><Input value={nova.bairro} onChange={(e) => setNova({ ...nova, bairro: e.target.value })} /></Field><Field label="Complemento"><Input value={nova.complemento} onChange={(e) => setNova({ ...nova, complemento: e.target.value })} /></Field></div>
+        <Field label="Origem do cadastro"><Input value={nova.origemCadastro} onChange={(e) => setNova({ ...nova, origemCadastro: e.target.value })} placeholder="Indicação, evento, importação..." /></Field>
+        <Field label="Observações"><textarea className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" rows={3} value={nova.observacoes} onChange={(e) => setNova({ ...nova, observacoes: e.target.value })} /></Field>
+        <fieldset className="space-y-2 text-sm"><legend className="mb-1 text-xs text-slate-500">Operações atendidas</legend>{(['TIM', 'STARLINK'] as const).map((op) => <label key={op} className="mr-4 inline-flex items-center gap-2"><input type="checkbox" checked={nova.operacoes.includes(op)} onChange={(e) => setNova({ ...nova, operacoes: e.target.checked ? [...nova.operacoes, op] : nova.operacoes.filter((x) => x !== op) })} />{op === 'STARLINK' ? 'Starlink' : op}</label>)}</fieldset>
         <Field label="Segmento">
           <Input value={nova.segmento} onChange={(e) => setNova({ ...nova, segmento: e.target.value })} />
         </Field>
@@ -658,11 +748,27 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
             &larr; Todos os clientes
           </button>
           <Card titulo={ficha.conta.nome} descricao={mascararCnpj(ficha.conta.cnpj)}>
+            {!editandoCadastro ? <Button variante="neutro" onClick={abrirEdicaoCadastro}>Editar cadastro da empresa</Button> : <div className="mb-4 space-y-3 rounded-lg border border-slate-200 p-3">
+              <div className="grid gap-3 sm:grid-cols-2"><Field label="Razão social"><Input value={cadastroConta.razaoSocial} onChange={(e) => setCadastroConta({ ...cadastroConta, razaoSocial: e.target.value, nome: e.target.value })} /></Field><Field label="Nome de exibição"><Input required value={cadastroConta.nome} onChange={(e) => setCadastroConta({ ...cadastroConta, nome: e.target.value })} /></Field></div>
+              <div className="grid gap-3 sm:grid-cols-2"><Field label="Nome fantasia"><Input value={cadastroConta.nomeFantasia} onChange={(e) => setCadastroConta({ ...cadastroConta, nomeFantasia: e.target.value })} /></Field><Field label="CNPJ"><Input value={cadastroConta.cnpj} onChange={(e) => setCadastroConta({ ...cadastroConta, cnpj: e.target.value })} /></Field></div>
+              <div className="grid gap-3 sm:grid-cols-2"><Field label="Inscrição estadual"><Input value={cadastroConta.inscricaoEstadual} onChange={(e) => setCadastroConta({ ...cadastroConta, inscricaoEstadual: e.target.value })} /></Field><Field label="CNAE principal"><Input value={cadastroConta.atividadePrincipal} onChange={(e) => setCadastroConta({ ...cadastroConta, atividadePrincipal: e.target.value })} /></Field></div>
+              <Field label="CNAEs secundários" hint="Um por linha ou separados por vírgula"><textarea className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" rows={2} value={cadastroConta.cnaeSecundario} onChange={(e) => setCadastroConta({ ...cadastroConta, cnaeSecundario: e.target.value })} /></Field>
+              <div className="grid gap-3 sm:grid-cols-3"><Field label="Cidade"><Input value={cadastroConta.cidade} onChange={(e) => setCadastroConta({ ...cadastroConta, cidade: e.target.value })} /></Field><Field label="UF atendida"><Select value={cadastroConta.uf} onChange={(e) => setCadastroConta({ ...cadastroConta, uf: e.target.value })}><option value="">Selecione</option>{cadastroConta.uf && !UFS_ATENDIDAS.some((x) => x.sigla === cadastroConta.uf) && <option value={cadastroConta.uf}>{cadastroConta.uf} · cadastro existente</option>}{UFS_ATENDIDAS.map((x) => <option key={x.sigla} value={x.sigla}>{x.sigla} · {x.nome}</option>)}</Select></Field><Field label="CEP"><Input value={cadastroConta.cep} onChange={(e) => setCadastroConta({ ...cadastroConta, cep: e.target.value })} /></Field></div>
+              <div className="grid gap-3 sm:grid-cols-3"><Field label="Logradouro"><Input value={cadastroConta.logradouro} onChange={(e) => setCadastroConta({ ...cadastroConta, logradouro: e.target.value })} /></Field><Field label="Número"><Input value={cadastroConta.numero} onChange={(e) => setCadastroConta({ ...cadastroConta, numero: e.target.value })} /></Field><Field label="Bairro"><Input value={cadastroConta.bairro} onChange={(e) => setCadastroConta({ ...cadastroConta, bairro: e.target.value })} /></Field><Field label="Complemento"><Input value={cadastroConta.complemento} onChange={(e) => setCadastroConta({ ...cadastroConta, complemento: e.target.value })} /></Field><Field label="Telefone"><Input value={cadastroConta.telefone} onChange={(e) => setCadastroConta({ ...cadastroConta, telefone: e.target.value })} /></Field><Field label="E-mail"><Input type="email" value={cadastroConta.email} onChange={(e) => setCadastroConta({ ...cadastroConta, email: e.target.value })} /></Field></div>
+              <div className="grid gap-3 sm:grid-cols-2"><Field label="Responsável pela empresa"><Input value={cadastroConta.responsavelNome} onChange={(e) => setCadastroConta({ ...cadastroConta, responsavelNome: e.target.value })} /></Field><Field label="CPF do responsável"><Input value={cadastroConta.responsavelCpf} onChange={(e) => setCadastroConta({ ...cadastroConta, responsavelCpf: e.target.value })} /></Field></div>
+              <div className="grid gap-3 sm:grid-cols-2"><Field label="Consultor responsável"><Select value={cadastroConta.responsavelId} onChange={(e) => setCadastroConta({ ...cadastroConta, responsavelId: e.target.value })}><option value="">Sem responsável</option>{consultores.map((u) => <option key={u.id} value={u.id}>{u.nome}{u.perfil ? ` · ${u.perfil === 'SUPORTE' ? 'Suporte' : 'Comercial'}` : ''}</option>)}</Select></Field><Field label="Origem do cadastro"><Input value={cadastroConta.origemCadastro} onChange={(e) => setCadastroConta({ ...cadastroConta, origemCadastro: e.target.value })} /></Field></div>
+              <Field label="Observações"><textarea className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" rows={3} value={cadastroConta.observacoes} onChange={(e) => setCadastroConta({ ...cadastroConta, observacoes: e.target.value })} /></Field>
+              <div className="flex gap-2"><Button onClick={() => void salvarCadastroConta()} disabled={salvandoCampo === 'cadastro' || !cadastroConta.nome.trim() || !cadastroConta.cnpj.trim() || !cadastroConta.cidade.trim() || !cadastroConta.uf.trim() || !cadastroConta.responsavelId}>{salvandoCampo === 'cadastro' ? 'Salvando…' : 'Salvar cadastro'}</Button><Button variante="neutro" onClick={() => setEditandoCadastro(false)}>Cancelar</Button></div>
+            </div>}
             <dl className="grid gap-3 text-sm sm:grid-cols-3">
               <div>
-                <dt className="text-xs text-slate-500">Segmento</dt>
-                <dd className="text-slate-800">{ficha.conta.segmento ?? '—'}</dd>
+                <dt className="text-xs text-slate-500">Operações</dt>
+                <dd className="flex flex-wrap gap-1">{(ficha.conta.operacoes?.length ? ficha.conta.operacoes.map((x) => x.operacao) : ficha.conta.segmento ? [ficha.conta.segmento] : []).map((op) => <Badge key={op} tom="marca">{op === 'STARLINK' ? 'Starlink' : op}</Badge>)}{!ficha.conta.operacoes?.length && !ficha.conta.segmento && '—'}</dd>
               </div>
+              <div><dt className="text-xs text-slate-500">Consultor responsável</dt><dd className="text-slate-800">{ficha.conta.responsavel?.nome ?? '—'}</dd></div>
+              <div><dt className="text-xs text-slate-500">CNAE principal</dt><dd className="text-slate-800">{ficha.conta.atividadePrincipal ?? '—'}</dd></div>
+              <div><dt className="text-xs text-slate-500">CNAEs secundários</dt><dd className="text-slate-800">{ficha.conta.cnaeSecundario?.join(', ') || '—'}</dd></div>
+              <div><dt className="text-xs text-slate-500">Origem do cadastro</dt><dd className="text-slate-800">{ficha.conta.origemCadastro ?? '—'}</dd></div>
               <div>
                 <dt className="text-xs text-slate-500">Site</dt>
                 <dd className="truncate text-slate-800">{ficha.conta.site ?? '—'}</dd>
@@ -689,6 +795,8 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
                 </dd>
               </div>
             </dl>
+
+            <fieldset className="mt-3 flex flex-wrap gap-3 border-t border-slate-100 pt-3 text-sm"><legend className="text-xs text-slate-500">Operações atendidas</legend>{(['TIM', 'STARLINK'] as const).map((op) => <label key={op} className="inline-flex items-center gap-2"><input type="checkbox" disabled={salvandoCampo === 'operacoes'} checked={Boolean(ficha.conta.operacoes?.some((x) => x.operacao === op))} onChange={(e) => { const atual = ficha.conta.operacoes?.map((x) => x.operacao) ?? []; void definirOperacoes(e.target.checked ? [...new Set([...atual, op])] : atual.filter((x) => x !== op)); }} />{op === 'STARLINK' ? 'Starlink' : op}</label>)}</fieldset>
 
             <div className="mt-4">
               <dt className="mb-1.5 text-xs text-slate-500">Etiquetas</dt>

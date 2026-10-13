@@ -11,12 +11,20 @@
 import { prisma } from '../lib/prisma';
 import { comOrganizacao } from '../lib/tenant';
 
-const NOMES_FUNIL = ['Credenciamento TIM', 'Credenciamento Starlink'];
-const ESTAGIOS = ['Novo cadastro', 'Pendencia', 'Aprovacao', 'Credenciado', 'Ativo'];
+const NOMES_FUNIL = [
+  {
+    nome: 'Credenciamento TIM',
+    estagios: ['Em negociação', 'Credenciamento em andamento', 'Documentação', 'Credenciamento OK', 'Apto para venda'],
+  },
+  {
+    nome: 'Credenciamento Starlink',
+    estagios: ['Preencher o VSM', 'Contrato assinado', 'Treinamento realizado', 'Pronto para venda'],
+  },
+];
 
 async function main(_organizacaoId: string) {
   try {
-    for (const nome of NOMES_FUNIL) {
+    for (const { nome, estagios } of NOMES_FUNIL) {
       const existente = await prisma.funnel.findFirst({ where: { nome } });
       if (existente) {
         console.log(`Funil "${nome}" ja existe (id ${existente.id}) — pulado.`);
@@ -27,12 +35,12 @@ async function main(_organizacaoId: string) {
           nome,
           tipo: 'ESTEIRA',
           estagios: {
-            createMany: { data: ESTAGIOS.map((e, indice) => ({ nome: e, ordem: indice + 1 })) },
+            createMany: { data: estagios.map((e, indice) => ({ nome: e, ordem: indice + 1 })) },
           },
         },
         include: { estagios: { orderBy: { ordem: 'asc' } } },
       });
-      console.log(`Funil "${criado.nome}" criado (id ${criado.id}) com ${criado.estagios.length} estagios.`);
+      console.log(`Funil "${criado.nome}" criado (id ${criado.id}) com ${criado.estagios.length} estágios.`);
     }
   } finally {
     await prisma.$disconnect();

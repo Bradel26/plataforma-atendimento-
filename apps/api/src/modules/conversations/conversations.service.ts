@@ -17,7 +17,7 @@ import { notificarConversaAtualizada, notificarConversaNova, notificarMensagem }
 import { enviarArquivoParaCanal, enviarParaCanal, exigeEnvioExterno } from '../channels/outbound.service';
 import { obterConfig, obterConfigPorId } from '../channels/channels.service';
 import { decidirDestino, filaPadraoDoCanal } from '../channels/inbound.service';
-import { impedimentoDeEnvio, numeroNormalizado } from '../channels/whatsapp.modo';
+import { impedimentoDeEnvio, modoEfetivo, numeroNormalizado } from '../channels/whatsapp.modo';
 import { getWhatsAppProvider } from '../channels/whatsapp-provider.factory';
 import type { FotoPerfil } from '../channels/avatar';
 import { promoverPrevia } from '../channels/chat-previews.service';
@@ -36,6 +36,7 @@ import {
 import type { ListarConversasQuery, TransferirInput } from './conversations.schemas';
 import { filtroDaVisao } from './conversations.visao';
 import { reservarProtocolo } from './protocolo';
+import { registrarAceiteFluxo } from '../fluxos/fluxos.service';
 
 export type Solicitante = { sub: string; perfil: Role; nome: string };
 
@@ -533,6 +534,37 @@ export async function obterConversa(solicitante: Solicitante, id: string) {
   return toConversaDetalhe(conversa);
 }
 
+async function estadoJanelaWhatsApp(conversa: Awaited<ReturnType<typeof carregarOuFalhar>>) {
+  if (conversa.canal !== 'WHATSAPP' || modoEfetivo(conversa.canalConfig?.modo) !== 'OFICIAL') {
+    return { aplica: false as const, aberta: true as const, ultimaMensagemClienteEm: null, expiraEm: null };
+  }
+  const ultima = await prisma.message.findFirst({
+    where: { conversaId: conversa.id, autor: 'CLIENTE', interno: false },
+    orderBy: { criadoEm: 'desc' },
+    select: { criadoEm: true },
+  });
+  const expiraEm = ultima ? new Date(ultima.criadoEm.getTime() + 24 * 60 * 60 * 1000) : null;
+  const aberta = expiraEm !== null && expiraEm.getTime() > Date.now();
+  return {
+    aplica: true as const,
+    aberta,
+    ultimaMensagemClienteEm: ultima?.criadoEm.toISOString() ?? null,
+    expiraEm: expiraEm?.toISOString() ?? null,
+  };
+}
+
+async function exigirJanelaWhatsAppAberta(conversa: Awaited<ReturnType<typeof carregarOuFalhar>>) {
+  const estado = await estadoJanelaWhatsApp(conversa);
+  if (estado.aplica && !estado.aberta) {
+    throw new AppError(409, 'JANELA_FECHADA', 'A janela de 24 horas do WhatsApp está fechada. Envie um template aprovado pela Meta para o cliente e aguarde a resposta antes de enviar texto livre.');
+  }
+}
+
+export async function obterJanelaWhatsApp(solicitante: Solicitante, id: string) {
+  const conversa = await carregarOuFalhar(id);
+  return estadoJanelaWhatsApp(conversa);
+}
+
 /**
  * Substitui as etiquetas da conversa.
  *
@@ -627,6 +659,7 @@ export async function assumirConversa(solicitante: Solicitante, id: string) {
   });
   if (count === 0) throw conflict('Outro atendente já assumiu esta conversa');
 
+  await registrarAceiteFluxo(id);
   await marcarAtendenteInicial(id, solicitante.sub);
   await registrarEventoSistema(id, `Aceito por: ${solicitante.nome}`, 'ACEITE');
 
@@ -634,10 +667,10 @@ export async function assumirConversa(solicitante: Solicitante, id: string) {
 }
 
 /**
- * Grava a mensagem do agente. Corrida inversa: o eco do celular (ponte) pode
- * chegar a `registrarMensagemPropria` antes deste create e gravar o mesmo
- * `idExterno`; entao o create estoura P2002. A mensagem ja saiu, por isso o
- * agente nao pode levar 500: promove a existente a autoria do agente.
+ * Grava a mensagem do agente. O eco da ponte pode chegar antes do retorno do
+ * envio e vir com ID serializado (`true_<chat>_<id>`), enquanto o provedor
+ * devolve o ID curto (`<id>`). Reconcilia os dois formatos na mesma conversa,
+ * promovendo o eco para a mensagem do agente e evitando duas bolhas.
  */
 async function criarMensagemDoAgente(
   solicitante: Solicitante,
@@ -645,17 +678,52 @@ async function criarMensagemDoAgente(
   interno: boolean,
   data: Prisma.MessageUncheckedCreateInput,
 ) {
+  // Os provedores alternam entre o ID curto (`3EB0...`) e o serializado
+  // (`true_<chat>_3EB0...`) nos dois sentidos. Converte ambos para a mesma
+  // chave antes de procurar o eco da ponte.
+  const partesId = idExterno?.split('_') ?? [];
+  const idCurto = partesId[0] === 'true' && partesId.length >= 3
+    ? partesId.at(-1) ?? null
+    : idExterno && /^[a-f0-9]{16,}$/i.test(idExterno)
+      ? idExterno
+      : null;
+  if (idCurto) {
+    const ecoAnterior = await prisma.message.findFirst({
+      where: {
+        conversaId: String(data.conversaId),
+        autor: 'AGENTE',
+        enviadaPorDispositivo: true,
+        OR: [
+          { idExterno: idCurto },
+          { idExterno: { startsWith: 'true_', endsWith: `_${idCurto}` } },
+        ],
+      },
+      orderBy: { criadoEm: 'desc' },
+      select: { id: true },
+    });
+    if (ecoAnterior) {
+      const mensagem = await prisma.message.update({
+        where: { id: ecoAnterior.id },
+        data: { ...data, autor: 'AGENTE', autorId: solicitante.sub, idExterno, enviadaPorDispositivo: false, interno },
+        include: { autorUsuario: { select: { nome: true } } },
+      });
+      return { mensagem, ecoReconciliado: true };
+    }
+  }
+
   try {
-    return await prisma.message.create({ data, include: { autorUsuario: { select: { nome: true } } } });
+    const mensagem = await prisma.message.create({ data, include: { autorUsuario: { select: { nome: true } } } });
+    return { mensagem, ecoReconciliado: false };
   } catch (erro) {
     if (idExterno === null || !colidiuNoIdExterno(erro)) throw erro;
     const existente = await prisma.message.findUnique({ where: { idExterno } });
     if (!existente) throw erro;
-    return prisma.message.update({
+    const mensagem = await prisma.message.update({
       where: { id: existente.id },
       data: { autor: 'AGENTE', autorId: solicitante.sub, enviadaPorDispositivo: false, interno },
       include: { autorUsuario: { select: { nome: true } } },
     });
+    return { mensagem, ecoReconciliado: true };
   }
 }
 
@@ -667,6 +735,7 @@ export async function enviarMensagem(
 ) {
   const conversa = await carregarOuFalhar(id);
   if (conversa.status === 'FINALIZADO') throw badRequest('Conversa finalizada — não aceita novas mensagens');
+  if (!interno) await exigirJanelaWhatsAppAberta(conversa);
 
   // Responder sem ter assumido atribui a conversa ao agente automaticamente.
   const assumir = conversa.agenteId ? {} : { agenteId: solicitante.sub, atribuidoEm: new Date() };
@@ -678,7 +747,7 @@ export async function enviarMensagem(
       ? await enviarParaCanal(conversa.canal, conversa.enderecoExterno, conteudo, conversa.canalConfigId)
       : { idExterno: null };
 
-  const mensagem = await criarMensagemDoAgente(solicitante, envio.idExterno, interno, {
+  const { mensagem, ecoReconciliado } = await criarMensagemDoAgente(solicitante, envio.idExterno, interno, {
     conversaId: id,
     autor: 'AGENTE',
     autorId: solicitante.sub,
@@ -691,20 +760,25 @@ export async function enviarMensagem(
     where: { id },
     data: { ...assumir, status: 'EM_ATENDIMENTO', ultimaMensagemEm: mensagem.criadoEm },
   });
-  if (!conversa.agenteId) await marcarAtendenteInicial(id, solicitante.sub);
+  if (!conversa.agenteId) {
+    await marcarAtendenteInicial(id, solicitante.sub);
+    await registrarAceiteFluxo(id);
+  }
 
   const atualizada = await publicar(id, { filaAnteriorId: conversa.filaId });
-  notificarMensagem(
-    { conversaId: id, mensagem: toMensagem(mensagem) },
-    {
-      conversaId: id,
-      filaId: atualizada.fila?.id,
-      agenteId: atualizada.agente?.id,
-      // Nota interna nao pode chegar na sala da conversa: e la que o visitante
-      // do Webchat escuta.
-      incluirSalaDaConversa: !interno,
-    },
-  );
+  if (!ecoReconciliado) {
+    notificarMensagem(
+      { conversaId: id, mensagem: toMensagem(mensagem) },
+      {
+        conversaId: id,
+        filaId: atualizada.fila?.id,
+        agenteId: atualizada.agente?.id,
+        // Nota interna nao pode chegar na sala da conversa: e la que o visitante
+        // do Webchat escuta.
+        incluirSalaDaConversa: !interno,
+      },
+    );
+  }
 
   // Nota interna nao entra em contexto de IA (ver acima) — so agenda quando
   // a mensagem realmente saiu pro cliente.
@@ -730,6 +804,7 @@ export async function enviarArquivo(
 ) {
   const conversa = await carregarOuFalhar(id);
   if (conversa.status === 'FINALIZADO') throw badRequest('Conversa finalizada — não aceita novas mensagens');
+  if (!interno) await exigirJanelaWhatsAppAberta(conversa);
 
   const envio =
     !interno && exigeEnvioExterno(conversa.canal)
@@ -739,7 +814,7 @@ export async function enviarArquivo(
   const salvo = await salvar(arquivo);
   const assumir = conversa.agenteId ? {} : { agenteId: solicitante.sub, atribuidoEm: new Date() };
 
-  const mensagem = await criarMensagemDoAgente(solicitante, envio.idExterno, interno, {
+  const { mensagem, ecoReconciliado } = await criarMensagemDoAgente(solicitante, envio.idExterno, interno, {
     conversaId: id,
     autor: 'AGENTE',
     autorId: solicitante.sub,
@@ -754,18 +829,23 @@ export async function enviarArquivo(
     where: { id },
     data: { ...assumir, status: 'EM_ATENDIMENTO', ultimaMensagemEm: mensagem.criadoEm },
   });
-  if (!conversa.agenteId) await marcarAtendenteInicial(id, solicitante.sub);
+  if (!conversa.agenteId) {
+    await marcarAtendenteInicial(id, solicitante.sub);
+    await registrarAceiteFluxo(id);
+  }
 
   const atualizada = await publicar(id, { filaAnteriorId: conversa.filaId });
-  notificarMensagem(
-    { conversaId: id, mensagem: toMensagem(mensagem) },
-    {
-      conversaId: id,
-      filaId: atualizada.fila?.id,
-      agenteId: atualizada.agente?.id,
-      incluirSalaDaConversa: !interno,
-    },
-  );
+  if (!ecoReconciliado) {
+    notificarMensagem(
+      { conversaId: id, mensagem: toMensagem(mensagem) },
+      {
+        conversaId: id,
+        filaId: atualizada.fila?.id,
+        agenteId: atualizada.agente?.id,
+        incluirSalaDaConversa: !interno,
+      },
+    );
+  }
 
   return { mensagem: toMensagem(mensagem), conversa: atualizada };
 }
@@ -796,6 +876,7 @@ export async function transferirConversa(solicitante: Solicitante, id: string, i
       where: { id },
       data: { agenteId: destino.id, status: 'ATRIBUIDO', atribuidoEm: new Date() },
     });
+    await registrarAceiteFluxo(id);
     await registrarEventoSistema(id, `${solicitante.nome} transferiu o atendimento para ${destino.nome}.${sufixo}`, 'TRANSFERENCIA');
     await marcarAtendenteInicial(id, destino.id);
   } else {

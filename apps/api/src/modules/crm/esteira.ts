@@ -20,10 +20,12 @@ export const normalizar = (texto: string) =>
 
 export function papelDoEstagio(nome: string): PapelDoEstagio {
   const n = normalizar(nome);
-  if (n.startsWith('novo') || n.includes('cadastro')) return 'NOVO';
-  if (n.includes('analise')) return 'ANALISE';
+  if (n.startsWith('novo') || n.includes('cadastro') || n.includes('negociacao') || n.includes('preencher o vsm')) return 'NOVO';
+  if (n.includes('analise') || n.includes('em andamento') || n.includes('contrato assinado')) return 'ANALISE';
   if (n.includes('pendenc') || n.includes('document')) return 'PENDENCIA';
   if (n.includes('aprova')) return 'APROVACAO';
+  if (n.includes('apto para venda') || n.includes('pronto para venda')) return 'ATIVO';
+  if (n.includes('treinamento realizado')) return 'CREDENCIADO';
   if (n.includes('credenciad')) return 'CREDENCIADO';
   if (n.includes('ativo')) return 'ATIVO';
   return 'OUTRO';

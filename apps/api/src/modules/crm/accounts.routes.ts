@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../../http/async-handler';
 import { requireAuth, requireRole } from '../../http/middleware/auth';
-import { filtroDe, politicaContatos, politicaContas } from '../../lib/politicas';
+import { exigirUsuarioDaOrganizacao, filtroDe, politicaContatos, politicaContas } from '../../lib/politicas';
 import { apenasVisivel } from '../../lib/visibilidade';
 import { MAXIMO_POR_REGISTRO, TAMANHO_MAXIMO, normalizarTags } from '../../lib/tags';
 import { validateBody, validateQuery } from '../../http/middleware/validate';
@@ -29,16 +29,47 @@ export const accountsRoutes = Router();
 
 accountsRoutes.use(requireAuth);
 
-/** Guarda apenas digitos: mascara nao deve gerar duplicidade de CNPJ. */
+async function validarConsultorResponsavel(usuarioId?: string | null) {
+  if (!usuarioId) return;
+  const consultor = await prisma.user.findFirst({ where: { id: usuarioId, ativo: true, perfil: { in: ['COMERCIAL', 'SUPORTE'] } }, select: { id: true } });
+  if (!consultor) throw badRequest('Selecione um consultor ativo da equipe comercial ou suporte');
+}
+
+/** Guarda apenas digitos e valida os verificadores do CNPJ. */
+function cnpjValido(v: string): boolean {
+  if (!/^\d{14}$/.test(v) || /^([\d])\1{13}$/.test(v)) return false;
+  const digito = (base: string, pesos: number[]) => {
+    const resto = [...base].reduce((soma, n, i) => soma + Number(n) * pesos[i]!, 0) % 11;
+    return resto < 2 ? 0 : 11 - resto;
+  };
+  return digito(v.slice(0, 12), [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]) === Number(v[12]) &&
+    digito(v.slice(0, 13), [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]) === Number(v[13]);
+}
 const cnpj = z
   .string()
   .trim()
   .transform((v) => v.replace(/\D/g, ''))
-  .refine((v) => v.length === 14, 'CNPJ deve ter 14 digitos');
+  .refine(cnpjValido, 'Informe um CNPJ válido');
 
-const criarSchema = z.object({
+const camposContaSchema = z.object({
+  cadastroCompleto: z.boolean().optional(),
   nome: z.string().trim().min(2, 'Nome muito curto').max(160),
+  razaoSocial: z.string().trim().max(180).nullable().optional(),
   cnpj: cnpj.nullable().optional(),
+  nomeFantasia: z.string().trim().max(160).nullable().optional(),
+  inscricaoEstadual: z.string().trim().max(40).nullable().optional(),
+  cidade: z.string().trim().max(120).nullable().optional(),
+  uf: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/).nullable().optional(),
+  cep: z.string().trim().max(12).nullable().optional(),
+  logradouro: z.string().trim().max(180).nullable().optional(),
+  numero: z.string().trim().max(30).nullable().optional(),
+  complemento: z.string().trim().max(120).nullable().optional(),
+  bairro: z.string().trim().max(100).nullable().optional(),
+  responsavelNome: z.string().trim().max(160).nullable().optional(),
+  responsavelCpf: z.string().trim().max(14).nullable().optional(),
+  atividadePrincipal: z.string().trim().max(300).nullable().optional(),
+  cnaeSecundario: z.array(z.string().trim().max(300)).max(30).optional(),
+  origemCadastro: z.string().trim().max(120).nullable().optional(),
   segmento: z.string().trim().max(80).nullable().optional(),
   site: z.string().url('Informe uma URL valida').nullable().optional(),
   telefone: z.string().trim().min(8).max(20).nullable().optional(),
@@ -53,7 +84,17 @@ const criarSchema = z.object({
   camposCustomizados: z.record(z.string(), z.unknown()).optional(),
 });
 
-const atualizarSchema = criarSchema
+const criarSchema = camposContaSchema.superRefine((d, ctx) => {
+  if (!d.cadastroCompleto) return;
+  if (!d.razaoSocial?.trim()) ctx.addIssue({ code: 'custom', path: ['razaoSocial'], message: 'Razão social é obrigatória' });
+  if (!d.cnpj) ctx.addIssue({ code: 'custom', path: ['cnpj'], message: 'CNPJ é obrigatório' });
+  if (!d.cidade?.trim()) ctx.addIssue({ code: 'custom', path: ['cidade'], message: 'Cidade é obrigatória' });
+  const ufs = ['GO', 'TO', 'MA', 'PA', 'DF', 'AM', 'MT', 'MS', 'RR'];
+  if (!d.uf || !ufs.includes(d.uf)) ctx.addIssue({ code: 'custom', path: ['uf'], message: 'Selecione uma UF atendida pela Bradel' });
+  if (!d.responsavelId) ctx.addIssue({ code: 'custom', path: ['responsavelId'], message: 'Consultor responsável é obrigatório' });
+});
+
+const atualizarSchema = camposContaSchema
   .partial()
   .refine((d) => Object.keys(d).length > 0, { message: 'Informe ao menos um campo' });
 
@@ -125,7 +166,7 @@ accountsRoutes.get(
       },
       orderBy: { nome: 'asc' },
       take: limite,
-      include: { _count: { select: { contatos: true, leads: true, oportunidades: true } } },
+      include: { operacoes: { select: { operacao: true } }, responsavel: { select: { id: true, nome: true } }, _count: { select: { contatos: true, leads: true, oportunidades: true } } },
     });
 
     res.json({
@@ -139,6 +180,27 @@ accountsRoutes.get(
   }),
 );
 
+accountsRoutes.get('/resumo', asyncHandler(async (_req, res) => {
+  const contas = await filtroDe(politicaContas);
+  const contatos = await filtroDe(politicaContatos);
+  const [empresas, empresasComContatos, empresasSemContatos, tim, starlink, ambas, totalContatos, contatosTim, contatosStarlink] = await Promise.all([
+    prisma.account.count({ where: contas }),
+    prisma.account.count({ where: { AND: [contas, { contatos: { some: { excluidoEm: null } } }] } }),
+    prisma.account.count({ where: { AND: [contas, { contatos: { none: { excluidoEm: null } } }] } }),
+    prisma.account.count({ where: { AND: [contas, { OR: [{ operacoes: { some: { operacao: 'TIM' } } }, { segmento: 'TIM' }] }] } }),
+    prisma.account.count({ where: { AND: [contas, { OR: [{ operacoes: { some: { operacao: 'STARLINK' } } }, { segmento: 'STARLINK' }] }] } }),
+    prisma.account.count({ where: { AND: [contas, { operacoes: { some: { operacao: 'TIM' } } }, { operacoes: { some: { operacao: 'STARLINK' } } }] } }),
+    prisma.contact.count({ where: { AND: [contatos, { excluidoEm: null }] } }),
+    prisma.contact.count({ where: { AND: [contatos, { excluidoEm: null }, { OR: [{ operacoes: { some: { operacao: 'TIM' } } }, { segmentoParceiro: 'TIM' }] }] } }),
+    prisma.contact.count({ where: { AND: [contatos, { excluidoEm: null }, { OR: [{ operacoes: { some: { operacao: 'STARLINK' } } }, { segmentoParceiro: 'STARLINK' }] }] } }),
+  ]);
+  res.json({
+    empresas, empresasComContatos, empresasSemContatos,
+    porOperacao: { tim, starlink, ambas, somenteTim: tim - ambas, somenteStarlink: starlink - ambas },
+    contatos: { total: totalContatos, tim: contatosTim, starlink: contatosStarlink },
+  });
+}));
+
 /** Ficha 360 da conta: contatos, leads e oportunidades vinculados. */
 accountsRoutes.get(
   '/:id',
@@ -149,7 +211,7 @@ accountsRoutes.get(
       // Os contatos da ficha passam pela politica de contato: um agente que
       // chegou ao cliente por uma conversa nao herda a lista inteira de pessoas
       // dele.
-      include: { contatos: { where: await filtroDe(politicaContatos), orderBy: { nome: 'asc' } } },
+      include: { operacoes: { select: { operacao: true } }, responsavel: { select: { id: true, nome: true } }, contatos: { where: { AND: [await filtroDe(politicaContatos), { excluidoEm: null }] }, orderBy: { nome: 'asc' } } },
     });
     if (!conta) throw notFound('Conta não encontrada');
 
@@ -197,10 +259,14 @@ accountsRoutes.post(
       if (existente) throw conflict('Já existe uma conta com este CNPJ');
     }
     if (req.body.filialId) await exigirFilialDaOrganizacao(req.body.filialId);
+    if (req.body.responsavelId) {
+      await exigirUsuarioDaOrganizacao(req.body.responsavelId);
+      await validarConsultorResponsavel(req.body.responsavelId);
+    }
 
     // Valida os campos customizados ANTES de criar: se falhar, nao sobra
     // conta sem o campo obrigatorio que a validacao recusou.
-    const { camposCustomizados, ...corpo } = req.body;
+    const { camposCustomizados, cadastroCompleto: _cadastroCompleto, ...corpo } = req.body;
     const valores = await prepararValoresDoRegistro('CONTA', null, camposCustomizados);
 
     const conta = await prisma.account.create({ data: comTagsNormalizadas(corpo) });
@@ -224,8 +290,12 @@ accountsRoutes.patch(
       if (existente) throw conflict('Já existe uma conta com este CNPJ');
     }
     if (req.body.filialId) await exigirFilialDaOrganizacao(req.body.filialId);
+    if (req.body.responsavelId) {
+      await exigirUsuarioDaOrganizacao(req.body.responsavelId);
+      await validarConsultorResponsavel(req.body.responsavelId);
+    }
 
-    const { camposCustomizados, ...corpo } = req.body;
+    const { camposCustomizados, cadastroCompleto: _cadastroCompleto, ...corpo } = req.body;
     const valores = await prepararValoresDoRegistro('CONTA', id, camposCustomizados);
 
     /*
@@ -273,6 +343,17 @@ accountsRoutes.post(
     });
   }),
 );
+
+accountsRoutes.put('/:id/operacoes', validateBody(z.object({ operacoes: z.array(z.enum(['TIM', 'STARLINK'])).max(2) })), asyncHandler(async (req, res) => {
+  const id = param(req, 'id');
+  const conta = await prisma.account.findFirst({ where: apenasVisivel(id, await filtroDe(politicaContas)), select: { id: true } });
+  if (!conta) throw notFound('Empresa não encontrada');
+  await prisma.$transaction(async (tx) => {
+    await tx.accountOperation.deleteMany({ where: { contaId: id } });
+    if (req.body.operacoes.length) await tx.accountOperation.createMany({ data: req.body.operacoes.map((operacao: string) => ({ contaId: id, operacao })) });
+  });
+  res.json({ operacoes: req.body.operacoes });
+}));
 
 /**
  * Desvincula um contato da conta.

@@ -12,3 +12,19 @@ apps/api/storage
 
 # WhatsApp linked-device credentials and session data
 apps/ponte/dados
+
+# Arquivos de trabalho e referencias que nao fazem parte do container.
+backups
+.worktrees
+.playwright-mcp
+.superpowers
+test-results
+playwright-report
+coverage
+visualizacoes
+plataforma-atendimento
+*.mp4
+*.mkv
+*.zip
+*.docx
+scratch*

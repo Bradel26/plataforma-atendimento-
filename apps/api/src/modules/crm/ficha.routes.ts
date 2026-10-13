@@ -20,6 +20,7 @@ import {
   politicaContatos,
   politicaOportunidades,
   politicaProtocolos,
+  exigirUsuarioDaOrganizacao,
 } from '../../lib/politicas';
 import { apenasVisivel } from '../../lib/visibilidade';
 import { TIPOS_EVENTO, fichaConta, fichaContato, timeline } from './ficha.service';
@@ -123,12 +124,30 @@ const criarSchema = z
     prazo: z.coerce.date().nullable().optional(),
     responsavelId: z.string().uuid().nullable().optional(),
     ...vinculos,
+    recorrencia: z.object({
+      frequencia: z.enum(['DIARIA', 'SEMANAL', 'MENSAL']),
+      diasSemana: z.array(z.number().int().min(0).max(6)).max(7).default([]),
+      fimEm: z.coerce.date().optional(),
+    }).optional(),
   })
   // O banco nao expressa "um destes quatro nao nulo"; a regra vive aqui.
   .refine(
     (d) => Boolean(d.contatoId || d.contaId || d.oportunidadeId || d.protocoloId),
     'Vincule a atividade a um contato, conta, oportunidade ou protocolo',
   );
+
+const registroManualSchema = z.object({
+  contatoId: z.string().uuid(),
+  canal: z.enum(['TELEFONE', 'VISITA', 'OUTRO']),
+  ocorridoEm: z.coerce.date(),
+  assunto: z.string().trim().min(2, 'Informe o assunto').max(160),
+  descricao: z.string().trim().min(2, 'Descreva o atendimento').max(4000),
+  resultado: z.string().trim().min(2, 'Informe o resultado').max(2000),
+  proximaAcao: z.string().trim().min(2, 'Informe a próxima ação').max(160),
+  descricaoTarefa: z.string().trim().max(2000).nullable().optional(),
+  prazoTarefa: z.coerce.date(),
+  responsavelTarefaId: z.string().uuid().optional(),
+});
 
 const atualizarSchema = z
   .object({
@@ -209,6 +228,7 @@ atividadesRoutes.get(
         AND: [
           {
             responsavelId: q.responsavelId,
+            canceladoEm: null,
             OR: [
               { prazo: { gte: dias[0]!.inicio, lt: dias[dias.length - 1]!.fim } },
               { prazo: { lt: dias[0]!.inicio }, concluidoEm: null },
@@ -257,6 +277,7 @@ atividadesRoutes.get(
         AND: [
           {
             ...situacao,
+            canceladoEm: null,
             contatoId: q.contatoId,
             contaId: q.contaId,
             oportunidadeId: q.oportunidadeId,
@@ -353,22 +374,161 @@ atividadesRoutes.post(
     const dados = req.body as z.infer<typeof criarSchema>;
     const autorId = req.user?.sub;
 
+    // No Atendimento e na ficha do contato, um registro precisa deixar a próxima
+    // ação agendada. A rota manual abaixo cria interação e tarefa em transação.
+    if (dados.contatoId && !dados.prazo) {
+      throw badRequest('Informe a data e a hora da próxima tarefa antes de salvar');
+    }
+
     await conferirVinculos(dados);
 
-    const atividade = await prisma.activity.create({
-      data: {
-        ...dados,
-        criadoPorId: autorId,
-        // Sem responsavel explicito, quem registra e o responsavel: tarefa sem
-        // dono nao aparece em nenhuma lista e morre.
-        responsavelId: dados.responsavelId ?? autorId,
-      },
-      include: inclusao,
-    });
+    const { recorrencia, ...atividadeDados } = dados;
+    let atividade;
+    if (!recorrencia) {
+      atividade = await prisma.activity.create({
+        data: {
+          ...atividadeDados,
+          criadoPorId: autorId,
+          responsavelId: dados.responsavelId ?? autorId,
+        },
+        include: inclusao,
+      });
+    } else {
+      if (!dados.prazo || (recorrencia.fimEm && recorrencia.fimEm <= dados.prazo)) throw badRequest('A data final precisa ser posterior à primeira ocorrência');
+      if (recorrencia.frequencia === 'SEMANAL' && recorrencia.diasSemana.length === 0) throw badRequest('Selecione ao menos um dia da semana');
+      if (recorrencia.fimEm && recorrencia.fimEm.getTime() - dados.prazo.getTime() > 10 * 366 * 24 * 60 * 60 * 1000) throw badRequest('A recorrência pode durar no máximo dez anos');
+      const datas: Date[] = [];
+      const cursor = new Date(dados.prazo);
+      const horizonteInicial = new Date(Date.now() + 120 * 24 * 60 * 60 * 1000);
+      const limiteInicial = recorrencia.fimEm && recorrencia.fimEm < horizonteInicial ? recorrencia.fimEm : horizonteInicial;
+      while (cursor <= limiteInicial && datas.length < 120) {
+        const dia = cursor.getDay();
+        const inclui = datas.length === 0 || (
+          recorrencia.frequencia === 'DIARIA' ||
+          (recorrencia.frequencia === 'SEMANAL' && recorrencia.diasSemana.includes(dia)) ||
+          (recorrencia.frequencia === 'MENSAL' && cursor.getDate() === dados.prazo.getDate())
+        );
+        if (inclui) datas.push(new Date(cursor));
+        cursor.setDate(cursor.getDate() + 1);
+      }
+      const criadas = await prisma.$transaction(async (tx) => {
+        const serie = await tx.activitySeries.create({ data: {
+          frequencia: recorrencia.frequencia,
+          diasSemana: recorrencia.diasSemana,
+          inicioEm: dados.prazo!,
+          fimEm: recorrencia.fimEm ?? null,
+        } });
+        return Promise.all(datas.map((prazo) => tx.activity.create({
+          data: { ...atividadeDados, prazo, serieId: serie.id, criadoPorId: autorId, responsavelId: dados.responsavelId ?? autorId },
+          include: inclusao,
+        })));
+      });
+      atividade = criadas[0]!;
+      res.status(201).json({ atividade, ocorrencias: criadas.length, serieId: atividade.serieId });
+      return;
+    }
 
     if (atividade.contatoId) void recalcularCiclosDoContato(atividade.contatoId).catch(() => undefined);
 
     res.status(201).json({ atividade });
+  }),
+);
+
+atividadesRoutes.post('/:id/cancelar-serie', asyncHandler(async (req, res) => {
+  const serieId = param(req, 'id');
+  const serie = await prisma.activitySeries.findFirst({ where: { id: serieId } });
+  if (!serie) throw notFound('Série de atividades não encontrada');
+  const agora = new Date();
+  await prisma.$transaction([
+    prisma.activitySeries.update({ where: { id: serieId }, data: { canceladoEm: agora } }),
+    prisma.activity.updateMany({ where: { serieId, concluidoEm: null, canceladoEm: null, prazo: { gte: agora } }, data: { canceladoEm: agora } }),
+  ]);
+  res.json({ cancelada: true });
+}));
+
+atividadesRoutes.post('/:id/cancelar', asyncHandler(async (req, res) => {
+  const id = param(req, 'id');
+  const atividade = await prisma.activity.findFirst({ where: apenasVisivel(id, await filtroDe(politicaAtividades)) });
+  if (!atividade) throw notFound('Atividade não encontrada');
+  if (atividade.concluidoEm) throw badRequest('Uma atividade concluída não pode ser cancelada');
+  const atualizada = await prisma.activity.update({ where: { id }, data: { canceladoEm: new Date() }, include: inclusao });
+  res.json({ atividade: atualizada });
+}));
+
+// Edita as ocorrências futuras de uma recorrência sem alterar o histórico já
+// concluído. Cada prazo conserva o dia original e recebe o horário escolhido.
+atividadesRoutes.patch('/:id/serie', validateBody(atualizarSchema), asyncHandler(async (req, res) => {
+  const serieId = param(req, 'id');
+  const serie = await prisma.activitySeries.findFirst({ where: { id: serieId, canceladoEm: null } });
+  if (!serie) throw notFound('Série de atividades não encontrada');
+  const amostra = await prisma.activity.findFirst({
+    where: { serieId, AND: [await filtroDe(politicaAtividades)] },
+    select: { id: true },
+  });
+  if (!amostra) throw notFound('Série de atividades não encontrada');
+  const dados = req.body as z.infer<typeof atualizarSchema>;
+  const futuras = await prisma.activity.findMany({
+    where: { serieId, concluidoEm: null, canceladoEm: null, prazo: { gte: new Date() } },
+    select: { id: true, prazo: true },
+  });
+  await prisma.$transaction(futuras.map((item) => {
+    const prazo = dados.prazo && item.prazo
+      ? new Date(item.prazo.getFullYear(), item.prazo.getMonth(), item.prazo.getDate(), dados.prazo.getHours(), dados.prazo.getMinutes())
+      : dados.prazo;
+    return prisma.activity.update({ where: { id: item.id }, data: { ...dados, ...(prazo !== undefined ? { prazo } : {}) } });
+  }));
+  res.json({ atualizadas: futuras.length });
+}));
+
+atividadesRoutes.post(
+  '/registro-manual',
+  validateBody(registroManualSchema),
+  asyncHandler(async (req, res) => {
+    const dados = req.body as z.infer<typeof registroManualSchema>;
+    const autorId = req.user!.sub;
+    const contato = await prisma.contact.findFirst({
+      where: apenasVisivel(dados.contatoId, await filtroDe(politicaContatos)),
+      select: { id: true, contaId: true },
+    });
+    if (!contato) throw notFound('Contato não encontrado');
+    const responsavelTarefaId = dados.responsavelTarefaId ?? autorId;
+    await exigirUsuarioDaOrganizacao(responsavelTarefaId);
+    await conferirVinculos({ contatoId: contato.id, contaId: contato.contaId });
+
+    const resultado = await prisma.$transaction(async (tx) => {
+      const registro = await tx.activity.create({
+        data: {
+          tipo: dados.canal === 'TELEFONE' ? 'LIGACAO' : dados.canal === 'VISITA' ? 'VISITA' : 'OUTRO',
+          canalManual: dados.canal,
+          ocorridoEm: dados.ocorridoEm,
+          titulo: dados.assunto,
+          descricao: dados.descricao,
+          resultado: dados.resultado,
+          contatoId: contato.id,
+          contaId: contato.contaId,
+          responsavelId: autorId,
+          criadoPorId: autorId,
+        },
+      });
+      const tarefa = await tx.activity.create({
+        data: {
+          tipo: 'TAREFA',
+          titulo: dados.proximaAcao,
+          descricao: dados.descricaoTarefa ?? null,
+          prazo: dados.prazoTarefa,
+          contatoId: contato.id,
+          contaId: contato.contaId,
+          responsavelId: responsavelTarefaId,
+          criadoPorId: autorId,
+          registroPaiId: registro.id,
+        },
+        include: inclusao,
+      });
+      return { registro, tarefa };
+    });
+
+    void recalcularCiclosDoContato(contato.id).catch(() => undefined);
+    res.status(201).json(resultado);
   }),
 );
 
@@ -404,6 +564,7 @@ atividadesRoutes.patch(
 
 atividadesRoutes.post(
   '/:id/concluir',
+  validateBody(z.object({ justificativa: z.string().trim().min(3).max(1000), resultado: z.string().trim().min(1).max(1000) })),
   asyncHandler(async (req, res) => {
     const id = param(req, 'id');
     const atual = await prisma.activity.findFirst({
@@ -415,7 +576,12 @@ atividadesRoutes.post(
 
     const atividade = await prisma.activity.update({
       where: { id },
-      data: { concluidoEm: new Date() },
+      data: {
+        concluidoEm: new Date(),
+        concluidoPorId: req.user!.sub,
+        justificativaConclusao: req.body.justificativa,
+        resultadoConclusao: req.body.resultado,
+      },
       include: inclusao,
     });
 

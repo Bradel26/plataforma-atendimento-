@@ -40,6 +40,9 @@ services:
   # WhatsApp e nao deve subir por acidente.
   ponte:
     profiles: ["ponte"]
+    depends_on:
+      postgres:
+        condition: service_healthy
     build:
       context: .
       dockerfile: apps/ponte/Dockerfile
@@ -49,10 +52,12 @@ services:
       PONTE_PORTA: 3100
       PONTE_TOKEN: ${PONTE_TOKEN:?defina PONTE_TOKEN}
       PONTE_SEGREDO: ${PONTE_SEGREDO:?defina PONTE_SEGREDO}
+      PONTE_CIFRA_CHAVE: ${PONTE_CIFRA_CHAVE:?defina PONTE_CIFRA_CHAVE}
+      DATABASE_URL: ${PONTE_DATABASE_URL:-postgresql://plataforma:plataforma@postgres:5432/plataforma}
       PONTE_PLATAFORMA_URL: ${PONTE_PLATAFORMA_URL:-http://host.docker.internal:3000}
       PONTE_ORGANIZACAO_ID: ${PONTE_ORGANIZACAO_ID:?defina PONTE_ORGANIZACAO_ID}
       # Como a API alcanca a ponte para baixar a midia recebida.
-      PONTE_URL_PUBLICA: ${PONTE_URL_PUBLICA:-http://plataforma-ponte:3100}
+      PONTE_URL_PUBLICA: ${PONTE_URL_PUBLICA:-http://localhost:3100}
     ports:
       - "3100:3100"
     volumes:

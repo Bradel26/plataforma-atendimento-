@@ -2,8 +2,16 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../../http/async-handler';
 import { requireAuth, requireRole } from '../../http/middleware/auth';
-import { validateQuery } from '../../http/middleware/validate';
-import { assuntos, indicadores, monitorEquipes, monitoramentoAgentes } from './metrics.service';
+import { validateBody, validateQuery } from '../../http/middleware/validate';
+import {
+  assuntos,
+  indicadores,
+  monitorEquipes,
+  monitoramentoAgentes,
+  obterConfiguracaoMonitoramento,
+  salvarConfiguracaoMonitoramento,
+  conversasAguardandoResposta,
+} from './metrics.service';
 
 export const metricsRoutes = Router();
 
@@ -12,6 +20,14 @@ metricsRoutes.use(requireAuth);
 const periodoSchema = z.object({
   desde: z.coerce.date().optional(),
   ate: z.coerce.date().optional(),
+});
+
+const configuracaoMonitoramentoSchema = z.object({
+  alertaRespostaMinutos: z.number().int().min(1).max(240),
+  criticoRespostaMinutos: z.number().int().min(2).max(240),
+}).refine((config) => config.criticoRespostaMinutos > config.alertaRespostaMinutos, {
+  message: 'O limite crítico precisa ser maior que o limite de alerta',
+  path: ['criticoRespostaMinutos'],
 });
 
 /** Indicadores do dashboard. Padrao: ultimas 24 horas. */
@@ -52,6 +68,37 @@ metricsRoutes.get(
   requireRole('ADMIN', 'SUPERVISOR', 'GESTOR'),
   asyncHandler(async (_req, res) => {
     res.json({ agentes: await monitoramentoAgentes() });
+  }),
+);
+
+/** Limites de tempo por organizaÃ§Ã£o para alertas de resposta. */
+metricsRoutes.get(
+  '/alertas-resposta/config',
+  requireRole('ADMIN', 'SUPERVISOR'),
+  asyncHandler(async (_req, res) => {
+    res.json({ config: await obterConfiguracaoMonitoramento() });
+  }),
+);
+
+metricsRoutes.put(
+  '/alertas-resposta/config',
+  requireRole('ADMIN', 'SUPERVISOR'),
+  validateBody(configuracaoMonitoramentoSchema),
+  asyncHandler(async (req, res) => {
+    res.json({ config: await salvarConfiguracaoMonitoramento(req.body) });
+  }),
+);
+
+/** Atendimentos atribuÃ­dos cuja Ãºltima mensagem externa ainda aguarda resposta. */
+metricsRoutes.get(
+  '/alertas-resposta',
+  requireRole('ADMIN', 'SUPERVISOR'),
+  asyncHandler(async (_req, res) => {
+    const [config, conversas] = await Promise.all([
+      obterConfiguracaoMonitoramento(),
+      conversasAguardandoResposta(),
+    ]);
+    res.json({ config, conversas });
   }),
 );
 

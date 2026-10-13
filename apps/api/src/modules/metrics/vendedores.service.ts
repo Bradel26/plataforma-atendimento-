@@ -48,13 +48,11 @@ export async function listarVendedoresVisiveis() {
       ativo: true,
       ...(ids
         ? { id: { in: ids } }
-        // ADMIN/SUPERVISOR (veTudo, sem `ids`): so os perfis que plausivelmente
-        // sao `responsavelId` de uma oportunidade neste modelo de papeis. A
-        // propria equipe do GESTOR e o "so eu mesmo" dos demais ficam como
-        // estavam — sempre selecionaveis, qualquer que seja o perfil.
-        : { perfil: { in: ['GESTOR', 'COMERCIAL'] } }),
+        // O painel mede quem atende clientes: vendas e suporte. Gestores de
+        // equipe continuam limitados pelos IDs acima.
+        : { perfil: { in: ['COMERCIAL', 'SUPORTE'] } }),
     },
-    select: { id: true, nome: true },
+    select: { id: true, nome: true, perfil: true },
     orderBy: { nome: 'asc' },
   });
 }

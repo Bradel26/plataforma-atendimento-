@@ -21,6 +21,7 @@ import { providerWebhooksRoutes } from './modules/channels/webhooks/webhooks.rou
 import { webhooksRoutes } from './modules/channels/webhooks.routes';
 import { vozRoutes, vozWebhookRoutes } from './modules/voice/voice.routes';
 import { conversationsRoutes } from './modules/conversations/conversations.routes';
+import { quickRepliesRoutes } from './modules/quick-replies/quick-replies.routes';
 import { accountsRoutes } from './modules/crm/accounts.routes';
 import { dadosRoutes } from './modules/dados/dados.routes';
 import { metricsRoutes } from './modules/metrics/metrics.routes';
@@ -52,6 +53,7 @@ import { filiaisRoutes } from './modules/filiais/filiais.routes';
 import { usersRoutes } from './modules/users/users.routes';
 import { ticketsRoutes } from './modules/tickets/tickets.routes';
 import { webchatRoutes } from './modules/webchat/webchat.routes';
+import { fluxosRoutes } from './modules/fluxos/fluxos.routes';
 
 export function createApp() {
   const app = express();
@@ -142,6 +144,8 @@ export function createApp() {
   app.use('/api/filiais', filiaisRoutes);
   app.use('/api/branding', brandingRoutes);
   app.use('/api/conversas', conversationsRoutes);
+  app.use('/api/mensagens-rapidas', quickRepliesRoutes);
+  app.use('/api/fluxos', fluxosRoutes);
   app.use('/api/contatos', contactsRoutes);
   if (env.WEBCHAT_ATIVO) app.use('/api/webchat', webchatRoutes);
   app.use('/api/contas', accountsRoutes);

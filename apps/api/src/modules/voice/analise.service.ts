@@ -140,19 +140,20 @@ const inclusaoDeAcoes = {
  * proxima acao" sao dois estados diferentes, e deixar a tela deduzir isso de uma
  * lista vazia produziria a mesma tela para os dois.
  */
-export async function analiseDaChamada(id: string) {
+export async function analiseDaChamada(id: string, acesso?: { usuarioId: string; gestor: boolean }) {
   const c = await prisma.call.findFirst({
     where: { OR: [{ id }, { idExterno: id }] },
     include: { ...inclusaoDeAcoes, contato: { select: { id: true, nome: true } } },
   });
   if (!c) throw notFound('Chamada não encontrada');
+  if (acesso && !acesso.gestor && c.agenteId !== acesso.usuarioId) throw notFound('Chamada não encontrada');
 
   const temVinculo = c.contatoId !== null;
 
   return {
     chamadaId: c.id,
     estado: estadoDaAnalise(c),
-    transcricao: c.transcricao,
+    transcricao: !acesso || acesso.gestor ? c.transcricao : null,
     resumo: c.resumo,
     /** Nulo NAO e NEUTRO: significa que ninguem analisou esta ligacao. */
     sentimento: c.sentimento,
