@@ -102,19 +102,22 @@ async function marcarDesconectadoLocalmente(config: {
   id: string;
   ponteSessao: string | null;
   donoId: string | null;
+  ponteConectadoEm?: Date | null;
 }): Promise<void> {
+  const status = config.ponteConectadoEm ? 'DESCONECTADO' : 'AGUARDANDO_QR';
+  const em = new Date();
   await prisma.channelConfig.update({
     where: { id: config.id },
-    data: { ponteStatus: 'DESCONECTADO', ponteStatusEm: new Date() },
+    data: { ponteStatus: status, ponteStatusEm: em },
   });
 
   notificarStatusCanal(
     {
       id: config.id,
       ponteSessao: config.ponteSessao,
-      status: 'DESCONECTADO',
+      status,
       detalhe: null,
-      em: new Date().toISOString(),
+      em: em.toISOString(),
     },
     { agenteId: config.donoId },
   );

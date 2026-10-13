@@ -2002,10 +2002,12 @@ model ChannelConfig {
   ponteSegredo  String?   @map("ponte_segredo")
   /// Nome da sessao/instancia na ponte, quando ela hospeda mais de um numero.
   ponteSessao   String?   @map("ponte_sessao")
-  /// Ultimo status de conexao que a ponte reportou para esta linha (CONECTADO/DESCONECTADO). Nulo fora do modo NAO_OFICIAL ou antes do primeiro aviso.
+  /// Ultimo status de conexao (CONECTADO/DESCONECTADO/AGUARDANDO_QR). Nulo antes do primeiro aviso.
   ponteStatus   String?   @map("ponte_status")
   /// Quando `ponteStatus` mudou pela ultima vez.
   ponteStatusEm DateTime? @map("ponte_status_em")
+  /// Primeira conexao confirmada. Distingue linha nunca pareada de WhatsApp que caiu.
+  ponteConectadoEm DateTime? @map("ponte_conectado_em")
 
   /// Fila que recebe as conversas deste canal.
   filaId String? @map("fila_id")

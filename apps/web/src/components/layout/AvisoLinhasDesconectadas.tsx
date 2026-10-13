@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../features/auth/AuthProvider';
 import { api, getAccessToken } from '../../lib/api';
@@ -14,7 +14,7 @@ export function AvisoLinhasDesconectadas() {
     try {
       setLinhas((await api.get<{ linhas: LinhaCaida[] }>('/canais/linhas-desconectadas')).linhas);
     } catch {
-      // O aviso não deve interromper o uso da plataforma se o status estiver indisponível.
+      // O aviso nao deve interromper o uso da plataforma se o status estiver indisponivel.
     }
   }, []);
 
@@ -30,9 +30,15 @@ export function AvisoLinhasDesconectadas() {
 
   if (!ve || linhas.length === 0) return null;
   const data = (iso: string) => new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
-  const itens = linhas.map((linha) => `${linha.nome}${linha.dono ? ` (${linha.dono.nome})` : ''}${linha.desde ? ` desde ${data(linha.desde)}` : ''}`).join(' · ');
   return <div role="alert" className="border-b border-red-200 bg-red-50 px-6 py-2 text-sm text-red-700">
-    <strong>{linhas.length === 1 ? 'WhatsApp desconectado:' : `${linhas.length} WhatsApps desconectados:`}</strong> {itens}{' — '}
-    <Link to="/configuracoes" className="underline">Reconectar</Link>
+    <strong>{linhas.length === 1 ? 'WhatsApp desconectado:' : `${linhas.length} WhatsApps desconectados:`}</strong>{' '}
+    {linhas.map((linha, index) => <Fragment key={linha.id}>
+      {index > 0 ? ' · ' : ''}
+      <Link to={`/configuracoes?aba=canais&linha=${encodeURIComponent(linha.id)}`} className="underline">
+        {linha.nome}{linha.dono ? ` (${linha.dono.nome})` : ''}
+      </Link>
+      {linha.desde ? ` desde ${data(linha.desde)}` : ''}
+    </Fragment>)}
+    {' — clique na linha para abrir a conexão.'}
   </div>;
 }

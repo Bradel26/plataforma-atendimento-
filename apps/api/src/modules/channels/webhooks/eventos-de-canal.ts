@@ -35,7 +35,7 @@ export async function organizacaoDaSessao(sessaoExterna: string): Promise<string
  */
 function statusDaLinha(situacao: SituacaoSessao): 'CONECTADO' | 'DESCONECTADO' | null {
   if (situacao.estado === 'CONECTADO') return 'CONECTADO';
-  if (situacao.estado === 'AGUARDANDO_QR' || situacao.estado === 'DESCONECTADO' || situacao.estado === 'FALHOU') {
+  if (situacao.estado === 'DESCONECTADO' || situacao.estado === 'FALHOU') {
     return 'DESCONECTADO';
   }
   return null;
@@ -67,9 +67,17 @@ async function registrarEstadoDaSessao(
   if (!status) return 'processado';
 
   const em = new Date();
-  await prisma.channelConfig.update({ where: { id: config.id }, data: { ponteStatus: status, ponteStatusEm: em } });
+  const statusEfetivo = status === 'DESCONECTADO' && !config.ponteConectadoEm ? 'AGUARDANDO_QR' : status;
+  await prisma.channelConfig.update({
+    where: { id: config.id },
+    data: {
+      ponteStatus: statusEfetivo,
+      ponteStatusEm: em,
+      ...(status === 'CONECTADO' ? { ponteConectadoEm: em } : {}),
+    },
+  });
   notificarStatusCanal(
-    { id: config.id, ponteSessao: config.ponteSessao, status, detalhe: situacao.detalhe, em: em.toISOString() },
+    { id: config.id, ponteSessao: config.ponteSessao, status: statusEfetivo, detalhe: situacao.detalhe, em: em.toISOString() },
     { agenteId: config.donoId },
   );
   return 'processado';

@@ -107,7 +107,7 @@ export function numeroNormalizado(bruto: string | null | undefined): string | nu
 
 export type EstadoDaPonte = {
   /** `conectado` so quando a ponte afirma que a sessao esta de pe. */
-  situacao: 'CONECTADO' | 'DESCONECTADO' | 'DESCONHECIDO';
+  situacao: 'CONECTADO' | 'DESCONECTADO' | 'AGUARDANDO_QR' | 'DESCONHECIDO';
   /** O que a ponte disse, para a tela mostrar sem traduzir errado. */
   detalhe: string | null;
   /** Numero conectado (so digitos, com pais), quando o provider sabe informar. */
@@ -144,9 +144,6 @@ export function lerEstadoDaPonte(corpo: unknown): EstadoDaPonte {
             ? c.state
             : null;
 
-  if (c.connected === true || c.conectado === true) return { situacao: 'CONECTADO', detalhe };
-  if (c.connected === false || c.conectado === false) return { situacao: 'DESCONECTADO', detalhe };
-
   const texto = (typeof c.status === 'string' ? c.status : typeof c.state === 'string' ? c.state : '')
     .trim()
     .toUpperCase();
@@ -154,7 +151,12 @@ export function lerEstadoDaPonte(corpo: unknown): EstadoDaPonte {
   if (['CONNECTED', 'OPEN', 'ONLINE', 'READY', 'CONECTADO'].includes(texto)) {
     return { situacao: 'CONECTADO', detalhe };
   }
-  if (['DISCONNECTED', 'CLOSE', 'CLOSED', 'OFFLINE', 'QRCODE', 'PAIRING', 'DESCONECTADO'].includes(texto)) {
+  if (['QRCODE', 'PAIRING', 'AGUARDANDO_QR', 'SCAN_QR_CODE'].includes(texto)) {
+    return { situacao: 'AGUARDANDO_QR', detalhe };
+  }
+  if (c.connected === true || c.conectado === true) return { situacao: 'CONECTADO', detalhe };
+  if (c.connected === false || c.conectado === false) return { situacao: 'DESCONECTADO', detalhe };
+  if (['DISCONNECTED', 'CLOSE', 'CLOSED', 'OFFLINE', 'DESCONECTADO'].includes(texto)) {
     return { situacao: 'DESCONECTADO', detalhe };
   }
 

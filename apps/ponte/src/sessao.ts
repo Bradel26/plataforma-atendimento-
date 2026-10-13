@@ -615,6 +615,18 @@ export function situacaoDe(sessao: Sessao) {
   };
 }
 
+/** Le uma sessao em memoria sem criar socket nem iniciar pareamento. */
+export function consultarSemIniciar(nome: string) {
+  const sessao = sessoes.get(nome);
+  if (sessao) return situacaoDe(sessao);
+  return {
+    connected: false,
+    status: 'QRCODE' as const,
+    detalhe: 'sessao ainda nao pareada; use Conectar WhatsApp para iniciar',
+    numero: null,
+  };
+}
+
 /** O QR atual, ou nulo quando nao ha o que escanear (conectada ou subindo). */
 export function qrDe(sessao: Sessao) {
   return { qr: sessao.qr, conectado: sessao.situacao === 'CONECTADO', status: sessao.situacao };

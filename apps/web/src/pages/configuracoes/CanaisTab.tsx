@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Alerta, Badge, Button, Card, EmptyState, Field, Input, Select } from '../../components/ui';
 import { useConfirm } from '../../components/ui/ConfirmDialog';
 import { ApiError, api, getAccessToken } from '../../lib/api';
@@ -68,7 +69,7 @@ type QrDaPonte = {
 };
 
 type EstadoDaPonte = {
-  situacao: 'CONECTADO' | 'DESCONECTADO' | 'DESCONHECIDO';
+  situacao: 'CONECTADO' | 'DESCONECTADO' | 'AGUARDANDO_QR' | 'DESCONHECIDO';
   detalhe: string | null;
   /** Numero conectado (so digitos, com pais), quando o servidor informa. */
   telefone?: string | null;
@@ -100,6 +101,7 @@ const vazio = {
 
 /** Configuracao dos canais da Meta. Segredos sao enviados, nunca lidos de volta. */
 export function CanaisTab() {
+  const [searchParams] = useSearchParams();
   const confirmar = useConfirm();
   const [canais, setCanais] = useState<CanalConfig[]>([]);
   const [filas, setFilas] = useState<Fila[]>([]);
@@ -207,6 +209,11 @@ export function CanaisTab() {
   useEffect(() => {
     void carregar();
   }, []);
+
+  useEffect(() => {
+    const linha = searchParams.get('linha');
+    if (linha && canais.some((canal) => canal.id === linha)) setLinhaAberta(linha);
+  }, [searchParams, canais]);
 
   /**
    * Aviso em tempo real de que uma sessao da ponte conectou ou caiu.
@@ -641,7 +648,9 @@ export function CanaisTab() {
                       ? 'conectada'
                       : estadoPonte.situacao === 'DESCONECTADO'
                         ? 'desconectada'
-                        : 'não confirmada'}
+                        : estadoPonte.situacao === 'AGUARDANDO_QR'
+                          ? 'aguardando QR Code'
+                          : 'não confirmada'}
                   </Badge>
                   {estadoPonte.situacao === 'CONECTADO' && estadoPonte.telefone ? (
                     <span className="text-slate-700">{telefoneLegivel(estadoPonte.telefone)}</span>
@@ -852,6 +861,9 @@ export function CanaisTab() {
                               {n.modo === 'NAO_OFICIAL' && n.ponteStatus === 'DESCONECTADO' && (
                                 <Badge tom="alerta">Desconectado</Badge>
                               )}
+                              {n.modo === 'NAO_OFICIAL' && n.ponteStatus === 'AGUARDANDO_QR' && (
+                                <Badge>Aguardando conexão</Badge>
+                              )}
                             </div>
                           </td>
                           <td className="py-2 text-right">
@@ -888,7 +900,9 @@ export function CanaisTab() {
                                       ? 'conectada'
                                       : estadoLinha.situacao === 'DESCONECTADO'
                                         ? 'desconectada'
-                                        : 'não confirmada'}
+                                        : estadoLinha.situacao === 'AGUARDANDO_QR'
+                                          ? 'aguardando QR Code'
+                                          : 'não confirmada'}
                                   </Badge>
                                   {estadoLinha.situacao === 'CONECTADO' && estadoLinha.telefone && (
                                     <span className="text-slate-700">{telefoneLegivel(estadoLinha.telefone)}</span>

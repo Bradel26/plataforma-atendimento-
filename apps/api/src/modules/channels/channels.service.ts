@@ -101,7 +101,9 @@ export async function listarCanais() {
     /// Ultimo status que a ponte avisou para esta linha (ver ponte.routes.ts:/status).
     /// Nulo fora do modo nao oficial ou antes do primeiro aviso — a tela so
     /// mostra o badge quando ha algo para mostrar.
-    ponteStatus: c.ponteStatus,
+    // Registros antigos marcados como desconectados sem jamais confirmar
+    // conexao representam linha ainda aguardando primeiro pareamento.
+    ponteStatus: c.ponteStatus === 'DESCONECTADO' && !c.ponteConectadoEm ? 'AGUARDANDO_QR' : c.ponteStatus,
     ponteStatusEm: c.ponteStatusEm,
     espelharCelular: c.espelharCelular,
     /*
@@ -121,7 +123,11 @@ export async function listarCanais() {
 
 export async function listarLinhasDesconectadas() {
   const linhas = await prisma.channelConfig.findMany({
-    where: { canal: 'WHATSAPP', modo: 'NAO_OFICIAL', ativo: true, ponteStatus: 'DESCONECTADO' },
+    where: {
+      canal: 'WHATSAPP', modo: 'NAO_OFICIAL', ativo: true, ponteStatus: 'DESCONECTADO',
+      // Linha que nunca conectou está apenas aguardando o primeiro pareamento.
+      ponteConectadoEm: { not: null },
+    },
     select: { id: true, nome: true, ponteSessao: true, ponteStatusEm: true, dono: { select: { id: true, nome: true } } },
     orderBy: { ponteStatusEm: 'asc' },
   });

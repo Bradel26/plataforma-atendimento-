@@ -98,3 +98,15 @@ export async function criarAuthStatePersistido(
     saveCreds: () => persistir(),
   };
 }
+
+/** Confirma o pareamento sem criar sessao/sock; usado pelo diagnostico passivo. */
+export async function temCredenciaisPareadas(nome: string, banco: BancoDeSessao): Promise<boolean> {
+  const salvo = await banco.obter(nome);
+  if (!salvo) return false;
+  try {
+    const persistido = JSON.parse(decifrar(salvo), BufferJSON.reviver) as { creds?: { registered?: boolean } };
+    return persistido.creds?.registered === true;
+  } catch {
+    return false;
+  }
+}

@@ -2,6 +2,8 @@ import { timingSafeEqual } from 'node:crypto';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import multer from 'multer';
 import { config } from './config.js';
+import { bancoDeSessaoPg } from './banco.js';
+import { temCredenciaisPareadas } from './autenticacaoPostgres.js';
 import { retirar } from './midia.js';
 import {
   SessaoIndisponivel,
@@ -13,6 +15,7 @@ import {
   listar,
   qrDe,
   situacaoDe,
+  consultarSemIniciar,
 } from './sessao.js';
 
 /**
@@ -114,8 +117,15 @@ export function criarServidor() {
 
   /** Diagnostico. O formato e o que `lerEstadoDaPonte()` sabe ler. */
   const estado = async (req: Request, res: Response) => {
-    const sessao = await garantirNoAr(sessaoDaUrl(req));
-    res.json(situacaoDe(sessao));
+    const nome = sessaoDaUrl(req);
+    // A consulta do painel nao deve iniciar pareamento. Credenciais salvas
+    // identificam uma linha ja pareada, que pode ser restaurada apos restart.
+    if (await temCredenciaisPareadas(nome, bancoDeSessaoPg)) {
+      const sessao = await garantirNoAr(nome);
+      res.json(situacaoDe(sessao));
+      return;
+    }
+    res.json(consultarSemIniciar(nome));
   };
   app.get('/estado', rota(estado));
   app.get('/estado/:sessao', rota(estado));

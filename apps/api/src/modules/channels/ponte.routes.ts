@@ -305,18 +305,28 @@ ponteRoutes.post(
         );
       }
 
+      // Uma sessao ainda sem pareamento pode fechar enquanto espera o QR.
+      // Isso nao e uma queda de um atendimento ativo e nao deve disparar alerta.
+      const statusEfetivo = corpo.status === 'DESCONECTADO' && !config.ponteConectadoEm
+        ? 'AGUARDANDO_QR'
+        : corpo.status;
+      const em = new Date();
       await prisma.channelConfig.update({
         where: { id: config.id },
-        data: { ponteStatus: corpo.status, ponteStatusEm: new Date() },
+        data: {
+          ponteStatus: statusEfetivo,
+          ponteStatusEm: em,
+          ...(corpo.status === 'CONECTADO' ? { ponteConectadoEm: em } : {}),
+        },
       });
 
       notificarStatusCanal(
         {
           id: config.id,
           ponteSessao: config.ponteSessao,
-          status: corpo.status,
+          status: statusEfetivo,
           detalhe: corpo.detalhe ?? null,
-          em: new Date().toISOString(),
+          em: em.toISOString(),
         },
         { agenteId: config.donoId },
       );

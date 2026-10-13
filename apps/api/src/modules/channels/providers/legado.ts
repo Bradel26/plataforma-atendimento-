@@ -30,9 +30,11 @@ export function estadoLegado(s: SituacaoSessao): EstadoDaPonte {
   const situacao =
     s.estado === 'CONECTADO'
       ? 'CONECTADO'
-      : s.estado === 'AGUARDANDO_QR' || s.estado === 'DESCONECTADO' || s.estado === 'FALHOU'
-        ? 'DESCONECTADO'
-        : 'DESCONHECIDO';
+      : s.estado === 'AGUARDANDO_QR'
+        ? 'AGUARDANDO_QR'
+        : s.estado === 'DESCONECTADO' || s.estado === 'FALHOU'
+          ? 'DESCONECTADO'
+          : 'DESCONHECIDO';
   return { situacao, detalhe: s.detalhe, telefone: s.telefone };
 }
 
