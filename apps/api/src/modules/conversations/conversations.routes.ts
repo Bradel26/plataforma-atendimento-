@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { asyncHandler } from '../../http/async-handler';
-import { requireAuth, requireRole } from '../../http/middleware/auth';
+import { requireAuth } from '../../http/middleware/auth';
 import { param } from '../../http/params';
 import { badRequest } from '../../lib/errors';
+import { requireModulo } from '../../lib/modulos';
 import { limiteBytes } from '../../lib/storage';
 import { validateBody, validateQuery } from '../../http/middleware/validate';
 import {
@@ -47,6 +48,7 @@ export const conversationsRoutes = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: limiteBytes, files: 1 } });
 
 conversationsRoutes.use(requireAuth);
+conversationsRoutes.use(requireModulo('atendimento'));
 
 /** O service decide o escopo (agente ve o dele; gestao ve tudo). */
 const quem = (req: { user?: { sub: string; perfil: Solicitante['perfil']; nome: string } }): Solicitante => ({
@@ -136,7 +138,7 @@ conversationsRoutes.get(
 /** Auditoria restrita à gestão; a consulta preserva políticaConversas. */
 conversationsRoutes.get(
   '/auditoria',
-  requireRole('ADMIN', 'SUPERVISOR', 'GESTOR'),
+  requireModulo('auditoria'),
   validateQuery(auditoriaSchema),
   asyncHandler(async (_req, res) => {
     res.json(await listarAuditoria(res.locals.query));
@@ -145,7 +147,7 @@ conversationsRoutes.get(
 
 conversationsRoutes.get(
   '/auditoria/opcoes',
-  requireRole('ADMIN', 'SUPERVISOR', 'GESTOR'),
+  requireModulo('auditoria'),
   asyncHandler(async (_req, res) => {
     res.json(await opcoesDaAuditoria());
   }),
