@@ -1,5 +1,8 @@
 import type { NextFunction, Request, Response } from 'express';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { findMany } = vi.hoisted(() => ({ findMany: vi.fn() }));
+vi.mock('../../lib/prisma', () => ({ prisma: { modulePermission: { findMany } } }));
 import { credenciamentosRoutes } from './credenciamentos.routes';
 
 /*
@@ -19,23 +22,26 @@ function fakeReq(perfil: string): Request {
 }
 
 function rodar(perfil: string) {
-  let erro: unknown;
-  guardDoModulo()(fakeReq(perfil), {} as Response, (e?: unknown) => {
-    erro = e;
+  return new Promise((resolve) => {
+    guardDoModulo()(fakeReq(perfil), {} as Response, resolve as NextFunction);
   });
-  return erro;
 }
 
 describe('credenciamentosRoutes — guard do modulo', () => {
-  it('SUPORTE acessa a Esteira, mesmo nivel operacional de COMERCIAL', () => {
-    expect(rodar('SUPORTE')).toBeUndefined();
+  beforeEach(() => vi.clearAllMocks());
+
+  it('SUPORTE sem permissão configurada recebe 403', async () => {
+    findMany.mockResolvedValue([]);
+    await expect(rodar('SUPORTE')).resolves.toMatchObject({ status: 403 });
   });
 
-  it('AGENTE continua fora — mesmo corte de Oportunidades', () => {
-    expect(rodar('AGENTE')).toMatchObject({ status: 403 });
+  it('SUPORTE com esteira configurada passa', async () => {
+    findMany.mockResolvedValue([{ modulo: 'esteira' }]);
+    await expect(rodar('SUPORTE')).resolves.toBeUndefined();
   });
 
-  it('COMERCIAL continua passando (nao regrediu)', () => {
-    expect(rodar('COMERCIAL')).toBeUndefined();
+  it('ADMIN sempre passa sem consultar configuração', async () => {
+    await expect(rodar('ADMIN')).resolves.toBeUndefined();
+    expect(findMany).not.toHaveBeenCalled();
   });
 });
