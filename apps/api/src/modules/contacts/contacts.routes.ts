@@ -520,8 +520,23 @@ contactsRoutes.patch(
   }),
 );
 
-/** Apaga o PII do contato, preservando o registro (so a ficha fica em branco). */
-function anonimizarContato(tx: ClienteDeEscrita, contatoId: string) {
+/**
+ * Apaga o PII do contato, preservando o registro (so a ficha fica em branco).
+ *
+ * Finaliza antes qualquer conversa ainda aberta: sem isso, o `enderecoExterno`
+ * dela continua casando com `status: { not: 'FINALIZADO' }` em
+ * `inbound.service.ts` (`encontrarOuCriarContato`/`registrarMensagemEntrante`)
+ * e uma mensagem nova do mesmo numero reabriria essa conversa anonimizada —
+ * que o filtro de `conversations.service.ts` (`contato.excluidoEm`) esconde da
+ * caixa de entrada. A conversa ficaria recebendo mensagem sem que ninguem
+ * visse. Finalizada, o telefone nulo abaixo garante que a proxima mensagem
+ * cria contato e conversa novos.
+ */
+async function anonimizarContato(tx: ClienteDeEscrita, contatoId: string) {
+  await tx.conversation.updateMany({
+    where: { contatoId, status: { not: 'FINALIZADO' } },
+    data: { status: 'FINALIZADO', finalizadoEm: new Date() },
+  });
   return tx.contact.update({
     where: { id: contatoId },
     data: {

@@ -14,6 +14,7 @@ const {
   contactDeletionRequestCreate,
   contactDeletionRequestUpdate,
   contactUpdate,
+  conversationUpdateMany,
   transaction,
 } = vi.hoisted(() => ({
   contactFindFirst: vi.fn(),
@@ -21,10 +22,12 @@ const {
   contactDeletionRequestCreate: vi.fn(),
   contactDeletionRequestUpdate: vi.fn(),
   contactUpdate: vi.fn(),
+  conversationUpdateMany: vi.fn().mockResolvedValue({ count: 0 }),
   transaction: vi.fn(async (fn: (tx: unknown) => unknown) =>
     fn({
       contactDeletionRequest: { create: contactDeletionRequestCreate, update: contactDeletionRequestUpdate },
       contact: { update: contactUpdate },
+      conversation: { updateMany: conversationUpdateMany },
     }),
   ),
 }));
@@ -109,6 +112,15 @@ describe('POST /:id/exclusao', () => {
     );
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ excluidoImediatamente: true }));
     expect(res.status).not.toHaveBeenCalledWith(202);
+
+    // Sem isto, uma mensagem nova do mesmo numero reabre a conversa anonimizada
+    // (`encontrarOuCriarContato`/`registrarMensagemEntrante` casam por
+    // `status: { not: 'FINALIZADO' }`) e ela fica recebendo mensagem escondida
+    // da caixa de entrada, que agora filtra `contato.excluidoEm`.
+    expect(conversationUpdateMany).toHaveBeenCalledWith({
+      where: { contatoId: 'contato-1', status: { not: 'FINALIZADO' } },
+      data: { status: 'FINALIZADO', finalizadoEm: expect.any(Date) },
+    });
   });
 
   it('SUPERVISOR: so cria a solicitacao pendente, nao exclui na hora', async () => {
@@ -171,5 +183,9 @@ describe('POST /:id/exclusao', () => {
       expect.objectContaining({ where: { id: 'contato-1' }, data: expect.objectContaining({ excluidoEm: expect.any(Date) }) }),
     );
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ excluidoImediatamente: true }));
+    expect(conversationUpdateMany).toHaveBeenCalledWith({
+      where: { contatoId: 'contato-1', status: { not: 'FINALIZADO' } },
+      data: { status: 'FINALIZADO', finalizadoEm: expect.any(Date) },
+    });
   });
 });
