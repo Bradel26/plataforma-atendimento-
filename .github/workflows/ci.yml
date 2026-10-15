@@ -70,6 +70,7 @@ jobs:
           # "curl: (22) error 401" e nada mais, escondendo qual das causas foi.
           # Capturando o codigo, cada uma ganha a mensagem do seu conserto.
           http=$(curl -sS -o resposta.json -w '%{http_code}' \
+            --connect-timeout 10 --max-time 30 --retry 3 --retry-all-errors --retry-delay 10 \
             -H "Authorization: Bearer ${COOLIFY_TOKEN}" \
             "${COOLIFY_URL}/api/v1/deploy?uuid=${COOLIFY_UUID}&force=false" || echo 000)
           resposta=$(cat resposta.json 2>/dev/null || echo '{}')
