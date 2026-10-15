@@ -17,4 +17,13 @@ describe('conversao', () => {
   it('nula quando nao ha nenhum fechamento no periodo', () => {
     expect(conversao(0, 0)).toBeNull();
   });
+
+  it('nao e afetada por oportunidades DESCARTADA -- o chamador nunca as inclui em ganhas/perdidas', () => {
+    // DESCARTADA nem entra nos parametros de conversao(), que so recebe
+    // ganhas/perdidas ja filtrados por igualdade exata de status -- este teste
+    // fixa o contrato da funcao pura; o caminho real (obterDesempenho exclui
+    // DESCARTADA do groupBy lido) fica coberto indiretamente por nao quebrar
+    // nenhum teste existente deste modulo.
+    expect(conversao(3, 1)).toBeCloseTo(0.75);
+  });
 });

@@ -1019,7 +1019,7 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
                         {o.estagio.nome} · {moeda(o.valor)}
                       </p>
                     </div>
-                    <Badge tom={o.status === 'GANHA' ? 'sucesso' : o.status === 'PERDIDA' ? 'neutro' : 'marca'}>
+                    <Badge tom={o.status === 'GANHA' ? 'sucesso' : o.status === 'ABERTA' ? 'marca' : 'neutro'}>
                       {o.status}
                     </Badge>
                   </li>

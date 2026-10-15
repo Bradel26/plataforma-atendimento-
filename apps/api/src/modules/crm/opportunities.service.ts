@@ -685,7 +685,9 @@ export async function reabrirOportunidade(id: string) {
     select: { id: true, status: true },
   });
   if (!atual) throw notFound('Oportunidade não encontrada');
-  if (atual.status !== 'PERDIDA') throw badRequest('Somente oportunidade perdida pode ser reaberta');
+  if (atual.status !== 'PERDIDA' && atual.status !== 'DESCARTADA') {
+    throw badRequest('Somente oportunidade perdida ou descartada pode ser reaberta');
+  }
   const agora = new Date();
   await prisma.$transaction(async (tx) => {
     await tx.opportunity.update({
@@ -695,7 +697,7 @@ export async function reabrirOportunidade(id: string) {
       where: { oportunidadeId: id, automacaoChave: { startsWith: `reativacao:${id}:` }, concluidoEm: null },
       data: { canceladoEm: agora, concluidoEm: agora },
     });
-    await registrarAuditoria(tx, id, [{ campo: 'STATUS', de: 'PERDIDA', para: 'ABERTA' }]);
+    await registrarAuditoria(tx, id, [{ campo: 'STATUS', de: atual.status, para: 'ABERTA' }]);
   });
   return obterOportunidade(id);
 }

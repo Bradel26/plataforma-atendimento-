@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { MAXIMO_POR_REGISTRO, TAMANHO_MAXIMO, normalizarTags } from '../../lib/tags';
 
 export const listarConversasSchema = z.object({
-  status: z.enum(['EM_ESPERA', 'ATRIBUIDO', 'EM_ATENDIMENTO', 'FINALIZADO']).optional(),
+  status: z.enum(['EM_ESPERA', 'ATRIBUIDO', 'EM_ATENDIMENTO', 'AGUARDANDO_CLIENTE', 'FINALIZADO']).optional(),
   /** Aba do Atendimento. Sem ela, so a politica de visibilidade filtra. */
   visao: z.enum(['MINHAS', 'ATRIBUIDAS', 'ACOMPANHAR']).optional(),
   /** Seletor de Acompanhar: id do dono do numero, ou EMPRESA. */

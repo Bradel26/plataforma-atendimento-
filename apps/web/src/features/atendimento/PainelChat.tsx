@@ -455,7 +455,9 @@ export function PainelChat({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Badge tom={finalizada ? 'neutro' : 'sucesso'}>{LABEL_CONVERSA_STATUS[conversa.status]}</Badge>
+          <Badge tom={finalizada ? 'neutro' : conversa.status === 'AGUARDANDO_CLIENTE' ? 'alerta' : 'sucesso'}>
+            {LABEL_CONVERSA_STATUS[conversa.status]}
+          </Badge>
           {conversa.arquivada && <Badge tom="neutro">Arquivada</Badge>}
           <span className="text-xs text-slate-400">{conversa.origem === 'ATIVO' ? '↗ Ativo' : '↙ Receptivo'}</span>
           {!somenteLeitura && (

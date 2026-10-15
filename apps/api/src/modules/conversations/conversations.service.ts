@@ -36,6 +36,7 @@ import {
 import type { ListarConversasQuery, TransferirInput } from './conversations.schemas';
 import { filtroDaVisao } from './conversations.visao';
 import { reservarProtocolo } from './protocolo';
+import { aoFalarComCliente } from './conversations.estados';
 import { registrarAceiteFluxo } from '../fluxos/fluxos.service';
 
 export type Solicitante = { sub: string; perfil: Role; nome: string };
@@ -756,9 +757,17 @@ export async function enviarMensagem(
     interno,
   });
 
+  // So escreve a chave quando o status de fato muda -- uma nota interna cujo
+  // calculo deu 'sem mudanca' nao deve regravar o valor lido antes do envio,
+  // que pode ja estar desatualizado (achado da revisao final).
+  const proximoStatus = aoFalarComCliente(conversa.status, interno);
   await prisma.conversation.update({
     where: { id },
-    data: { ...assumir, status: 'EM_ATENDIMENTO', ultimaMensagemEm: mensagem.criadoEm },
+    data: {
+      ...assumir,
+      ...(proximoStatus !== conversa.status ? { status: proximoStatus } : {}),
+      ultimaMensagemEm: mensagem.criadoEm,
+    },
   });
   if (!conversa.agenteId) {
     await marcarAtendenteInicial(id, solicitante.sub);
@@ -825,9 +834,17 @@ export async function enviarArquivo(
     interno,
   });
 
+  // So escreve a chave quando o status de fato muda -- uma nota interna cujo
+  // calculo deu 'sem mudanca' nao deve regravar o valor lido antes do envio,
+  // que pode ja estar desatualizado (achado da revisao final).
+  const proximoStatus = aoFalarComCliente(conversa.status, interno);
   await prisma.conversation.update({
     where: { id },
-    data: { ...assumir, status: 'EM_ATENDIMENTO', ultimaMensagemEm: mensagem.criadoEm },
+    data: {
+      ...assumir,
+      ...(proximoStatus !== conversa.status ? { status: proximoStatus } : {}),
+      ultimaMensagemEm: mensagem.criadoEm,
+    },
   });
   if (!conversa.agenteId) {
     await marcarAtendenteInicial(id, solicitante.sub);

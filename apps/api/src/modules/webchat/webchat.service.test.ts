@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * Achado 1(a) da revisao final: `historico()` (GET do Webchat) devolvia TODAS
@@ -7,17 +7,33 @@ import { describe, expect, it, vi } from 'vitest';
  * REAL (`toConversaDetalhe`/`semNotasInternas`), nao mockado — e exatamente o
  * filtro que precisa ser exercitado aqui.
  */
-const { conversationFindUnique } = vi.hoisted(() => ({
+const { conversationFindUnique, conversationUpdate, conversationUpdateMany, messageCreate } = vi.hoisted(() => ({
   conversationFindUnique: vi.fn(),
+  conversationUpdate: vi.fn(),
+  conversationUpdateMany: vi.fn().mockResolvedValue({ count: 0 }),
+  messageCreate: vi.fn(),
 }));
 
 vi.mock('../../lib/prisma', () => ({
   prisma: {
-    conversation: { findUnique: conversationFindUnique },
+    conversation: { findUnique: conversationFindUnique, update: conversationUpdate, updateMany: conversationUpdateMany },
+    message: { create: messageCreate },
   },
 }));
 
-import { historico } from './webchat.service';
+const hub = vi.hoisted(() => ({
+  notificarConversaAtualizada: vi.fn(),
+  notificarConversaNova: vi.fn(),
+  notificarMensagem: vi.fn(),
+}));
+vi.mock('../../realtime/hub', () => hub);
+
+const { entregarParaIa } = vi.hoisted(() => ({ entregarParaIa: vi.fn().mockResolvedValue({ entregue: true }) }));
+vi.mock('../bots/ia.service', () => ({ entregarParaIa }));
+const { responderAutomaticamente } = vi.hoisted(() => ({ responderAutomaticamente: vi.fn() }));
+vi.mock('../bots/bots.service', () => ({ responderAutomaticamente }));
+
+import { historico, mensagemDoCliente } from './webchat.service';
 
 function criarConversaMock() {
   const agora = new Date();
@@ -97,5 +113,60 @@ describe('historico (Achado 1a)', () => {
     const detalhe = await historico('conv-1');
 
     expect(detalhe.mensagens.map((m) => m.id)).toEqual(['m1', 'm3']);
+  });
+});
+
+describe('mensagemDoCliente — transicao de status', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('visitante escrevendo numa conversa AGUARDANDO_CLIENTE devolve para EM_ATENDIMENTO', async () => {
+    const conversa = { ...criarConversaMock(), status: 'AGUARDANDO_CLIENTE' as const };
+    conversationFindUnique.mockResolvedValueOnce(conversa);
+    messageCreate.mockResolvedValueOnce({ id: 'm-novo', conversaId: 'conv-1', criadoEm: new Date() });
+    conversationUpdate.mockResolvedValueOnce(criarConversaMock());
+
+    await mensagemDoCliente('conv-1', 'ola');
+
+    // Compare-and-set atomico, mesma garantia de `assumirConversa`: so troca
+    // se o status AINDA for AGUARDANDO_CLIENTE no banco na hora da escrita.
+    expect(conversationUpdateMany).toHaveBeenCalledWith({
+      where: { id: 'conv-1', status: 'AGUARDANDO_CLIENTE' },
+      data: { status: 'EM_ATENDIMENTO' },
+    });
+    expect(conversationUpdate.mock.calls[0]?.[0]?.data).not.toHaveProperty('status');
+  });
+
+  it('visitante escrevendo numa conversa EM_ESPERA nao muda o status', async () => {
+    const conversa = { ...criarConversaMock(), status: 'EM_ESPERA' as const };
+    conversationFindUnique.mockResolvedValueOnce(conversa);
+    messageCreate.mockResolvedValueOnce({ id: 'm-novo', conversaId: 'conv-1', criadoEm: new Date() });
+    conversationUpdate.mockResolvedValueOnce(criarConversaMock());
+
+    await mensagemDoCliente('conv-1', 'ola');
+
+    expect(conversationUpdateMany).toHaveBeenCalledWith({
+      where: { id: 'conv-1', status: 'AGUARDANDO_CLIENTE' },
+      data: { status: 'EM_ATENDIMENTO' },
+    });
+    expect(conversationUpdate.mock.calls[0]?.[0]?.data).not.toHaveProperty('status');
+  });
+
+  it('corrida: conversa finalizada por um agente durante o message.create nao e reaberta pela mensagem do visitante', async () => {
+    const conversa = { ...criarConversaMock(), status: 'AGUARDANDO_CLIENTE' as const };
+    conversationFindUnique.mockResolvedValueOnce(conversa);
+    messageCreate.mockResolvedValueOnce({ id: 'm-novo', conversaId: 'conv-1', criadoEm: new Date() });
+    conversationUpdateMany.mockResolvedValueOnce({ count: 0 });
+    conversationUpdate.mockResolvedValueOnce(criarConversaMock());
+
+    await mensagemDoCliente('conv-1', 'ola');
+
+    expect(conversationUpdateMany).toHaveBeenCalledWith({
+      where: { id: 'conv-1', status: 'AGUARDANDO_CLIENTE' },
+      data: { status: 'EM_ATENDIMENTO' },
+    });
+    // Nao casou (ja estava FINALIZADO) -- o update principal nao reabre.
+    expect(conversationUpdate.mock.calls[0]?.[0]?.data).not.toHaveProperty('status');
   });
 });

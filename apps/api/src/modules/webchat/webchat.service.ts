@@ -117,9 +117,20 @@ export async function mensagemDoCliente(conversaId: string, conteudo: string) {
     data: { conversaId, autor: 'CLIENTE', conteudo },
   });
 
+  // Compare-and-set atomico, nao o status lido antes do `message.create` --
+  // mesma garantia que `assumirConversa` ja usa, para nao reabrir/desfazer
+  // uma transferencia que aconteceu nesse intervalo.
+  await prisma.conversation.updateMany({
+    where: { id: conversaId, status: 'AGUARDANDO_CLIENTE' },
+    data: { status: 'EM_ATENDIMENTO' },
+  });
+
   const atualizada = await prisma.conversation.update({
     where: { id: conversaId },
-    data: { ultimaMensagemEm: mensagem.criadoEm, naoLidas: { increment: 1 } },
+    data: {
+      ultimaMensagemEm: mensagem.criadoEm,
+      naoLidas: { increment: 1 },
+    },
     include: inclusaoDetalhe,
   });
 

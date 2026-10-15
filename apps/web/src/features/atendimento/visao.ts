@@ -7,7 +7,7 @@ import type { ConversaResumo } from '../../lib/types';
  *  - Atribuídas: o que está atribuído a mim de outros números
  *  - Acompanhar: o que posso ver dos outros numeros (ADMIN e SUPERVISOR)
  *
- * Uma camada ACIMA de `ConversaStatus`: o status continua com os quatro valores
+ * Uma camada ACIMA de `ConversaStatus`: o status continua com os cinco valores
  * de sempre, e a aba so escolhe como consultar/filtrar.
  */
 export type VisaoInbox = 'MINHAS' | 'ATRIBUIDAS' | 'ACOMPANHAR';

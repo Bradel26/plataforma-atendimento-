@@ -265,6 +265,18 @@ describe('montarFluxo (1.4)', () => {
     expect(r.cicloMedioDias).toBeNull();
   });
 
+  it('ignora fechamentos DESCARTADA na taxa de conversao', () => {
+    const r = montarFluxo([
+      f('GANHA', 1000, '2026-01-01T00:00:00Z', '2026-01-10T00:00:00Z'),
+      f('PERDIDA', 500, '2026-01-01T00:00:00Z', '2026-01-12T00:00:00Z'),
+      f('DESCARTADA', 2000, '2026-01-01T00:00:00Z', '2026-01-15T00:00:00Z'),
+    ]);
+    expect(r.ganhas).toBe(1);
+    expect(r.perdidas).toBe(1);
+    // Sem a oportunidade descartada no denominador: 1 / (1 + 1) = 0.5, nao 1 / 3.
+    expect(r.taxaConversao).toBe(0.5);
+  });
+
   it('so perdas: conversao e zero de verdade, nao nulo', () => {
     // Aqui HOUVE denominador — tres decisoes, nenhuma ganha. Zero e a resposta
     // certa, e trocar por nulo esconderia um mes ruim.

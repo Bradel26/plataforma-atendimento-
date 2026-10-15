@@ -8,6 +8,10 @@ describe('situacaoDaConversa', () => {
     expect(situacaoDaConversa('EM_ATENDIMENTO')).toBe('EM_ATENDIMENTO');
     expect(situacaoDaConversa('FINALIZADO')).toBe('FINALIZADA');
   });
+
+  it('trata AGUARDANDO_CLIENTE como EM_ATENDIMENTO', () => {
+    expect(situacaoDaConversa('AGUARDANDO_CLIENTE')).toBe('EM_ATENDIMENTO');
+  });
 });
 
 describe('auditoriaSchema', () => {
@@ -43,8 +47,14 @@ describe('filtrosDaAuditoria', () => {
   it('situação vira status; SEM_EQUIPE vira filaId nulo', () => {
     const q = auditoriaSchema.parse({ situacao: ['EM_ATENDIMENTO', 'FINALIZADA'], filaId: ['SEM_EQUIPE'] });
     const filtros = filtrosDaAuditoria(q);
-    expect(filtros).toContainEqual({ status: { in: ['ATRIBUIDO', 'EM_ATENDIMENTO', 'FINALIZADO'] } });
+    expect(filtros).toContainEqual({ status: { in: ['ATRIBUIDO', 'EM_ATENDIMENTO', 'AGUARDANDO_CLIENTE', 'FINALIZADO'] } });
     expect(filtros).toContainEqual({ OR: [{ filaId: null }] });
+  });
+
+  it('filtro por situação EM_ATENDIMENTO inclui AGUARDANDO_CLIENTE', () => {
+    const q = auditoriaSchema.parse({ situacao: ['EM_ATENDIMENTO'] });
+    const filtros = filtrosDaAuditoria(q);
+    expect(filtros).toContainEqual({ status: { in: ['ATRIBUIDO', 'EM_ATENDIMENTO', 'AGUARDANDO_CLIENTE'] } });
   });
 
   it('telefone filtra só pelos dígitos', () => {

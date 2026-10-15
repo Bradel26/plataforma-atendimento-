@@ -14,7 +14,7 @@ export type Situacao = (typeof SITUACOES)[number];
 
 const STATUS_DA_SITUACAO: Record<Situacao, ConversationStatus[]> = {
   AGUARDANDO_FILA: ['EM_ESPERA'],
-  EM_ATENDIMENTO: ['ATRIBUIDO', 'EM_ATENDIMENTO'],
+  EM_ATENDIMENTO: ['ATRIBUIDO', 'EM_ATENDIMENTO', 'AGUARDANDO_CLIENTE'],
   FINALIZADA: ['FINALIZADO'],
 };
 

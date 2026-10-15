@@ -171,6 +171,20 @@ export async function registrarMensagemEntrante(dados: MensagemNormalizada) {
     });
   }
 
+  /*
+   * Compare-and-set atomico, nao o status lido antes de `baixarAnexo` (que
+   * pode levar segundos): nesse intervalo a conversa pode ter sido
+   * transferida para fila (EM_ESPERA) ou finalizada por outro agente.
+   * Escrever de volta `aoReceberDoCliente(conversa.status)` direto no update
+   * principal reabriria uma conversa encerrada ou desfaria a transferencia --
+   * o WHERE aqui exige que o status AINDA seja AGUARDANDO_CLIENTE no banco no
+   * instante da escrita, mesma garantia que `assumirConversa` ja usa.
+   */
+  await prisma.conversation.updateMany({
+    where: { id: conversa.id, status: 'AGUARDANDO_CLIENTE' },
+    data: { status: 'EM_ATENDIMENTO' },
+  });
+
   const atualizada = await prisma.conversation.update({
     where: { id: conversa.id },
     data: {
@@ -276,7 +290,9 @@ export async function registrarMensagemPropria(dados: MensagemNormalizada) {
     conversa = await prisma.conversation.create({
       data: {
         canal: dados.canal,
-        status: destino.agenteId ? 'EM_ATENDIMENTO' : 'EM_ESPERA',
+        // O dono falou primeiro pelo celular -- ja nasce aguardando o cliente,
+        // nao "em atendimento" (que implicaria uma troca ja rolando).
+        status: destino.agenteId ? 'AGUARDANDO_CLIENTE' : 'EM_ESPERA',
         contatoId: contato.id,
         filaId: destino.filaId,
         agenteId: destino.agenteId,
@@ -301,12 +317,25 @@ export async function registrarMensagemPropria(dados: MensagemNormalizada) {
   });
   if (mensagem === null) return { duplicada: true as const };
 
+  /*
+   * Compare-and-set atomico, nao o status lido antes de `baixarAnexo` (que
+   * pode levar segundos): nesse intervalo a conversa pode ter sido
+   * transferida para fila (EM_ESPERA) ou finalizada por outro agente. Gravar
+   * 'AGUARDANDO_CLIENTE' direto no update principal com base no status antigo
+   * desfaria essa transferencia/encerramento -- o WHERE aqui exige que o
+   * status AINDA seja ATRIBUIDO ou EM_ATENDIMENTO no banco no instante da
+   * escrita, mesma garantia que `assumirConversa` ja usa.
+   */
+  await prisma.conversation.updateMany({
+    where: { id: conversa.id, status: { in: ['ATRIBUIDO', 'EM_ATENDIMENTO'] } },
+    data: { status: 'AGUARDANDO_CLIENTE' },
+  });
+
   const atualizada = await prisma.conversation.update({
     where: { id: conversa.id },
     data: {
       ultimaMensagemEm: mensagem.criadoEm,
       arquivada: false,
-      ...(conversa.status === 'ATRIBUIDO' ? { status: 'EM_ATENDIMENTO' as const } : {}),
     },
     include: inclusaoDetalhe,
   });
