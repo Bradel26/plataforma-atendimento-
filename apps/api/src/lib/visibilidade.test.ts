@@ -90,7 +90,7 @@ describe('nada vira sem filtro', () => {
     // O termo da fila continua no filtro, com lista vazia: `in: []` nao casa
     // com nada. Omitir o termo seria "qualquer conversa em espera".
     expect(politicaConversas.filtro(AGENTE_SEM_FILA)).toEqual({
-      OR: [MEU_NUMERO, ATRIBUIDA_A_MIM, { status: 'EM_ESPERA', filaId: { in: [] } }],
+      OR: [ATRIBUIDA_A_MIM, { status: 'EM_ESPERA', filaId: { in: [] } }],
     });
   });
 });
@@ -118,12 +118,11 @@ describe('conversas (organizadas por numero, 2026-10-05)', () => {
     expect(politicaConversas.filtro(ADMIN)).toEqual({});
   });
 
-  it('SUPERVISOR ve Numero da empresa, numeros de Comercial e Suporte, o proprio e o atribuido a ele', () => {
+  it('SUPERVISOR ve Numero da empresa, numeros de Comercial e Suporte, e o atribuido a ele', () => {
     expect(politicaConversas.filtro(SUPERVISOR)).toEqual({
       OR: [
         EMPRESA,
         { canalConfig: { dono: { perfil: { in: ['COMERCIAL', 'SUPORTE'] } } } },
-        MEU_NUMERO,
         ATRIBUIDA_A_MIM,
       ],
     });
@@ -133,21 +132,19 @@ describe('conversas (organizadas por numero, 2026-10-05)', () => {
     expect(Object.keys(politicaConversas.filtro(SUPERVISOR)).length).toBeGreaterThan(0);
   });
 
-  it('gestor: proprio numero, atribuidas, e a espera e a equipe so no Numero da empresa', () => {
+  it('gestor: atribuidas, e a espera e a equipe so no Numero da empresa', () => {
     expect(politicaConversas.filtro(GESTOR)).toEqual({
       OR: [
-        MEU_NUMERO,
         ATRIBUIDA_A_MIM,
         { AND: [EMPRESA, { OR: [{ agenteId: { in: [EU, COLEGA] } }, { status: 'EM_ESPERA' }] }] },
       ],
     });
   });
 
-  it('comercial/suporte/agente: proprio numero, atribuidas de qualquer numero, espera das filas em que atuam', () => {
-    // "Atribuidas de qualquer numero" e o caso da transferencia: o Leandro passa
-    // a conversa do numero dele para a Alessandra, e ela precisa ve-la.
+  it('comercial/suporte/agente: atribuidas e espera das filas em que atuam', () => {
+    // A origem da linha nao mantem acesso depois que a conversa e transferida.
     expect(politicaConversas.filtro(AGENTE)).toEqual({
-      OR: [MEU_NUMERO, ATRIBUIDA_A_MIM, { status: 'EM_ESPERA', filaId: { in: ['f-1'] } }],
+      OR: [ATRIBUIDA_A_MIM, { status: 'EM_ESPERA', filaId: { in: ['f-1'] } }],
     });
   });
 });

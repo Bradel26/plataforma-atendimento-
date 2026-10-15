@@ -468,7 +468,7 @@ async function encontrarOuCriarContato(dados: MensagemNormalizada, canalConfigId
     // Contatos criados antes da normalizacao podem ter telefone nulo, embora
     // o JID atual ja traga o numero. Completa o cadastro uma vez para que as
     // proximas mensagens recebidas por outras caixas encontrem este contato.
-    if (!contato.telefone && dados.telefone) {
+    if (contato.telefone === null && dados.telefone) {
       return prisma.contact.update({
         where: { id: contato.id },
         data: { telefone: dados.telefone, uf: contato.uf ?? ufDoTelefone(dados.telefone) },
