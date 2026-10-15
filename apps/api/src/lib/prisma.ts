@@ -67,6 +67,8 @@ const COM_ORGANIZACAO = new Set([
   'CicloParceiro',
   // Metas operacionais do consultor: tabela raiz, com organizacao e CHECK proprio.
   'MetaOperacional',
+  // Permissao de modulo por perfil: tabela raiz, com organizacao e CHECK proprio.
+  'ModulePermission',
 ]);
 
 /** Operacoes que leem ou alteram por filtro: ganham `where`. */

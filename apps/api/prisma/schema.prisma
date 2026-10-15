@@ -108,6 +108,7 @@ model Organizacao {
   consumoIa                   ConsumoIA[]
   produtosDoCliente           ProdutoDoCliente[]
   visoesSalvas                VisaoSalva[]
+  permissoesModulo            ModulePermission[]
   filiais                     Filial[]
   camposCustomizados          CampoCustomizado[]
   mensagensRapidas            MensagemRapida[]
@@ -1510,6 +1511,22 @@ model VisaoSalva {
   @@unique([organizacaoId, entidade, nome])
   @@index([organizacaoId, entidade])
   @@map("visoes_salvas")
+}
+
+/// Permissao de modulo por perfil (ADMIN configura em Configuracoes >
+/// Usuarios e permissoes). Presenca da linha = perfil ve o modulo. ADMIN
+/// nunca aparece aqui: sempre ve tudo, tratado em codigo (lib/modulos.ts).
+model ModulePermission {
+  id            String   @id @default(cuid())
+  organizacaoId String   @default("") @map("organizacao_id")
+  perfil        Role
+  modulo        String
+  criadoEm      DateTime @default(now()) @map("criado_em")
+
+  organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+
+  @@unique([organizacaoId, perfil, modulo])
+  @@map("module_permissions")
 }
 
 /// Filial (item 6.5): unidade fisica da organizacao, usada para classificar
