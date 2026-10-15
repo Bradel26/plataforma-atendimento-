@@ -4,6 +4,8 @@ import { hashPassword, verifyPassword } from '../../lib/password';
 import { issueRefreshToken, signAccessToken } from '../../lib/tokens';
 import { registrarPresenca } from '../metrics/metrics.service';
 import { toPublicUser } from '../users/users.serializer';
+import { modulosPermitidos } from '../../lib/modulos';
+import { comOrganizacao } from '../../lib/tenant';
 import type { AlterarSenhaInicialInput, LoginInput } from './auth.schemas';
 import { garantirNaoBloqueado, limparFalhas, registrarFalha } from './tentativas';
 
@@ -106,7 +108,8 @@ async function buildSession(user: Awaited<ReturnType<typeof prisma.user.findUniq
     org: user.organizacaoId,
   });
   const refreshToken = await issueRefreshToken(user.id, user.organizacaoId);
-  return { accessToken, refreshToken, usuario: toPublicUser(user) };
+  const modulosPermitidosSessao = await comOrganizacao(user.organizacaoId, () => modulosPermitidos(user.perfil));
+  return { accessToken, refreshToken, usuario: { ...toPublicUser(user), modulosPermitidos: [...modulosPermitidosSessao] } };
 }
 
 export async function marcarOffline(userId: string) {

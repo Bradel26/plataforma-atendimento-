@@ -3,6 +3,7 @@ import { Alerta, Badge, Button, Card, EmptyState, Field, Input, Select } from '.
 import { useConfirm } from '../../components/ui/ConfirmDialog';
 import { ApiError, api } from '../../lib/api';
 import { COR_STATUS, LABEL_PERFIL, LABEL_STATUS, type Filial, type Perfil, type Usuario } from '../../lib/types';
+import { PermissoesModuloPanel } from './PermissoesModuloPanel';
 
 const FORM_VAZIO = { nome: '', email: '', senha: '', perfil: 'AGENTE' as Perfil };
 
@@ -212,6 +213,7 @@ export function UsuariosTab() {
           </Button>
         </form>
       </Card>
+      <PermissoesModuloPanel />
     </div>
   );
 }

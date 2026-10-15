@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { asyncHandler } from '../../http/async-handler';
 import { requireAuth, requireRole } from '../../http/middleware/auth';
+import { requireModulo } from '../../lib/modulos';
 import { validateBody, validateQuery } from '../../http/middleware/validate';
 import { param } from '../../http/params';
 import {
@@ -28,7 +29,7 @@ export const credenciamentosRoutes = Router();
 
 credenciamentosRoutes.use(requireAuth);
 /** Processo operacional de credenciamento: AGENTE fora, mesmo corte de Oportunidades. */
-credenciamentosRoutes.use(requireRole('ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL', 'SUPORTE'));
+credenciamentosRoutes.use(requireModulo('esteira'));
 
 /** Periodo padrao: ultimos 30 dias. */
 function periodoDe(q: { desde?: Date; ate?: Date }) {

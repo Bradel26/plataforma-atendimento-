@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { useAuth } from '../../features/auth/AuthProvider';
 import { ROTULO_TIPO, montarPaleta, moverSelecao, type ItemDaPaleta } from './paleta';
+import { NAV } from './nav';
 
 /**
  * Paleta de comando com `Ctrl+K` (item 6.2 do plano em ANALISE-CRM.md) — o
@@ -35,7 +36,8 @@ export function PaletaDeComando() {
   const navigate = useNavigate();
   const { usuario } = useAuth();
 
-  const itens: ItemDaPaleta[] = usuario ? montarPaleta(usuario.perfil, termo, resultados) : [];
+  const modulos = usuario?.perfil === 'ADMIN' ? NAV.map((i) => i.rota.slice(1)) : (usuario?.modulosPermitidos ?? []);
+  const itens: ItemDaPaleta[] = usuario ? montarPaleta(modulos, termo, resultados) : [];
 
   const fechar = useCallback(() => {
     setAberta(false);

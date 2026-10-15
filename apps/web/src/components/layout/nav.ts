@@ -17,7 +17,6 @@ export type NavItem = {
   rota: string;
   label: string;
   icone: ComponentType<{ className?: string }>;
-  perfis: Perfil[];
   fase: number;
   /**
    * Rotas de registro que pertencem a este modulo — `/contatos/:id` e do CRM.
@@ -28,22 +27,20 @@ export type NavItem = {
    * reclamasse — e a URL digitada a mao e justamente o caminho que nao passa
    * pelo menu.
    *
-   * `perfis` na subrota **restringe**, nunca amplia: `/oportunidades/:id` e um
-   * subconjunto de quem ve o CRM, porque o AGENTE ve o CRM e nao ve
-   * oportunidade. Ampliar seria criar permissao nova por uma porta lateral, e
-   * `nav.test.ts` falha se alguem tentar.
+ * `perfis` na subrota restringe quem tem o modulo, para páginas de processo
+ * comercial que não devem ser expostas a todos os usuários do CRM.
    */
   subrotas?: SubRota[];
 };
 
 export type SubRota = {
   rota: string;
-  /** Ausente: herda os perfis do modulo. Presente: precisa ser subconjunto deles. */
+  /** Restrição complementar à permissão do módulo, quando a rota exigir. */
   perfis?: Perfil[];
 };
 
 /** Perfis efetivos de uma subrota: os dela, ou os do modulo. */
-export const perfisDaSubrota = (item: NavItem, sub: SubRota): Perfil[] => sub.perfis ?? item.perfis;
+export const perfisDaSubrota = (_item: NavItem, sub: SubRota): Perfil[] => sub.perfis ?? [];
 
 /**
  * A rota casa com o padrao?
@@ -85,8 +82,8 @@ export function subrotaDaRota(pathname: string): { item: NavItem; sub: SubRota }
 
 /** Menu lateral fixo — ordem definida no SCOPE.md (Fase 0). */
 export const NAV: NavItem[] = [
-  { rota: '/dashboards', label: 'Dashboards', icone: IconDashboards, perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR'], fase: 3 },
-  { rota: '/atendimento', label: 'Atendimento', icone: IconAtendimento, perfis: ['ADMIN', 'SUPERVISOR', 'AGENTE', 'COMERCIAL', 'SUPORTE'], fase: 1 },
+  { rota: '/dashboards', label: 'Dashboards', icone: IconDashboards, fase: 3 },
+  { rota: '/atendimento', label: 'Atendimento', icone: IconAtendimento, fase: 1 },
   // Esteira de Credenciamento logo depois do Atendimento: e a ordem de trabalho
   // da operacao TIM/Starlink (SUGESTOES.docx). So aparece para a organizacao
   // que tem funil ESTEIRA — ver o filtro em Sidebar.tsx.
@@ -94,22 +91,20 @@ export const NAV: NavItem[] = [
     rota: '/esteira',
     label: 'Esteira',
     icone: IconEsteira,
-    perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL', 'SUPORTE'],
     fase: 5,
   },
-  { rota: '/monitoramento', label: 'Monitoramento', icone: IconMonitoramento, perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR'], fase: 3 },
-  { rota: '/auditoria', label: 'Auditoria', icone: IconMonitoramento, perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR'], fase: 3 },
-  { rota: '/gestao', label: 'Área da Gestão', icone: IconGestao, perfis: ['ADMIN', 'SUPERVISOR'], fase: 3 },
+  { rota: '/monitoramento', label: 'Monitoramento', icone: IconMonitoramento, fase: 3 },
+  { rota: '/auditoria', label: 'Auditoria', icone: IconMonitoramento, fase: 3 },
+  { rota: '/gestao', label: 'Área da Gestão', icone: IconGestao, fase: 3 },
   // GESTOR e COMERCIAL entram aqui pelo mesmo motivo que entravam na aba Leads
   // do CRM antes dela mudar de casa: leitura/trabalho do proprio funil.
-  { rota: '/campanhas', label: 'Campanhas', icone: IconCampanhas, perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'], fase: 4 },
-  { rota: '/relatorios', label: 'Desempenho Operacional', icone: IconRelatorios, perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR'], fase: 3 },
+  { rota: '/campanhas', label: 'Campanhas', icone: IconCampanhas, fase: 4 },
+  { rota: '/relatorios', label: 'Desempenho Operacional', icone: IconRelatorios, fase: 3 },
   // Telefonia fora do menu: a empresa nao tem operadora/PABX. A tela e a API de voz continuam no codigo para quando houver.
   {
     rota: '/crm',
     label: 'CRM',
     icone: IconCrm,
-    perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL', 'AGENTE', 'SUPORTE'],
     fase: 1,
     // Cada registro principal com endereco proprio, para poder ser mandado por
     // mensagem e sobreviver a um F5. A tela e a mesma: `/crm` continua sendo a
@@ -124,14 +119,13 @@ export const NAV: NavItem[] = [
       { rota: '/oportunidades/:id', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'] },
     ],
   },
-  { rota: '/configuracoes', label: 'Configurações', icone: IconConfiguracoes, perfis: ['ADMIN'], fase: 0 },
+  { rota: '/configuracoes', label: 'Configurações', icone: IconConfiguracoes, fase: 0 },
   // Visivel a todo perfil, de proposito: problema de sistema afeta
   // qualquer pessoa que usa a plataforma, nao so quem administra.
   {
     rota: '/chamado-ti',
     label: 'Chamado de TI',
     icone: IconChamadoTi,
-    perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL', 'SUPORTE', 'AGENTE'],
     fase: 6,
   },
 ];

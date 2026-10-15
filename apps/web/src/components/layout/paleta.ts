@@ -1,4 +1,3 @@
-import type { Perfil } from '../../lib/types';
 import { NAV } from './nav';
 
 /**
@@ -41,9 +40,9 @@ export const ROTULO_TIPO: Record<ItemDaPaleta['tipo'], string> = {
  * perfil, e a paleta passaria a oferecer uma tela que responde 403. `nav.test.ts`
  * já guarda o `NAV`; a paleta herda essa garantia de graça.
  */
-export function comandosDeNavegacao(perfil: Perfil, termo: string): Comando[] {
+export function comandosDeNavegacao(modulosPermitidos: string[], termo: string): Comando[] {
   const t = termo.trim().toLowerCase();
-  return NAV.filter((item) => item.perfis.includes(perfil))
+  return NAV.filter((item) => modulosPermitidos.includes(item.rota.slice(1)))
     .filter((item) => t === '' || item.label.toLowerCase().includes(t))
     .map((item) => ({ tipo: 'NAVEGAR' as const, rota: item.rota, label: item.label }));
 }
@@ -58,12 +57,12 @@ export function comandosDeNavegacao(perfil: Perfil, termo: string): Comando[] {
  * porque a busca só responde a partir de duas letras.
  */
 export function montarPaleta(
-  perfil: Perfil,
+  modulosPermitidos: string[],
   termo: string,
   registros: Array<{ tipo: 'CONTATO' | 'CONTA' | 'OPORTUNIDADE' | 'PROTOCOLO'; rota: string; titulo: string; detalhe: string | null }>,
 ): ItemDaPaleta[] {
   return [
-    ...comandosDeNavegacao(perfil, termo),
+    ...comandosDeNavegacao(modulosPermitidos, termo),
     ...registros.map((r) => ({ tipo: r.tipo, rota: r.rota, label: r.titulo, detalhe: r.detalhe })),
   ];
 }

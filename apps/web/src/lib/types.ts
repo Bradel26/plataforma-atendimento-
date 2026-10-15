@@ -31,6 +31,7 @@ export type Usuario = {
   criadoEm: string;
   /** Filial desta pessoa (item 6.5). Nulo = sem filial atribuida. */
   filialId?: string | null;
+  modulosPermitidos?: string[];
 };
 
 export type EntidadeCampoCustomizado = 'CONTA' | 'LEAD' | 'OPORTUNIDADE';

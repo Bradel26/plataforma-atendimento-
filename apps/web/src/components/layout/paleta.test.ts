@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { comandosDeNavegacao, montarPaleta, moverSelecao } from './paleta';
+const MODULOS_ADMIN = ['dashboards', 'atendimento', 'esteira', 'monitoramento', 'auditoria', 'gestao', 'campanhas', 'relatorios', 'crm', 'configuracoes', 'chamado-ti'];
 
 /**
  * Paleta de comando (item 6.2).
@@ -8,9 +9,10 @@ import { comandosDeNavegacao, montarPaleta, moverSelecao } from './paleta';
  * abre — e a pessoa descobre com um 403 — ou nao oferecer a que ele abre.
  */
 
+const MODULOS = MODULOS_ADMIN.filter((m) => m !== 'configuracoes');
 describe('comandosDeNavegacao', () => {
   it('o agente não recebe comando para tela que não e dele', () => {
-    const rotas = comandosDeNavegacao('AGENTE', '').map((c) => c.rota);
+    const rotas = comandosDeNavegacao(MODULOS, '').map((c) => c.rota);
     expect(rotas).toContain('/atendimento');
     expect(rotas).toContain('/crm');
     // Gestao, campanhas e configuracoes recusam AGENTE por perfil.
@@ -22,7 +24,7 @@ describe('comandosDeNavegacao', () => {
   it('o comercial recebe o CRM e o atendimento', () => {
     // Vendedor com WhatsApp proprio atende o cliente direto no painel — por
     // isso COMERCIAL passou a ver /atendimento junto com /crm.
-    const rotas = comandosDeNavegacao('COMERCIAL', '').map((c) => c.rota);
+    const rotas = comandosDeNavegacao(MODULOS, '').map((c) => c.rota);
     expect(rotas).toContain('/crm');
     expect(rotas).toContain('/atendimento');
   });
@@ -30,18 +32,18 @@ describe('comandosDeNavegacao', () => {
   it('o admin recebe tudo', () => {
     // O contraponto dos dois acima: sem ele, os testes passariam com a lista
     // vazia — "nao ve o que nao e dele" tambem e satisfeito por nao ver nada.
-    const rotas = comandosDeNavegacao('ADMIN', '').map((c) => c.rota);
+    const rotas = comandosDeNavegacao(MODULOS, '').map((c) => c.rota);
     expect(rotas).toContain('/configuracoes');
     expect(rotas.length).toBeGreaterThan(8);
   });
 
   it('filtra pelo termo, sem diferenciar caixa', () => {
-    expect(comandosDeNavegacao('ADMIN', 'crm').map((c) => c.rota)).toEqual(['/crm']);
-    expect(comandosDeNavegacao('ADMIN', 'CRM').map((c) => c.rota)).toEqual(['/crm']);
+    expect(comandosDeNavegacao(MODULOS_ADMIN, 'crm').map((c) => c.rota)).toEqual(['/crm']);
+    expect(comandosDeNavegacao(MODULOS_ADMIN, 'CRM').map((c) => c.rota)).toEqual(['/crm']);
   });
 
   it('termo que não casa com tela nenhuma devolve vazio', () => {
-    expect(comandosDeNavegacao('ADMIN', 'zzzz')).toEqual([]);
+    expect(comandosDeNavegacao(MODULOS_ADMIN, 'zzzz')).toEqual([]);
   });
 });
 
@@ -58,19 +60,19 @@ describe('montarPaleta', () => {
      * Nao e estetica: comando e previsivel, registro e achado. "Ir para CRM"
      * acima de um contato chamado "CRM Teste" e o palpite certo.
      */
-    const itens = montarPaleta('ADMIN', 'crm', [{ ...registro, titulo: 'CRM Teste' }]);
+    const itens = montarPaleta(MODULOS_ADMIN, 'crm', [{ ...registro, titulo: 'CRM Teste' }]);
     expect(itens[0]?.tipo).toBe('NAVEGAR');
   });
 
   it('sem termo, só os comandos aparecem', () => {
     // A busca de registro so responde a partir de duas letras, entao com o campo
     // vazio nao existe registro para mostrar.
-    const itens = montarPaleta('ADMIN', '', []);
+    const itens = montarPaleta(MODULOS_ADMIN, '', []);
     expect(itens.every((i) => i.tipo === 'NAVEGAR')).toBe(true);
   });
 
   it('o registro conserva rota e detalhe', () => {
-    const itens = montarPaleta('ADMIN', 'acougue', [registro]);
+    const itens = montarPaleta(MODULOS, 'acougue', [registro]);
     const contato = itens.find((i) => i.tipo === 'CONTATO');
     expect(contato?.rota).toBe('/contatos/c1');
     expect(contato && 'detalhe' in contato ? contato.detalhe : null).toBe('Mercado Central');

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import { asyncHandler } from '../../http/async-handler';
 import { requireAuth, requireRole } from '../../http/middleware/auth';
+import { requireModulo } from '../../lib/modulos';
 import { validateBody, validateQuery } from '../../http/middleware/validate';
 import { param } from '../../http/params';
 import { notFound } from '../../lib/errors';
@@ -38,6 +39,7 @@ export const ticketsRoutes = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: limiteBytes, files: 1 } });
 
 ticketsRoutes.use(requireAuth);
+ticketsRoutes.use(requireModulo('chamado-ti'));
 
 ticketsRoutes.get(
   '/',

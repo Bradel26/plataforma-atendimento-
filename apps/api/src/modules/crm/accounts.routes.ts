@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../../http/async-handler';
 import { requireAuth, requireRole } from '../../http/middleware/auth';
+import { requireModulo } from '../../lib/modulos';
 import { exigirUsuarioDaOrganizacao, filtroDe, politicaContatos, politicaContas } from '../../lib/politicas';
 import { apenasVisivel } from '../../lib/visibilidade';
 import { MAXIMO_POR_REGISTRO, TAMANHO_MAXIMO, normalizarTags } from '../../lib/tags';
@@ -28,6 +29,7 @@ import {
 export const accountsRoutes = Router();
 
 accountsRoutes.use(requireAuth);
+accountsRoutes.use(requireModulo('crm'));
 
 async function validarConsultorResponsavel(usuarioId?: string | null) {
   if (!usuarioId) return;

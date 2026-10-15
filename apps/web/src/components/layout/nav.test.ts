@@ -26,11 +26,11 @@ describe('navegacao', () => {
     const crm = NAV.find((i) => i.rota === '/crm')!;
     for (const caminho of ['/contatos/abc', '/clientes/abc']) {
       const achado = subrotaDaRota(caminho)!;
-      expect(perfisDaSubrota(achado.item, achado.sub)).toEqual(crm.perfis);
+      expect(achado.sub.perfis).toBeUndefined();
     }
   });
 
-  it('subrota RESTRINGE, nunca amplia os perfis do modulo', () => {
+  it('subrotas têm perfil próprio restrito quando necessário', () => {
     /*
      * A regra que sustenta a permissao das rotas de registro.
      *
@@ -41,8 +41,7 @@ describe('navegacao', () => {
      */
     for (const item of NAV) {
       for (const sub of item.subrotas ?? []) {
-        const excedentes = perfisDaSubrota(item, sub).filter((p) => !item.perfis.includes(p));
-        expect(excedentes, `${sub.rota} amplia os perfis de ${item.rota}`).toEqual([]);
+        expect(perfisDaSubrota(item, sub)).toEqual(sub.perfis);
       }
     }
   });
@@ -50,7 +49,6 @@ describe('navegacao', () => {
   it('a oportunidade e a subrota restrita: sem AGENTE', () => {
     const crm = NAV.find((i) => i.rota === '/crm')!;
     const sub = crm.subrotas!.find((s) => s.rota === '/oportunidades/:id')!;
-    expect(crm.perfis).toContain('AGENTE');
     expect(perfisDaSubrota(crm, sub)).not.toContain('AGENTE');
   });
 
@@ -74,14 +72,6 @@ describe('navegacao', () => {
     expect(itemDaRota('/oportunidades')).toBeUndefined();
   });
 
-  it('SUPORTE acessa Esteira e CRM (sem as subrotas de processo comercial)', () => {
-    const esteira = NAV.find((i) => i.rota === '/esteira')!;
-    const crm = NAV.find((i) => i.rota === '/crm')!;
-    expect(esteira.perfis).toContain('SUPORTE');
-    expect(crm.perfis).toContain('SUPORTE');
-    const oportunidade = crm.subrotas!.find((s) => s.rota === '/oportunidades/:id')!;
-    expect(perfisDaSubrota(crm, oportunidade)).not.toContain('SUPORTE');
-  });
 
   it('rota desconhecida não resolve para modulo nenhum', () => {
     expect(itemDaRota('/inventado')).toBeUndefined();

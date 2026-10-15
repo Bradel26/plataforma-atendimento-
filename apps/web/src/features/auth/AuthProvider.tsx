@@ -9,6 +9,7 @@ type AuthContextValue = {
   sair: () => Promise<void>;
   alterarStatus: (status: AgentStatus) => Promise<void>;
   temPerfil: (...perfis: Perfil[]) => boolean;
+  temModulo: (modulo: string) => boolean;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -67,6 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     (...perfis: Perfil[]) => (usuario ? perfis.includes(usuario.perfil) : false),
     [usuario],
   );
+  const temModulo = useCallback((modulo: string) => Boolean(usuario && (usuario.perfil === 'ADMIN' || (modulo !== 'configuracoes' && usuario.modulosPermitidos?.includes(modulo)))), [usuario]);
 
   /*
    * Heartbeat: enquanto a aba fica visivel, avisa o backend "ainda estou aqui"
@@ -95,8 +97,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [usuario]);
 
   const valor = useMemo(
-    () => ({ usuario, carregando, entrar, sair, alterarStatus, temPerfil }),
-    [usuario, carregando, entrar, sair, alterarStatus, temPerfil],
+    () => ({ usuario, carregando, entrar, sair, alterarStatus, temPerfil, temModulo }),
+    [usuario, carregando, entrar, sair, alterarStatus, temPerfil, temModulo],
   );
 
   return <AuthContext.Provider value={valor}>{children}</AuthContext.Provider>;

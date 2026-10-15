@@ -50,7 +50,7 @@ function RotasPublicas() {
 }
 
 function AppRoutes() {
-  const { usuario, carregando, temPerfil } = useAuth();
+  const { usuario, carregando, temPerfil, temModulo } = useAuth();
 
   if (carregando) {
     return (
@@ -68,7 +68,7 @@ function AppRoutes() {
     );
   }
 
-  const permitidos = NAV.filter((item) => temPerfil(...item.perfis));
+  const permitidos = NAV.filter((item) => temModulo(item.rota.slice(1)));
   const inicial = permitidos[0]?.rota ?? '/atendimento';
 
   return (

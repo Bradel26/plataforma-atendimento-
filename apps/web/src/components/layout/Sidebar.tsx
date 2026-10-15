@@ -21,7 +21,7 @@ const CHAVE_COLAPSO = 'plataforma:sidebar-colapsada';
  *   de la, porque o botao que abre mora fora deste componente).
  */
 export function Sidebar({ aberta, aoFechar }: { aberta: boolean; aoFechar: () => void }) {
-  const { temPerfil } = useAuth();
+  const { temPerfil, temModulo } = useAuth();
   const { branding } = useBranding();
   const { pathname } = useLocation();
   const [colapsada, setColapsada] = useState(() => {
@@ -42,7 +42,7 @@ export function Sidebar({ aberta, aoFechar }: { aberta: boolean; aoFechar: () =>
       .catch(() => setTemEsteira(false));
   }, [temPerfil]);
 
-  const itens = NAV.filter((item) => temPerfil(...item.perfis)).filter(
+  const itens = NAV.filter((item) => temModulo(item.rota.slice(1))).filter(
     (item) => item.rota !== '/esteira' || temEsteira,
   );
   /**

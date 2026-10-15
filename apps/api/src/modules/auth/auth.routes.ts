@@ -13,6 +13,8 @@ import {
   revokeRefreshToken,
 } from '../../lib/tokens';
 import { toPublicUser } from '../users/users.serializer';
+import { modulosPermitidos } from '../../lib/modulos';
+import { comOrganizacao } from '../../lib/tenant';
 import { alterarSenhaInicialSchema, loginSchema } from './auth.schemas';
 import { alterarSenhaInicial, login, marcarOffline, sessionForUserId } from './auth.service';
 
@@ -97,7 +99,8 @@ authRoutes.get(
   asyncHandler(async (req, res) => {
     const user = await prisma.user.findUnique({ where: { id: req.user!.sub } });
     if (!user) throw notFound('Usuário não encontrado');
-    res.json({ usuario: toPublicUser(user) });
+    const modulosPermitidosSessao = await comOrganizacao(user.organizacaoId, () => modulosPermitidos(user.perfil));
+    res.json({ usuario: { ...toPublicUser(user), modulosPermitidos: [...modulosPermitidosSessao] } });
   }),
 );
 

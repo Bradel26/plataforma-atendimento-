@@ -51,6 +51,7 @@ import { healthRoutes } from './modules/health/health.routes';
 import { queuesRoutes } from './modules/queues/queues.routes';
 import { filiaisRoutes } from './modules/filiais/filiais.routes';
 import { usersRoutes } from './modules/users/users.routes';
+import { permissoesModuloRoutes } from './modules/permissoes/permissoesModulo.routes';
 import { ticketsRoutes } from './modules/tickets/tickets.routes';
 import { webchatRoutes } from './modules/webchat/webchat.routes';
 import { fluxosRoutes } from './modules/fluxos/fluxos.routes';
@@ -140,6 +141,7 @@ export function createApp() {
   app.use('/api/health', healthRoutes);
   app.use('/api/auth', authRoutes);
   app.use('/api/usuarios', usersRoutes);
+  app.use('/api/permissoes-modulo', permissoesModuloRoutes);
   app.use('/api/filas', queuesRoutes);
   app.use('/api/filiais', filiaisRoutes);
   app.use('/api/branding', brandingRoutes);

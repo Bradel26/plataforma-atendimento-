@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../../http/async-handler';
 import { requireAuth, requireRole } from '../../http/middleware/auth';
+import { requireModulo } from '../../lib/modulos';
 import { param } from '../../http/params';
 import { validateBody, validateQuery } from '../../http/middleware/validate';
 import { badRequest, notFound } from '../../lib/errors';
@@ -30,6 +31,7 @@ export const contactsRoutes = Router();
 const cacheFotosContato = new Map<string, { expiraEm: number; busca: Promise<FotoPerfil | null> }>();
 
 contactsRoutes.use(requireAuth);
+contactsRoutes.use(requireModulo('crm'));
 
 const listarSchema = z.object({
   /*
