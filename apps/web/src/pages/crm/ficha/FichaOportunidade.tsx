@@ -38,7 +38,7 @@ const data = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('pt
 const pct = (v: number | null | undefined) =>
   v === null || v === undefined ? '—' : `${(v * 100).toFixed(1)}%`;
 
-const TOM_STATUS = { ABERTA: 'marca', GANHA: 'sucesso', PERDIDA: 'alerta' } as const;
+const TOM_STATUS = { ABERTA: 'marca', GANHA: 'sucesso', PERDIDA: 'alerta', DESCARTADA: 'neutro' } as const;
 
 export function FichaOportunidade({ oportunidadeId }: { oportunidadeId: string }) {
   const [oportunidade, setOportunidade] = useState<Oportunidade | null>(null);
@@ -312,7 +312,7 @@ export function FichaOportunidade({ oportunidadeId }: { oportunidadeId: string }
             </Button>
           </div>
         )}
-        {o.status === 'PERDIDA' && (
+        {(o.status === 'PERDIDA' || o.status === 'DESCARTADA') && (
           <div className="mt-4">
             <Button variante="neutro" onClick={() => void reabrir()}>Reabrir oportunidade</Button>
           </div>

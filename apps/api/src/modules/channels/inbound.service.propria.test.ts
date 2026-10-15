@@ -10,6 +10,7 @@ const db = vi.hoisted(() => ({
   conversationFindMany: vi.fn().mockResolvedValue([]),
   conversationCreate: vi.fn(),
   conversationUpdate: vi.fn(),
+  conversationUpdateMany: vi.fn().mockResolvedValue({ count: 0 }),
   contactFindFirst: vi.fn(),
   contactCreate: vi.fn(),
   contactFindUniqueOrThrow: vi.fn(),
@@ -19,7 +20,13 @@ const db = vi.hoisted(() => ({
 vi.mock('../../lib/prisma', () => ({
   prisma: {
     message: { findUnique: db.messageFindUnique, create: db.messageCreate },
-    conversation: { findFirst: db.conversationFindFirst, findMany: db.conversationFindMany, create: db.conversationCreate, update: db.conversationUpdate },
+    conversation: {
+      findFirst: db.conversationFindFirst,
+      findMany: db.conversationFindMany,
+      create: db.conversationCreate,
+      update: db.conversationUpdate,
+      updateMany: db.conversationUpdateMany,
+    },
     contact: { findFirst: db.contactFindFirst, create: db.contactCreate, findUniqueOrThrow: db.contactFindUniqueOrThrow },
     queue: { findFirst: db.queueFindFirst },
     user: { findUnique: vi.fn().mockResolvedValue({ nome: 'Dono' }) },
@@ -85,7 +92,7 @@ describe('registrarMensagemPropria', () => {
 
   it('sem conversa aberta: cria conversa ATIVA na linha, atribuida ao dono, com protocolo', async () => {
     configDoDestino.mockResolvedValue({ id: 'cfg-1', donoId: 'dono-1', filaId: null, espelharCelular: true });
-    db.conversationCreate.mockResolvedValue({ id: 'c-1', status: 'EM_ATENDIMENTO' });
+    db.conversationCreate.mockResolvedValue({ id: 'c-1', status: 'AGUARDANDO_CLIENTE' });
 
     await rodar();
 
@@ -95,7 +102,9 @@ describe('registrarMensagemPropria', () => {
       canalConfigId: 'cfg-1',
       agenteId: 'dono-1',
       atendenteInicialId: 'dono-1',
-      status: 'EM_ATENDIMENTO',
+      // O dono falou primeiro -- ja nasce aguardando o cliente, nao "em
+      // atendimento" (que implicaria uma troca ja rolando).
+      status: 'AGUARDANDO_CLIENTE',
     });
     expect(db.messageCreate.mock.calls[0]?.[0]?.data).toMatchObject({
       autor: 'AGENTE',
@@ -121,5 +130,66 @@ describe('registrarMensagemPropria', () => {
     expect(entregarParaIa).not.toHaveBeenCalled();
     expect(responderAutomaticamente).not.toHaveBeenCalled();
     expect(hub.notificarConversaAtualizada).toHaveBeenCalledTimes(1);
+  });
+
+  it('mensagem propria em conversa ja ATRIBUIDO ou EM_ATENDIMENTO poe em AGUARDANDO_CLIENTE', async () => {
+    configDoDestino.mockResolvedValue({ id: 'cfg-1', donoId: 'dono-1', filaId: null, espelharCelular: true });
+    db.conversationFindFirst
+      .mockResolvedValueOnce({ contatoId: 'contato-1' })
+      .mockResolvedValueOnce({ id: 'c-9', status: 'ATRIBUIDO', canalConfigId: 'cfg-1' });
+    db.contactFindUniqueOrThrow.mockResolvedValue({ id: 'contato-1' });
+
+    await rodar();
+
+    // Compare-and-set atomico, nao o status lido antes de `baixarAnexo` (que
+    // pode levar segundos) -- mesma garantia de `assumirConversa` e dos outros
+    // dois pontos de entrada (achado da revisao final).
+    expect(db.conversationUpdateMany).toHaveBeenCalledWith({
+      where: { id: 'c-9', status: { in: ['ATRIBUIDO', 'EM_ATENDIMENTO'] } },
+      data: { status: 'AGUARDANDO_CLIENTE' },
+    });
+    expect(db.conversationUpdate.mock.calls[0]?.[0]?.data).not.toHaveProperty('status');
+  });
+
+  it('mensagem propria em conversa EM_ESPERA nao mexe no status (sem agente assumido)', async () => {
+    configDoDestino.mockResolvedValue({ id: 'cfg-1', donoId: null, filaId: 'fila-1', espelharCelular: true });
+    db.conversationFindFirst
+      .mockResolvedValueOnce({ contatoId: 'contato-1' })
+      .mockResolvedValueOnce({ id: 'c-9', status: 'EM_ESPERA', canalConfigId: 'cfg-1' });
+    db.contactFindUniqueOrThrow.mockResolvedValue({ id: 'contato-1' });
+
+    await rodar();
+
+    // Sem ATRIBUIDO/EM_ATENDIMENTO no banco, o compare-and-set nao casa -- a
+    // tentativa e incondicional, o efeito e que nunca existe.
+    expect(db.conversationUpdateMany).toHaveBeenCalledWith({
+      where: { id: 'c-9', status: { in: ['ATRIBUIDO', 'EM_ATENDIMENTO'] } },
+      data: { status: 'AGUARDANDO_CLIENTE' },
+    });
+    expect(db.conversationUpdate.mock.calls[0]?.[0]?.data).not.toHaveProperty('status');
+  });
+
+  it('corrida: conversa transferida para fila (EM_ESPERA, sem agente) durante o download do anexo nao e reaberta como AGUARDANDO_CLIENTE', async () => {
+    // O status lido no inicio da funcao (ATRIBUIDO) fica desatualizado -- a
+    // conversa foi transferida para fila por um supervisor enquanto o anexo
+    // baixava. O compare-and-set so acha linha se o banco AINDA tiver
+    // ATRIBUIDO/EM_ATENDIMENTO; aqui simulamos que ja nao tem (count: 0).
+    configDoDestino.mockResolvedValue({ id: 'cfg-1', donoId: 'dono-1', filaId: null, espelharCelular: true });
+    db.conversationFindFirst
+      .mockResolvedValueOnce({ contatoId: 'contato-1' })
+      .mockResolvedValueOnce({ id: 'c-9', status: 'ATRIBUIDO', canalConfigId: 'cfg-1' });
+    db.contactFindUniqueOrThrow.mockResolvedValue({ id: 'contato-1' });
+    db.conversationUpdateMany.mockResolvedValueOnce({ count: 0 });
+
+    await rodar();
+
+    // A tentativa foi feita (prova que o padrao atomico roda sempre), mas
+    // como nao casou (count: 0), o update principal continua sem a chave
+    // status -- nao reabre/sobrescreve o que a transferencia decidiu.
+    expect(db.conversationUpdateMany).toHaveBeenCalledWith({
+      where: { id: 'c-9', status: { in: ['ATRIBUIDO', 'EM_ATENDIMENTO'] } },
+      data: { status: 'AGUARDANDO_CLIENTE' },
+    });
+    expect(db.conversationUpdate.mock.calls[0]?.[0]?.data).not.toHaveProperty('status');
   });
 });

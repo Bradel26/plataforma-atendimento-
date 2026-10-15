@@ -100,6 +100,13 @@ describe('PainelChat — ações da conversa', () => {
     expect(html).not.toContain('Encerrar');
     expect(html).not.toContain('Aceitar');
   });
+
+  it('conversa AGUARDANDO_CLIENTE mostra o rótulo "Aguardando cliente"', () => {
+    const html = renderizar({
+      conversa: criarConversaDetalheMock({ status: 'AGUARDANDO_CLIENTE' }),
+    });
+    expect(html).toContain('Aguardando cliente');
+  });
 });
 
 describe('PainelChat — abas do rodape (Task 5)', () => {

@@ -4,6 +4,7 @@ import { indicadoresVoz } from '../voice/voice.service';
 import { organizacaoAtual } from '../../lib/tenant';
 import { filtroDe, politicaConversas } from '../../lib/politicas';
 import { notFound } from '../../lib/errors';
+import { EM_ATENDIMENTO_ATIVO } from '../conversations/conversations.estados';
 
 const ABERTOS_TICKET = ['ABERTO', 'EM_ANDAMENTO', 'AGUARDANDO_CLIENTE'] as const;
 
@@ -37,7 +38,7 @@ export async function conversasAguardandoResposta() {
       AND: [
         await filtroDe(politicaConversas),
         {
-          status: { in: ['ATRIBUIDO', 'EM_ATENDIMENTO'] },
+          status: { in: [...EM_ATENDIMENTO_ATIVO] },
           arquivada: false,
           agenteId: { not: null },
           mensagens: { some: { autor: 'CLIENTE', interno: false } },
@@ -103,6 +104,22 @@ export async function mediaSegundos(
 export type Periodo = { desde: Date; ate: Date };
 
 /**
+ * Card "Em atendimento" do dashboard: soma ATRIBUIDO + AGUARDANDO_CLIENTE,
+ * nao so um dos dois. AGUARDANDO_CLIENTE e tao "ativo" quanto EM_ATENDIMENTO
+ * do ponto de vista de carga do agente -- so muda quem fala a seguir. Sem
+ * isto, toda conversa que vira AGUARDANDO_CLIENTE some do card assim que o
+ * agente responde, subnotificando quantas conversas estao de fato em curso.
+ */
+export function resumoConversasPorStatus(conversas: Record<string, number>) {
+  return {
+    emEspera: conversas.EM_ESPERA ?? 0,
+    atribuidas: conversas.ATRIBUIDO ?? 0,
+    emAtendimento: (conversas.EM_ATENDIMENTO ?? 0) + (conversas.AGUARDANDO_CLIENTE ?? 0),
+    finalizadas: conversas.FINALIZADO ?? 0,
+  };
+}
+
+/**
  * Indicadores do dashboard. TME = tempo medio de espera (criacao -> atribuicao);
  * TMA = tempo medio de atendimento (atribuicao -> finalizacao).
  */
@@ -158,10 +175,7 @@ export async function indicadores(periodo: Periodo) {
   return {
     periodo,
     conversas: {
-      emEspera: conversas.EM_ESPERA ?? 0,
-      atribuidas: conversas.ATRIBUIDO ?? 0,
-      emAtendimento: conversas.EM_ATENDIMENTO ?? 0,
-      finalizadas: conversas.FINALIZADO ?? 0,
+      ...resumoConversasPorStatus(conversas),
       novasNoPeriodo: novasConversas,
       mensagensNoPeriodo: mensagens,
       porCanal: contar(porCanal, 'canal'),
@@ -237,7 +251,7 @@ export function montarEquipes(filas: FilaComMembros[], contagens: ContagemFila[]
     contagens.filter((c) => c.filaId === id && c.status === 'EM_ESPERA').reduce((soma, c) => soma + c._count._all, 0);
   const atendimentoDaFila = (id: string) =>
     contagens
-      .filter((c) => c.filaId === id && (c.status === 'ATRIBUIDO' || c.status === 'EM_ATENDIMENTO'))
+      .filter((c) => c.filaId === id && (EM_ATENDIMENTO_ATIVO as string[]).includes(c.status))
       .reduce((soma, c) => soma + c._count._all, 0);
   const chats = new Map(chatsPorAgente.map((c) => [c.agenteId, c._count._all]));
   const filasDoUsuario = new Map<string, string[]>();
@@ -292,7 +306,7 @@ export async function monitorEquipes(filaIds: string[]) {
     }),
     prisma.conversation.groupBy({
       by: ['agenteId'],
-      where: { agenteId: { in: usuarioIds }, status: { in: ['ATRIBUIDO', 'EM_ATENDIMENTO'] }, arquivada: false },
+      where: { agenteId: { in: usuarioIds }, status: { in: [...EM_ATENDIMENTO_ATIVO] }, arquivada: false },
       _count: { _all: true },
     }),
   ]);
@@ -391,7 +405,7 @@ export async function monitoramentoAgentes() {
       filas: { include: { fila: { select: { id: true, nome: true } } } },
       _count: {
         select: {
-          conversas: { where: { status: { in: ['ATRIBUIDO', 'EM_ATENDIMENTO'] } } },
+          conversas: { where: { status: { in: [...EM_ATENDIMENTO_ATIVO] } } },
           protocolos: { where: { status: { in: ['ABERTO', 'EM_ANDAMENTO', 'AGUARDANDO_CLIENTE'] } } },
         },
       },
@@ -410,7 +424,7 @@ export async function monitoramentoAgentes() {
      * interna nao conta — o cliente nao a viu, entao nao respondeu nada.
      */
     prisma.conversation.findMany({
-      where: { agenteId: { in: ids }, status: { in: ['ATRIBUIDO', 'EM_ATENDIMENTO'] } },
+      where: { agenteId: { in: ids }, status: { in: [...EM_ATENDIMENTO_ATIVO] } },
       select: {
         agenteId: true,
         atribuidoEm: true,

@@ -27,7 +27,7 @@ vi.mock('../../../lib/prisma', () => ({
   prisma: {
     message: { findUnique: db.messageFindUnique, create: db.messageCreate },
     contact: { findFirst: db.contactFindFirst, create: db.contactCreate, findUniqueOrThrow: vi.fn() },
-    conversation: { findFirst: db.conversationFindFirst, create: db.conversationCreate, update: db.conversationUpdate },
+    conversation: { findFirst: db.conversationFindFirst, create: db.conversationCreate, update: db.conversationUpdate, updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     queue: { findFirst: db.queueFindFirst },
     user: { findUnique: vi.fn().mockResolvedValue({ nome: 'Dono' }) },
     channelConfig: { findFirst: db.channelConfigFindFirst, update: db.channelConfigUpdate },

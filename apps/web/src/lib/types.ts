@@ -125,7 +125,7 @@ export const COR_STATUS: Record<AgentStatus, string> = {
 // Fase 1 — Atendimento
 // --------------------------------------------------------------------------
 
-export type ConversaStatus = 'EM_ESPERA' | 'ATRIBUIDO' | 'EM_ATENDIMENTO' | 'FINALIZADO';
+export type ConversaStatus = 'EM_ESPERA' | 'ATRIBUIDO' | 'EM_ATENDIMENTO' | 'AGUARDANDO_CLIENTE' | 'FINALIZADO';
 
 export type AutorMensagem = 'CLIENTE' | 'AGENTE' | 'SISTEMA' | 'BOT';
 export type EventoConversa = 'ACEITE' | 'TRANSFERENCIA' | 'ENCERRAMENTO';
@@ -267,6 +267,7 @@ export const LABEL_CONVERSA_STATUS: Record<ConversaStatus, string> = {
   EM_ESPERA: 'Em espera',
   ATRIBUIDO: 'Atribuído',
   EM_ATENDIMENTO: 'Em atendimento',
+  AGUARDANDO_CLIENTE: 'Aguardando cliente',
   FINALIZADO: 'Finalizado',
 };
 
@@ -274,6 +275,7 @@ export const ABAS_ATENDIMENTO: ConversaStatus[] = [
   'EM_ESPERA',
   'ATRIBUIDO',
   'EM_ATENDIMENTO',
+  'AGUARDANDO_CLIENTE',
   'FINALIZADO',
 ];
 
@@ -290,7 +292,7 @@ export type MotivoPerda =
   | 'SEM_BUDGET'
   | 'SEM_RESPOSTA'
   | 'OUTRO';
-export type OportunidadeStatus = 'ABERTA' | 'GANHA' | 'PERDIDA';
+export type OportunidadeStatus = 'ABERTA' | 'GANHA' | 'PERDIDA' | 'DESCARTADA';
 
 type Referencia = { id: string; nome: string };
 

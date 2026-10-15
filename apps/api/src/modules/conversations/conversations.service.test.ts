@@ -8,6 +8,7 @@ import {
   assumirConversa,
   contarPorVisao,
   desarquivarConversa,
+  enviarArquivo,
   enviarMensagem,
   finalizarConversa,
   iniciarConversa,
@@ -813,6 +814,124 @@ describe('enviarMensagem — nota interna', () => {
   });
 });
 
+/*
+ * AGUARDANDO_CLIENTE — o agente respondeu, agora e a vez do cliente. Nota
+ * interna nunca conta como "falar com o cliente" (ver conversations.estados.ts).
+ */
+describe('enviarMensagem/enviarArquivo — transicao de status', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function criarConversaMock(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'conv-1',
+      canal: 'WHATSAPP' as const,
+      status: 'ATRIBUIDO' as const,
+      enderecoExterno: '5511999998888',
+      canalConfigId: 'cfg-1',
+      filaId: null,
+      agenteId: 'user-1',
+      ...overrides,
+    };
+  }
+
+  function criarMensagemMock(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'msg-1',
+      conversaId: 'conv-1',
+      autor: 'AGENTE' as const,
+      autorId: 'user-1',
+      conteudo: '',
+      idExterno: null,
+      interno: false,
+      criadoEm: new Date(),
+      ...overrides,
+    };
+  }
+
+  it('enviarMensagem poe a conversa em AGUARDANDO_CLIENTE quando o agente manda mensagem real', async () => {
+    const conversa = criarConversaMock();
+    conversationFindFirst.mockResolvedValue(conversa);
+    exigeEnvioExterno.mockReturnValue(true);
+    enviarParaCanal.mockResolvedValue({ idExterno: 'ext-1' });
+    messageCreate.mockResolvedValue(criarMensagemMock({ conteudo: 'oi', interno: false }));
+
+    await comOrganizacao('org-1', () => enviarMensagem(SOLICITANTE, conversa.id, 'oi', false), {
+      id: 'user-1',
+      perfil: 'ADMIN',
+    });
+
+    expect(conversationUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'AGUARDANDO_CLIENTE' }) }),
+    );
+  });
+
+  it('enviarMensagem NAO poe em AGUARDANDO_CLIENTE quando a mensagem e nota interna', async () => {
+    const conversa = criarConversaMock({ status: 'EM_ATENDIMENTO' });
+    conversationFindFirst.mockResolvedValue(conversa);
+    exigeEnvioExterno.mockReturnValue(true);
+    messageCreate.mockResolvedValue(criarMensagemMock({ conteudo: 'nota', interno: true }));
+
+    await comOrganizacao('org-1', () => enviarMensagem(SOLICITANTE, conversa.id, 'nota', true), {
+      id: 'user-1',
+      perfil: 'ADMIN',
+    });
+
+    // Omite a chave em vez de regravar o status lido antes do envio: uma nota
+    // interna nao deve desfazer uma mudanca de status que aconteceu nesse
+    // intervalo (achado da revisao final).
+    expect(conversationUpdate.mock.calls[0]?.[0]?.data).not.toHaveProperty('status');
+  });
+
+  it('enviarArquivo poe a conversa em AGUARDANDO_CLIENTE para envio real', async () => {
+    const conversa = criarConversaMock();
+    conversationFindFirst.mockResolvedValue(conversa);
+    exigeEnvioExterno.mockReturnValue(true);
+    enviarArquivoParaCanal.mockResolvedValue({ idExterno: 'ext-2' });
+    messageCreate.mockResolvedValue(criarMensagemMock({ conteudo: 'arquivo.pdf', interno: false }));
+
+    await comOrganizacao(
+      'org-1',
+      () => enviarArquivo(SOLICITANTE, conversa.id, { buffer: Buffer.from('x'), nome: 'arquivo.pdf', tipo: 'application/pdf' }, undefined, false),
+      { id: 'user-1', perfil: 'ADMIN' },
+    );
+
+    expect(conversationUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'AGUARDANDO_CLIENTE' }) }),
+    );
+  });
+
+  it('enviarArquivo preserva o status em nota interna', async () => {
+    const conversa = criarConversaMock({ status: 'EM_ATENDIMENTO' });
+    conversationFindFirst.mockResolvedValue(conversa);
+    exigeEnvioExterno.mockReturnValue(true);
+    messageCreate.mockResolvedValue(criarMensagemMock({ conteudo: 'arquivo.pdf', interno: true }));
+
+    await comOrganizacao(
+      'org-1',
+      () => enviarArquivo(SOLICITANTE, conversa.id, { buffer: Buffer.from('x'), nome: 'arquivo.pdf', tipo: 'application/pdf' }, undefined, true),
+      { id: 'user-1', perfil: 'ADMIN' },
+    );
+
+    expect(conversationUpdate.mock.calls[0]?.[0]?.data).not.toHaveProperty('status');
+  });
+
+  it('nota interna poe EM_ESPERA para ATRIBUIDO (mudanca real) -- a chave aparece quando o status de fato muda', async () => {
+    const conversa = criarConversaMock({ status: 'EM_ESPERA' });
+    conversationFindFirst.mockResolvedValue(conversa);
+    exigeEnvioExterno.mockReturnValue(true);
+    messageCreate.mockResolvedValue(criarMensagemMock({ conteudo: 'nota', interno: true }));
+
+    await comOrganizacao('org-1', () => enviarMensagem(SOLICITANTE, conversa.id, 'nota', true), {
+      id: 'user-1',
+      perfil: 'ADMIN',
+    });
+
+    expect(conversationUpdate.mock.calls[0]?.[0]?.data).toMatchObject({ status: 'ATRIBUIDO' });
+  });
+});
+
 describe('assumirConversa — aceite atomico (primeiro que pega)', () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -848,6 +967,14 @@ describe('assumirConversa — aceite atomico (primeiro que pega)', () => {
     await comoAgente(() => assumirConversa(SOLICITANTE, 'c-1'));
 
     expect(conversationUpdateMany).not.toHaveBeenCalled();
+    expect(messageCreate).not.toHaveBeenCalled();
+  });
+
+  it('rejeita assumir uma conversa AGUARDANDO_CLIENTE ja atribuida a outro agente', async () => {
+    conversationFindFirst.mockResolvedValueOnce({ id: 'c-1', status: 'AGUARDANDO_CLIENTE', agenteId: 'outro-agente', atendenteInicialId: 'outro-agente', filaId: null });
+    conversationUpdateMany.mockResolvedValueOnce({ count: 0 });
+
+    await expect(comoAgente(() => assumirConversa(SOLICITANTE, 'c-1'))).rejects.toMatchObject({ status: 409 });
     expect(messageCreate).not.toHaveBeenCalled();
   });
 });

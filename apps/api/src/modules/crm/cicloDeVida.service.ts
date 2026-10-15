@@ -46,19 +46,24 @@ export async function fatosDosContatos(filtro: Prisma.ContactWhereInput) {
   const contaDoContato = new Map(contatos.map((c) => [c.id, c.contaId]));
   const contas = [...new Set(contatos.map((c) => c.contaId).filter((x): x is string => x !== null))];
 
-  const porConta = async (status: 'GANHA' | 'ABERTA' | 'PERDIDA') =>
+  const porConta = async (status: 'GANHA' | 'ABERTA' | ('PERDIDA' | 'DESCARTADA')[]) =>
     contas.length === 0
       ? []
       : prisma.opportunity.groupBy({
           by: ['contaId'],
-          where: { contaId: { in: contas }, status },
+          where: { contaId: { in: contas }, status: Array.isArray(status) ? { in: status } : status },
           _count: { _all: true },
         });
 
   const [ganhas, abertas, perdidas, leads, qualificados, conversas] = await Promise.all([
     porConta('GANHA'),
     porConta('ABERTA'),
-    porConta('PERDIDA'),
+    // Descartada conta como perdida para o CICLO DE VIDA do contato: do ponto
+    // de vista dele, "a empresa desistiu" e "o cliente disse nao" chegam no
+    // mesmo lugar (sem negociacao aberta, ja houve uma tentativa). A distincao
+    // entre perdida/descartada importa para METRICA DE CONVERSAO
+    // (comercial.service.ts, vendedores.ts), nao para este degrau.
+    porConta(['PERDIDA', 'DESCARTADA']),
     prisma.lead.groupBy({ by: ['contatoId'], _count: { _all: true } }),
     prisma.lead.groupBy({
       by: ['contatoId'],

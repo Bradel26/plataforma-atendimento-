@@ -18,6 +18,7 @@ const {
   conversationFindFirst,
   conversationCreate,
   conversationUpdate,
+  conversationUpdateMany,
   messageCreate,
   configDoDestino,
 } = vi.hoisted(() => ({
@@ -26,6 +27,7 @@ const {
   conversationFindFirst: vi.fn(),
   conversationCreate: vi.fn(),
   conversationUpdate: vi.fn(),
+  conversationUpdateMany: vi.fn().mockResolvedValue({ count: 0 }),
   messageCreate: vi.fn(),
   configDoDestino: vi.fn(),
 }));
@@ -34,7 +36,13 @@ vi.mock('../../lib/prisma', () => ({
   prisma: {
     message: { findUnique: messageFindUnique, create: messageCreate },
     contact: { findFirst: contactFindFirst, findUniqueOrThrow: vi.fn(), create: vi.fn() },
-    conversation: { findFirst: conversationFindFirst, findMany: vi.fn().mockResolvedValue([]), create: conversationCreate, update: conversationUpdate },
+    conversation: {
+      findFirst: conversationFindFirst,
+      findMany: vi.fn().mockResolvedValue([]),
+      create: conversationCreate,
+      update: conversationUpdate,
+      updateMany: conversationUpdateMany,
+    },
     queue: { findFirst: vi.fn() },
     user: { findUnique: vi.fn().mockResolvedValue({ nome: 'Dono' }) },
   },
@@ -178,6 +186,86 @@ describe('registrarMensagemEntrante — conversa nao atravessa linha (achado cri
     expect(conversationUpdate.mock.calls[0]?.[0]?.where).toEqual({ id: 'conv-existente' });
     expect(notificarConversaAtualizada).toHaveBeenCalledTimes(1);
     expect(notificarConversaNova).not.toHaveBeenCalled();
+  });
+
+  it('cliente escrevendo numa conversa AGUARDANDO_CLIENTE devolve o status para EM_ATENDIMENTO', async () => {
+    configDoDestino.mockResolvedValue({ id: 'cfg-compartilhada', donoId: null, filaId: 'fila-1' });
+
+    conversationFindFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: 'conv-aguardando',
+        contatoId: 'contato-1',
+        canalConfigId: 'cfg-compartilhada',
+        filaId: 'fila-1',
+        status: 'AGUARDANDO_CLIENTE',
+        arquivada: false,
+      });
+
+    await registrarMensagemEntrante(mensagem({ idExterno: 'wamid.aguardando-cliente' }));
+
+    // Compare-and-set atomico: a troca so e tentada condicionada ao status
+    // AINDA ser AGUARDANDO_CLIENTE no banco, nao no valor lido antes do
+    // download do anexo -- mesma garantia de `assumirConversa`.
+    expect(conversationUpdateMany).toHaveBeenCalledWith({
+      where: { id: 'conv-aguardando', status: 'AGUARDANDO_CLIENTE' },
+      data: { status: 'EM_ATENDIMENTO' },
+    });
+    expect(conversationUpdate.mock.calls[0]?.[0]?.data).not.toHaveProperty('status');
+  });
+
+  it('cliente escrevendo numa conversa EM_ESPERA ou ATRIBUIDO nao muda o status', async () => {
+    configDoDestino.mockResolvedValue({ id: 'cfg-compartilhada', donoId: null, filaId: 'fila-1' });
+
+    conversationFindFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: 'conv-atribuida',
+        contatoId: 'contato-1',
+        canalConfigId: 'cfg-compartilhada',
+        filaId: 'fila-1',
+        status: 'ATRIBUIDO',
+        arquivada: false,
+      });
+
+    await registrarMensagemEntrante(mensagem({ idExterno: 'wamid.atribuida' }));
+
+    // Sem AGUARDANDO_CLIENTE no banco, o compare-and-set nao casa -- so a
+    // tentativa e incondicional, o efeito e que nunca existe.
+    expect(conversationUpdateMany).toHaveBeenCalledWith({
+      where: { id: 'conv-atribuida', status: 'AGUARDANDO_CLIENTE' },
+      data: { status: 'EM_ATENDIMENTO' },
+    });
+    expect(conversationUpdate.mock.calls[0]?.[0]?.data).not.toHaveProperty('status');
+  });
+
+  it('corrida: conversa finalizada por outro agente durante o download do anexo nao e reaberta pela mensagem do cliente', async () => {
+    // O status lido no inicio (AGUARDANDO_CLIENTE) fica desatualizado -- um
+    // agente finalizou a conversa enquanto o anexo baixava. O compare-and-set
+    // nao acha mais a linha (count: 0): simulado aqui explicitamente, para
+    // nao depender do valor padrao do mock.
+    configDoDestino.mockResolvedValue({ id: 'cfg-compartilhada', donoId: null, filaId: 'fila-1' });
+    conversationFindFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: 'conv-finalizada-durante-anexo',
+        contatoId: 'contato-1',
+        canalConfigId: 'cfg-compartilhada',
+        filaId: 'fila-1',
+        status: 'AGUARDANDO_CLIENTE',
+        arquivada: false,
+      });
+    conversationUpdateMany.mockResolvedValueOnce({ count: 0 });
+
+    await registrarMensagemEntrante(mensagem({ idExterno: 'wamid.corrida-finalizada' }));
+
+    expect(conversationUpdateMany).toHaveBeenCalledWith({
+      where: { id: 'conv-finalizada-durante-anexo', status: 'AGUARDANDO_CLIENTE' },
+      data: { status: 'EM_ATENDIMENTO' },
+    });
+    // A tentativa nao casou (ja estava FINALIZADO no banco), e o update
+    // principal continua sem a chave status -- nao reabre a conversa.
+    expect(conversationUpdate.mock.calls[0]?.[0]?.data).not.toHaveProperty('status');
   });
 
   it('sem nenhuma linha configurada (config nula dos dois lados), ainda agrupa mensagens do mesmo contato entre si', async () => {

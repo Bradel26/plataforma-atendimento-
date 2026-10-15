@@ -137,7 +137,10 @@ export async function resumoDoVendedor(vendedorId: string, mes: Date): Promise<R
   const contarStatus = (grupos: Array<{ status: string; _count: { _all: number } }>, status: string) =>
     grupos.find((g) => g.status === status)?._count._all ?? 0;
 
-  const abertas = contarStatus(conversasPorStatus, 'ATRIBUIDO') + contarStatus(conversasPorStatus, 'EM_ATENDIMENTO');
+  const abertas =
+    contarStatus(conversasPorStatus, 'ATRIBUIDO') +
+    contarStatus(conversasPorStatus, 'EM_ATENDIMENTO') +
+    contarStatus(conversasPorStatus, 'AGUARDANDO_CLIENTE');
   const encerradas = contarStatus(conversasPorStatus, 'FINALIZADO');
   const totalConversas = conversasPorStatus.reduce((acc, g) => acc + g._count._all, 0);
 

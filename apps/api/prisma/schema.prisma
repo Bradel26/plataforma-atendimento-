@@ -299,6 +299,8 @@ enum ConversationStatus {
   EM_ESPERA
   ATRIBUIDO
   EM_ATENDIMENTO
+  /// O agente ja respondeu e espera o cliente — ver `conversations.estados.ts`.
+  AGUARDANDO_CLIENTE
   FINALIZADO
 }
 
@@ -634,6 +636,11 @@ enum OportunidadeStatus {
   ABERTA
   GANHA
   PERDIDA
+  /// Fechada sem decisao de compra/venda real (ex.: cliente sumiu, oportunidade
+  /// duplicada). Fica fora do calculo de taxa de conversao (ver `comercial.service.ts`
+  /// e `vendedores.ts`, que ja filtram por igualdade exata e por isso nao precisam
+  /// de mudanca para excluir este valor).
+  DESCARTADA
 }
 
 /// Papel de uma pessoa dentro da conta (item 5.2).

@@ -87,7 +87,7 @@ export const atualizarOportunidadeSchema = z
 
 export const fecharOportunidadeSchema = z
   .object({
-    status: z.enum(['GANHA', 'PERDIDA']),
+    status: z.enum(['GANHA', 'PERDIDA', 'DESCARTADA']),
     motivoPerda: z.enum(MOTIVOS_PERDA).optional(),
   })
   .refine((d) => d.status !== 'PERDIDA' || Boolean(d.motivoPerda), {
@@ -108,7 +108,7 @@ export const listarOportunidadesSchema = z.object({
   estagioId: z.string().uuid().optional(),
   contaId: z.string().uuid().optional(),
   responsavelId: z.string().uuid().optional(),
-  status: z.enum(['ABERTA', 'GANHA', 'PERDIDA']).optional(),
+  status: z.enum(['ABERTA', 'GANHA', 'PERDIDA', 'DESCARTADA']).optional(),
   busca: z.string().trim().min(1).optional(),
   limite: z.coerce.number().int().min(1).max(200).default(100),
 });

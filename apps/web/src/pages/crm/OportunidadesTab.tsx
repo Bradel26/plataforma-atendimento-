@@ -55,7 +55,7 @@ function CartaoOportunidade({
   aoArrastar: (id: string) => void;
   aoAbrir: (id: string) => void;
   aoMover: (id: string, estagioId: string) => void;
-  aoFechar: (id: string, status: 'GANHA' | 'PERDIDA') => void;
+  aoFechar: (id: string, status: 'GANHA' | 'PERDIDA' | 'DESCARTADA') => void;
 }) {
   const etiquetas = etiquetasDoCartao(o);
   const discordancia = discordanciaDaTemperatura(o.temperatura, o.estagio.probabilidade, probabilidadesDoFunil);
@@ -194,6 +194,13 @@ function CartaoOportunidade({
             className="rounded border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
           >
             Perdeu
+          </button>
+          <button
+            type="button"
+            onClick={() => aoFechar(o.id, 'DESCARTADA')}
+            className="rounded border border-slate-200 px-2 py-1 text-xs text-slate-500 hover:bg-slate-50"
+          >
+            Descartar
           </button>
         </div>
       </div>
@@ -375,7 +382,7 @@ export function OportunidadesTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
     await moverPara(id, estagioId);
   };
 
-  const enviarFechamento = async (id: string, status: 'GANHA' | 'PERDIDA', motivoPerda?: MotivoPerda) => {
+  const enviarFechamento = async (id: string, status: 'GANHA' | 'PERDIDA' | 'DESCARTADA', motivoPerda?: MotivoPerda) => {
     try {
       await api.post(`/oportunidades/${id}/fechar`, { status, ...(motivoPerda ? { motivoPerda } : {}) });
       await carregar();
@@ -389,7 +396,7 @@ export function OportunidadesTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
    * (Fase 9 — substitui o `window.prompt` que nao seguia tema escuro nem
    * white-label) e so envia depois de confirmado.
    */
-  const fechar = async (id: string, status: 'GANHA' | 'PERDIDA') => {
+  const fechar = async (id: string, status: 'GANHA' | 'PERDIDA' | 'DESCARTADA') => {
     if (status === 'PERDIDA') {
       setPedidoMotivo(id);
       return;
