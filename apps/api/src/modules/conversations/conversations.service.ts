@@ -101,7 +101,7 @@ export async function buscarFotoDaConversa(id: string): Promise<FotoPerfil | nul
 }
 
 export async function listarConversas(solicitante: Solicitante, query: ListarConversasQuery) {
-  const filtros: Prisma.ConversationWhereInput[] = [await escopoVisivel()];
+  const filtros: Prisma.ConversationWhereInput[] = [await escopoVisivel(), { contato: { excluidoEm: null } }];
 
   if (query.status) filtros.push({ status: query.status });
   const ctx = await contextoVisibilidade();
@@ -233,7 +233,11 @@ export async function listarAtendimentosAnteriores(
  */
 export async function contarPorVisao() {
   const ctx = await contextoVisibilidade();
-  const base: Prisma.ConversationWhereInput[] = [await escopoVisivel(), { arquivada: false }];
+  const base: Prisma.ConversationWhereInput[] = [
+    await escopoVisivel(),
+    { arquivada: false },
+    { contato: { excluidoEm: null } },
+  ];
   const contar = (extra: Prisma.ConversationWhereInput) =>
     prisma.conversation.count({ where: { AND: [...base, extra] } });
 
@@ -267,6 +271,7 @@ export async function listarCaixaEntrada() {
           await escopoVisivel(),
           { arquivada: false, status: 'EM_ESPERA', agenteId: null },
           { OR: [{ filaId: { in: ctx.filaIds } }, ...(verSemEquipe ? [{ filaId: null }] : [])] },
+          { contato: { excluidoEm: null } },
         ],
       },
       include: inclusaoResumo,
