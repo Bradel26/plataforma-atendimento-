@@ -74,6 +74,15 @@ describe('navegacao', () => {
     expect(itemDaRota('/oportunidades')).toBeUndefined();
   });
 
+  it('SUPORTE acessa Esteira e CRM (sem as subrotas de processo comercial)', () => {
+    const esteira = NAV.find((i) => i.rota === '/esteira')!;
+    const crm = NAV.find((i) => i.rota === '/crm')!;
+    expect(esteira.perfis).toContain('SUPORTE');
+    expect(crm.perfis).toContain('SUPORTE');
+    const oportunidade = crm.subrotas!.find((s) => s.rota === '/oportunidades/:id')!;
+    expect(perfisDaSubrota(crm, oportunidade)).not.toContain('SUPORTE');
+  });
+
   it('rota desconhecida não resolve para modulo nenhum', () => {
     expect(itemDaRota('/inventado')).toBeUndefined();
     // Prefixo parecido nao conta: era o defeito do `startsWith` solto, que

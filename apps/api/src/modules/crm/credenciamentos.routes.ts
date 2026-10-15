@@ -28,7 +28,7 @@ export const credenciamentosRoutes = Router();
 
 credenciamentosRoutes.use(requireAuth);
 /** Processo operacional de credenciamento: AGENTE fora, mesmo corte de Oportunidades. */
-credenciamentosRoutes.use(requireRole('ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'));
+credenciamentosRoutes.use(requireRole('ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL', 'SUPORTE'));
 
 /** Periodo padrao: ultimos 30 dias. */
 function periodoDe(q: { desde?: Date; ate?: Date }) {

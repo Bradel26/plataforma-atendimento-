@@ -94,7 +94,7 @@ export const NAV: NavItem[] = [
     rota: '/esteira',
     label: 'Esteira',
     icone: IconEsteira,
-    perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'],
+    perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL', 'SUPORTE'],
     fase: 5,
   },
   { rota: '/monitoramento', label: 'Monitoramento', icone: IconMonitoramento, perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR'], fase: 3 },
@@ -109,7 +109,7 @@ export const NAV: NavItem[] = [
     rota: '/crm',
     label: 'CRM',
     icone: IconCrm,
-    perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL', 'AGENTE'],
+    perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL', 'AGENTE', 'SUPORTE'],
     fase: 1,
     // Cada registro principal com endereco proprio, para poder ser mandado por
     // mensagem e sobreviver a um F5. A tela e a mesma: `/crm` continua sendo a
