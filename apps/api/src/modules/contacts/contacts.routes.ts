@@ -6,7 +6,7 @@ import { param } from '../../http/params';
 import { validateBody, validateQuery } from '../../http/middleware/validate';
 import { badRequest, notFound } from '../../lib/errors';
 import type { Prisma } from '@prisma/client';
-import { prisma } from '../../lib/prisma';
+import { prisma, type ClienteDeEscrita } from '../../lib/prisma';
 import { apos, decodificarCursor, fatiar } from '../../lib/paginacao';
 import { inclusaoResumo, toConversaResumo } from '../conversations/conversations.serializer';
 
@@ -520,6 +520,18 @@ contactsRoutes.patch(
   }),
 );
 
+/** Apaga o PII do contato, preservando o registro (so a ficha fica em branco). */
+function anonimizarContato(tx: ClienteDeEscrita, contatoId: string) {
+  return tx.contact.update({
+    where: { id: contatoId },
+    data: {
+      nome: 'Contato removido', telefone: null, email: null, observacoes: null, tags: [],
+      segmentoParceiro: null, uf: null, cidade: null, contaId: null, responsavelId: null,
+      papelNaConta: null, qualificacaoQsa: null, excluidoEm: new Date(), anonimizadoEm: new Date(),
+    },
+  });
+}
+
 /**
  * Apaga o contato e tudo que pertence so a ele (conversas, mensagens,
  * candidaturas de campanha, credenciamentos — todos `onDelete: Cascade` no
@@ -527,6 +539,11 @@ contactsRoutes.patch(
  * chamada, atividade viram `onDelete: SetNull`), nunca some junto.
  *
  * Mesmo padrao de `accountsRoutes.delete('/:id', ...)`: restrito a ADMIN.
+ *
+ * ADMIN executa na hora — e o perfil de maior confianca da organizacao, sem
+ * ninguem acima para aprovar. Os demais perfis (incluindo SUPERVISOR) entram
+ * no fluxo de dupla aprovacao: a exclusao so vale depois que uma SEGUNDA
+ * pessoa (ADMIN ou SUPERVISOR, nunca quem pediu) decide em `/exclusao/aprovar`.
  */
 contactsRoutes.post(
   '/:id/exclusao',
@@ -540,8 +557,25 @@ contactsRoutes.post(
     if (!existe) throw notFound('Contato não encontrado');
     const pendente = await prisma.contactDeletionRequest.findFirst({ where: { contatoId: id, status: 'PENDENTE' } });
     if (pendente) throw badRequest('Já existe uma solicitação de exclusão aguardando aprovação');
+
+    if (req.user!.perfil === 'ADMIN') {
+      const solicitacao = await prisma.$transaction(async (tx) => {
+        const decisao = await tx.contactDeletionRequest.create({
+          data: {
+            contatoId: id, solicitadoPorId: req.user!.sub, motivo: req.body.motivo,
+            status: 'APROVADA', aprovadoPorId: req.user!.sub,
+            motivoDecisao: 'Exclusão direta por Administrador', decididoEm: new Date(),
+          },
+        });
+        await anonimizarContato(tx, id);
+        return decisao;
+      });
+      res.json({ solicitacao, excluidoImediatamente: true });
+      return;
+    }
+
     const solicitacao = await prisma.contactDeletionRequest.create({ data: { contatoId: id, solicitadoPorId: req.user!.sub, motivo: req.body.motivo } });
-    res.status(202).json({ solicitacao });
+    res.status(202).json({ solicitacao, excluidoImediatamente: false });
   }),
 );
 
@@ -553,7 +587,7 @@ contactsRoutes.post('/:id/exclusao/aprovar', requireRole('ADMIN', 'SUPERVISOR'),
   const justificativa = z.string().trim().min(3).max(1000).parse(req.body?.justificativa);
   const resultado = await prisma.$transaction(async (tx) => {
     const decisao = await tx.contactDeletionRequest.update({ where: { id }, data: { status: 'APROVADA', aprovadoPorId: req.user!.sub, motivoDecisao: justificativa, decididoEm: new Date() } });
-    await tx.contact.update({ where: { id: solicitacao.contatoId }, data: { nome: 'Contato removido', telefone: null, email: null, observacoes: null, tags: [], segmentoParceiro: null, uf: null, cidade: null, contaId: null, responsavelId: null, papelNaConta: null, qualificacaoQsa: null, excluidoEm: new Date(), anonimizadoEm: new Date() } });
+    await anonimizarContato(tx, solicitacao.contatoId);
     return decisao;
   });
   res.json({ solicitacao: resultado });
