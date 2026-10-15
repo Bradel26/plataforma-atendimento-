@@ -60,4 +60,13 @@ describe('conversationsRoutes — guard da auditoria', () => {
     const erro = await rodar(camadaDaRota('/auditoria'), 'GESTOR');
     expect(erro).toBeUndefined();
   });
+
+  it('COMERCIAL com a linha "auditoria" passa — prova que a checagem veio da tabela, nao do array antigo', async () => {
+    // COMERCIAL nunca esteve no antigo requireRole('ADMIN','SUPERVISOR','GESTOR').
+    // Este teste só passa se o guard consultar a tabela (requireModulo); sob o código
+    // antigo (requireRole hardcoded) ele falharia, pois COMERCIAL nunca era permitido.
+    findMany.mockResolvedValue([{ modulo: 'auditoria' }]);
+    const erro = await rodar(camadaDaRota('/auditoria'), 'COMERCIAL');
+    expect(erro).toBeUndefined();
+  });
 });
