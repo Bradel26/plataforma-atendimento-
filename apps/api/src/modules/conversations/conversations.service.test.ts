@@ -585,6 +585,28 @@ describe('listarConversas / contarPorStatus — exclusao de arquivadas (Fase 11.
       expect(JSON.stringify(args.where)).toContain('"arquivada":false');
     }
   });
+
+  // Contato excluido vira "Contato removido" (anonimizacao), mas a Conversation
+  // nunca e apagada — existe so para a Auditoria. Sem este filtro ela reaparecia
+  // na caixa de entrada e nos contadores com o nome anonimizado.
+  it('listarConversas: nao lista conversa de contato excluido', async () => {
+    await comOrganizacao('org-1', () => listarConversas(SOLICITANTE, { limite: 50, tags: [] }), {
+      id: 'user-1',
+      perfil: 'ADMIN',
+    });
+
+    const where = conversationFindMany.mock.calls[0]?.[0]?.where;
+    expect(JSON.stringify(where)).toContain('"contato":{"excluidoEm":null}');
+  });
+
+  it('contarPorVisao: sempre exclui contato excluido, para o numero da aba bater com a lista', async () => {
+    await comOrganizacao('org-1', () => contarPorVisao(), { id: 'user-1', perfil: 'ADMIN' });
+
+    expect(conversationCount).toHaveBeenCalledTimes(3);
+    for (const [args] of conversationCount.mock.calls) {
+      expect(JSON.stringify(args.where)).toContain('"contato":{"excluidoEm":null}');
+    }
+  });
 });
 
 describe('abas por numero (2026-10-05)', () => {
@@ -1010,6 +1032,19 @@ describe('listarCaixaEntrada', () => {
     const r = await comOrganizacao('org-1', () => listarCaixaEntrada(), { id: 'user-1', perfil: 'COMERCIAL' });
 
     expect(r.grupos.map((g) => g.fila?.nome ?? null)).toEqual(['Comercial']);
+  });
+
+  // Contato excluido vira "Contato removido" (anonimizacao), mas a Conversation
+  // nunca e apagada — existe so para a Auditoria. Sem este filtro ela reaparecia
+  // na caixa de entrada com o nome anonimizado.
+  it('nao lista conversa de contato excluido', async () => {
+    queueFindMany.mockResolvedValue([]);
+    conversationFindMany.mockResolvedValue([]);
+
+    await comOrganizacao('org-1', () => listarCaixaEntrada(), { id: 'user-1', perfil: 'ADMIN' });
+
+    const where = conversationFindMany.mock.calls[0]?.[0]?.where;
+    expect(JSON.stringify(where)).toContain('"contato":{"excluidoEm":null}');
   });
 });
 
