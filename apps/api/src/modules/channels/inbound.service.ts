@@ -13,6 +13,7 @@ import { processarMensagemDeFluxo } from '../fluxos/fluxos.service';
 import { inclusaoDetalhe, toConversaDetalhe, toMensagem } from '../conversations/conversations.serializer';
 import { reservarProtocolo } from '../conversations/protocolo';
 import type { MensagemNormalizada } from './meta.types';
+import { numeroNormalizado } from './whatsapp.modo';
 
 type DestinoConversa = { canalConfigId: string | null; filaId: string | null; agenteId: string | null };
 
@@ -89,7 +90,7 @@ export async function destinoDaMensagem(canal: Channel, identificadorDestino: st
  * Idempotente: o webhook da Meta reentrega quando nao recebe 200, e `idExterno`
  * e unico — reentrega devolve `duplicada: true` sem criar nada.
  * Reaproveita a conversa aberta do mesmo interlocutor; se a ultima foi
- * finalizada, abre uma nova.
+ * finalizada, abre uma nova conversa (novo protocolo) no mesmo contato.
  */
 export async function registrarMensagemEntrante(dados: MensagemNormalizada) {
   const jaExiste = await prisma.message.findUnique({ where: { idExterno: dados.idExterno } });
@@ -423,7 +424,10 @@ async function encontrarOuCriarContato(dados: MensagemNormalizada, canalConfigId
       enderecoExterno: dados.enderecoExterno,
       canal: dados.canal,
       canalConfigId,
-      status: { not: 'FINALIZADO' },
+      // O protocolo pertence a cada Conversation, mas o contato precisa ser
+      // estavel entre atendimentos. Localiza tambem conversas finalizadas;
+      // contato anonimizado fica fora para respeitar o fluxo de exclusao LGPD.
+      contato: { excluidoEm: null },
     },
     orderBy: { ultimaMensagemEm: 'desc' },
     select: { contatoId: true, ultimaMensagemEm: true },
@@ -460,11 +464,25 @@ async function encontrarOuCriarContato(dados: MensagemNormalizada, canalConfigId
   }
 
   if (porConversa) {
-    return prisma.contact.findUniqueOrThrow({ where: { id: porConversa.contatoId } });
+    const contato = await prisma.contact.findUniqueOrThrow({ where: { id: porConversa.contatoId } });
+    // Contatos criados antes da normalizacao podem ter telefone nulo, embora
+    // o JID atual ja traga o numero. Completa o cadastro uma vez para que as
+    // proximas mensagens recebidas por outras caixas encontrem este contato.
+    if (!contato.telefone && dados.telefone) {
+      return prisma.contact.update({
+        where: { id: contato.id },
+        data: { telefone: dados.telefone, uf: contato.uf ?? ufDoTelefone(dados.telefone) },
+      });
+    }
+    return contato;
   }
 
   if (dados.telefone) {
-    const porTelefone = await prisma.contact.findFirst({ where: { telefone: dados.telefone } });
+    const normalizado = numeroNormalizado(dados.telefone);
+    const porTelefone = await prisma.contact.findFirst({
+      where: normalizado ? { telefoneNormalizado: normalizado, excluidoEm: null } : { telefone: dados.telefone, excluidoEm: null },
+      orderBy: { criadoEm: 'asc' },
+    });
     if (porTelefone) return porTelefone;
   }
 

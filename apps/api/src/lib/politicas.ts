@@ -65,16 +65,13 @@ export const politicaConversas = {
    * - SUPERVISOR ve o Numero da empresa e os numeros cujo dono e COMERCIAL ou
    *   SUPORTE — nao o de ADMIN, nem o de outro SUPERVISOR. Vale em toda a
    *   plataforma: lista, abrir por id, ficha do contato, etiquetas.
-   * - Os demais: as atribuidas a ele (de qualquer numero — e assim que uma
-   *   transferencia chega) e as em espera nas filas em que atua.
-   *
-   * Para todos, as conversas do proprio numero ficam sempre visiveis, mesmo
-   * transferidas: "Minhas" e o meu numero.
+   * - Os demais: somente as atribuidas a ele e as em espera nas filas em que
+   *   atua. Ser dono do numero que originou a conversa nao mantem acesso apos
+   *   uma transferencia para outra pessoa ou equipe.
    */
   filtro(ctx: ContextoVisibilidade): Prisma.ConversationWhereInput {
     if (ctx.perfil === 'ADMIN') return {};
 
-    const doMeuNumero: Prisma.ConversationWhereInput = { canalConfig: { donoId: ctx.usuarioId } };
     const atribuidaAMim: Prisma.ConversationWhereInput = { agenteId: ctx.usuarioId };
 
     if (ctx.perfil === 'SUPERVISOR') {
@@ -82,7 +79,6 @@ export const politicaConversas = {
         OR: [
           DO_NUMERO_DA_EMPRESA,
           { canalConfig: { dono: { perfil: { in: PERFIS_ACOMPANHADOS_PELO_SUPERVISOR } } } },
-          doMeuNumero,
           atribuidaAMim,
         ],
       };
@@ -91,7 +87,6 @@ export const politicaConversas = {
     if (ctx.veEquipe) {
       return {
         OR: [
-          doMeuNumero,
           atribuidaAMim,
           { AND: [DO_NUMERO_DA_EMPRESA, { OR: [{ agenteId: { in: ctx.equipeIds } }, { status: 'EM_ESPERA' }] }] },
         ],
@@ -100,7 +95,6 @@ export const politicaConversas = {
 
     return {
       OR: [
-        doMeuNumero,
         atribuidaAMim,
         // `filaIds` vazio produz `in: []`, que nao casa com nada. E o
         // comportamento certo: quem nao esta em fila nenhuma nao ve espera

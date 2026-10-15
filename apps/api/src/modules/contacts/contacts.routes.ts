@@ -25,6 +25,7 @@ import { obterConfig, obterConfigPorId } from '../channels/channels.service';
 import { getWhatsAppProvider } from '../channels/whatsapp-provider.factory';
 import type { FotoPerfil } from '../channels/avatar';
 import { SEGMENTOS_PARCEIRO, identificarSegmentoParceiro } from '../crm/segmentoParceiro';
+import { numeroNormalizado } from '../channels/whatsapp.modo';
 
 export const contactsRoutes = Router();
 
@@ -438,7 +439,11 @@ contactsRoutes.post(
       where: {
         OR: [
           dados.email ? { email: dados.email } : undefined,
-          dados.telefone ? { telefone: dados.telefone } : undefined,
+          dados.telefone
+            ? numeroNormalizado(dados.telefone)
+              ? { telefoneNormalizado: numeroNormalizado(dados.telefone) }
+              : { telefone: dados.telefone }
+            : undefined,
         ].filter(Boolean) as Prisma.ContactWhereInput[],
       },
       select: { id: true, nome: true },
@@ -475,8 +480,14 @@ contactsRoutes.post(
   asyncHandler(async (req, res) => {
     const { telefone, nome } = req.body as z.infer<typeof porTelefoneSchema>;
 
+    const normalizado = numeroNormalizado(telefone);
     const existente = await prisma.contact.findFirst({
-      where: { telefone, AND: [await filtroDe(politicaContatos)] },
+      where: {
+        ...(normalizado ? { telefoneNormalizado: normalizado } : { telefone }),
+        excluidoEm: null,
+        AND: [await filtroDe(politicaContatos)],
+      },
+      orderBy: { criadoEm: 'asc' },
     });
     if (existente) return res.json({ contato: existente });
 

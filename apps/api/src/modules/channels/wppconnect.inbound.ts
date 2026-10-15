@@ -61,8 +61,15 @@ export function normalizarEventoWpp(bruto: unknown): MensagemNormalizada | null 
    * conversa continua sendo `enderecoExterno` (o `@lid`/`@c.us` acima),
    * nunca este campo.
    */
+  // `formattedName` costuma ser o nome salvo no WhatsApp, nao o telefone.
+  // Quando o identificador e um JID comum (`@c.us`), o numero e confiavel e
+  // permite reencontrar o mesmo contato entre caixas/linhas diferentes. LID
+  // continua opaco: nunca tentamos tratar seus digitos como telefone.
+  const telefoneDoJid = enderecoExterno.toLowerCase().endsWith('@c.us')
+    ? numeroNormalizado(enderecoExterno.slice(0, -'@c.us'.length))
+    : null;
   const telefone =
-    typeof sender.formattedName === 'string' ? numeroNormalizado(sender.formattedName) : null;
+    (typeof sender.formattedName === 'string' ? numeroNormalizado(sender.formattedName) : null) ?? telefoneDoJid;
 
   const sessao = typeof evento.session === 'string' && evento.session.trim() ? evento.session.trim() : null;
 

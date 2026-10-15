@@ -896,7 +896,10 @@ export async function transferirConversa(solicitante: Solicitante, id: string, i
 
     await prisma.conversation.update({
       where: { id },
-      data: { agenteId: destino.id, status: 'ATRIBUIDO', atribuidoEm: new Date() },
+      // Transferencia direta muda a caixa de responsabilidade para a pessoa;
+      // limpar a fila de origem impede que notificacoes continuem indo para a
+      // equipe anterior. A pessoa de destino acompanha por agenteId.
+      data: { filaId: null, agenteId: destino.id, status: 'ATRIBUIDO', atribuidoEm: new Date() },
     });
     await registrarAceiteFluxo(id);
     await registrarEventoSistema(id, `${solicitante.nome} transferiu o atendimento para ${destino.nome}.${sufixo}`, 'TRANSFERENCIA');
