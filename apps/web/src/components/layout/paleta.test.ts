@@ -10,9 +10,11 @@ const MODULOS_ADMIN = ['dashboards', 'atendimento', 'esteira', 'monitoramento', 
  */
 
 const MODULOS = MODULOS_ADMIN.filter((m) => m !== 'configuracoes');
+const MODULOS_AGENTE = ['atendimento', 'crm', 'chamado-ti'];
+const MODULOS_COMERCIAL = ['atendimento', 'crm', 'esteira', 'campanhas', 'chamado-ti'];
 describe('comandosDeNavegacao', () => {
   it('o agente não recebe comando para tela que não e dele', () => {
-    const rotas = comandosDeNavegacao(MODULOS, '').map((c) => c.rota);
+    const rotas = comandosDeNavegacao(MODULOS_AGENTE, '').map((c) => c.rota);
     expect(rotas).toContain('/atendimento');
     expect(rotas).toContain('/crm');
     // Gestao, campanhas e configuracoes recusam AGENTE por perfil.
@@ -24,7 +26,7 @@ describe('comandosDeNavegacao', () => {
   it('o comercial recebe o CRM e o atendimento', () => {
     // Vendedor com WhatsApp proprio atende o cliente direto no painel — por
     // isso COMERCIAL passou a ver /atendimento junto com /crm.
-    const rotas = comandosDeNavegacao(MODULOS, '').map((c) => c.rota);
+    const rotas = comandosDeNavegacao(MODULOS_COMERCIAL, '').map((c) => c.rota);
     expect(rotas).toContain('/crm');
     expect(rotas).toContain('/atendimento');
   });
@@ -32,7 +34,7 @@ describe('comandosDeNavegacao', () => {
   it('o admin recebe tudo', () => {
     // O contraponto dos dois acima: sem ele, os testes passariam com a lista
     // vazia — "nao ve o que nao e dele" tambem e satisfeito por nao ver nada.
-    const rotas = comandosDeNavegacao(MODULOS, '').map((c) => c.rota);
+    const rotas = comandosDeNavegacao(MODULOS_ADMIN, '').map((c) => c.rota);
     expect(rotas).toContain('/configuracoes');
     expect(rotas.length).toBeGreaterThan(8);
   });

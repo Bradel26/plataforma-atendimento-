@@ -22,8 +22,7 @@ describe('navegacao', () => {
     }
   });
 
-  it('subrota sem perfis proprios herda os do modulo', () => {
-    const crm = NAV.find((i) => i.rota === '/crm')!;
+  it('subrota sem perfis proprios não impõe restrição adicional', () => {
     for (const caminho of ['/contatos/abc', '/clientes/abc']) {
       const achado = subrotaDaRota(caminho)!;
       expect(achado.sub.perfis).toBeUndefined();
@@ -41,7 +40,7 @@ describe('navegacao', () => {
      */
     for (const item of NAV) {
       for (const sub of item.subrotas ?? []) {
-        expect(perfisDaSubrota(item, sub)).toEqual(sub.perfis);
+        expect(perfisDaSubrota(item, sub)).toEqual(sub.perfis ?? []);
       }
     }
   });

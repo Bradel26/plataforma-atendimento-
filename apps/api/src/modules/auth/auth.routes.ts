@@ -14,7 +14,6 @@ import {
 } from '../../lib/tokens';
 import { toPublicUser } from '../users/users.serializer';
 import { modulosPermitidos } from '../../lib/modulos';
-import { comOrganizacao } from '../../lib/tenant';
 import { alterarSenhaInicialSchema, loginSchema } from './auth.schemas';
 import { alterarSenhaInicial, login, marcarOffline, sessionForUserId } from './auth.service';
 
