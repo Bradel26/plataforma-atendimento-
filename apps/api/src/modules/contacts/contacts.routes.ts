@@ -556,17 +556,26 @@ contactsRoutes.post(
     });
     if (!existe) throw notFound('Contato não encontrado');
     const pendente = await prisma.contactDeletionRequest.findFirst({ where: { contatoId: id, status: 'PENDENTE' } });
-    if (pendente) throw badRequest('Já existe uma solicitação de exclusão aguardando aprovação');
 
+    /*
+     * ADMIN nunca fica preso por um pedido pendente de ninguem (nem o proprio,
+     * nem de outra pessoa): a acao dele e direta e resolve qualquer pedido em
+     * aberto como parte da mesma decisao, em vez de recusar.
+     */
     if (req.user!.perfil === 'ADMIN') {
       const solicitacao = await prisma.$transaction(async (tx) => {
-        const decisao = await tx.contactDeletionRequest.create({
-          data: {
-            contatoId: id, solicitadoPorId: req.user!.sub, motivo: req.body.motivo,
-            status: 'APROVADA', aprovadoPorId: req.user!.sub,
-            motivoDecisao: 'Exclusão direta por Administrador', decididoEm: new Date(),
-          },
-        });
+        const decisao = pendente
+          ? await tx.contactDeletionRequest.update({
+              where: { id: pendente.id },
+              data: { status: 'APROVADA', aprovadoPorId: req.user!.sub, motivoDecisao: 'Exclusão direta por Administrador', decididoEm: new Date() },
+            })
+          : await tx.contactDeletionRequest.create({
+              data: {
+                contatoId: id, solicitadoPorId: req.user!.sub, motivo: req.body.motivo,
+                status: 'APROVADA', aprovadoPorId: req.user!.sub,
+                motivoDecisao: 'Exclusão direta por Administrador', decididoEm: new Date(),
+              },
+            });
         await anonimizarContato(tx, id);
         return decisao;
       });
@@ -574,6 +583,7 @@ contactsRoutes.post(
       return;
     }
 
+    if (pendente) throw badRequest('Já existe uma solicitação de exclusão aguardando aprovação');
     const solicitacao = await prisma.contactDeletionRequest.create({ data: { contatoId: id, solicitadoPorId: req.user!.sub, motivo: req.body.motivo } });
     res.status(202).json({ solicitacao, excluidoImediatamente: false });
   }),

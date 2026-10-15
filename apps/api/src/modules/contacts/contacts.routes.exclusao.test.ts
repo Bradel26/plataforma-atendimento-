@@ -12,22 +12,27 @@ const {
   contactFindFirst,
   contactDeletionRequestFindFirst,
   contactDeletionRequestCreate,
+  contactDeletionRequestUpdate,
   contactUpdate,
   transaction,
 } = vi.hoisted(() => ({
   contactFindFirst: vi.fn(),
   contactDeletionRequestFindFirst: vi.fn(),
   contactDeletionRequestCreate: vi.fn(),
+  contactDeletionRequestUpdate: vi.fn(),
   contactUpdate: vi.fn(),
   transaction: vi.fn(async (fn: (tx: unknown) => unknown) =>
-    fn({ contactDeletionRequest: { create: contactDeletionRequestCreate }, contact: { update: contactUpdate } }),
+    fn({
+      contactDeletionRequest: { create: contactDeletionRequestCreate, update: contactDeletionRequestUpdate },
+      contact: { update: contactUpdate },
+    }),
   ),
 }));
 
 vi.mock('../../lib/prisma', () => ({
   prisma: {
     contact: { findFirst: contactFindFirst, update: contactUpdate },
-    contactDeletionRequest: { findFirst: contactDeletionRequestFindFirst, create: contactDeletionRequestCreate },
+    contactDeletionRequest: { findFirst: contactDeletionRequestFindFirst, create: contactDeletionRequestCreate, update: contactDeletionRequestUpdate },
     $transaction: transaction,
   },
 }));
@@ -135,16 +140,36 @@ describe('POST /:id/exclusao', () => {
     expect(res.status).toHaveBeenCalledWith(202);
   });
 
-  it('ja existe solicitacao pendente: recusa antes de decidir o fluxo, mesmo para ADMIN', async () => {
+  it('ja existe solicitacao pendente: recusa para quem nao e ADMIN', async () => {
     contactDeletionRequestFindFirst.mockResolvedValue({ id: 'req-existente', status: 'PENDENTE' });
     const handler = handlerDe('/:id/exclusao', 'post');
     const res = fakeRes();
 
     await expect(
-      comOrganizacao('org-1', () => new Promise<void>((resolve, reject) => handler(fakeReq('ADMIN', { motivo: 'cadastro de teste' }), res, (e) => (e ? reject(e) : resolve())))),
+      comOrganizacao('org-1', () => new Promise<void>((resolve, reject) => handler(fakeReq('SUPERVISOR', { motivo: 'cadastro de teste' }), res, (e) => (e ? reject(e) : resolve())))),
     ).rejects.toMatchObject({ status: 400 });
 
     expect(contactDeletionRequestCreate).not.toHaveBeenCalled();
     expect(contactUpdate).not.toHaveBeenCalled();
+  });
+
+  it('ADMIN: ja existe solicitacao pendente (ate de outra pessoa) -- resolve ela e exclui direto, nao recusa', async () => {
+    contactDeletionRequestFindFirst.mockResolvedValue({ id: 'req-existente', status: 'PENDENTE' });
+    contactDeletionRequestUpdate.mockResolvedValue({ id: 'req-existente', status: 'APROVADA' });
+    const handler = handlerDe('/:id/exclusao', 'post');
+    const res = fakeRes();
+
+    await rodar(handler, fakeReq('ADMIN', { motivo: 'cadastro de teste' }), res);
+    await vi.waitFor(() => expect(res.json).toHaveBeenCalled());
+
+    expect(contactDeletionRequestCreate).not.toHaveBeenCalled();
+    expect(contactDeletionRequestUpdate).toHaveBeenCalledWith({
+      where: { id: 'req-existente' },
+      data: expect.objectContaining({ status: 'APROVADA', aprovadoPorId: 'user-1', decididoEm: expect.any(Date) }),
+    });
+    expect(contactUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'contato-1' }, data: expect.objectContaining({ excluidoEm: expect.any(Date) }) }),
+    );
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ excluidoImediatamente: true }));
   });
 });
