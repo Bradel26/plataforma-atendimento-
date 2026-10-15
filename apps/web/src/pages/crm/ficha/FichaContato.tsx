@@ -132,13 +132,23 @@ export function FichaContato({ contatoId, aoMudarEtiquetas }: FichaProps) {
     }
   };
 
+  const ehAdmin = usuario?.perfil === 'ADMIN';
+
   const excluir = async () => {
-    const motivo = window.prompt('Explique por que este cadastro deve ser removido. A solicitação precisa da aprovação de outra pessoa:');
+    const motivo = window.prompt(
+      ehAdmin
+        ? 'Explique por que este cadastro deve ser removido. Como Administrador, a remoção acontece na hora:'
+        : 'Explique por que este cadastro deve ser removido. A solicitação precisa da aprovação de outra pessoa:',
+    );
     if (!motivo?.trim()) return;
     setExcluindo(true); setErro(null); setAvisoSolicitacao(null);
     try {
-      await api.post(`/contatos/${contatoId}/exclusao`, { motivo: motivo.trim() });
-      setAvisoSolicitacao('Solicitação enviada. O cadastro será removido após aprovação de outra pessoa; o histórico será preservado.');
+      const { excluidoImediatamente } = await api.post<{ excluidoImediatamente: boolean }>(`/contatos/${contatoId}/exclusao`, { motivo: motivo.trim() });
+      setAvisoSolicitacao(
+        excluidoImediatamente
+          ? 'Cadastro removido. O histórico será preservado.'
+          : 'Solicitação enviada. O cadastro será removido após aprovação de outra pessoa; o histórico será preservado.',
+      );
       await carregar();
     } catch (e) { setErro(e instanceof ApiError ? e.message : 'Falha ao solicitar a remoção'); }
     finally { setExcluindo(false); }
