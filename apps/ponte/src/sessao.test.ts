@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chatValido, contatoValido, jidLembrado, lembrarJid, numeroDoJid } from './sessao.js';
+import { chatValido, contatoValido, jidLembrado, lembrarJid, numeroDoJid, statusDoAckBaileys } from './sessao.js';
 
 /**
  * O WhatsApp passou a identificar alguns contatos por "LID" (endereco
@@ -9,6 +9,29 @@ import { chatValido, contatoValido, jidLembrado, lembrarJid, numeroDoJid } from 
  * mensagem nunca chega. `lembrarJid` guarda o endereco de onde uma mensagem
  * realmente chegou, para a resposta usar o MESMO endereco.
  */
+/**
+ * De-para do ack numerico do Baileys (`proto.WebMessageInfo.Status`) para o
+ * vocabulario do CRM. A numeracao do Baileys desloca tudo +1 em relacao ao
+ * `ack` do wwebjs/WAHA porque inclui ERROR=0 — por isso tem mapper proprio,
+ * em vez de reaproveitar `statusDoAck` do provider WAHA.
+ */
+describe('statusDoAckBaileys', () => {
+  it('mapeia cada valor conhecido do enum do Baileys', () => {
+    expect(statusDoAckBaileys(0)).toBe('FALHOU');
+    expect(statusDoAckBaileys(1)).toBe('PENDENTE');
+    expect(statusDoAckBaileys(2)).toBe('ENVIADA');
+    expect(statusDoAckBaileys(3)).toBe('ENTREGUE');
+    expect(statusDoAckBaileys(4)).toBe('LIDA');
+    expect(statusDoAckBaileys(5)).toBe('LIDA'); // PLAYED (audio/video) conta como lida
+  });
+
+  it('valor desconhecido ou ausente: null, nunca lanca', () => {
+    expect(statusDoAckBaileys(99)).toBeNull();
+    expect(statusDoAckBaileys(null)).toBeNull();
+    expect(statusDoAckBaileys(undefined)).toBeNull();
+  });
+});
+
 describe('jid lembrado por sessao', () => {
   it('mantem o endereco LID recebido na sessao correspondente', () => {
     lembrarJid('linha-a', '79233992933473', '79233992933473@lid');

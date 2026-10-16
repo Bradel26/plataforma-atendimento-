@@ -52,6 +52,7 @@ export function toMensagem(m: MensagemSerializavel) {
     interno: m.interno,
     evento: m.evento,
     enviadaPorDispositivo: m.enviadaPorDispositivo,
+    status: m.status,
     criadoEm: m.criadoEm,
   };
 }

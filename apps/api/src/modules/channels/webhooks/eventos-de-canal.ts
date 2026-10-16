@@ -1,9 +1,9 @@
 import { log } from '../../../lib/log';
 import { prisma, prismaSemIsolamento } from '../../../lib/prisma';
 import { semOrganizacao } from '../../../lib/tenant';
-import { notificarStatusCanal } from '../../../realtime/hub';
+import { notificarMensagemStatus, notificarStatusCanal } from '../../../realtime/hub';
 import { registrarMensagemEntrante } from '../inbound.service';
-import type { EventoDeCanal, SituacaoSessao } from '../providers/channel-provider';
+import type { EventoDeCanal, SituacaoSessao, StatusDeEntrega } from '../providers/channel-provider';
 
 /**
  * O que o CRM faz com cada evento que um provider entregou — o lado de
@@ -84,6 +84,73 @@ async function registrarEstadoDaSessao(
 }
 
 /**
+ * Ordem de progressao do ack — um `message.ack` fora de ordem (comum em
+ * reentregas de webhook) nunca pode voltar a mensagem de LIDA para ENTREGUE.
+ * FALHOU fica no mesmo nivel de ENVIADA: so e informativo antes de alguma
+ * confirmacao de entrega chegar, nunca sobrescreve uma mensagem ja entregue.
+ */
+const RANK_DO_STATUS: Record<StatusDeEntrega, number> = {
+  PENDENTE: 0,
+  FALHOU: 0,
+  ENVIADA: 1,
+  ENTREGUE: 2,
+  LIDA: 3,
+};
+
+/**
+ * Grava o ack na mensagem (por `idExterno`, unico entre providers) e avisa o
+ * painel em tempo real. `idExterno` desconhecido = mensagem que o CRM nunca
+ * registrou como propria (ex.: ack de uma mensagem enviada direto no celular,
+ * ainda nao espelhada) — ignora, nao e erro.
+ */
+export async function registrarStatusDeEntrega(
+  idExterno: string,
+  status: StatusDeEntrega,
+  contexto: { provider: string; organizacaoId: string },
+): Promise<ResultadoDoEvento> {
+  const mensagem = await prisma.message.findUnique({
+    where: { idExterno },
+    select: { id: true, conversaId: true, status: true, interno: true },
+  });
+  if (!mensagem) {
+    log.info('mensagem', 'status de entrega para idExterno desconhecido', { ...contexto, idExterno, status });
+    return 'ignorado';
+  }
+
+  const rankAtual = mensagem.status ? RANK_DO_STATUS[mensagem.status] : -1;
+  if (mensagem.status === status) {
+    return 'duplicado';
+  }
+  if (RANK_DO_STATUS[status] < rankAtual) {
+    log.info('mensagem', 'status de entrega fora de ordem, ignorado', {
+      ...contexto,
+      idExterno,
+      statusAtual: mensagem.status,
+      statusRecebido: status,
+    });
+    return 'ignorado';
+  }
+
+  await prisma.message.update({ where: { id: mensagem.id }, data: { status } });
+  log.info('mensagem', 'status de entrega', { ...contexto, idExterno, status });
+
+  const conversa = await prisma.conversation.findUnique({
+    where: { id: mensagem.conversaId },
+    select: { filaId: true, agenteId: true },
+  });
+  notificarMensagemStatus(
+    { conversaId: mensagem.conversaId, mensagemId: mensagem.id, idExterno, status },
+    {
+      conversaId: mensagem.conversaId,
+      filaId: conversa?.filaId,
+      agenteId: conversa?.agenteId,
+      incluirSalaDaConversa: !mensagem.interno,
+    },
+  );
+  return 'processado';
+}
+
+/**
  * Entrega um evento ao dominio. Roda DENTRO do contexto da organizacao ja
  * aberto por quem chama. Lanca quando a gravacao falha — a rota responde 5xx
  * e o provider reentrega, o que e seguro porque a entrada e idempotente por
@@ -110,15 +177,7 @@ export async function processarEventoDeCanal(
       return registrarEstadoDaSessao(evento.sessaoExterna, evento.situacao, contexto);
 
     case 'mensagem.status':
-      // Ainda nao ha onde gravar (a Message nao tem coluna de status): fica no
-      // log, com o idExterno, para rastrear "o cliente recebeu?" desde ja.
-      log.info('mensagem', 'status de entrega', {
-        ...contexto,
-        sessaoExterna: evento.sessaoExterna,
-        idExterno: evento.idExterno,
-        status: evento.status,
-      });
-      return 'processado';
+      return registrarStatusDeEntrega(evento.idExterno, evento.status, contexto);
 
     case 'mensagem.propria':
       // Mensagem digitada no proprio celular: ainda nao espelhada no historico.

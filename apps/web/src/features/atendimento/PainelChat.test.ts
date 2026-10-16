@@ -67,6 +67,7 @@ function criarMensagemMock(overrides: Partial<Mensagem> = {}): Mensagem {
     interno: false,
     evento: null,
     enviadaPorDispositivo: false,
+    status: null,
     criadoEm: '2026-09-25T10:05:00.000Z',
     ...overrides,
   };

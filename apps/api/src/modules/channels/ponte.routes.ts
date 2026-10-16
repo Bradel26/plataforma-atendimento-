@@ -9,6 +9,7 @@ import { assinaturaValida, configDaSessaoPonte, configDoDestino, importarContato
 import { registrarMensagemEntrante, registrarMensagemPropria } from './inbound.service';
 import { modoEfetivo, numeroNormalizado } from './whatsapp.modo';
 import { salvarPrevia } from './chat-previews.service';
+import { registrarStatusDeEntrega } from './webhooks/eventos-de-canal';
 
 /**
  * Entrada do WhatsApp nao oficial: a ponte posta aqui o que o cliente mandou.
@@ -332,6 +333,107 @@ ponteRoutes.post(
       );
 
       res.json({ ok: true });
+    });
+  }),
+);
+
+const mensagemStatusSchema = z.object({
+  /** Mesmo valor de `ChannelConfig.ponteSessao` — identifica a linha pessoal. */
+  sessao: z.string().trim().min(1).max(60),
+  /** Id da mensagem no WhatsApp (`Message.idExterno`) — a mesma que `entregar` usa. */
+  idExterno: z.string().trim().min(1).max(200),
+  status: z.enum(['PENDENTE', 'ENVIADA', 'ENTREGUE', 'LIDA', 'FALHOU']),
+});
+
+/**
+ * Ack de uma mensagem ja enviada (entregue, lida) vindo da ponte Baileys.
+ *
+ * Mesmo padrao de seguranca das rotas acima: corpo cru + assinatura HMAC com o
+ * `ponteSegredo` da linha. A gravacao de fato (`registrarStatusDeEntrega`) e a
+ * MESMA que os providers WAHA/GOWA usam — a ponte so traduz o ack do Baileys
+ * para o vocabulario comum (`StatusDeEntrega`) antes de mandar.
+ */
+ponteRoutes.post(
+  '/mensagem-status/:organizacaoId',
+  raw({ type: '*/*', limit: '2mb' }),
+  asyncHandler(async (req, res) => {
+    const organizacaoId = req.params.organizacaoId!;
+    const corpoBruto = Buffer.isBuffer(req.body) ? req.body : Buffer.from('');
+
+    if (!(await organizacaoExiste(organizacaoId))) {
+      res.status(404).json({ error: { code: 'NAO_ENCONTRADO', message: 'Organização não encontrada' } });
+      return;
+    }
+
+    await comOrganizacao(organizacaoId, async () => {
+      let corpoJson: unknown;
+      try {
+        corpoJson = JSON.parse(corpoBruto.toString('utf8'));
+      } catch (erro) {
+        throw badRequest(
+          `Corpo inválido: ${erro instanceof Error ? erro.message.slice(0, 200) : 'não e JSON'}`,
+        );
+      }
+
+      const sessaoBruta: string | null =
+        typeof corpoJson === 'object' &&
+        corpoJson !== null &&
+        'sessao' in corpoJson &&
+        typeof (corpoJson as { sessao?: unknown }).sessao === 'string' &&
+        (corpoJson as { sessao: string }).sessao.trim().length > 0
+          ? (corpoJson as { sessao: string }).sessao.trim()
+          : null;
+
+      if (!sessaoBruta) throw badRequest('Corpo invalido: sessao ausente');
+      const config = await configDaSessaoPonte(sessaoBruta);
+
+      if (!config) {
+        res.json({ ok: true, ignorado: true });
+        return;
+      }
+
+      if (!config?.ativo || modoEfetivo(config.modo) !== 'NAO_OFICIAL') {
+        res.status(503).json({
+          error: {
+            code: 'CANAL_INDISPONIVEL',
+            message: 'O WhatsApp desta organização não está no modo não oficial',
+          },
+        });
+        return;
+      }
+
+      if (!config.ponteSegredo) {
+        res.status(503).json({
+          error: {
+            code: 'PONTE_SEM_SEGREDO',
+            message: 'Configure o segredo da ponte antes de receber avisos de status',
+          },
+        });
+        return;
+      }
+
+      const assinatura = req.header('x-ponte-assinatura') ?? req.header('x-hub-signature-256');
+      if (!assinaturaValida(corpoBruto, assinatura, config.ponteSegredo)) {
+        res
+          .status(401)
+          .json({ error: { code: 'ASSINATURA_INVALIDA', message: 'Assinatura da ponte inválida' } });
+        return;
+      }
+
+      let corpo: z.infer<typeof mensagemStatusSchema>;
+      try {
+        corpo = mensagemStatusSchema.parse(corpoJson);
+      } catch (erro) {
+        throw badRequest(
+          `Corpo inválido: ${erro instanceof Error ? erro.message.slice(0, 200) : 'não e JSON'}`,
+        );
+      }
+
+      const resultado = await registrarStatusDeEntrega(corpo.idExterno, corpo.status, {
+        provider: 'ponte-baileys',
+        organizacaoId,
+      });
+      res.json({ ok: true, resultado });
     });
   }),
 );

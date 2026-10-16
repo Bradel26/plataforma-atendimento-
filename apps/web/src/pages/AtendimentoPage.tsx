@@ -378,6 +378,7 @@ export function AtendimentoPage() {
     carregarMais,
     aplicarEvento,
     inscreverMensagens,
+    inscreverStatusDeMensagem,
     focarConversa,
     recarregarContadores,
   } = useConversas(visao, tags, usuario?.id ?? null, filtroAcompanhar);
@@ -499,6 +500,21 @@ export function AtendimentoPage() {
         void recarregarContadores().catch(() => undefined);
       }),
     [inscreverMensagens, recarregarContadores],
+  );
+
+  // Ack do provider (entregue, lida) numa mensagem ja exibida na conversa aberta.
+  useEffect(
+    () =>
+      inscreverStatusDeMensagem(({ conversaId, mensagemId, status }) => {
+        setAberta((atual) => {
+          if (!atual || atual.id !== conversaId) return atual;
+          return {
+            ...atual,
+            mensagens: atual.mensagens.map((m) => (m.id === mensagemId ? { ...m, status } : m)),
+          };
+        });
+      }),
+    [inscreverStatusDeMensagem],
   );
 
   const aoMudar = useCallback(

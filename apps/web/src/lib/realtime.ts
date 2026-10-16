@@ -5,6 +5,7 @@ export const EVENTOS = {
   conversaNova: 'conversa:nova',
   conversaAtualizada: 'conversa:atualizada',
   mensagemNova: 'mensagem:nova',
+  mensagemStatus: 'mensagem:status',
   agenteStatus: 'agente:status',
   protocoloAtualizado: 'protocolo:atualizado',
   chamadaAtualizada: 'chamada:atualizada',

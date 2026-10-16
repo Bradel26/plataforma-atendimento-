@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { json, Router, type NextFunction, type Request, type Response } from 'express';
 import { asyncHandler } from '../../http/async-handler';
 import { badRequest } from '../../lib/errors';
+import { log } from '../../lib/log';
 import { prismaSemIsolamento } from '../../lib/prisma';
 import { comOrganizacao, semOrganizacao } from '../../lib/tenant';
 import { obterSegredoWebhookWppConnect } from '../../config/wppconnect.config';
@@ -103,6 +104,24 @@ wppconnectWebhookRoutes.post(
     }
 
     await comOrganizacao(organizacaoId, async () => {
+      // `onack` (status de entrega) ainda nao tem mapper: so o formato real do
+      // `onmessage` foi capturado ate hoje (ETAPA 4.1). Loga a FORMA do payload
+      // (nunca o conteudo da mensagem) para a proxima captura real completar o
+      // de-para, no mesmo padrao do que ja existe para WAHA/GOWA/Baileys
+      // (`StatusDeEntrega` em channel-provider.ts) — nao adivinha o mapeamento
+      // sem confirmar o payload de verdade.
+      const eventoBruto =
+        corpo && typeof corpo === 'object' && typeof (corpo as { event?: unknown }).event === 'string'
+          ? (corpo as { event: string }).event
+          : null;
+      if (eventoBruto === 'onack') {
+        const campos = corpo && typeof corpo === 'object' ? Object.keys(corpo as Record<string, unknown>) : [];
+        log.info('mensagem', 'onack do wppconnect recebido, sem mapper ainda', {
+          sessaoExterna: sessaoBruta,
+          camposDoPayload: campos.join(','),
+        });
+      }
+
       const normalizada = normalizarEventoWpp(corpo);
       if (!normalizada) {
         // Evento que nao interessa (onack, presence, eco, grupo, payload

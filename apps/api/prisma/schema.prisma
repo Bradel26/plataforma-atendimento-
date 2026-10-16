@@ -327,6 +327,17 @@ enum EventoConversa {
   ENCERRAMENTO
 }
 
+/// Confirmacao de entrega no vocabulario do CRM (`StatusDeEntrega` em
+/// channel-provider.ts). So preenchido para mensagens que saem por um
+/// provider que informa ack (hoje: WAHA, GOWA); null = engine nao informa.
+enum StatusDeEntrega {
+  PENDENTE
+  ENVIADA
+  ENTREGUE
+  LIDA
+  FALHOU
+}
+
 enum AttachmentType {
   TEXTO
   IMAGEM
@@ -576,6 +587,9 @@ model Message {
   evento                EventoConversa?
   /// true = digitada no celular/WhatsApp Web do numero, espelhada pela ponte (autor AGENTE, autorId nulo).
   enviadaPorDispositivo Boolean         @default(false) @map("enviada_por_dispositivo")
+  /// Ack do provider (`mensagem.status` em eventos-de-canal.ts), por `idExterno`.
+  /// Null = engine nao informa (ou mensagem ainda sem resposta do provider).
+  status                StatusDeEntrega?
   criadoEm              DateTime        @default(now()) @map("criado_em")
 
   conversa     Conversation @relation(fields: [conversaId], references: [id], onDelete: Cascade)

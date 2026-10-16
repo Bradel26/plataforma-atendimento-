@@ -264,6 +264,53 @@ export function quandoReceber(handler: (sessao: Sessao, msg: unknown) => void) {
 }
 
 /**
+ * Quem avisa a plataforma que uma mensagem ja enviada teve o ack mudado
+ * (entregue, lida). Mesma tecnica de `aoReceber`: hook injetavel, para a
+ * sessao nao conhecer a plataforma e dar para testar sem rede.
+ */
+let aoMudarStatusDeMensagem: ((sessao: Sessao, idExterno: string, status: StatusDeMensagem) => void) | null = null;
+
+export function quandoMudarStatusDeMensagem(
+  handler: (sessao: Sessao, idExterno: string, status: StatusDeMensagem) => void,
+) {
+  aoMudarStatusDeMensagem = handler;
+}
+
+/**
+ * Vocabulario do CRM (`StatusDeEntrega` em channel-provider.ts na API) — a
+ * ponte traduz o enum do Baileys para isto ANTES de sair, para a API nunca
+ * precisar conhecer o protocolo do WhatsApp Web.
+ */
+export type StatusDeMensagem = 'PENDENTE' | 'ENVIADA' | 'ENTREGUE' | 'LIDA' | 'FALHOU';
+
+/**
+ * De-para do ack do Baileys (`proto.WebMessageInfo.Status`, exportado pela lib
+ * como numero) para o vocabulario do CRM.
+ *
+ * Numeracao confirmada em `WAProto/index.d.ts` da `@whiskeysockets/baileys`
+ * instalada: ERROR=0, PENDING=1, SERVER_ACK=2, DELIVERY_ACK=3, READ=4,
+ * PLAYED=5 — NAO e a mesma numeracao do `ack` do wwebjs/WAHA (-1..4), entao
+ * nao reaproveita aquele mapper.
+ */
+export function statusDoAckBaileys(status: number | null | undefined): StatusDeMensagem | null {
+  switch (status) {
+    case 0:
+      return 'FALHOU';
+    case 1:
+      return 'PENDENTE';
+    case 2:
+      return 'ENVIADA';
+    case 3:
+      return 'ENTREGUE';
+    case 4:
+    case 5:
+      return 'LIDA';
+    default:
+      return null;
+  }
+}
+
+/**
  * Quem avisa a plataforma que a sessao caiu ou voltou. Mesma tecnica de
  * `aoReceber`: hook injetavel, para nao criar dependencia circular com
  * `plataforma.ts` e para o teste conseguir observar sem rede.
@@ -447,6 +494,20 @@ async function conectar(sessao: Sessao) {
     // reentregariam conversas antigas como se tivessem acabado de chegar.
     if (evento.type !== 'notify') return;
     for (const msg of evento.messages) aoReceber?.(sessao, msg);
+  });
+
+  /**
+   * Ack de uma mensagem ja enviada (entregue, lida). So interessa o que tem
+   * `update.status` e `key.id` — o Baileys tambem usa este mesmo evento para
+   * outras mudancas (ex.: edicao), que aqui viram no-op.
+   */
+  sock.ev.on('messages.update', (atualizacoes) => {
+    for (const { key, update } of atualizacoes) {
+      if (!key.id) continue;
+      const status = statusDoAckBaileys(update.status as number | null | undefined);
+      if (!status) continue;
+      aoMudarStatusDeMensagem?.(sessao, key.id, status);
+    }
   });
 
   sock.ev.on('contacts.upsert', (lista) => {

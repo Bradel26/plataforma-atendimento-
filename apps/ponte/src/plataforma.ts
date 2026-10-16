@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { config } from './config.js';
-import type { ChatBruto } from './sessao.js';
+import type { ChatBruto, StatusDeMensagem } from './sessao.js';
 
 /**
  * O caminho de volta: a ponte entrega na plataforma o que o cliente mandou.
@@ -209,4 +209,19 @@ export async function avisarStatus(
   const endereco = `${BASE}/status/${config.organizacaoId}`;
   const corpo = JSON.stringify({ sessao, status, detalhe });
   return postComRetentativa(endereco, corpo, `o status (${status}) da sessao "${sessao}"`);
+}
+
+/**
+ * Avisa a plataforma que uma mensagem ja enviada teve o ack mudado (entregue,
+ * lida) — o mesmo `idExterno` que `entregar`/o envio de saida ja usam, para a
+ * API achar a `Message` certa sem conhecer nada do protocolo do WhatsApp Web.
+ */
+export async function avisarStatusDeMensagem(
+  sessao: string,
+  idExterno: string,
+  status: StatusDeMensagem,
+): Promise<boolean> {
+  const endereco = `${BASE}/mensagem-status/${config.organizacaoId}`;
+  const corpo = JSON.stringify({ sessao, idExterno, status });
+  return postComRetentativa(endereco, corpo, `o status (${status}) da mensagem ${idExterno}`);
 }

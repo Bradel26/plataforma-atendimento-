@@ -145,6 +145,9 @@ export const notificarConversaAtualizada = (conversa: unknown, destinos: Destino
 export const notificarMensagem = (payload: unknown, destinos: Destinos): Promise<void> =>
   emitirDaConversa(EVENTOS.mensagemNova, payload, destinos);
 
+export const notificarMensagemStatus = (payload: unknown, destinos: Destinos): Promise<void> =>
+  emitirDaConversa(EVENTOS.mensagemStatus, payload, destinos);
+
 /** Chamados: interessa ao responsavel, a fila e a gestao. */
 export const notificarProtocolo = (
   protocolo: unknown,

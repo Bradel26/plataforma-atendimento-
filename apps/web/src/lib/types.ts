@@ -131,6 +131,8 @@ export type ConversaStatus = 'EM_ESPERA' | 'ATRIBUIDO' | 'EM_ATENDIMENTO' | 'AGU
 export type AutorMensagem = 'CLIENTE' | 'AGENTE' | 'SISTEMA' | 'BOT';
 export type EventoConversa = 'ACEITE' | 'TRANSFERENCIA' | 'ENCERRAMENTO';
 export type OrigemConversa = 'ATIVO' | 'RECEPTIVO';
+/** Ack do provider. Null = engine nao informa, ou mensagem ainda sem resposta. */
+export type StatusDeEntrega = 'PENDENTE' | 'ENVIADA' | 'ENTREGUE' | 'LIDA' | 'FALHOU';
 
 export type Mensagem = {
   id: string;
@@ -144,6 +146,7 @@ export type Mensagem = {
   interno: boolean;
   evento: EventoConversa | null;
   enviadaPorDispositivo: boolean;
+  status: StatusDeEntrega | null;
   criadoEm: string;
 };
 

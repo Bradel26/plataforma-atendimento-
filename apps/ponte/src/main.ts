@@ -2,12 +2,13 @@ import type { WAMessage } from '@whiskeysockets/baileys';
 import { config } from './config.js';
 import { GerenciadorDeChats } from './chats.js';
 import { GerenciadorDeContatos } from './contatos.js';
-import { avisarStatus, entregarChats, entregarContatos } from './plataforma.js';
+import { avisarStatus, avisarStatusDeMensagem, entregarChats, entregarContatos } from './plataforma.js';
 import { receber } from './recebida.js';
 import { criarServidor } from './servidor.js';
 import {
   garantirNoAr,
   quandoMudarStatus,
+  quandoMudarStatusDeMensagem,
   quandoReceber,
   quandoReceberChats,
   quandoReceberContatos,
@@ -29,6 +30,10 @@ quandoReceber((sessao, msg) => {
 
 quandoMudarStatus((sessao) => {
   void avisarStatus(sessao.nome, sessao.situacao === 'CONECTADO' ? 'CONECTADO' : 'DESCONECTADO', sessao.detalhe);
+});
+
+quandoMudarStatusDeMensagem((sessao, idExterno, status) => {
+  void avisarStatusDeMensagem(sessao.nome, idExterno, status);
 });
 
 /*

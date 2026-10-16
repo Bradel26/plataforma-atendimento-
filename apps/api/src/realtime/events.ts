@@ -9,6 +9,8 @@ export const EVENTOS = {
   conversaAtualizada: 'conversa:atualizada',
   /** Nova mensagem numa conversa. */
   mensagemNova: 'mensagem:nova',
+  /** Ack do provider mudou o status de entrega de uma mensagem ja enviada. */
+  mensagemStatus: 'mensagem:status',
   /** Agente mudou de status de presenca. */
   agenteStatus: 'agente:status',
   /** Chamado criado ou alterado (status, comentario, anexo, agendamento). */

@@ -2,10 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Socket } from 'socket.io-client';
 import { api, getAccessToken } from '../../lib/api';
 import { EVENTOS, conectar } from '../../lib/realtime';
-import type { Contadores, ConversaDetalhe, ConversaResumo, Mensagem } from '../../lib/types';
+import type { Contadores, ConversaDetalhe, ConversaResumo, Mensagem, StatusDeEntrega } from '../../lib/types';
 import { parametrosDaVisao, pertenceALista, type FiltroAcompanhar, type VisaoInbox } from './visao';
 
 type MensagemEvento = { conversaId: string; mensagem: Mensagem };
+type StatusDeMensagemEvento = { conversaId: string; mensagemId: string; idExterno: string; status: StatusDeEntrega };
 
 const CONTADORES_ZERADOS: Contadores = { MINHAS: 0, ATRIBUIDAS: 0, ACOMPANHAR: null };
 
@@ -213,6 +214,18 @@ export function useConversas(
     [socket],
   );
 
+  /** Ack do provider (entregue, lida) numa mensagem ja enviada e exibida. */
+  const inscreverStatusDeMensagem = useCallback(
+    (ouvinte: (evento: StatusDeMensagemEvento) => void) => {
+      if (!socket) return () => {};
+      socket.on(EVENTOS.mensagemStatus, ouvinte);
+      return () => {
+        socket.off(EVENTOS.mensagemStatus, ouvinte);
+      };
+    },
+    [socket],
+  );
+
   /** Entra na sala da conversa aberta para receber as mensagens dela. */
   const focarConversa = useCallback(
     (id: string | null, anterior?: string | null) => {
@@ -235,8 +248,22 @@ export function useConversas(
       recarregarContadores: carregarContadores,
       aplicarEvento,
       inscreverMensagens,
+      inscreverStatusDeMensagem,
       focarConversa,
     }),
-    [conversas, contadores, carregando, erro, cursor, carregarMais, carregarLista, carregarContadores, aplicarEvento, inscreverMensagens, focarConversa],
+    [
+      conversas,
+      contadores,
+      carregando,
+      erro,
+      cursor,
+      carregarMais,
+      carregarLista,
+      carregarContadores,
+      aplicarEvento,
+      inscreverMensagens,
+      inscreverStatusDeMensagem,
+      focarConversa,
+    ],
   );
 }

@@ -93,6 +93,41 @@ function Anexo({ mensagem }: { mensagem: Mensagem }) {
   );
 }
 
+/**
+ * Tique de status no padrao visual do WhatsApp: um `check` cinza (enviada),
+ * dois `check` cinza (entregue) ou dois `check` azuis (lida). `null`/PENDENTE
+ * nao desenha nada (ainda sem confirmacao do provider); FALHOU vira um alerta.
+ *
+ * So aparece para mensagem da empresa — o status de entrega e sempre sobre o
+ * que A EMPRESA mandou para o cliente, nunca o contrario.
+ */
+function TiqueDeStatus({ status }: { status: Mensagem['status'] }) {
+  if (status === 'FALHOU') {
+    return (
+      <span className="text-[10px] font-semibold text-red-500" title="Falha no envio">
+        !
+      </span>
+    );
+  }
+  if (!status || status === 'PENDENTE') return null;
+
+  const cor = status === 'LIDA' ? '#53bdeb' : '#8696a0';
+  const duplo = status === 'ENTREGUE' || status === 'LIDA';
+  const rotulo = status === 'ENTREGUE' ? 'Entregue' : status === 'LIDA' ? 'Lida' : 'Enviada';
+
+  return (
+    <svg width={duplo ? '14' : '10'} height="10" viewBox={duplo ? '0 0 16 11' : '0 0 11 11'} fill="none" aria-label={rotulo}>
+      <path
+        d={duplo ? 'M1 5.5L4.5 9L11 1.5M5.5 5.5L9 9L15.5 1.5' : 'M1 5.5L4.5 9L10.5 1.5'}
+        stroke={cor}
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function Bolha({ mensagem }: { mensagem: Mensagem }) {
   if (mensagem.autor === 'SISTEMA') {
     if (mensagem.evento) return <EventoConversa mensagem={mensagem} />;
@@ -133,17 +168,7 @@ function Bolha({ mensagem }: { mensagem: Mensagem }) {
         <TextoComLinks texto={mensagem.conteudo} />
         <p className="mt-1 flex items-center justify-end gap-1 text-right text-[10px] text-slate-500">
           {hora(mensagem.criadoEm)}
-          {daEmpresa && (
-            <svg width="14" height="10" viewBox="0 0 16 11" fill="none" aria-label="Enviada">
-              <path
-                d="M1 5.5L4.5 9L11 1.5M5.5 5.5L9 9L15.5 1.5"
-                stroke="#53bdeb"
-                strokeWidth="1.4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          )}
+          {daEmpresa && <TiqueDeStatus status={mensagem.status} />}
         </p>
       </div>
     </li>

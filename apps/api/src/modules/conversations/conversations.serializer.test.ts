@@ -134,6 +134,7 @@ describe('campos do atendimento estilo PCM', () => {
       interno: false,
       evento: null,
       enviadaPorDispositivo: true,
+      status: null,
       criadoEm: new Date('2026-10-09T15:00:00Z'),
       autorUsuario: null,
     });
@@ -154,6 +155,7 @@ describe('campos do atendimento estilo PCM', () => {
       interno: false,
       evento: 'ACEITE',
       enviadaPorDispositivo: false,
+      status: null,
       criadoEm: new Date(),
     });
     expect(m.autorNome).toBeNull();
