@@ -1,14 +1,15 @@
-import type { WAMessage } from '@whiskeysockets/baileys';
+import type { WACallEvent, WAMessage } from '@whiskeysockets/baileys';
 import { config } from './config.js';
 import { GerenciadorDeChats } from './chats.js';
 import { GerenciadorDeContatos } from './contatos.js';
-import { avisarStatus, avisarStatusDeMensagem, entregarChats, entregarContatos } from './plataforma.js';
+import { avisarStatus, avisarStatusDeMensagem, avisarChamadaWhatsApp, entregarChats, entregarContatos } from './plataforma.js';
 import { receber } from './recebida.js';
 import { criarServidor } from './servidor.js';
 import {
   garantirNoAr,
   quandoMudarStatus,
   quandoMudarStatusDeMensagem,
+  quandoReceberChamada,
   quandoReceber,
   quandoReceberChats,
   quandoReceberContatos,
@@ -34,6 +35,10 @@ quandoMudarStatus((sessao) => {
 
 quandoMudarStatusDeMensagem((sessao, idExterno, status) => {
   void avisarStatusDeMensagem(sessao.nome, idExterno, status);
+});
+
+quandoReceberChamada((sessao, chamada) => {
+  void avisarChamadaWhatsApp(sessao.nome, sessao.numero, chamada as WACallEvent);
 });
 
 /*

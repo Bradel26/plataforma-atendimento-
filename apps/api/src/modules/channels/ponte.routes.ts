@@ -10,6 +10,7 @@ import { registrarMensagemEntrante, registrarMensagemPropria } from './inbound.s
 import { modoEfetivo, numeroNormalizado } from './whatsapp.modo';
 import { salvarPrevia } from './chat-previews.service';
 import { registrarStatusDeEntrega } from './webhooks/eventos-de-canal';
+import { registrarEventoDeChamadaWhatsApp } from './whatsapp-call.service';
 
 /**
  * Entrada do WhatsApp nao oficial: a ponte posta aqui o que o cliente mandou.
@@ -333,6 +334,78 @@ ponteRoutes.post(
       );
 
       res.json({ ok: true });
+    });
+  }),
+);
+
+const chamadaWhatsAppSchema = z.object({
+  sessao: z.string().trim().min(1).max(60),
+  numeroDaLinha: z.string().trim().max(30).nullable(),
+  idExterno: z.string().trim().min(1).max(120),
+  status: z.enum(['offer', 'ringing', 'preaccept', 'transport', 'relaylatency', 'timeout', 'reject', 'accept', 'terminate']),
+  de: z.string().trim().min(1).max(200),
+  telefoneDe: z.string().trim().max(30).nullable(),
+  ocorreuEm: z.string().datetime(),
+  video: z.boolean(),
+  offline: z.boolean(),
+});
+
+/** Recebe o ciclo da chamada visto pela ponte e grava o CDR ligado ao contato. */
+ponteRoutes.post(
+  '/chamada-whatsapp/:organizacaoId',
+  raw({ type: '*/*', limit: '2mb' }),
+  asyncHandler(async (req, res) => {
+    const organizacaoId = req.params.organizacaoId!;
+    const corpoBruto = Buffer.isBuffer(req.body) ? req.body : Buffer.from('');
+    if (!(await organizacaoExiste(organizacaoId))) {
+      res.status(404).json({ error: { code: 'NAO_ENCONTRADO', message: 'Organização não encontrada' } });
+      return;
+    }
+
+    await comOrganizacao(organizacaoId, async () => {
+      let corpoJson: unknown;
+      try {
+        corpoJson = JSON.parse(corpoBruto.toString('utf8'));
+      } catch {
+        throw badRequest('Corpo inválido: JSON esperado');
+      }
+
+      const sessao =
+        corpoJson && typeof corpoJson === 'object' && 'sessao' in corpoJson && typeof corpoJson.sessao === 'string'
+          ? corpoJson.sessao.trim()
+          : '';
+      if (!sessao) throw badRequest('Corpo inválido: sessão ausente');
+      const config = await configDaSessaoPonte(sessao);
+      if (!config) {
+        res.json({ ok: true, ignorado: true });
+        return;
+      }
+      if (!config.ativo || modoEfetivo(config.modo) !== 'NAO_OFICIAL') {
+        res.status(503).json({ error: { code: 'CANAL_INDISPONIVEL', message: 'A sessão não está ativa no modo não oficial' } });
+        return;
+      }
+      if (!config.ponteSegredo) {
+        res.status(503).json({ error: { code: 'PONTE_SEM_SEGREDO', message: 'Configure o segredo da ponte' } });
+        return;
+      }
+      const assinatura = req.header('x-ponte-assinatura') ?? req.header('x-hub-signature-256');
+      if (!assinaturaValida(corpoBruto, assinatura, config.ponteSegredo)) {
+        res.status(401).json({ error: { code: 'ASSINATURA_INVALIDA', message: 'Assinatura da ponte inválida' } });
+        return;
+      }
+
+      let evento: z.infer<typeof chamadaWhatsAppSchema>;
+      try {
+        evento = chamadaWhatsAppSchema.parse(corpoJson);
+      } catch (erro) {
+        throw badRequest(`Corpo inválido: ${erro instanceof Error ? erro.message.slice(0, 200) : 'formato inesperado'}`);
+      }
+
+      const resultado = await registrarEventoDeChamadaWhatsApp(evento, {
+        donoId: config.donoId,
+        filaId: config.filaId,
+      });
+      res.json({ ok: true, ...resultado });
     });
   }),
 );

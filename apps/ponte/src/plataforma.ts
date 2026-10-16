@@ -1,4 +1,5 @@
 import { createHmac } from 'node:crypto';
+import type { WACallEvent } from '@whiskeysockets/baileys';
 import { config } from './config.js';
 import type { ChatBruto, StatusDeMensagem } from './sessao.js';
 
@@ -224,4 +225,25 @@ export async function avisarStatusDeMensagem(
   const endereco = `${BASE}/mensagem-status/${config.organizacaoId}`;
   const corpo = JSON.stringify({ sessao, idExterno, status });
   return postComRetentativa(endereco, corpo, `o status (${status}) da mensagem ${idExterno}`);
+}
+
+/** Encaminha os metadados de uma chamada observada pelo WhatsApp conectado. */
+export async function avisarChamadaWhatsApp(
+  sessao: string,
+  numeroDaLinha: string | null,
+  chamada: WACallEvent,
+): Promise<boolean> {
+  const endereco = `${BASE}/chamada-whatsapp/${config.organizacaoId}`;
+  const corpo = JSON.stringify({
+    sessao,
+    numeroDaLinha,
+    idExterno: chamada.id,
+    status: chamada.status,
+    de: chamada.from,
+    telefoneDe: chamada.callerPn ?? null,
+    ocorreuEm: chamada.date.toISOString(),
+    video: chamada.isVideo ?? false,
+    offline: chamada.offline,
+  });
+  return postComRetentativa(endereco, corpo, `o evento ${chamada.status} da chamada ${chamada.id}`);
 }

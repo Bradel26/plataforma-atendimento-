@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alerta, Badge, Button, EmptyState } from '../../../components/ui';
-import { ApiError, api } from '../../../lib/api';
+import { ApiError, api, getAccessToken } from '../../../lib/api';
+import { conectar, EVENTOS } from '../../../lib/realtime';
 import {
   LABEL_TIPO_EVENTO,
   TIPOS_EVENTO,
@@ -101,6 +102,18 @@ export function LinhaDoTempo({ base, raizId, recarregar = 0 }: Props) {
     setCursor(null);
     void buscar(null);
   }, [buscar, raizId, recarregar]);
+
+  useEffect(() => {
+    const token = getAccessToken();
+    if (!token) return;
+    const socket = conectar({ token });
+    socket.on(EVENTOS.chamadaAtualizada, (chamada: { contatoId?: string | null }) => {
+      if (chamada.contatoId === raizId) void buscar(null);
+    });
+    return () => {
+      socket.disconnect();
+    };
+  }, [buscar, raizId]);
 
   const alternar = (tipo: TipoEvento) =>
     setTipos((atuais) => (atuais.includes(tipo) ? atuais.filter((t) => t !== tipo) : [...atuais, tipo]));

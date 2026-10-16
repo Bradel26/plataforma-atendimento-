@@ -2,9 +2,10 @@ import { Fragment, useCallback, useEffect, useState } from 'react';
 import { Alerta, Badge, Button, Card, Field, Input } from '../components/ui';
 import { StatTile } from '../components/viz/StatTile';
 import { AssistenteDaLigacao } from './telefonia/AssistenteDaLigacao';
-import { ApiError, api } from '../lib/api';
+import { ApiError, api, getAccessToken } from '../lib/api';
 import { ESTADO } from '../lib/viz';
 import { LABEL_CHAMADA_STATUS, type Chamada, type IndicadoresVoz } from '../lib/types';
+import { conectar, EVENTOS } from '../lib/realtime';
 
 const dataHora = (iso: string) => new Date(iso).toLocaleString('pt-BR');
 
@@ -70,6 +71,16 @@ export function TelefoniaPage() {
 
   useEffect(() => {
     void carregar();
+  }, [carregar]);
+
+  useEffect(() => {
+    const token = getAccessToken();
+    if (!token) return;
+    const socket = conectar({ token });
+    socket.on(EVENTOS.chamadaAtualizada, () => void carregar());
+    return () => {
+      socket.disconnect();
+    };
   }, [carregar]);
 
   const ligar = async (e: React.FormEvent) => {

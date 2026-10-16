@@ -7,6 +7,7 @@ import {
   makeWASocket,
   type AnyMessageContent,
   type WASocket,
+  type WACallEvent,
 } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import { toDataURL } from 'qrcode';
@@ -276,6 +277,13 @@ export function quandoMudarStatusDeMensagem(
   aoMudarStatusDeMensagem = handler;
 }
 
+/** Evento de chamada WhatsApp observado pela sessao conectada por QR. */
+let aoReceberChamada: ((sessao: Sessao, chamada: WACallEvent) => void) | null = null;
+
+export function quandoReceberChamada(handler: (sessao: Sessao, chamada: WACallEvent) => void) {
+  aoReceberChamada = handler;
+}
+
 /**
  * Vocabulario do CRM (`StatusDeEntrega` em channel-provider.ts na API) — a
  * ponte traduz o enum do Baileys para isto ANTES de sair, para a API nunca
@@ -508,6 +516,13 @@ async function conectar(sessao: Sessao) {
       if (!status) continue;
       aoMudarStatusDeMensagem?.(sessao, key.id, status);
     }
+  });
+
+  // A conexao por QR informa o ciclo da chamada, mas nao fornece o audio nem
+  // uma operacao para atender a chamada pela plataforma. Encaminhamos apenas
+  // metadados para o historico do CRM.
+  sock.ev.on('call', (chamadas) => {
+    for (const chamada of chamadas) aoReceberChamada?.(sessao, chamada);
   });
 
   sock.ev.on('contacts.upsert', (lista) => {

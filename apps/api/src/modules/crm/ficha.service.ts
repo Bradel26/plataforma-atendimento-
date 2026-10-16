@@ -136,7 +136,8 @@ function fontes(raiz: Raiz) {
         SELECT 'CHAMADA' AS tipo, ch.id, ch.iniciado_em AS ocorrido_em,
                CASE ch.direcao WHEN 'ENTRANTE' THEN 'Chamada recebida'
                                ELSE 'Chamada realizada' END AS titulo,
-               ch.numero_destino AS detalhe,
+               CASE ch.direcao WHEN 'ENTRANTE' THEN ch.numero_origem
+                               ELSE ch.numero_destino END AS detalhe,
                'VOZ' AS canal, ch.status::text AS situacao,
                NULL::numeric AS valor, ch.id AS referencia,
                'CONTATO' AS escopo, u.nome AS usuario_nome
