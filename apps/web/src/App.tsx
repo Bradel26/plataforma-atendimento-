@@ -12,6 +12,7 @@ import { DashboardsPage } from './pages/DashboardsPage';
 import { GestaoPage } from './pages/GestaoPage';
 import { LoginPage } from './pages/LoginPage';
 import { MonitoramentoPage } from './pages/MonitoramentoPage';
+import { TelefoniaPage } from './pages/TelefoniaPage';
 import { DesempenhoPage } from './pages/DesempenhoPage';
 import { WebchatPage } from './pages/WebchatPage';
 import { WEBCHAT_ATIVO } from './lib/recursos';
@@ -27,6 +28,7 @@ import { EditorFluxoPage } from './pages/fluxos/EditorFluxoPage';
 const PAGINAS: Record<string, ComponentType> = {
   '/dashboards': DashboardsPage,
   '/atendimento': AtendimentoPage,
+  '/telefonia': TelefoniaPage,
   '/auditoria': AuditoriaPage,
   '/chamado-ti': ChamadoTiPage,
   '/esteira': EsteiraPage,

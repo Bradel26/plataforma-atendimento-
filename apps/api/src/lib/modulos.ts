@@ -14,6 +14,7 @@ import { prisma } from './prisma';
  */
 export const MODULOS_EDITAVEIS = [
   'atendimento',
+  'telefonia',
   'esteira',
   'monitoramento',
   'auditoria',
