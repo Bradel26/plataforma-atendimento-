@@ -1107,6 +1107,7 @@ export type Chamada = {
   contato: { id: string; nome: string } | null;
   agente: { id: string; nome: string } | null;
   fila: { id: string; nome: string } | null;
+  linha?: { id: string; nome: string | null; donoId: string | null; donoNome: string | null } | null;
   /** Nota de 1 a 5 de quem ouviu. Nulo = ninguem classificou, nao "ruim". */
   classificacao?: number | null;
   classificadoEm?: string | null;

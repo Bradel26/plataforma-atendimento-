@@ -1,6 +1,10 @@
+import { readFile } from 'node:fs/promises';
 import { ErroPermanente, registrarHandler } from '../../lib/fila';
 import { prisma } from '../../lib/prisma';
-import { limiteBytes, salvar, tipoAceito } from '../../lib/storage';
+import { caminhoDe, limiteBytes, salvar, tipoAceito } from '../../lib/storage';
+import { env } from '../../env';
+import { notificarChamada } from '../../realtime/hub';
+import { TIPO_TRANSCRICAO_CHAMADA_WHATSAPP } from '../channels/meta-calling.service';
 import { TIPO_GRAVACAO, obterConfig } from './voice.service';
 import { twilio } from './twilio.provider';
 
@@ -42,4 +46,42 @@ registrarHandler<{ chamadaId: string; url: string }>(TIPO_GRAVACAO, async ({ cha
 
   const arquivo = await salvar({ buffer, nome: `chamada-${chamada.idExterno}`, tipo });
   await prisma.call.update({ where: { id: chamadaId }, data: { gravacaoUrl: arquivo.url } });
+});
+
+registrarHandler<{ chamadaId: string; url: string }>(TIPO_TRANSCRICAO_CHAMADA_WHATSAPP, async ({ chamadaId, url }) => {
+  const chamada = await prisma.call.findUnique({
+    where: { id: chamadaId },
+    include: { canalConfig: { select: { transcreverChamadasWhatsapp: true } } },
+  });
+  if (!chamada) throw new ErroPermanente('chamada não encontrada');
+  if (chamada.transcricao) return;
+  if (!chamada.canalConfig?.transcreverChamadasWhatsapp) throw new ErroPermanente('transcrição desativada para esta linha');
+  if (!env.OPENAI_API_KEY) throw new ErroPermanente('OPENAI_API_KEY não configurada');
+
+  const chaveArquivo = url.replace(/^\/api\/arquivos\//, '').split('?')[0]!;
+  const buffer = await readFile(caminhoDe(chaveArquivo));
+  const tipo = tipoAceito(url.includes('.m4a') ? 'audio/mp4' : 'audio/webm') ? (url.includes('.m4a') ? 'audio/mp4' : 'audio/webm') : 'audio/webm';
+  const form = new FormData();
+  form.append('model', 'gpt-transcribe');
+  form.append('file', new Blob([new Uint8Array(buffer)], { type: tipo }), `chamada-${chamada.id}.${tipo === 'audio/mp4' ? 'm4a' : 'webm'}`);
+
+  const resposta = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}` },
+    body: form,
+  });
+  const corpo = await resposta.json().catch(() => ({})) as { text?: string; error?: { message?: string } };
+  if ([400, 401, 403, 404].includes(resposta.status)) {
+    throw new ErroPermanente(`serviço de transcrição recusou o áudio (HTTP ${resposta.status})`);
+  }
+  if (!resposta.ok || !corpo.text) throw new Error(corpo.error?.message ?? `transcrição falhou (HTTP ${resposta.status})`);
+
+  await prisma.call.update({
+    where: { id: chamada.id },
+    data: { transcricao: corpo.text, analisadoPor: 'OpenAI gpt-transcribe', analisadoEm: new Date() },
+  });
+  await notificarChamada(
+    { id: chamada.id, contatoId: chamada.contatoId, transcricao: corpo.text },
+    { agenteId: chamada.agenteId, filaId: chamada.filaId },
+  );
 });

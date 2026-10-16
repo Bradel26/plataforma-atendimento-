@@ -60,6 +60,10 @@ const { getQRCode, getStatus, disconnect } = vi.hoisted(() => ({
   disconnect: vi.fn(),
 }));
 
+vi.mock('./whatsapp-provider.factory', () => ({
+  getWhatsAppProvider: () => ({ getQRCode, getStatus, disconnect }),
+}));
+
 vi.mock('./providers/baileys.provider', () => ({
   BaileysProvider: class {
     getQRCode = getQRCode;
@@ -245,6 +249,12 @@ describe('POST /whatsapp/pessoal/conectar — self-service', () => {
       ponteSessao: 'vendedor-user-1',
       modo: 'NAO_OFICIAL',
       ativo: true,
+      nome: null,
+      phoneNumberId: null,
+      whatsappCallingHabilitado: false,
+      gravarChamadasWhatsapp: false,
+      transcreverChamadasWhatsapp: false,
+      transcricaoAutomaticaAtiva: false,
     });
 
     const handler = handlerDe('/whatsapp/pessoal/conectar', 'post');
@@ -258,7 +268,12 @@ describe('POST /whatsapp/pessoal/conectar — self-service', () => {
     expect(conectarMinhaLinhaWhatsapp).toHaveBeenCalledWith('user-1');
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith({
-      numero: { id: 'linha-1', ponteSessao: 'vendedor-user-1', modo: 'NAO_OFICIAL', ativo: true },
+      numero: {
+        id: 'linha-1', ponteSessao: 'vendedor-user-1', modo: 'NAO_OFICIAL', ativo: true,
+        nome: null, phoneNumberId: null, whatsappCallingHabilitado: false,
+        gravarChamadasWhatsapp: false, transcreverChamadasWhatsapp: false,
+        transcricaoAutomaticaAtiva: false,
+      },
     });
     const corpo = vi.mocked(res.json).mock.calls[0]?.[0];
     expect(corpo.numero).not.toHaveProperty('ponteUrl');

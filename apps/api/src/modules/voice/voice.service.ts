@@ -253,6 +253,7 @@ const inclusao = {
   contato: { select: { id: true, nome: true } },
   agente: { select: { id: true, nome: true } },
   fila: { select: { id: true, nome: true } },
+  canalConfig: { select: { id: true, nome: true, donoId: true, phoneNumberId: true, dono: { select: { nome: true } } } },
   // Quem classificou entra na leitura (item 6.6): "nota 2" sem autor nao se
   // discute com ninguem.
   classificadoPor: { select: { id: true, nome: true } },
@@ -302,6 +303,12 @@ function serializar(c: ChamadaDb) {
     contato: relacoes.contato ?? null,
     agente: relacoes.agente ?? null,
     fila: relacoes.fila ?? null,
+    linha: relacoes.canalConfig ? {
+      id: relacoes.canalConfig.id,
+      nome: relacoes.canalConfig.nome ?? relacoes.canalConfig.phoneNumberId,
+      donoId: relacoes.canalConfig.donoId,
+      donoNome: relacoes.canalConfig.dono?.nome ?? null,
+    } : null,
     classificadoPor: relacoes.classificadoPor ?? null,
   };
 }

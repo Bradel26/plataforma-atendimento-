@@ -143,17 +143,22 @@ const inclusaoDeAcoes = {
 export async function analiseDaChamada(id: string, acesso?: { usuarioId: string; gestor: boolean }) {
   const c = await prisma.call.findFirst({
     where: { OR: [{ id }, { idExterno: id }] },
-    include: { ...inclusaoDeAcoes, contato: { select: { id: true, nome: true } } },
+    include: {
+      ...inclusaoDeAcoes,
+      contato: { select: { id: true, nome: true } },
+      canalConfig: { select: { donoId: true } },
+    },
   });
   if (!c) throw notFound('Chamada não encontrada');
-  if (acesso && !acesso.gestor && c.agenteId !== acesso.usuarioId) throw notFound('Chamada não encontrada');
+  const donoDaLinha = c.canalConfig?.donoId === acesso?.usuarioId;
+  if (acesso && !acesso.gestor && c.agenteId !== acesso.usuarioId && !donoDaLinha) throw notFound('Chamada não encontrada');
 
   const temVinculo = c.contatoId !== null;
 
   return {
     chamadaId: c.id,
     estado: estadoDaAnalise(c),
-    transcricao: !acesso || acesso.gestor ? c.transcricao : null,
+    transcricao: !acesso || acesso.gestor || donoDaLinha ? c.transcricao : null,
     resumo: c.resumo,
     /** Nulo NAO e NEUTRO: significa que ninguem analisou esta ligacao. */
     sentimento: c.sentimento,

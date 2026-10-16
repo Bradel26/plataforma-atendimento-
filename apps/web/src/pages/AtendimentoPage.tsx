@@ -11,6 +11,7 @@ import { PainelContato } from '../features/atendimento/PainelContato';
 import { useConversas } from '../features/atendimento/useConversas';
 import { useCaixaEntrada } from '../features/atendimento/useCaixaEntrada';
 import { upsertPrevia } from '../features/atendimento/previas';
+import { ConectarWhatsAppCloud } from '../features/atendimento/ConectarWhatsAppCloud';
 import {
   LABEL_VISAO_INBOX,
   SEM_FILTRO_ACOMPANHAR,
@@ -32,7 +33,7 @@ import type { Acompanhaveis, ConversaDetalhe, Previa } from '../lib/types';
  */
 type PassoMobile = 'lista' | 'chat' | 'ficha';
 
-type MinhaLinhaWhatsapp = { id: string; ponteSessao: string | null; modo: string | null; ativo: boolean };
+type MinhaLinhaWhatsapp = { id: string; ponteSessao: string | null; modo: string | null; ativo: boolean; nome?: string | null; phoneNumberId?: string | null; whatsappCallingHabilitado?: boolean };
 
 // Lista (esquerda) e ficha (direita) tem faixas proprias — a ficha precisa
 // de mais espaco maximo porque "Registrar / agendar" fica cortado em
@@ -230,7 +231,10 @@ export function AtendimentoPage() {
   useEffect(() => {
     void api
       .get<{ numero: MinhaLinhaWhatsapp | null }>('/canais/numeros/meu')
-      .then(({ numero }) => setMinhaLinha(numero))
+      .then(({ numero }) => {
+        setMinhaLinha(numero);
+        if (numero?.modo === 'OFICIAL' && numero.phoneNumberId) setMinhaLinhaConectada(true);
+      })
       .catch(() => undefined)
       .finally(() => setCarregandoMinhaLinha(false));
   }, []);
@@ -349,6 +353,16 @@ export function AtendimentoPage() {
       setConectandoLinha(false);
     }
   }, [minhaLinha]);
+
+  const atualizarMinhaLinha = useCallback(async () => {
+    const { numero } = await api.get<{ numero: MinhaLinhaWhatsapp | null }>('/canais/numeros/meu');
+    setMinhaLinha(numero);
+    if (numero?.modo === 'OFICIAL' && numero.phoneNumberId) {
+      setMinhaLinhaConectada(true);
+      setMostrarConectar(false);
+      setQrConectar(null);
+    }
+  }, []);
 
   const desconectarWhatsapp = useCallback(async () => {
     if (!minhaLinha) return;
@@ -761,6 +775,10 @@ export function AtendimentoPage() {
                         >
                           {conectandoLinha ? 'Conectando...' : erroConectar ? 'Tentar novamente' : 'Conectar WhatsApp'}
                         </Button>
+                        <div className="w-full border-t border-slate-100 pt-3">
+                          <p className="mb-2 text-left text-xs font-medium text-slate-700">Conexão oficial da Cloud API</p>
+                          <ConectarWhatsAppCloud onConnected={() => void atualizarMinhaLinha()} />
+                        </div>
                       </>
                     ) : (
                       <>
@@ -795,6 +813,10 @@ export function AtendimentoPage() {
                         >
                           Cancelar
                         </Button>
+                        <div className="w-full border-t border-slate-100 pt-3">
+                          <p className="mb-2 text-left text-xs font-medium text-slate-700">Migrar para a conexão oficial</p>
+                          <ConectarWhatsAppCloud onConnected={() => void atualizarMinhaLinha()} />
+                        </div>
                       </>
                     )}
                   </div>
@@ -829,6 +851,12 @@ export function AtendimentoPage() {
                   >
                     {desconectandoLinha ? 'Desconectando...' : 'Desconectar'}
                   </Button>
+                  {minhaLinha.modo === 'NAO_OFICIAL' && (
+                    <div className="mt-2 w-full max-w-xs text-left">
+                      <p className="mb-2 text-xs font-medium text-slate-700">Migrar para a conexão oficial</p>
+                      <ConectarWhatsAppCloud onConnected={() => void atualizarMinhaLinha()} />
+                    </div>
+                  )}
                 </div>
               )}
             </div>

@@ -14,6 +14,7 @@ import {
 import { registrarMensagemEntrante } from './inbound.service';
 import { normalizarWebhook } from './meta.parser';
 import type { MetaWebhook } from './meta.types';
+import { registrarChamadasMeta } from './meta-calling.service';
 
 export const webhooksRoutes = Router();
 
@@ -148,5 +149,7 @@ async function processarEntrada(
       else processadas += 1;
     }
 
-    res.json({ recebidas: mensagens.length, processadas, duplicadas });
+    const chamadas = await registrarChamadasMeta(payload);
+
+    res.json({ recebidas: mensagens.length, processadas, duplicadas, chamadas });
 }

@@ -29,6 +29,20 @@ export type MetaWebhook = {
         contacts?: Array<{ wa_id: string; profile?: { name?: string } }>;
         messages?: MetaTextoWhatsApp[];
         statuses?: Array<{ id: string; status: string }>;
+        /** WhatsApp Business Calling API events (connect, accepted, terminate, etc.). */
+        calls?: Array<{
+          id?: string;
+          call_id?: string;
+          callId?: string;
+          from?: string;
+          to?: string;
+          event?: string;
+          status?: string;
+          timestamp?: string | number;
+          direction?: string;
+          /** SDP is used by the separate media/signaling stage; never expose it in history. */
+          session?: { sdp_type?: string; sdp?: string };
+        }>;
       };
     }>;
     /** Messenger e Instagram Direct */

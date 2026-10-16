@@ -1,12 +1,16 @@
 import express, { Router } from 'express';
+import multer from 'multer';
 import { z } from 'zod';
 import { asyncHandler } from '../../http/async-handler';
 import { requireAuth, requireRole } from '../../http/middleware/auth';
 import { validateBody, validateQuery } from '../../http/middleware/validate';
 import { param } from '../../http/params';
+import { badRequest } from '../../lib/errors';
 import { prismaSemIsolamento } from '../../lib/prisma';
 import { ORGANIZACAO_INICIAL, comOrganizacao, semOrganizacao } from '../../lib/tenant';
+import { limiteBytes } from '../../lib/storage';
 import { getBranding } from '../branding/branding.service';
+import { controlarChamadaMeta, guardarGravacaoDaChamada, obterOfertaDaChamada, originarChamadaMeta } from '../channels/meta-calling.service';
 import { acaoViraTarefa, analiseDaChamada, descartarAcao } from './analise.service';
 import {
   aplicarEvento,
@@ -24,6 +28,7 @@ import {
 export const vozRoutes = Router();
 /** Rotas chamadas pelo provedor. Publicas, protegidas por assinatura. */
 export const vozWebhookRoutes = Router();
+const uploadGravacao = multer({ storage: multer.memoryStorage(), limits: { fileSize: limiteBytes, files: 1 } });
 
 const STATUS = [
   'INICIANDO',
@@ -87,7 +92,7 @@ vozRoutes.get(
     res.json(gestor ? resultado : {
       ...resultado,
       chamadas: resultado.chamadas
-        .map((c) => ({ ...c, transcricao: null, gravacaoUrl: null })),
+        .map((c) => c.linha ? c : ({ ...c, transcricao: null, gravacaoUrl: null })),
     });
   }),
 );
@@ -98,6 +103,70 @@ vozRoutes.post(
   validateBody(z.object({ destino: z.string().trim().min(8, 'Informe o número com DDD').max(20) })),
   asyncHandler(async (req, res) => {
     res.status(201).json({ chamada: await originarChamada(req.user!.sub, req.body.destino) });
+  }),
+);
+
+vozRoutes.post(
+  '/chamadas/whatsapp/originar',
+  requireAuth,
+  validateBody(z.object({
+    destino: z.string().trim().min(10).max(20),
+    sdp: z.string().min(20).max(100_000),
+  })),
+  asyncHandler(async (req, res) => {
+    res.status(201).json({ chamada: await originarChamadaMeta({
+      usuarioId: req.user!.sub,
+      destino: req.body.destino,
+      sdp: req.body.sdp,
+    }) });
+  }),
+);
+
+vozRoutes.get(
+  '/chamadas/:id/whatsapp/oferta',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    res.json({ oferta: await obterOfertaDaChamada(
+      param(req, 'id'),
+      req.user!.sub,
+      req.user!.perfil === 'ADMIN' || req.user!.perfil === 'SUPERVISOR',
+    ) });
+  }),
+);
+
+vozRoutes.post(
+  '/chamadas/:id/whatsapp/acao',
+  requireAuth,
+  validateBody(z.object({
+    acao: z.enum(['accept', 'reject', 'terminate']),
+    sdp: z.string().max(100_000).optional(),
+  })),
+  asyncHandler(async (req, res) => {
+    const chamada = await controlarChamadaMeta({
+      chamadaId: param(req, 'id'),
+      usuarioId: req.user!.sub,
+      gestor: req.user!.perfil === 'ADMIN' || req.user!.perfil === 'SUPERVISOR',
+      acao: req.body.acao,
+      sdp: req.body.sdp,
+    });
+    res.json({ chamadaId: chamada.id, status: chamada.status });
+  }),
+);
+
+vozRoutes.post(
+  '/chamadas/:id/whatsapp/gravacao',
+  requireAuth,
+  uploadGravacao.single('arquivo'),
+  asyncHandler(async (req, res) => {
+    if (!req.file) throw badRequest('Envie o áudio da chamada no campo arquivo.');
+    const resultado = await guardarGravacaoDaChamada({
+      chamadaId: param(req, 'id'),
+      usuarioId: req.user!.sub,
+      gestor: req.user!.perfil === 'ADMIN' || req.user!.perfil === 'SUPERVISOR',
+      buffer: req.file.buffer,
+      tipo: req.file.mimetype,
+    });
+    res.status(201).json(resultado);
   }),
 );
 
@@ -121,7 +190,7 @@ vozRoutes.patch(
   asyncHandler(async (req, res) => {
     const gestor = req.user!.perfil === 'ADMIN' || req.user!.perfil === 'SUPERVISOR';
     const chamada = await classificarChamada(param(req, 'id'), req.body.classificacao, req.user!.sub, gestor);
-    res.json({ chamada: gestor ? chamada : { ...chamada, transcricao: null, gravacaoUrl: null } });
+    res.json({ chamada: gestor || chamada.linha ? chamada : { ...chamada, transcricao: null, gravacaoUrl: null } });
   }),
 );
 

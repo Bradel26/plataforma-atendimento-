@@ -26,6 +26,7 @@ import {
 import { AVISO_NAO_OFICIAL, modoEfetivo } from './whatsapp.modo';
 import { getWhatsAppProvider } from './whatsapp-provider.factory';
 import { estadoDaIa, estadoDaIaDoNumero, salvarIa, salvarIaDoNumero } from '../bots/ia.service';
+import { conectarNumeroMeta, estadoDoEmbeddedSignup } from './meta-embedded-signup.service';
 
 export const channelsRoutes = Router();
 
@@ -66,6 +67,9 @@ const camposDoCanal = {
   appSecret: z.string().trim().min(10).nullable().optional(),
   verifyToken: z.string().trim().min(6).nullable().optional(),
   filaId: z.string().uuid().nullable().optional(),
+  whatsappCallingHabilitado: z.boolean().optional(),
+  gravarChamadasWhatsapp: z.boolean().optional(),
+  transcreverChamadasWhatsapp: z.boolean().optional(),
   /*
    * WhatsApp nos dois modos.
    *
@@ -305,6 +309,26 @@ channelsRoutes.get(
   asyncHandler(async (req, res) => {
     const numero = await minhaLinhaWhatsapp(req.user!.sub);
     res.json({ numero });
+  }),
+);
+
+/** Configuração pública mínima do Embedded Signup: IDs não são segredos. */
+channelsRoutes.get('/whatsapp/meta/embedded-signup', asyncHandler(async (_req, res) => {
+  res.json(estadoDoEmbeddedSignup());
+}));
+
+/** Finaliza o OAuth no servidor e associa a linha Meta ao usuário autenticado. */
+channelsRoutes.post(
+  '/whatsapp/pessoal/meta/conectar',
+  validateBody(z.object({
+    codigo: z.string().trim().min(10).max(4000),
+    wabaId: z.string().trim().min(4).max(80),
+    phoneNumberId: z.string().trim().min(4).max(80),
+    pin: z.string().regex(/^\d{6}$/, 'Defina um PIN de segurança com 6 dígitos'),
+  })),
+  asyncHandler(async (req, res) => {
+    const resultado = await conectarNumeroMeta({ ...req.body, donoId: req.user!.sub });
+    res.status(201).json(resultado);
   }),
 );
 

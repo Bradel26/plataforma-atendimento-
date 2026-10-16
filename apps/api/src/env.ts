@@ -29,6 +29,14 @@ const schema = z.object({
   JWT_ACCESS_TTL: z.string().default('15m'),
   JWT_REFRESH_TTL_DAYS: z.coerce.number().int().positive().default(7),
   WEB_ORIGIN: z.string().default('http://localhost:5173'),
+  /** App Meta usado no Embedded Signup multiusuário de números WhatsApp. */
+  META_APP_ID: z.string().default(''),
+  META_APP_SECRET: z.string().default(''),
+  META_EMBEDDED_SIGNUP_CONFIG_ID: z.string().default(''),
+  META_WEBHOOK_VERIFY_TOKEN: z.string().default(''),
+  META_GRAPH_API_VERSION: z.string().regex(/^v\d+\.0$/).default('v25.0'),
+  /** Chave do serviço de transcrição automática das gravações de voz. */
+  OPENAI_API_KEY: z.string().default(''),
   /**
    * Endereco publico desta API, usado onde a URL precisa ser absoluta e sair da
    * rede — o anexo que o motor de IA externo vai baixar, por exemplo. Vazio cai

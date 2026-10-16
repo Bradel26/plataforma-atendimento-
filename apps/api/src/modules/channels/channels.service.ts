@@ -8,6 +8,7 @@ import { cifrar, decifrar } from '../../lib/crypto-box';
 import { modoEfetivo } from './whatsapp.modo';
 import { obterConfigGlobalPonte } from '../../config/ponte.config';
 import { getWhatsAppProvider } from './whatsapp-provider.factory';
+import { env } from '../../env';
 
 export const CANAIS_EXTERNOS = ['WHATSAPP', 'INSTAGRAM', 'FACEBOOK'] as const;
 export type CanalExterno = (typeof CANAIS_EXTERNOS)[number];
@@ -106,6 +107,9 @@ export async function listarCanais() {
     ponteStatus: c.ponteStatus === 'DESCONECTADO' && !c.ponteConectadoEm ? 'AGUARDANDO_QR' : c.ponteStatus,
     ponteStatusEm: c.ponteStatusEm,
     espelharCelular: c.espelharCelular,
+    whatsappCallingHabilitado: c.whatsappCallingHabilitado,
+    gravarChamadasWhatsapp: c.gravarChamadasWhatsapp,
+    transcreverChamadasWhatsapp: c.transcreverChamadasWhatsapp,
     /*
      * Pronto para operar, por modo.
      *
@@ -156,6 +160,9 @@ type SalvarCanalInput = {
   appSecret?: string | null;
   verifyToken?: string | null;
   filaId?: string | null;
+  whatsappCallingHabilitado?: boolean;
+  gravarChamadasWhatsapp?: boolean;
+  transcreverChamadasWhatsapp?: boolean;
 };
 
 /** Campos aceitos so nas linhas pessoais — a de sempre nao tem dono nem rotulo. */
@@ -485,7 +492,18 @@ export async function minhaLinhaWhatsapp(usuarioId: string) {
     `[crm] minhaLinhaWhatsapp donoId=${usuarioId} canalConfigId=${config?.id ?? 'nenhum'} ponteSessao=${config?.ponteSessao ?? 'nenhum'}`,
   );
   if (!config) return null;
-  return { id: config.id, ponteSessao: config.ponteSessao, modo: config.modo, ativo: config.ativo };
+  return {
+    id: config.id,
+    ponteSessao: config.ponteSessao,
+    modo: config.modo,
+    ativo: config.ativo,
+    nome: config.nome,
+    phoneNumberId: config.phoneNumberId,
+    whatsappCallingHabilitado: config.whatsappCallingHabilitado,
+    gravarChamadasWhatsapp: config.gravarChamadasWhatsapp,
+    transcreverChamadasWhatsapp: config.transcreverChamadasWhatsapp,
+    transcricaoAutomaticaAtiva: config.transcreverChamadasWhatsapp && Boolean(env.OPENAI_API_KEY),
+  };
 }
 
 /**

@@ -36,6 +36,9 @@ type CanalConfig = {
   ponteStatus?: string | null;
   ponteStatusEm?: string | null;
   espelharCelular?: boolean;
+  whatsappCallingHabilitado?: boolean;
+  gravarChamadasWhatsapp?: boolean;
+  transcreverChamadasWhatsapp?: boolean;
 };
 
 type IaDoNumero = { ativa: boolean; webhook: string | null; assinado: boolean };
@@ -59,6 +62,9 @@ const numeroVazio = {
   iaAtiva: false,
   iaUrlWebhook: '',
   iaSegredo: '',
+  whatsappCallingHabilitado: false,
+  gravarChamadasWhatsapp: false,
+  transcreverChamadasWhatsapp: false,
 };
 
 type QrDaPonte = {
@@ -434,6 +440,9 @@ export function CanaisTab() {
       filaId: numero.fila?.id ?? '',
       ativo: numero.ativo,
       espelharCelular: numero.espelharCelular ?? true,
+      whatsappCallingHabilitado: numero.whatsappCallingHabilitado ?? false,
+      gravarChamadasWhatsapp: numero.gravarChamadasWhatsapp ?? false,
+      transcreverChamadasWhatsapp: numero.transcreverChamadasWhatsapp ?? false,
       iaAtiva: ia?.ativa ?? false,
       iaUrlWebhook: ia?.webhook ?? '',
     });
@@ -454,6 +463,9 @@ export function CanaisTab() {
     setNumeroOcupado(true);
     try {
       const corpo: Record<string, unknown> = { ativo: numeroForm.ativo, modo: numeroForm.modo };
+      corpo.whatsappCallingHabilitado = numeroForm.modo === 'OFICIAL' && numeroForm.whatsappCallingHabilitado;
+      corpo.gravarChamadasWhatsapp = numeroForm.modo === 'OFICIAL' && numeroForm.gravarChamadasWhatsapp;
+      corpo.transcreverChamadasWhatsapp = numeroForm.modo === 'OFICIAL' && numeroForm.transcreverChamadasWhatsapp;
       if (numeroForm.modo === 'NAO_OFICIAL') corpo.espelharCelular = numeroForm.espelharCelular;
       if (numeroForm.nome) corpo.nome = numeroForm.nome;
       if (numeroForm.donoId) corpo.donoId = numeroForm.donoId;
@@ -1043,6 +1055,25 @@ export function CanaisTab() {
                         onChange={(e) => setNumeroForm({ ...numeroForm, verifyToken: e.target.value })}
                       />
                     </Field>
+                    <div className="sm:col-span-2 space-y-2 rounded-lg border border-slate-200 p-3">
+                      <label className="flex items-start gap-2 text-xs text-slate-700">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5"
+                          checked={numeroForm.whatsappCallingHabilitado}
+                          onChange={(e) => setNumeroForm({ ...numeroForm, whatsappCallingHabilitado: e.target.checked })}
+                        />
+                        <span>Habilitar chamadas WhatsApp nesta linha<span className="block text-slate-500">A Meta ainda precisa liberar Calling para este número e receber a inscrição de webhook de chamadas.</span></span>
+                      </label>
+                      <label className="flex items-start gap-2 text-xs text-slate-700">
+                        <input type="checkbox" className="mt-0.5" checked={numeroForm.gravarChamadasWhatsapp} onChange={(e) => setNumeroForm({ ...numeroForm, gravarChamadasWhatsapp: e.target.checked })} />
+                        <span>Gravar chamadas atendidas no navegador</span>
+                      </label>
+                      <label className="flex items-start gap-2 text-xs text-slate-700">
+                        <input type="checkbox" className="mt-0.5" checked={numeroForm.transcreverChamadasWhatsapp} onChange={(e) => setNumeroForm({ ...numeroForm, transcreverChamadasWhatsapp: e.target.checked })} />
+                        <span>Transcrever gravações automaticamente<span className="block text-slate-500">Requer OPENAI_API_KEY configurada no servidor.</span></span>
+                      </label>
+                    </div>
                   </>
                 )}
                 <Field

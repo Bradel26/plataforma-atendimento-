@@ -1,0 +1,137 @@
+import { env } from '../../env';
+import { badRequest, conflict, serviceUnavailable } from '../../lib/errors';
+import { Prisma } from '@prisma/client';
+import { prisma } from '../../lib/prisma';
+import { atualizarNumero, criarNumero } from './channels.service';
+
+type MetaPhone = { id: string; display_phone_number?: string; verified_name?: string };
+type MetaError = { error?: { message?: string; code?: number; error_subcode?: number } };
+
+const metaConfigurada = () => Boolean(env.META_APP_ID && env.META_APP_SECRET && env.META_EMBEDDED_SIGNUP_CONFIG_ID && env.META_WEBHOOK_VERIFY_TOKEN);
+
+export function estadoDoEmbeddedSignup() {
+  return {
+    disponivel: metaConfigurada(),
+    appId: metaConfigurada() ? env.META_APP_ID : null,
+    configId: metaConfigurada() ? env.META_EMBEDDED_SIGNUP_CONFIG_ID : null,
+    apiVersion: metaConfigurada() ? env.META_GRAPH_API_VERSION : null,
+  };
+}
+
+async function graph<T>(path: string, token: string, init?: RequestInit): Promise<T> {
+  const resposta = await fetch(`https://graph.facebook.com/${env.META_GRAPH_API_VERSION}/${path}`, {
+    ...init,
+    headers: { ...(init?.headers ?? {}), Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+  });
+  const corpo = await resposta.json().catch(() => ({})) as T & MetaError;
+  if (!resposta.ok) {
+    const detalhe = corpo.error?.message;
+    throw serviceUnavailable(`A Meta recusou a configuração do WhatsApp${detalhe ? `: ${detalhe}` : ` (HTTP ${resposta.status})`}.`);
+  }
+  return corpo;
+}
+
+/**
+ * Finaliza o Embedded Signup de uma pessoa autenticada.
+ * O code OAuth é trocado no servidor; token e segredos nunca voltam ao browser.
+ * A linha antiga do mesmo dono é atualizada só depois de a Meta validar o ativo.
+ */
+export async function conectarNumeroMeta(input: {
+  codigo: string;
+  wabaId: string;
+  phoneNumberId: string;
+  pin: string;
+  donoId: string;
+}) {
+  if (!metaConfigurada()) {
+    throw serviceUnavailable('O administrador ainda precisa configurar o app Meta e o Embedded Signup da plataforma.');
+  }
+
+  const atual = await prisma.channelConfig.findFirst({ where: { canal: 'WHATSAPP', donoId: input.donoId } });
+  if (atual?.phoneNumberId && atual.phoneNumberId !== input.phoneNumberId) {
+    throw conflict('Este usuário já tem outro número oficial conectado. Remova ou migre a linha atual antes de conectar um número diferente.');
+  }
+
+  const existente = await prisma.channelConfig.findFirst({ where: { canal: 'WHATSAPP', phoneNumberId: input.phoneNumberId } });
+  if (existente && existente.donoId !== input.donoId) {
+    throw conflict('Este número já está conectado a outro usuário da plataforma.');
+  }
+
+  const codigoUrl = new URL(`https://graph.facebook.com/${env.META_GRAPH_API_VERSION}/oauth/access_token`);
+  codigoUrl.searchParams.set('client_id', env.META_APP_ID);
+  codigoUrl.searchParams.set('client_secret', env.META_APP_SECRET);
+  codigoUrl.searchParams.set('code', input.codigo);
+  const troca = await fetch(codigoUrl, { method: 'GET' });
+  const tokenJson = await troca.json() as { access_token?: string; error?: { message?: string } };
+  if (!troca.ok || !tokenJson.access_token) {
+    throw badRequest(`Não foi possível concluir a autorização da Meta${tokenJson.error?.message ? `: ${tokenJson.error.message}` : '.'}`);
+  }
+  const token = tokenJson.access_token;
+
+  // Verifica pelo próprio WABA que o número retornado pelo fluxo pertence ao
+  // ativo autorizado; não confiamos nos IDs enviados pelo navegador isoladamente.
+  const phones = await graph<{ data?: MetaPhone[] }>(`${encodeURIComponent(input.wabaId)}/phone_numbers?fields=id,display_phone_number,verified_name&limit=100`, token);
+  const phone = phones.data?.find((item) => item.id === input.phoneNumberId);
+  if (!phone) throw badRequest('O número escolhido não pertence ao WhatsApp Business Account autorizado.');
+
+  // A Cloud API exige registro do número e PIN de verificação em duas etapas.
+  // O PIN é usado somente nesta chamada e nunca é persistido nem devolvido.
+  await graph(`${encodeURIComponent(input.phoneNumberId)}/register`, token, {
+    method: 'POST', body: JSON.stringify({ messaging_product: 'whatsapp', pin: input.pin }),
+  });
+
+  // A assinatura do app no WABA habilita entrega de eventos de mensagem e voz.
+  await graph(`${encodeURIComponent(input.wabaId)}/subscribed_apps`, token, { method: 'POST', body: '{}' });
+
+  // Calling é uma capacidade independente da conexão de mensagens. Uma linha
+  // pode ficar conectada para mensagens mesmo se Meta ainda não liberar voz.
+  let callingAtivo = false;
+  try {
+    await graph(`${encodeURIComponent(input.phoneNumberId)}/settings`, token, {
+      method: 'POST', body: JSON.stringify({ calling: { status: 'ENABLED' } }),
+    });
+    callingAtivo = true;
+  } catch {
+    callingAtivo = false;
+  }
+
+  const linha = {
+    nome: phone.verified_name || phone.display_phone_number || 'WhatsApp pessoal',
+    donoId: input.donoId,
+    modo: 'OFICIAL' as const,
+    ativo: true,
+    phoneNumberId: input.phoneNumberId,
+    wabaId: input.wabaId,
+    accessToken: token,
+    appSecret: env.META_APP_SECRET,
+    verifyToken: env.META_WEBHOOK_VERIFY_TOKEN,
+    ponteUrl: null,
+    ponteToken: null,
+    ponteSegredo: null,
+    ponteSessao: null,
+    espelharCelular: false,
+    whatsappCallingHabilitado: callingAtivo,
+    gravarChamadasWhatsapp: true,
+    transcreverChamadasWhatsapp: true,
+  };
+
+  let canal: Awaited<ReturnType<typeof criarNumero>>;
+  try {
+    canal = atual
+      ? await atualizarNumero(atual.id, linha)
+      : await criarNumero('WHATSAPP', linha);
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+      throw conflict('Este número WhatsApp já está conectado a outra linha ou conta da plataforma.');
+    }
+    throw e;
+  }
+
+  return {
+    canal,
+    callingAtivo,
+    aviso: callingAtivo
+      ? 'Número conectado e Calling API habilitada na Meta. O painel já pode receber e iniciar chamadas pelo navegador.'
+      : 'Número conectado para mensagens. A Meta ainda não habilitou Calling API para esta linha.',
+  };
+}

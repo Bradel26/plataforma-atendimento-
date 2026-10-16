@@ -2077,6 +2077,11 @@ model ChannelConfig {
   /// Segredo HMAC com que assinamos a entrega. Cifrado em repouso.
   iaSegredo    String? @map("ia_segredo")
 
+  /// Calling API e gravacao configuradas nesta linha individual de WhatsApp.
+  whatsappCallingHabilitado Boolean @default(false) @map("whatsapp_calling_habilitado")
+  gravarChamadasWhatsapp Boolean @default(false) @map("gravar_chamadas_whatsapp")
+  transcreverChamadasWhatsapp Boolean @default(false) @map("transcrever_chamadas_whatsapp")
+
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 
   fila           Queue?         @relation(fields: [filaId], references: [id], onDelete: SetNull)
@@ -2084,6 +2089,7 @@ model ChannelConfig {
   organizacao    Organizacao    @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
   conversas      Conversation[]
   previasChat    ChatPreview[]
+  chamadas       Call[]
   fluxo          Fluxo?         @relation("FluxoPublicadoCanal")
   fluxosRascunho Fluxo[]        @relation("FluxoRascunhoCanal")
 
@@ -2604,11 +2610,15 @@ model Call {
 
   numeroOrigem  String @map("numero_origem")
   numeroDestino String @map("numero_destino")
+  /// SDP remoto temporário para sinalizar uma chamada WhatsApp Cloud no navegador.
+  sdpRemoto String? @map("sdp_remoto")
 
   contatoId  String? @map("contato_id")
   conversaId String? @map("conversa_id")
   agenteId   String? @map("agente_id")
   filaId     String? @map("fila_id")
+  /// Linha WhatsApp que transportou a chamada; nulo para telefonia organizacional.
+  canalConfigId String? @map("canal_config_id")
 
   iniciadoEm  DateTime  @default(now()) @map("iniciado_em")
   atendidoEm  DateTime? @map("atendido_em")
@@ -2652,10 +2662,12 @@ model Call {
   classificadoPor User?                 @relation("ChamadaClassificador", fields: [classificadoPorId], references: [id], onDelete: SetNull)
   acoesSugeridas  CallSuggestedAction[]
   fila            Queue?                @relation(fields: [filaId], references: [id], onDelete: SetNull)
+  canalConfig     ChannelConfig?        @relation(fields: [canalConfigId], references: [id], onDelete: SetNull)
   organizacao     Organizacao           @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
   @@index([organizacaoId, iniciadoEm])
   @@index([organizacaoId, agenteId, iniciadoEm])
+  @@index([organizacaoId, canalConfigId, iniciadoEm])
   @@index([organizacaoId, status])
   @@map("chamadas")
 }
