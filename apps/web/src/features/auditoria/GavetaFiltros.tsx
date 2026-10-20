@@ -31,16 +31,12 @@ export function GavetaFiltros({ aberta, aoFechar, aplicados, opcoes, aoAplicar }
     <div className="space-y-4">
       {linhas.map((linha, i) => {
         const tipo = CAMPO_DE_TEXTO[linha.campo];
-        return <div key={i} className="space-y-2 rounded-xl border border-slate-200 p-3">
+        return <div key={i} className="space-y-1.5">
           <div className="flex items-center gap-2">
             <Select aria-label="Filtro" value={linha.campo} onChange={(e) => mudar(i, { campo: e.target.value as CampoFiltro, valores: [] })}>
               {CAMPOS.map((campo) => <option key={campo} value={campo}>{LABEL_CAMPO[campo]}</option>)}
             </Select>
-            <button type="button" aria-label="Remover filtro" onClick={() => setLinhas((atuais) => atuais.filter((_, j) => j !== i))} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-red-50 hover:text-red-600">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6" />
-              </svg>
-            </button>
+            <button type="button" aria-label="Remover filtro" onClick={() => setLinhas((atuais) => atuais.filter((_, j) => j !== i))} className="px-2 text-red-500">🗑</button>
           </div>
           {tipo === 'lista' && <Select multiple aria-label="Selecionar opções" value={linha.valores} onChange={(e) => mudar(i, { ...linha, valores: [...e.target.selectedOptions].map((o) => o.value) })} className="h-28">
             {opcoesDo(linha.campo).map((opcao) => <option key={opcao.valor} value={opcao.valor}>{opcao.rotulo}</option>)}
@@ -49,7 +45,7 @@ export function GavetaFiltros({ aberta, aoFechar, aplicados, opcoes, aoAplicar }
           {tipo === 'data' && <Input type="date" value={linha.valores[0] ?? ''} onChange={(e) => mudar(i, { ...linha, valores: [e.target.value] })} />}
         </div>;
       })}
-      <Button tamanho="sm" variante="neutro" onClick={() => setLinhas((atuais) => [...atuais, { campo: 'situacao', valores: [] }])}>+ Adicionar filtro</Button>
+      <Button tamanho="sm" onClick={() => setLinhas((atuais) => [...atuais, { campo: 'situacao', valores: [] }])}>+ Adicionar filtro</Button>
     </div>
   </Gaveta>;
 }

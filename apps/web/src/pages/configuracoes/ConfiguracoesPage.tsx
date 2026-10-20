@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CabecalhoPagina } from '../../components/ui/Pagina';
 import { BotsTab } from './BotsTab';
 import { FluxosTab } from './FluxosTab';
 import { CamposCustomizadosTab } from './CamposCustomizadosTab';
@@ -16,24 +15,22 @@ import { VozTab } from './VozTab';
 import { WhiteLabelTab } from './WhiteLabelTab';
 
 const ABAS = [
-  { id: 'usuarios', label: 'Usuários e permissões', grupo: 'Equipe e acesso', descricao: 'Quem entra na plataforma, com qual perfil e em quais módulos' },
-  { id: 'filiais', label: 'Filiais', grupo: 'Equipe e acesso', descricao: 'Unidades da empresa e o que pertence a cada uma' },
-  { id: 'filas', label: 'Filas', grupo: 'Equipe e acesso', descricao: 'Equipes de atendimento e quem recebe as conversas de cada uma' },
-  { id: 'canais', label: 'Canais', grupo: 'Canais e atendimento', descricao: 'Números de WhatsApp, redes sociais e o widget do site' },
-  { id: 'mensagens-rapidas', label: 'Mensagens rápidas', grupo: 'Canais e atendimento', descricao: 'Respostas prontas para usar durante o atendimento' },
-  { id: 'bots', label: 'Chatbot', grupo: 'Canais e atendimento', descricao: 'Perguntas automáticas antes de a conversa chegar a uma pessoa' },
-  { id: 'fluxos', label: 'Fluxos', grupo: 'Canais e atendimento', descricao: 'Roteamentos de WhatsApp montados em etapas' },
-  { id: 'ia', label: 'IA (motor externo)', grupo: 'Inteligência e voz', descricao: 'Ligação com o motor de IA: ponte por canal e tokens de integração' },
-  { id: 'voz', label: 'Voz', grupo: 'Inteligência e voz', descricao: 'Provedor de telefonia, gravação e transcrição das ligações' },
-  { id: 'campos-customizados', label: 'Campos customizados', grupo: 'Dados e sistema', descricao: 'Campos extras nas fichas de contato e de conta' },
-  { id: 'lgpd', label: 'LGPD e retenção', grupo: 'Dados e sistema', descricao: 'Por quanto tempo os dados ficam guardados e os pedidos do titular' },
-  { id: 'fila', label: 'Fila de trabalho', grupo: 'Dados e sistema', descricao: 'Trabalhos em segundo plano esperando, e os que desistiram' },
-  { id: 'whitelabel', label: 'White Label', grupo: 'Marca', descricao: 'Nome, logo e cores da plataforma' },
+  { id: 'usuarios', label: 'Usuários e permissões' },
+  { id: 'filiais', label: 'Filiais' },
+  { id: 'campos-customizados', label: 'Campos customizados' },
+  { id: 'filas', label: 'Filas' },
+  { id: 'canais', label: 'Canais' },
+  { id: 'mensagens-rapidas', label: 'Mensagens rápidas' },
+  { id: 'bots', label: 'Chatbot' },
+  { id: 'fluxos', label: 'Fluxos' },
+  { id: 'ia', label: 'IA (motor externo)' },
+  { id: 'whitelabel', label: 'White Label' },
+  { id: 'voz', label: 'Voz' },
+  { id: 'lgpd', label: 'LGPD e retenção' },
+  { id: 'fila', label: 'Fila de trabalho' },
 ] as const;
 
 type AbaId = (typeof ABAS)[number]['id'];
-
-const GRUPOS = [...new Set(ABAS.map((a) => a.grupo))];
 
 export function ConfiguracoesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -41,7 +38,6 @@ export function ConfiguracoesPage() {
     ? searchParams.get('aba') as AbaId
     : 'usuarios';
   const [aba, setAba] = useState<AbaId>(abaInicial);
-  const atual = ABAS.find((a) => a.id === aba)!;
 
   const selecionarAba = (id: AbaId) => {
     setAba(id);
@@ -49,61 +45,37 @@ export function ConfiguracoesPage() {
   };
 
   return (
-    <div className="grid items-start gap-5 lg:grid-cols-[240px_minmax(0,1fr)]">
-      {/* No celular a lista vira uma faixa que rola de lado; no desktop, grupos empilhados. */}
-      <nav
-        aria-label="Seções das configurações"
-        className="sem-barra-de-rolagem flex min-w-0 gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5 lg:sticky lg:top-4 lg:flex-col lg:gap-3.5 lg:overflow-visible lg:p-2.5"
-      >
-        {GRUPOS.map((grupo) => (
-          <div key={grupo} className="flex shrink-0 gap-1 lg:flex-col lg:gap-0.5">
-            <p className="hidden px-2.5 pb-1 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500 lg:block">{grupo}</p>
-            {ABAS.filter((a) => a.grupo === grupo).map(({ id, label }) => {
-              const ativa = aba === id;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  aria-current={ativa ? 'page' : undefined}
-                  onClick={() => selecionarAba(id)}
-                  className={`flex h-[34px] shrink-0 items-center gap-2.5 whitespace-nowrap rounded-lg px-2.5 text-left text-[13px] transition ${
-                    ativa
-                      ? 'bg-[var(--brand-primary-soft)] font-bold text-[var(--brand-primary)]'
-                      : 'font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-900'
-                  }`}
-                >
-                  <span
-                    className={`hidden h-4 w-[3px] shrink-0 rounded-sm lg:block ${ativa ? 'bg-[var(--brand-primary)]' : 'bg-transparent'}`}
-                    aria-hidden="true"
-                  />
-                  {label}
-                </button>
-              );
-            })}
-          </div>
+    <div className="space-y-5">
+      <nav className="flex flex-wrap gap-1 border-b border-slate-200">
+        {ABAS.map(({ id, label }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => selecionarAba(id)}
+            className={`-mb-px border-b-2 px-4 py-2.5 text-sm transition ${
+              aba === id
+                ? 'border-[var(--brand-primary)] font-medium text-[var(--brand-primary)]'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            {label}
+          </button>
         ))}
       </nav>
 
-      {/* `[&_.grid>*]:min-w-0`: as abas usam grades `1fr`, que crescem ate caber a
-          tabela mais larga (a matriz de permissoes) e empurravam a pagina para o
-          lado; com min-w-0 a tabela rola dentro do proprio cartao. */}
-      <div className="flex min-w-0 flex-col gap-5 [&_.grid>*]:min-w-0">
-        <CabecalhoPagina acima={atual.grupo} titulo={atual.label} descricao={atual.descricao} />
-
-        {aba === 'usuarios' && <UsuariosTab />}
-        {aba === 'filiais' && <FiliaisTab />}
-        {aba === 'campos-customizados' && <CamposCustomizadosTab />}
-        {aba === 'filas' && <FilasTab />}
-        {aba === 'canais' && <CanaisTab />}
-        {aba === 'mensagens-rapidas' && <MensagensRapidasTab />}
-        {aba === 'bots' && <BotsTab />}
-        {aba === 'fluxos' && <FluxosTab />}
-        {aba === 'ia' && <IaTab />}
-        {aba === 'whitelabel' && <WhiteLabelTab />}
-        {aba === 'voz' && <VozTab />}
-        {aba === 'lgpd' && <LgpdTab />}
-        {aba === 'fila' && <FilaTab />}
-      </div>
+      {aba === 'usuarios' && <UsuariosTab />}
+      {aba === 'filiais' && <FiliaisTab />}
+      {aba === 'campos-customizados' && <CamposCustomizadosTab />}
+      {aba === 'filas' && <FilasTab />}
+      {aba === 'canais' && <CanaisTab />}
+      {aba === 'mensagens-rapidas' && <MensagensRapidasTab />}
+      {aba === 'bots' && <BotsTab />}
+      {aba === 'fluxos' && <FluxosTab />}
+      {aba === 'ia' && <IaTab />}
+      {aba === 'whitelabel' && <WhiteLabelTab />}
+      {aba === 'voz' && <VozTab />}
+      {aba === 'lgpd' && <LgpdTab />}
+      {aba === 'fila' && <FilaTab />}
     </div>
   );
 }

@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
-import { Alerta, Input, Select } from '../components/ui';
-import { CabecalhoPagina, Segmentado } from '../components/ui/Pagina';
+import { Link } from 'react-router-dom';
+import { Alerta, Badge, Card, Field, Input, Select } from '../components/ui';
+import { BarList } from '../components/viz/BarList';
+import { StatTile } from '../components/viz/StatTile';
 import { ApiError, api } from '../lib/api';
 import { ESTADO, SERIES } from '../lib/viz';
 import type { GestaoOperacao, OperacaoEsteira, Semaforo } from '../lib/types';
-import { BarraEmpilhada, Barras, Indicador, Painel, Selo } from './dashboard/blocos';
 import { ConsumoDeIaCard } from './gestao/ConsumoDeIa';
 import { ComercialTab } from './crm/ComercialTab';
 
@@ -24,17 +24,10 @@ export const LABEL_SEMAFORO: Record<Semaforo, string> = {
   CRITICO: 'Crítico',
 };
 
-// So tons que o tema escuro remapeia (index.css).
-const CLASSE_SEMAFORO: Record<Semaforo, string> = {
-  NORMAL: 'bg-emerald-50 text-emerald-700',
-  ATENCAO: 'bg-amber-50 text-amber-700',
-  CRITICO: 'bg-red-50 text-red-700',
-};
-
 function Farol({ s }: { s: Semaforo }) {
   return (
-    <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full py-0.5 pl-2 pr-2.5 text-xs font-semibold ${CLASSE_SEMAFORO[s]}`}>
-      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: COR_SEMAFORO[s] }} aria-hidden />
+    <span className="inline-flex items-center gap-1.5 text-xs text-slate-700">
+      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: COR_SEMAFORO[s] }} aria-hidden />
       {LABEL_SEMAFORO[s]}
     </span>
   );
@@ -42,27 +35,14 @@ function Farol({ s }: { s: Semaforo }) {
 
 const dias = (n: number | null) => (n === null ? '—' : `${String(n).replace('.', ',')} dia${n === 1 ? '' : 's'}`);
 
-const ABAS = [
-  { valor: 'esteira', rotulo: 'Esteira' },
-  { valor: 'comercial', rotulo: 'Funil comercial' },
-  { valor: 'ia', rotulo: 'Consumo de IA' },
-] as const;
-type Aba = (typeof ABAS)[number]['valor'];
-
 /**
  * Area da Gestao — tempo, produtividade e gargalos da operacao.
  *
  * Nao repete o Dashboard: la esta "quantos parceiros temos"; aqui esta "quanto
  * tempo levam, onde param e quem esta parado". Tres perguntas, na ordem do
  * documento: quantos entram, em que etapa estao, onde travam.
- *
- * O funil comercial e o consumo de IA moram em abas proprias: cada um le uma
- * coisa diferente e, empilhados, empurravam a esteira para fora da tela.
  */
 export function GestaoPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const abaDaUrl = searchParams.get('aba');
-  const aba: Aba = ABAS.some((a) => a.valor === abaDaUrl) ? (abaDaUrl as Aba) : 'esteira';
   const [dados, setDados] = useState<GestaoOperacao | null>(null);
   const [operacoes, setOperacoes] = useState<OperacaoEsteira[]>([]);
   const [desde, setDesde] = useState(trintaDias());
@@ -103,228 +83,222 @@ export function GestaoPage() {
   const tempoEtapa = (dados?.tempoMedioPorEtapa ?? []).map((e) => ({
     rotulo: `${e.etapa} (${e.passagens})`,
     valor: e.mediaDias ?? 0,
+    cor: SERIES[1],
   }));
-  const lenta = [...(dados?.tempoMedioPorEtapa ?? [])].sort((a, b) => (b.mediaDias ?? 0) - (a.mediaDias ?? 0))[0];
 
   return (
-    <div className="flex flex-col gap-5">
-      <CabecalhoPagina titulo="Gestão da operação" descricao="Quanto tempo leva, onde para e quem está parado">
-        <Segmentado
-          papel="tab"
-          rotulo="Área da gestão"
-          opcoes={ABAS}
-          valor={aba}
-          aoMudar={(v) => setSearchParams(v === 'esteira' ? {} : { aba: v }, { replace: true })}
+    <div className="space-y-5">
+      <Card titulo="Filtros" descricao="O período vale para os tempos medios; parados e sem interação são a foto de agora">
+        <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <Field label="De">
+            <Input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} />
+          </Field>
+          <Field label="Até">
+            <Input type="date" value={ate} onChange={(e) => setAte(e.target.value)} />
+          </Field>
+          <Field label="Operação">
+            <Select value={funilId} onChange={(e) => setFunilId(e.target.value)}>
+              <option value="">Todas</option>
+              {operacoes.map((o) => (
+                <option key={o.id} value={o.id}>{o.nome}</option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Parado a partir de" hint="dias sem avançar">
+            <Input
+              type="number"
+              min={1}
+              max={90}
+              value={limiteDias}
+              onChange={(e) => setLimiteDias(Math.max(1, Number(e.target.value) || 1))}
+            />
+          </Field>
+          <Field label="Sem interação há" hint="horas">
+            <Input
+              type="number"
+              min={1}
+              max={720}
+              value={horas}
+              onChange={(e) => setHoras(Math.max(1, Number(e.target.value) || 1))}
+            />
+          </Field>
+        </div>
+      </Card>
+
+      {erro && <Alerta>{erro}</Alerta>}
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <StatTile
+          rotulo="Tempo médio de credenciamento"
+          valor={dias(dados?.tempoMedioCredenciamentoDias ?? null)}
+          detalhe={`do cadastro ao credenciado · ${dados?.credenciadosNoPeriodo ?? 0} no período`}
         />
-      </CabecalhoPagina>
+        <StatTile
+          rotulo="Parceiros parados"
+          valor={dados?.parceirosParados ?? '—'}
+          detalhe={`${limiteDias}+ dias sem avançar na esteira`}
+          estado={dados && dados.parceirosParados > 0 ? ESTADO.grave : undefined}
+        />
+        <StatTile
+          rotulo="Maior tempo parado"
+          valor={dados?.maiorTempoParado ? dias(dados.maiorTempoParado.dias) : '—'}
+          detalhe={
+            dados?.maiorTempoParado
+              ? `${dados.maiorTempoParado.parceiro} · ${dados.maiorTempoParado.etapa}`
+              : 'ninguém parado'
+          }
+        />
+        <StatTile
+          rotulo="Etapa mais lenta"
+          valor={(() => {
+            const lenta = [...(dados?.tempoMedioPorEtapa ?? [])].sort((a, b) => (b.mediaDias ?? 0) - (a.mediaDias ?? 0))[0];
+            return lenta ? dias(lenta.mediaDias) : '—';
+          })()}
+          detalhe={
+            [...(dados?.tempoMedioPorEtapa ?? [])].sort((a, b) => (b.mediaDias ?? 0) - (a.mediaDias ?? 0))[0]?.etapa ??
+            'sem passagens no período'
+          }
+        />
+        <StatTile
+          rotulo="Atendimentos sem interação"
+          valor={dados?.atendimentosSemInteracao.total ?? '—'}
+          detalhe={`abertos e sem mensagem há ${horas}h+`}
+          estado={dados && dados.atendimentosSemInteracao.total > 0 ? ESTADO.atencao : undefined}
+        />
+      </div>
 
-      {aba === 'comercial' && <ComercialTab />}
-      {aba === 'ia' && <ConsumoDeIaCard />}
-
-      {aba === 'esteira' && (
-        <>
-          <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
-            <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
-              De
-              <Input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className="w-[150px]" />
-            </label>
-            <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
-              Até
-              <Input type="date" value={ate} onChange={(e) => setAte(e.target.value)} className="w-[150px]" />
-            </label>
-            <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
-              Operação
-              <Select value={funilId} onChange={(e) => setFunilId(e.target.value)} className="w-48">
-                <option value="">Todas</option>
-                {operacoes.map((o) => (
-                  <option key={o.id} value={o.id}>{o.nome}</option>
-                ))}
-              </Select>
-            </label>
-            <span className="hidden h-9 w-px self-end bg-slate-200 sm:block" aria-hidden="true" />
-            <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
-              Parado a partir de (dias)
-              <Input
-                type="number"
-                min={1}
-                max={90}
-                value={limiteDias}
-                onChange={(e) => setLimiteDias(Math.max(1, Number(e.target.value) || 1))}
-                className="w-24"
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
-              Sem interação há (horas)
-              <Input
-                type="number"
-                min={1}
-                max={720}
-                value={horas}
-                onChange={(e) => setHoras(Math.max(1, Number(e.target.value) || 1))}
-                className="w-24"
-              />
-            </label>
-            <p className="basis-full text-xs text-slate-500 xl:ml-auto xl:basis-auto xl:max-w-xs xl:self-center xl:text-right">
-              O período vale para os tempos médios; parados e sem interação são a foto de agora
-            </p>
-          </div>
-
-          {erro && <Alerta>{erro}</Alerta>}
-
-          <section aria-label="Indicadores" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            <Indicador
-              rotulo="Tempo de credenciamento"
-              valor={dias(dados?.tempoMedioCredenciamentoDias ?? null)}
-              detalhe={`do cadastro ao credenciado · ${dados?.credenciadosNoPeriodo ?? 0} no período`}
-            />
-            <Indicador
-              rotulo="Parceiros parados"
-              valor={dados?.parceirosParados ?? '—'}
-              detalhe={`${limiteDias}+ dias sem avançar na esteira`}
-              selo={dados && dados.parceirosParados > 0 ? <Selo tom="grave">Agir</Selo> : undefined}
-            />
-            <Indicador
-              rotulo="Maior tempo parado"
-              valor={dados?.maiorTempoParado ? dias(dados.maiorTempoParado.dias) : '—'}
-              detalhe={
-                dados?.maiorTempoParado
-                  ? `${dados.maiorTempoParado.parceiro} · ${dados.maiorTempoParado.etapa}`
-                  : 'ninguém parado'
-              }
-            />
-            <Indicador
-              rotulo="Etapa mais lenta"
-              valor={lenta ? dias(lenta.mediaDias) : '—'}
-              detalhe={lenta?.etapa ?? 'sem passagens no período'}
-            />
-            <Indicador
-              rotulo="Sem interação"
-              valor={dados?.atendimentosSemInteracao.total ?? '—'}
-              detalhe={`abertos e sem mensagem há ${horas}h+`}
-              selo={dados && dados.atendimentosSemInteracao.total > 0 ? <Selo tom="atencao">Atenção</Selo> : undefined}
-            />
-          </section>
-
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-            <Painel titulo="Onde a esteira acumula" descricao="Parceiros em cada etapa agora; em vermelho, os parados">
-              {(dados?.volumePorEtapa ?? []).length === 0 ? (
-                <p className="text-sm text-slate-500">Nenhuma esteira configurada.</p>
-              ) : (
-                <div className="flex flex-col gap-4">
-                  {dados!.volumePorEtapa.map((v) => (
-                    <div key={v.funil.id}>
-                      <p className="mb-2 text-[12.5px] font-bold text-slate-600">{v.funil.nome}</p>
-                      <ol className="grid gap-1.5 [grid-template-columns:repeat(auto-fill,minmax(118px,1fr))]">
-                        {v.etapas.map((e, i) => (
-                          <li
-                            key={e.id}
-                            className={`flex min-w-0 flex-col gap-1 rounded-xl border px-3 py-2.5 ${
-                              e.parados > 0 ? 'border-red-200 bg-red-50' : 'border-slate-200 bg-slate-50'
-                            }`}
-                          >
-                            <span className="truncate text-[11.5px] text-slate-600" title={e.nome}>{i + 1}. {e.nome}</span>
-                            <span className="text-xl font-bold tabular-nums text-slate-900">{e.total}</span>
-                            <span className={`text-[11.5px] font-semibold tabular-nums ${e.parados > 0 ? 'text-red-700' : 'text-slate-500'}`}>
-                              {e.parados > 0 ? `${e.parados} parado(s)` : 'nenhum parado'}
-                            </span>
-                          </li>
-                        ))}
-                      </ol>
-                    </div>
-                  ))}
-                  {dados && (
-                    <div className="border-t border-slate-100 pt-3">
-                      <p className="mb-2 text-[12.5px] font-semibold text-slate-700">Semáforo dos parceiros na esteira</p>
-                      <BarraEmpilhada
-                        rotuloAcessivel={`Dentro do tempo esperado ${dados.semaforoContagem.NORMAL}, próximo do limite ${dados.semaforoContagem.ATENCAO}, acima do tempo esperado ${dados.semaforoContagem.CRITICO}`}
-                        partes={[
-                          { rotulo: 'Dentro do tempo esperado', valor: dados.semaforoContagem.NORMAL, cor: COR_SEMAFORO.NORMAL },
-                          { rotulo: 'Próximo do limite', valor: dados.semaforoContagem.ATENCAO, cor: COR_SEMAFORO.ATENCAO },
-                          { rotulo: 'Acima do tempo esperado', valor: dados.semaforoContagem.CRITICO, cor: COR_SEMAFORO.CRITICO },
-                        ]}
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
-            </Painel>
-
-            <Painel titulo="Leadtime por etapa" descricao="Média das saídas de cada etapa no período, em dias (passagens)">
-              <Barras itens={tempoEtapa} larguraRotulo={190} unidade="d" cor={SERIES[0]} formatar={(v) => v.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} vazio="Nenhum parceiro mudou de etapa no período" />
-            </Painel>
-          </div>
-
-          <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-            <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white" aria-labelledby="gestao-parados">
-              <div className="px-5 py-4">
-                <h3 id="gestao-parados" className="text-[15px] font-semibold text-slate-800">Parceiros sem movimentação</h3>
-                <p className="mt-0.5 text-[12.5px] text-slate-500">
-                  Os {dados?.semMovimentacao.length ?? 0} parados há mais tempo, fora da etapa Ativo
-                </p>
-              </div>
-              {!dados || dados.semMovimentacao.length === 0 ? (
-                <p className="px-5 pb-5 text-sm text-slate-500">Nenhum parceiro na esteira.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-[13px]">
-                    <thead className="border-y border-slate-200 bg-slate-50 text-[11.5px] text-slate-500">
-                      <tr>
-                        {['Parceiro', 'Responsável', 'Etapa', 'Última mov.', 'Parado', 'Situação'].map((h) => (
-                          <th key={h} className="whitespace-nowrap px-4 py-2.5 font-semibold">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 text-slate-700">
-                      {dados.semMovimentacao.map((p) => (
-                        <tr key={p.id}>
-                          <td className="px-4 py-2.5">
-                            <Link to={`/contatos/${p.contato.id}`} className="font-bold text-blue-700 hover:underline">
-                              {p.parceiro}
-                            </Link>
-                            <span className="block text-xs text-slate-500">{p.operacao.nome}</span>
-                          </td>
-                          <td className="px-4 py-2.5">{p.responsavel?.nome ?? '—'}</td>
-                          <td className="px-4 py-2.5">{p.etapa}</td>
-                          <td className="px-4 py-2.5 tabular-nums">{new Date(p.ultimaMovimentacao).toLocaleDateString('pt-BR')}</td>
-                          <td className="whitespace-nowrap px-4 py-2.5 font-bold tabular-nums text-slate-900">{dias(p.diasParado)}</td>
-                          <td className="px-4 py-2.5"><Farol s={p.semaforo} /></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </section>
-
-            <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white" aria-labelledby="gestao-sem-interacao">
-              <div className="px-5 py-4">
-                <h3 id="gestao-sem-interacao" className="text-[15px] font-semibold text-slate-800">Atendimentos sem interação</h3>
-                <p className="mt-0.5 text-[12.5px] text-slate-500">Conversas abertas sem nenhuma mensagem há {horas} hora(s) ou mais</p>
-              </div>
-              {!dados || dados.atendimentosSemInteracao.lista.length === 0 ? (
-                <p className="px-5 pb-5 text-sm text-slate-500">Nenhum atendimento parado.</p>
-              ) : (
-                <ul className="flex flex-col gap-1.5 px-3 pb-3">
-                  {dados.atendimentosSemInteracao.lista.map((c) => (
-                    <li key={c.id} className="flex flex-wrap items-center gap-2.5 rounded-xl bg-slate-50 px-3 py-2.5">
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[13.5px] font-bold text-slate-900">{c.contato.nome}</span>
-                        <span className="text-xs text-slate-500">{c.canal} · {c.agente?.nome ?? 'sem consultor'}</span>
-                      </span>
-                      <span className="text-[13px] font-bold tabular-nums text-slate-800">
-                        {c.horasSemInteracao >= 48
-                          ? `${Math.floor(c.horasSemInteracao / 24)} dias`
-                          : `${c.horasSemInteracao} h`}
-                      </span>
-                      <Farol s={c.semaforo} />
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-          </div>
-        </>
+      {dados && (
+        <p className="flex flex-wrap gap-4 text-xs text-slate-600">
+          <span>
+            <Farol s="NORMAL" /> dentro do tempo esperado ({dados.semaforoContagem.NORMAL})
+          </span>
+          <span>
+            <Farol s="ATENCAO" /> próximo do limite ({dados.semaforoContagem.ATENCAO})
+          </span>
+          <span>
+            <Farol s="CRITICO" /> acima do tempo esperado ({dados.semaforoContagem.CRITICO})
+          </span>
+        </p>
       )}
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        <Card titulo="Onde a esteira acumula" descricao="Parceiros em cada etapa agora; entre parenteses, os parados">
+          {(dados?.volumePorEtapa ?? []).length === 0 ? (
+            <p className="text-sm text-slate-500">Nenhuma esteira configurada.</p>
+          ) : (
+            <div className="space-y-4">
+              {dados!.volumePorEtapa.map((v) => (
+                <div key={v.funil.id}>
+                  <p className="mb-1.5 text-xs font-medium text-slate-500">{v.funil.nome}</p>
+                  <ol className="flex flex-wrap items-center gap-1.5 text-sm">
+                    {v.etapas.map((e, i) => (
+                      <li key={e.id} className="flex items-center gap-1.5">
+                        {i > 0 && <span className="text-slate-400" aria-hidden>→</span>}
+                        <span
+                          className={`rounded-lg border px-2.5 py-1 ${
+                            e.parados > 0 ? 'border-red-200 bg-red-50' : 'border-slate-200 bg-white'
+                          }`}
+                        >
+                          <span className="text-slate-600">{e.nome}</span>{' '}
+                          <span className="font-semibold tabular-nums text-slate-800">{e.total}</span>
+                          {e.parados > 0 && <span className="text-xs text-red-700"> ({e.parados})</span>}
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Card titulo="Leadtime" descricao="Média das saídas de cada etapa no período, em dias (passagens)">
+          <BarList itens={tempoEtapa} unidade="dias" vazio="Nenhum parceiro mudou de etapa no período" />
+        </Card>
+      </div>
+
+      <Card
+        titulo="Parceiros sem movimentação"
+        descricao={`Os ${dados?.semMovimentacao.length ?? 0} parados há mais tempo, fora da etapa Ativo`}
+      >
+        {!dados || dados.semMovimentacao.length === 0 ? (
+          <p className="text-sm text-slate-500">Nenhum parceiro na esteira.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="pb-2 pr-3 font-medium">Parceiro</th>
+                  <th className="pb-2 pr-3 font-medium">Responsável</th>
+                  <th className="pb-2 pr-3 font-medium">Operação</th>
+                  <th className="pb-2 pr-3 font-medium">Etapa</th>
+                  <th className="pb-2 pr-3 font-medium">Última movimentação</th>
+                  <th className="pb-2 pr-3 font-medium">Tempo parado</th>
+                  <th className="pb-2 font-medium">Situação</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {dados.semMovimentacao.map((p) => (
+                  <tr key={p.id}>
+                    <td className="py-2.5 pr-3">
+                      <Link to={`/contatos/${p.contato.id}`} className="font-medium text-slate-800 hover:underline">
+                        {p.parceiro}
+                      </Link>
+                    </td>
+                    <td className="py-2.5 pr-3 text-slate-600">{p.responsavel?.nome ?? '—'}</td>
+                    <td className="py-2.5 pr-3 text-slate-600">{p.operacao.nome}</td>
+                    <td className="py-2.5 pr-3 text-slate-600">{p.etapa}</td>
+                    <td className="py-2.5 pr-3 tabular-nums text-slate-600">
+                      {new Date(p.ultimaMovimentacao).toLocaleDateString('pt-BR')}
+                    </td>
+                    <td className="py-2.5 pr-3 tabular-nums text-slate-800">{dias(p.diasParado)}</td>
+                    <td className="py-2.5">
+                      <Farol s={p.semaforo} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      <Card
+        titulo="Atendimentos sem interação"
+        descricao={`Conversas abertas sem nenhuma mensagem há ${horas} hora(s) ou mais`}
+      >
+        {!dados || dados.atendimentosSemInteracao.lista.length === 0 ? (
+          <p className="text-sm text-slate-500">Nenhum atendimento parado.</p>
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {dados.atendimentosSemInteracao.lista.map((c) => (
+              <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+                <span>
+                  <span className="font-medium text-slate-800">{c.contato.nome}</span>{' '}
+                  <Badge>{c.canal}</Badge>{' '}
+                  <span className="text-xs text-slate-500">{c.agente?.nome ?? 'sem consultor'}</span>
+                </span>
+                <span className="flex items-center gap-3">
+                  <span className="text-xs tabular-nums text-slate-600">
+                    {c.horasSemInteracao >= 48
+                      ? `${Math.floor(c.horasSemInteracao / 24)} dias`
+                      : `${c.horasSemInteracao} h`}
+                  </span>
+                  <Farol s={c.semaforo} />
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
+      {/* Leitura do funil de Vendas/Jornadas do CRM — funil diferente da esteira
+          acima (ver spec 2026-09-29-leitura-do-credenciamento-design.md).
+          Convivem na mesma pagina de proposito: cada uma le um funil. */}
+      <ComercialTab />
+
+      {/* Consumo de IA (item 6.8): custo da instalacao, lido por quem administra. */}
+      <ConsumoDeIaCard />
     </div>
   );
 }

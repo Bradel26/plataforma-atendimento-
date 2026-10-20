@@ -7,7 +7,6 @@ import { PaletaDeComando } from './PaletaDeComando';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { AvisoLinhasDesconectadas } from './AvisoLinhasDesconectadas';
-import { AssistenteGlobal } from './AssistenteGlobal';
 
 export function AppShell() {
   const { pathname } = useLocation();
@@ -38,7 +37,6 @@ export function AppShell() {
             </main>
           </div>
           <PaletaDeComando />
-          <AssistenteGlobal />
         </div>
       </ConfirmProvider>
     </ToastProvider>

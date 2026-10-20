@@ -5,48 +5,9 @@ import { SkeletonBloco, SkeletonTexto } from '../../components/ui/Skeleton';
 import { Indicador } from '../../pages/crm/ficha/Indicadores';
 import { RegistrarAtividade } from '../../pages/crm/ficha/RegistrarAtividade';
 import { EditorEtiquetas, ETIQUETAS_CONTATO, ETIQUETAS_CONVERSA } from '../../pages/crm/Etiquetas';
-import { LABEL_CONVERSA_STATUS, LABEL_TIPO_ATIVIDADE, type Atividade, type ConversaDetalhe, type FichaContato as Ficha } from '../../lib/types';
+import { LABEL_TIPO_ATIVIDADE, type Atividade, type ConversaDetalhe, type FichaContato as Ficha } from '../../lib/types';
 import { api } from '../../lib/api'; import { AvatarConversa } from './AvatarConversa';
 import { RegistroManual } from '../../pages/crm/ficha/RegistroManual';
-import { telefoneLegivel } from '../../lib/telefone';
-import { CLASSE_STATUS } from './apresentacao';
-
-const TITULO_SECAO = 'mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500';
-
-const dataHoraCurta = (iso: string | null) =>
-  iso
-    ? new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
-    : '—';
-
-function DadosDoAtendimento({ conversa }: { conversa: ConversaDetalhe }) {
-  const linhas: Array<[string, React.ReactNode]> = [
-    ['Status', (
-      <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${CLASSE_STATUS[conversa.status]}`}>
-        {LABEL_CONVERSA_STATUS[conversa.status]}
-      </span>
-    )],
-    ['Protocolo', <span className="font-mono">{conversa.protocolo ?? '—'}</span>],
-    ['Canal', conversa.linha?.nome ?? conversa.canal],
-    ['Origem', conversa.origem === 'ATIVO' ? 'Ativo' : 'Receptivo'],
-    ['Equipe', conversa.fila?.nome ?? '—'],
-    ['Responsável', conversa.agente?.nome ?? '—'],
-    ['Aberto em', <span className="tabular-nums">{dataHoraCurta(conversa.criadoEm)}</span>],
-    ['Aceito em', <span className="tabular-nums">{dataHoraCurta(conversa.atribuidoEm)}</span>],
-  ];
-  return (
-    <div className="mt-5">
-      <p className={TITULO_SECAO}>Atendimento</p>
-      <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-xs">
-        {linhas.map(([rotulo, valor]) => (
-          <div key={rotulo} className="contents">
-            <dt className="text-slate-500">{rotulo}</dt>
-            <dd className="truncate text-right text-slate-700">{valor}</dd>
-          </div>
-        ))}
-      </dl>
-    </div>
-  );
-}
 
 /**
  * Quem e essa pessoa, sem sair da conversa — e o que fazer a respeito dela.
@@ -68,10 +29,7 @@ export function PainelContato({
   conversaId,
   conversaTags,
   aoMudarConversa,
-  conversa,
 }: {
-  /** Conversa aberta, para a secao "Atendimento" (status, protocolo, responsavel). */
-  conversa?: ConversaDetalhe;
   contatoId: string;
   /** So existe quando o painel e um drawer (notebook/tablet) ou um passo do mobile — no desktop a coluna e fixa. */
   aoFechar?: () => void;
@@ -140,11 +98,11 @@ export function PainelContato({
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="min-h-0 flex-1 overflow-y-auto border-b border-slate-100 p-5">
+      <div className="min-h-0 flex-1 overflow-y-auto border-b border-slate-100 p-4">
         <div className="flex items-start gap-3">
-          <AvatarConversa conversaId={conversaId ?? contatoId} nome={contato.nome} className="h-12 w-12 text-base" avatarPath={`/contatos/${contatoId}/avatar`} />
+          <AvatarConversa conversaId={conversaId ?? contatoId} nome={contato.nome} className="h-11 w-11" avatarPath={`/contatos/${contatoId}/avatar`} />
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[15px] font-semibold text-slate-800">{contato.nome}</p>
+            <p className="truncate text-sm font-semibold text-slate-800">{contato.nome}</p>
             {contato.conta ? (
               <Link
                 to={`/clientes/${contato.conta.id}`}
@@ -164,10 +122,10 @@ export function PainelContato({
           )}
         </div>
 
-        <dl className="mt-4 grid grid-cols-2 gap-2 text-xs">
+        <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
           <div className="min-w-0">
             <dt className="text-slate-500">Telefone</dt>
-            <dd className="truncate tabular-nums text-slate-700">{contato.telefone ? telefoneLegivel(contato.telefone) : '—'}</dd>
+            <dd className="truncate text-slate-700">{contato.telefone ?? '—'}</dd>
           </div>
           <div className="min-w-0">
             <dt className="text-slate-500">E-mail</dt>
@@ -175,10 +133,8 @@ export function PainelContato({
           </div>
         </dl>
 
-        {conversa && <DadosDoAtendimento conversa={conversa} />}
-
-        <div className="mt-5">
-          <p className={TITULO_SECAO}>Etiquetas do contato</p>
+        <div className="mt-3">
+          <p className="mb-1.5 text-xs font-medium text-slate-500">Etiquetas do contato</p>
           <EditorEtiquetas
             tags={contato.tags ?? []}
             opcoes={ETIQUETAS_CONTATO}
@@ -196,8 +152,8 @@ export function PainelContato({
           cá pra liberar espaco vertical nas mensagens.
         */}
         {conversaId && (
-          <div className="mt-4">
-            <p className={TITULO_SECAO}>Etiquetas da conversa</p>
+          <div className="mt-3">
+            <p className="mb-1.5 text-xs font-medium text-slate-500">Etiquetas da conversa</p>
             <EditorEtiquetas
               tags={conversaTags ?? []}
               opcoes={ETIQUETAS_CONVERSA}
@@ -216,7 +172,7 @@ export function PainelContato({
             combinado ou agendar um retorno, sem sair da conversa. Mesmo
             componente que a ficha completa usa — so entra escondido porque o
             formulario aberto tomaria a altura toda deste painel estreito. */}
-        <div className="mt-5">
+        <div className="mt-3">
           <div className="flex flex-wrap gap-2">
             <Button
               variante="neutro"
@@ -248,7 +204,7 @@ export function PainelContato({
 
       {atividadesAbertas.length > 0 && (
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
-          <p className={TITULO_SECAO}>Próximas ações</p>
+          <p className="mb-2 text-xs font-medium text-slate-500">Próximas ações</p>
           <ul className="space-y-2">
             {atividadesAbertas.map((a) => {
               const atrasada = Boolean(a.prazo && new Date(a.prazo).getTime() < agora);

@@ -7,14 +7,12 @@ export function Gaveta({
   aoFechar,
   children,
   rodape,
-  largura = 'max-w-sm',
 }: {
   aberta: boolean;
   titulo: string;
   aoFechar: () => void;
   children: ReactNode;
   rodape?: ReactNode;
-  largura?: string;
 }) {
   const idTitulo = useId();
 
@@ -37,7 +35,7 @@ export function Gaveta({
       className="fixed inset-0 z-50 flex justify-end bg-black/30"
       onClick={aoFechar}
     >
-      <aside className={`flex h-full w-full ${largura} flex-col bg-white shadow-xl`} onClick={(evento) => evento.stopPropagation()}>
+      <aside className="flex h-full w-full max-w-sm flex-col bg-white shadow-xl" onClick={(evento) => evento.stopPropagation()}>
         <header className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
           <h2 id={idTitulo} className="text-sm font-semibold text-slate-800">{titulo}</h2>
           <button type="button" onClick={aoFechar} aria-label="Fechar" className="rounded px-2 text-lg leading-none text-slate-400 hover:text-slate-600">

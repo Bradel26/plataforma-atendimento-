@@ -84,7 +84,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
           onClick={fechar}
         >
           <div
-            className="anim-entrada-dialogo w-full max-w-sm rounded-xl border border-slate-200 bg-white p-5 shadow-xl"
+            className="anim-entrada-diálogo w-full max-w-sm rounded-xl border border-slate-200 bg-white p-5 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 id="confirm-dialog-titulo" className="text-sm font-semibold text-slate-800">

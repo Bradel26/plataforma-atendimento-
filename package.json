@@ -10,7 +10,6 @@
     "dev": "npm run dev --workspace=@plataforma/api --workspace=@plataforma/web --if-present",
     "dev:api": "npm run dev -w @plataforma/api",
     "dev:api:local": "powershell -ExecutionPolicy Bypass -File scripts/dev-api-local.ps1",
-    "transcricao:local": "docker compose --profile transcricao up -d --build transcriber",
     "dev:web": "npm run dev -w @plataforma/web",
     "dev:ponte": "npm run dev -w @plataforma/ponte",
     "build:ponte": "npm run build -w @plataforma/ponte",

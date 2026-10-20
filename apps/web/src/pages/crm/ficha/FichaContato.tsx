@@ -18,7 +18,7 @@ import { CheckinDeVisita } from './CheckinDeVisita';
 import { RegistrarAtividade } from './RegistrarAtividade';
 import { RegistroManual } from './RegistroManual';
 import { EditorEtiquetas, ETIQUETAS_CONTATO } from '../Etiquetas';
-import { Modal } from '../../../components/ui/Modal';
+import { LABEL_CANAL_ORIGEM } from '../temperatura';
 
 /**
  * A vida do cliente numa tela: quem e, o que esta em aberto, o que ficou
@@ -34,7 +34,6 @@ const dataHora = (iso: string) =>
 
 type FichaProps = {
   contatoId: string;
-  aoVoltar?: () => void;
   /**
    * Avisa a aba que as etiquetas mudaram.
    *
@@ -51,7 +50,7 @@ type FichaProps = {
   aoExcluir?: () => void;
 };
 
-export function FichaContato({ contatoId, aoMudarEtiquetas, aoVoltar }: FichaProps) {
+export function FichaContato({ contatoId, aoMudarEtiquetas }: FichaProps) {
   const navigate = useNavigate();
   const { usuario } = useAuth();
   const [ficha, setFicha] = useState<Ficha | null>(null);
@@ -73,7 +72,6 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoVoltar }: FichaPro
   const [contas, setContas] = useState<Conta[] | null>(null);
   const [vinculando, setVinculando] = useState(false);
   const [registroManualAberto, setRegistroManualAberto] = useState(false);
-  const [maisDadosAberto, setMaisDadosAberto] = useState(false);
 
   /** 404 tem tela propria; qualquer outra falha vira alerta. */
   const [naoEncontrado, setNaoEncontrado] = useState(false);
@@ -259,60 +257,59 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoVoltar }: FichaPro
   if (erro && !ficha) return <Alerta>{erro}</Alerta>;
   if (!ficha) return <Card titulo="Ficha do contato"><p className="text-sm text-slate-500">Carregando ficha...</p></Card>;
 
-  const { contato, indicadores: i, atividadesAbertas } = ficha;
+  const { contato, indicadores: i, atividadesAbertas, temPreviaWhatsapp } = ficha;
   const agora = Date.now();
-  // Fixture estritamente local para a ficha fictícia usada na revisão visual.
-  // Em build de produção este contato não recebe dados de demonstração.
-  const demonstracaoLocal = import.meta.env.DEV && contatoId === '89a13a02-9b77-4e67-a574-8f723da7b93e';
-  const indicadoresExibidos = demonstracaoLocal
-    ? { ...i, conversas: 0, chamadas: 0, atividadesAbertas: atividadesAbertas.length }
-    : i;
 
   return (
-    <div className="mx-auto flex h-full min-h-0 w-full max-w-[1500px] flex-col gap-3 overflow-hidden">
-      <div className="shrink-0">
-        <div className="text-xs text-slate-500">CRM <span className="mx-2">/</span><button type="button" onClick={aoVoltar} className="hover:text-blue-600 hover:underline">Contatos</button></div>
-        <h1 className="mt-2 text-lg font-semibold tracking-tight text-slate-900">Visão completa do cliente</h1>
-      </div>
+    <div className="space-y-5">
       <Card
-        titulo={(
-          <div className="flex items-center gap-3">
-            <span aria-hidden className="grid size-11 shrink-0 place-items-center rounded-full bg-blue-100 text-sm font-semibold text-blue-700">
-              {contato.nome.trim().split(/\s+/).slice(0, 2).map((parte) => parte[0]).join('').toLocaleUpperCase('pt-BR')}
-            </span>
-            <div className="min-w-0">
-              <span className="block truncate text-[15px]">{contato.nome}</span>
-              <span className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] font-normal text-slate-500">
-                {contato.conta?.nome ?? 'Sem empresa vinculada'}
-                {contato.cidade && <> · {contato.cidade}{contato.uf ? ` · ${contato.uf}` : ''}</>}
-                {contato.criadoEm && <> · Cadastrado em {new Date(contato.criadoEm).toLocaleDateString('pt-BR')}</>}
-              </span>
-            </div>
-            {contato.operacoes?.length ? contato.operacoes.map((op) => <Badge key={op.operacao} tom="marca">{op.operacao === 'STARLINK' ? 'Starlink' : op.operacao}</Badge>) : null}
-            {demonstracaoLocal && <Badge tom="alerta">Dados fictícios</Badge>}
-          </div>
-        )}
+        titulo={contato.nome}
+        descricao={contato.conta ? `Empresa: ${contato.conta.nome}` : 'Sem empresa vinculada'}
         acao={
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <Button variante="primario" onClick={() => setRegistroManualAberto(true)}>+ Registrar interação</Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Sem telefone nao ha como abrir conversa de WhatsApp — o botao nem aparece. */}
             {contato.telefone && (
-              <Button variante="neutro" onClick={() => void iniciarConversa()} disabled={iniciando}>
-                {iniciando ? 'Iniciando...' : 'Abrir conversa'}
+              <Button variante="primario" onClick={() => void iniciarConversa()} disabled={iniciando}>
+                {iniciando ? 'Iniciando...' : 'Iniciar conversa'}
               </Button>
             )}
-            <details className="relative">
-              <summary aria-label="Mais ações do contato" className="grid size-10 cursor-pointer list-none place-items-center rounded-lg border border-slate-200 text-lg text-slate-600 hover:bg-slate-50">…</summary>
-              <div className="absolute right-0 top-12 z-20 grid min-w-52 gap-1 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
-                {contato.conta ? <Button variante="neutro" onClick={() => void desvincular(contato.conta!.id)}>Desvincular empresa</Button> : vinculando ? (
-                  <Select autoFocus defaultValue="" onChange={(e) => void vincular(e.target.value)} onBlur={() => setVinculando(false)} aria-label="Empresa">
-                    <option value="">{contas ? 'Escolha a empresa...' : 'Carregando...'}</option>
-                    {(contas ?? []).map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                  </Select>
-                ) : <Button variante="neutro" onClick={() => void abrirSeletor()}>Vincular empresa</Button>}
-                <Button variante="neutro" onClick={() => abrirEdicao(contato)}>Editar contato</Button>
-                <Button variante="perigo" onClick={() => void excluir()} disabled={excluindo || Boolean(contato.excluidoEm)}>{excluindo ? 'Solicitando...' : 'Solicitar remoção'}</Button>
-              </div>
-            </details>
+            {temPreviaWhatsapp && <Badge tom="marca">Já tem conversa no WhatsApp</Badge>}
+            {/* Vincular fica no cabecalho porque e onde a falta aparece: sem
+               empresa, metade dos numeros abaixo e sempre zero — proposta e
+               oportunidade vivem na conta, nao na pessoa. */}
+            {contato.conta ? (
+              <Button variante="neutro" onClick={() => void desvincular(contato.conta!.id)}>
+                Desvincular empresa
+              </Button>
+            ) : vinculando ? (
+              <Select
+                autoFocus
+                defaultValue=""
+                onChange={(e) => void vincular(e.target.value)}
+                onBlur={() => setVinculando(false)}
+                className="max-w-[260px]"
+                aria-label="Empresa"
+              >
+                <option value="">{contas ? 'Escolha a empresa...' : 'Carregando...'}</option>
+                {(contas ?? []).map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nome}
+                  </option>
+                ))}
+              </Select>
+            ) : (
+              <Button variante="neutro" onClick={() => void abrirSeletor()}>
+                Vincular empresa
+              </Button>
+            )}
+            {!editando && (
+              <Button variante="neutro" onClick={() => abrirEdicao(contato)}>
+                Editar contato
+              </Button>
+            )}
+            <Button variante="perigo" onClick={() => void excluir()} disabled={excluindo || Boolean(contato.excluidoEm)}>
+              {excluindo ? 'Solicitando...' : 'Solicitar remoção'}
+            </Button>
           </div>
         }
       >
@@ -380,7 +377,61 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoVoltar }: FichaPro
               </Button>
             </div>
           </div>
-        ) : null}
+        ) : (
+        <dl className="grid gap-3 text-sm sm:grid-cols-4">
+          <div>
+            <dt className="text-xs text-slate-500">E-mail</dt>
+            <dd className="truncate text-slate-800">{contato.email ?? '—'}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-slate-500">Telefone</dt>
+            <dd className="text-slate-800">{contato.telefone ?? '—'}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-slate-500">Cidade / UF</dt>
+            <dd className="text-slate-800">{[contato.cidade, contato.uf].filter(Boolean).join(' / ') || '—'}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-slate-500">Canal de origem</dt>
+            <dd className="text-slate-800">{contato.canalOrigem ? LABEL_CANAL_ORIGEM[contato.canalOrigem] : '—'}</dd>
+          </div>
+          <div><dt className="text-xs text-slate-500">Origem da importação</dt><dd className="text-slate-800">{contato.origemImportacao ?? 'Cadastro fora de importação'}</dd></div>
+          <div>
+            <dt className="text-xs text-slate-500">Operações</dt>
+            <dd className="flex flex-wrap gap-1">{(contato.operacoes?.length ? contato.operacoes.map((x) => x.operacao) : contato.segmentoParceiro ? [contato.segmentoParceiro] : []).map((op) => <Badge key={op} tom="marca">{op === 'STARLINK' ? 'Starlink' : op}</Badge>)}{!contato.operacoes?.length && !contato.segmentoParceiro && <span className="text-slate-800">Sem classificação</span>}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-slate-500">Cliente desde</dt>
+            <dd className="text-slate-800">
+              {contato.criadoEm ? new Date(contato.criadoEm).toLocaleDateString('pt-BR') : '—'}
+            </dd>
+          </div>
+        </dl>
+        )}
+
+        <div className="mt-4">
+          <dt className="mb-1.5 text-xs text-slate-500">Etiquetas</dt>
+          <EditorEtiquetas
+            tags={contato.tags ?? []}
+            opcoes={ETIQUETAS_CONTATO}
+            aoSalvar={async (tags) => {
+              await api.patch(`/contatos/${contatoId}`, { tags });
+              aoMudarEtiquetas?.();
+              // Recarrega a ficha em vez de mexer no estado local: a etiqueta
+              // gravada volta normalizada pelo servidor, e mostrar o que foi
+              // digitado deixaria a tela diferente do banco por um instante.
+              atualizar();
+            }}
+          />
+        </div>
+
+        <div className="mt-4">
+          <Indicadores dados={i} escopo="CONTATO" />
+        </div>
+
+        {contato.observacoes && (
+          <p className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">{contato.observacoes}</p>
+        )}
         {erro && <div className="mt-3"><Alerta>{erro}</Alerta></div>}
         {avisoSolicitacao && <div className="mt-3"><Alerta>{avisoSolicitacao}</Alerta></div>}
         {ficha.solicitacoesExclusao.length > 0 && (
@@ -405,95 +456,46 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoVoltar }: FichaPro
         )}
       </Card>
 
-      <section aria-label="Resumo do relacionamento com o cliente" className="grid shrink-0 grid-cols-2 gap-2 xl:grid-cols-4">
-        {[
-          { label: 'Conversas', value: indicadoresExibidos.conversas, descricao: indicadoresExibidos.conversas ? 'registradas' : 'nenhuma registrada', tone: 'bg-blue-500', text: 'text-sky-600' },
-          { label: 'Ligações', value: indicadoresExibidos.chamadas, descricao: indicadoresExibidos.chamadas ? 'registradas' : 'nenhuma registrada', tone: 'bg-violet-500', text: 'text-violet-600' },
-          { label: 'Atividades', value: demonstracaoLocal ? 1 : indicadoresExibidos.atividadesAbertas, descricao: demonstracaoLocal ? '1 Nota no histórico' : 'em aberto', tone: 'bg-amber-600', text: 'text-amber-700' },
-          { label: 'Protocolos', value: i.protocolosAbertos, descricao: 'nenhum aberto', tone: 'bg-emerald-500', text: 'text-emerald-600' },
-        ].map((item) => (
-          <div key={item.label} className="min-h-[62px] rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
-            <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase text-slate-500"><span aria-hidden className={`size-1.5 rounded-full ${item.tone}`} />{item.label}</p>
-            <div className="mt-1 flex items-baseline gap-3"><span className={`text-xl font-semibold tabular-nums ${item.text}`}>{item.value}</span><span className="text-[10px] text-slate-500">{item.descricao}</span></div>
-          </div>
-        ))}
-      </section>
+      <CicloDoParceiro contatoId={contatoId} segmentoParceiro={ficha?.contato.segmentoParceiro ?? null} />
 
-      <div className="grid min-h-0 flex-1 gap-3 overflow-hidden xl:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
-        <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_3px_rgb(15_23_42/0.05)]">
-          <header className="shrink-0 border-b border-slate-100 px-4 py-3">
-            <h2 className="text-sm font-semibold tracking-tight text-slate-900">Linha do tempo completa</h2>
-            <p className="mt-1 text-xs text-slate-500">Conversas, ligações, atividades e protocolos em ordem cronológica</p>
-          </header>
-          <div className="min-h-0 flex-1 overflow-y-auto p-4">
-            <LinhaDoTempo base={`/ficha/contato/${contatoId}`} raizId={contatoId} recarregar={versao} eventosDemonstracao={demonstracaoLocal} />
-          </div>
-        </section>
-        <aside className="min-h-0 space-y-3 overflow-y-auto pr-1">
-          <Card compact titulo="Antes de falar com o cliente" acao={demonstracaoLocal ? <Badge tom="marca">1 evento</Badge> : undefined}>
-            <div className="space-y-2 text-xs">
-              <p className="leading-relaxed text-slate-700">{contato.observacoes ?? (demonstracaoLocal ? 'Tem interesse em conhecer os serviços. Na nota de ontem, ficou combinado enviar informações e retornar em dois dias.' : 'Confira o histórico e os registros recentes antes de iniciar o contato.')}</p>
-              <div className="rounded-lg bg-amber-50 px-3 py-2 text-[10px] font-medium leading-relaxed text-amber-800">● &nbsp;{demonstracaoLocal ? 'Confirmar o envio das informações e agendar o retorno combinado.' : atividadesAbertas[0]?.titulo ?? 'Nenhuma próxima ação registrada.'}</div>
-              {atividadesAbertas[0]?.prazo && <p className="text-[10px] text-slate-500">Prazo: {dataHora(atividadesAbertas[0].prazo)}</p>}
-            </div>
-          </Card>
-          <Card compact titulo="Dados do cliente">
-            <dl className="grid grid-cols-[68px_minmax(0,1fr)] gap-x-2 gap-y-1.5 text-[10px]">
-              <dt className="text-slate-500">E-mail</dt><dd className="break-words text-slate-900">{contato.email ?? 'Não cadastrado'}</dd>
-              <dt className="text-slate-500">Telefone</dt><dd className="text-slate-900">{contato.telefone ? mascararTelefoneBr(contato.telefone) : 'Não cadastrado'}</dd>
-              <dt className="text-slate-500">Empresa</dt><dd className="text-slate-900">{contato.conta?.nome ?? 'Sem vínculo'}</dd>
-              <dt className="text-slate-500">Localização</dt><dd className="text-slate-900">{[contato.cidade, contato.uf].filter(Boolean).join(' · ') || '—'}</dd>
-              <dt className="text-slate-500">Segmento</dt><dd className="text-slate-900">{(contato.operacoes?.map((x) => x.operacao) ?? []).join(', ') || contato.segmentoParceiro || '—'}</dd>
-              <dt className="border-t border-slate-100 pt-2 text-slate-500">Etiquetas</dt><dd className="border-t border-slate-100 pt-2"><EditorEtiquetas tags={contato.tags ?? []} opcoes={ETIQUETAS_CONTATO} aoSalvar={async (tags) => { await api.patch(`/contatos/${contatoId}`, { tags }); aoMudarEtiquetas?.(); atualizar(); }} /></dd>
-            </dl>
-          </Card>
-          <Card compact titulo="Tudo no mesmo histórico">
-            <p className="mb-2 text-[10px] leading-relaxed text-slate-500">Cada item mostra conteúdo, data, canal, responsável e estado. Anexos e detalhes ficam acessíveis no registro.</p>
-            <ul className="space-y-1.5 text-[10px]">
-              {[['bg-blue-600', 'Conversas', 'Mensagens completas e anexos'], ['bg-violet-600', 'Ligações', 'Gravação e transcrição quando disponíveis'], ['bg-amber-600', 'Notas e tarefas', 'Quem registrou e o que ficou combinado'], ['bg-emerald-500', 'Protocolos e etapas', 'Mudanças ao longo do tempo']].map(([cor, titulo, texto]) => <li key={titulo} className="grid grid-cols-[8px_82px_1fr] items-center gap-2"><span className={`size-1.5 rounded-full ${cor}`} /><span className="font-medium text-slate-800">{titulo}</span><span className="text-slate-500">{texto}</span></li>)}
-            </ul>
-          </Card>
-          <button
-            type="button"
-            onClick={() => setMaisDadosAberto(true)}
-            className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-3 text-left text-xs font-semibold text-slate-700 shadow-sm transition hover:border-blue-300 hover:bg-slate-50"
-          >
-            <span>Mais dados, tarefas e ciclo</span>
-            <span aria-hidden className="text-base leading-none text-slate-400">＋</span>
-          </button>
-        </aside>
-      </div>
+      {atividadesAbertas.length > 0 && (
+        <Card titulo="Tarefas marcadas" descricao={`${atividadesAbertas.length} em aberto`}>
+          <ul className="divide-y divide-slate-100">
+            {atividadesAbertas.map((a) => {
+              const atrasada = Boolean(a.prazo && new Date(a.prazo).getTime() < agora);
+              return (
+                <li key={a.id} className="flex items-start justify-between gap-4 py-2.5">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge>{LABEL_TIPO_ATIVIDADE[a.tipo]}</Badge>
+                      {a.prazo && (
+                        <Badge tom={atrasada ? 'alerta' : 'neutro'}>
+                          {atrasada ? 'Atrasada · ' : ''}
+                          {dataHora(a.prazo)}
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="mt-1 text-sm text-slate-800">{a.titulo}</p>
+                    {a.responsavel && <p className="text-xs text-slate-500">{a.responsavel.nome}</p>}
+                    <CheckinDeVisita atividade={a} aoMudar={() => atualizar()} aoErrar={setErro} />
+                  </div>
+                  <Button variante="neutro" onClick={() => void concluir(a)}>
+                    Concluir
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+      )}
 
-      <Modal
-        aberto={maisDadosAberto}
-        titulo="Dados, tarefas e ciclo do cliente"
-        aoFechar={() => setMaisDadosAberto(false)}
-        largura="max-w-6xl"
+      <Card
+        titulo="Registrar"
+        descricao="Registre ou agende a próxima ação. Interações manuais geram uma tarefa vinculada."
+        acao={<Button variante="neutro" onClick={() => setRegistroManualAberto(true)}>Novo registro manual</Button>}
       >
-        <div className="space-y-4">
-          <Card titulo="Relacionamento e resultados" descricao="Indicadores consolidados deste contato e da empresa vinculada.">
-            <Indicadores dados={indicadoresExibidos} escopo="CONTATO" />
-          </Card>
-
-          <div className="grid gap-4 xl:grid-cols-2">
-            <CicloDoParceiro contatoId={contatoId} segmentoParceiro={ficha?.contato.segmentoParceiro ?? null} />
-            <Card titulo="Tarefas em aberto" descricao={`${atividadesAbertas.length} ${atividadesAbertas.length === 1 ? 'tarefa pendente' : 'tarefas pendentes'}`}>
-              {atividadesAbertas.length > 0 ? (
-                <ul className="divide-y divide-slate-100">
-                  {atividadesAbertas.map((a) => {
-                    const atrasada = Boolean(a.prazo && new Date(a.prazo).getTime() < agora);
-                    return <li key={a.id} className="flex flex-wrap items-start justify-between gap-3 py-3 first:pt-0 last:pb-0"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><Badge>{LABEL_TIPO_ATIVIDADE[a.tipo]}</Badge>{a.prazo && <Badge tom={atrasada ? 'alerta' : 'neutro'}>{atrasada ? 'Atrasada · ' : ''}{dataHora(a.prazo)}</Badge>}</div><p className="mt-2 text-sm font-medium text-slate-800">{a.titulo}</p>{a.responsavel && <p className="mt-1 text-xs text-slate-500">Responsável: {a.responsavel.nome}</p>}<CheckinDeVisita atividade={a} aoMudar={atualizar} aoErrar={setErro} /></div><Button variante="neutro" tamanho="sm" onClick={() => void concluir(a)}>Concluir</Button></li>;
-                  })}
-                </ul>
-              ) : <EmptyState titulo="Nenhuma tarefa em aberto" descricao="Quando houver um próximo passo combinado, ele aparecerá aqui." />}
-            </Card>
-          </div>
-
-          <Card titulo="Registrar interação" descricao="Anote o que aconteceu ou agende o próximo contato.">
-            <RegistrarAtividade contatoId={contatoId} aoRegistrar={atualizar} />
-          </Card>
-        </div>
-      </Modal>
+        <RegistrarAtividade contatoId={contatoId} aoRegistrar={atualizar} />
+      </Card>
 
       <RegistroManual
         contatoId={contatoId}
@@ -504,6 +506,9 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoVoltar }: FichaPro
         aoSalvar={atualizar}
       />
 
+      <Card titulo="Linha do tempo" descricao="Tudo que aconteceu com este cliente e com a empresa dele">
+        <LinhaDoTempo base={`/ficha/contato/${contatoId}`} raizId={contatoId} recarregar={versao} />
+      </Card>
     </div>
   );
 }

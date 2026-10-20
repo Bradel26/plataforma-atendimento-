@@ -1293,7 +1293,6 @@ export type EventoFicha = {
   /** De quem e o evento: do proprio contato ou da empresa dele. */
   escopo: 'CONTATO' | 'CONTA';
   usuario: string | null;
-  gravacaoUrl?: string | null;
 };
 
 export type Timeline = { eventos: EventoFicha[]; proximoCursor: string | null };

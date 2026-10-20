@@ -25,20 +25,16 @@ function telefoneLimpo(valor: string | null): string | null {
 async function contatoDoTelefone(numero: string | null) {
   const digitos = telefoneLimpo(numero);
   if (!digitos) return null;
-  const canonico = (valor: string) => {
-    const limpo = valor.replace(/\D/g, '');
-    return limpo.startsWith('55') && (limpo.length === 12 || limpo.length === 13)
-      ? limpo.slice(2)
-      : limpo;
-  };
   const candidatos = await prisma.contact.findMany({
     where: { telefone: { contains: digitos.slice(-8) } },
     select: { id: true, telefone: true },
     take: 20,
   });
-  const exatos = candidatos.filter((c) => c.telefone && canonico(c.telefone) === canonico(digitos));
+  const exatos = candidatos.filter((c) => c.telefone?.replace(/\D/g, '') === digitos);
   if (exatos.length === 1) return { id: exatos[0]!.id };
-  return null;
+  // Se nao ha correspondencia completa, vincula so quando o sufixo identifica
+  // um unico contato. Em caso ambiguo e mais seguro deixar sem vinculo.
+  return candidatos.length === 1 ? { id: candidatos[0]!.id } : null;
 }
 
 /** Persiste os eventos do Baileys como uma chamada entrante idempotente. */

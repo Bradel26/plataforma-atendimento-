@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Alerta, Badge, Button, Card, Select } from '../components/ui';
+import { Alerta, Badge, Button, Card, Input, Select } from '../components/ui';
 import { useToast } from '../components/ui/Toast';
 import { CaixaEntradaEquipes } from '../features/atendimento/CaixaEntradaEquipes';
 import { ListaConversas } from '../features/atendimento/ListaConversas';
@@ -12,8 +12,6 @@ import { useConversas } from '../features/atendimento/useConversas';
 import { useCaixaEntrada } from '../features/atendimento/useCaixaEntrada';
 import { upsertPrevia } from '../features/atendimento/previas';
 import { ConectarWhatsAppCloud } from '../features/atendimento/ConectarWhatsAppCloud';
-import { clienteAguardandoDesde } from '../features/atendimento/apresentacao';
-import { IconeBalao, IconeBusca, IconeChevron, IconeEntrada, IconeMais } from '../features/atendimento/icones';
 import {
   LABEL_VISAO_INBOX,
   SEM_FILTRO_ACOMPANHAR,
@@ -34,14 +32,6 @@ import type { Acompanhaveis, ConversaDetalhe, Previa } from '../lib/types';
  * ficha, sempre uma por vez, com volta explicita — nunca as tres espremidas.
  */
 type PassoMobile = 'lista' | 'chat' | 'ficha';
-
-/** Recorte rapido sobre as conversas ja carregadas da aba — nao muda a consulta ao servidor. */
-type FiltroRapido = 'TODAS' | 'SEM_RESPOSTA' | 'AGUARDANDO_CLIENTE';
-const FILTROS_RAPIDOS: Array<{ id: FiltroRapido; rotulo: string }> = [
-  { id: 'TODAS', rotulo: 'Todas' },
-  { id: 'SEM_RESPOSTA', rotulo: 'Sem resposta' },
-  { id: 'AGUARDANDO_CLIENTE', rotulo: 'Aguardando cliente' },
-];
 
 type MinhaLinhaWhatsapp = { id: string; ponteSessao: string | null; modo: string | null; ativo: boolean; nome?: string | null; phoneNumberId?: string | null; whatsappCallingHabilitado?: boolean };
 
@@ -134,9 +124,9 @@ function useLarguraAjustavel(chave: string, padrao: number, min: number, max: nu
 }
 
 /**
- * Puxador vertical entre duas colunas — arrasta para redimensionar. E a
- * propria divisoria de 1px entre os paineis; a area clicavel (`w-2`) invade
- * 4px de cada vizinho (`-mx-1`) para facilitar o clique sem engrossar a linha.
+ * Puxador vertical entre duas colunas — arrasta para redimensionar. A area
+ * clicavel (`w-2.5`) e mais larga que a linha visivel (`w-1` interno) para
+ * facilitar o clique sem deixar a divisoria com aparencia grossa.
  */
 function Puxador({ onArrastar, titulo }: { onArrastar: (e: ReactMouseEvent) => void; titulo: string }) {
   return (
@@ -145,15 +135,11 @@ function Puxador({ onArrastar, titulo }: { onArrastar: (e: ReactMouseEvent) => v
       role="separator"
       aria-orientation="vertical"
       title={titulo}
-      className="group relative z-10 -mx-1 flex w-2 shrink-0 cursor-col-resize items-stretch justify-center self-stretch"
+      className="group flex w-2.5 shrink-0 cursor-col-resize items-stretch justify-center self-stretch"
     >
-      <div className="w-px bg-slate-200 transition-all group-hover:w-0.5 group-hover:bg-[var(--brand-primary)] group-active:w-0.5 group-active:bg-[var(--brand-primary)]" />
+      <div className="w-1 rounded transition group-hover:bg-slate-300 group-active:bg-slate-400" />
     </div>
   );
-}
-
-function Divisoria() {
-  return <div className="w-px shrink-0 self-stretch bg-slate-200" aria-hidden="true" />;
 }
 
 type QrDaPonte = {
@@ -170,7 +156,7 @@ export function AtendimentoPage() {
   const { ref: containerRef, faixa } = useFaixaDeLargura<HTMLDivElement>();
   const listaAjustavel = useLarguraAjustavel(
     'plataforma:atendimento-largura-lista',
-    360,
+    320,
     LARGURA_MIN_LISTA,
     LARGURA_MAX_LISTA,
   );
@@ -191,9 +177,6 @@ export function AtendimentoPage() {
   const [filtroAcompanhar, setFiltroAcompanhar] = useState<FiltroAcompanhar>(SEM_FILTRO_ACOMPANHAR);
   const [acompanhaveis, setAcompanhaveis] = useState<Acompanhaveis | null>(null);
   const [busca, setBusca] = useState('');
-  const [filtroRapido, setFiltroRapido] = useState<FiltroRapido>('TODAS');
-  /** Null = automatico: aberta enquanto houver conversa esperando alguem aceitar. */
-  const [caixaAberta, setCaixaAberta] = useState<boolean | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   /**
    * Ficha como drawer no notebook/tablet: comeca fechada (a resposta e a
@@ -565,7 +548,7 @@ export function AtendimentoPage() {
     [],
   );
 
-  const porBusca = busca.trim()
+  const filtradas = busca.trim()
     ? conversas.filter((c) => {
         const t = busca.trim().toLowerCase();
         return (
@@ -575,17 +558,6 @@ export function AtendimentoPage() {
         );
       })
     : conversas;
-
-  const passaNoFiltroRapido = (c: (typeof conversas)[number], f: FiltroRapido) => {
-    if (f === 'SEM_RESPOSTA') return Boolean(c.ultimaMensagem && clienteAguardandoDesde(c.status, [c.ultimaMensagem]));
-    if (f === 'AGUARDANDO_CLIENTE') return c.status === 'AGUARDANDO_CLIENTE';
-    return true;
-  };
-  const filtradas = porBusca.filter((c) => passaNoFiltroRapido(c, filtroRapido));
-  // Com mais paginas por carregar, a contagem local seria so parcial — melhor nao mostrar numero nenhum.
-  const contagemRapida = (f: FiltroRapido): number | null =>
-    temMais ? null : porBusca.filter((c) => passaNoFiltroRapido(c, f)).length;
-  const caixaVisivel = caixaAberta ?? caixa.total > 0;
 
   /*
    * Quatro faixas, quatro composicoes — nao a mesma coluna de sempre so
@@ -621,159 +593,73 @@ export function AtendimentoPage() {
     : undefined;
 
   return (
-    <div
-      ref={containerRef}
-      className="flex h-[calc(100vh-8rem)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
-    >
+    <div ref={containerRef} className="flex h-[calc(100vh-8rem)] gap-5">
+      {mostrarLista && !emMobile && (
+        <section className="flex w-60 shrink-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <CaixaEntradaEquipes
+            grupos={caixa.grupos}
+            carregando={caixa.carregando}
+            erro={caixa.erro}
+            aceitandoId={aceitandoId}
+            onAceitar={(id) => void aceitar(id)}
+          />
+        </section>
+      )}
       {mostrarLista && (
         <section
-          aria-label="Conversas"
-          className={`flex ${emDesktop ? '' : classesLista} min-w-0 flex-col overflow-hidden bg-white`}
+          className={`flex ${emDesktop ? '' : classesLista} flex-col overflow-hidden rounded-xl border border-slate-200 bg-white`}
           style={larguraListaEstilo}
         >
-          {emDesktop && listaAjustavel.recolhida ? (
-            <div className="flex justify-center py-2">
+          {emDesktop && (
+            <div className="flex items-center justify-end border-b border-slate-100 px-1.5 py-1">
               <button
                 type="button"
                 onClick={listaAjustavel.alternarRecolhida}
-                title="Expandir lista de conversas"
-                aria-label="Expandir lista de conversas"
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                title={listaAjustavel.recolhida ? 'Expandir lista de conversas' : 'Recolher lista de conversas'}
+                className="rounded px-1.5 py-0.5 text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-600"
               >
-                »
+                {listaAjustavel.recolhida ? '»' : '«'}
               </button>
             </div>
-          ) : (
+          )}
+          {(!emDesktop || !listaAjustavel.recolhida) && (
           <>
-          {/*
-            Caixa de entrada das equipes: antes uma coluna inteira so para ela,
-            quase sempre com "Sem equipe" e nada mais. Agora e um bloco no topo
-            da lista que abre sozinho quando ha conversa esperando alguem aceitar.
-          */}
-          <div className="border-b border-slate-100">
-            <button
-              type="button"
-              onClick={() => setCaixaAberta(!caixaVisivel)}
-              aria-expanded={caixaVisivel}
-              className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-[13px] text-slate-700 transition hover:bg-slate-50"
-            >
-              <IconeEntrada tamanho={16} className="text-slate-500" />
-              <span className="font-semibold">Caixa de entrada</span>
-              {caixa.total > 0 ? (
-                <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
-                  {caixa.total} aguardando
-                </span>
-              ) : (
-                <span className="text-xs text-slate-500">{caixa.carregando ? 'carregando…' : 'nenhuma nova'}</span>
-              )}
-              <IconeChevron tamanho={16} className={`ml-auto text-slate-500 transition ${caixaVisivel ? 'rotate-180' : ''}`} />
-            </button>
-            {caixaVisivel && (
-              <div className="max-h-64 overflow-y-auto border-t border-slate-100">
-                <CaixaEntradaEquipes
-                  grupos={caixa.grupos}
-                  carregando={caixa.carregando}
-                  erro={caixa.erro}
-                  aceitandoId={aceitandoId}
-                  onAceitar={(id) => void aceitar(id)}
-                  semCabecalho
-                />
-              </div>
-            )}
+          <div className="flex items-center gap-2 border-b border-slate-100 p-3">
+            <Input placeholder="Buscar por contato ou mensagem" value={busca} onChange={(e) => setBusca(e.target.value)} />
+            <Button tamanho="sm" variante="neutro" title="Iniciar nova conversa" aria-label="Iniciar nova conversa" onClick={() => setIniciando(true)}>
+              +
+            </Button>
           </div>
 
-          <div className="space-y-3 border-b border-slate-100 p-3">
-            <div
-              role="tablist"
-              aria-label="Visão da caixa"
-              className="flex gap-1 rounded-lg bg-slate-100 p-1"
-            >
-              {visoesDisponiveis(podeAcompanhar).map((v) => {
-                const ativa = visao === v;
-                const n = contadorDaVisao(v);
-                return (
-                  <button
-                    key={v}
-                    type="button"
-                    role="tab"
-                    aria-selected={ativa}
-                    onClick={() => setVisao(v)}
-                    className={`flex h-8 min-w-0 flex-auto items-center justify-center gap-1 rounded-md px-1.5 text-xs transition ${
-                      ativa ? 'bg-white font-semibold text-slate-800 shadow-sm' : 'font-medium text-slate-500 hover:text-slate-700'
-                    }`}
-                  >
-                    <span className="truncate">{LABEL_VISAO_INBOX[v]}</span>
-                    {n !== null && (
-                      <span
-                        className={`shrink-0 rounded-full px-1.5 text-[11px] tabular-nums ${
-                          ativa ? 'bg-[var(--brand-primary)] font-semibold texto-sobre-cor-fixa' : 'text-slate-500'
-                        }`}
-                      >
-                        {n}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
+          {emMobile && caixa.total > 0 && (
+            <div className="max-h-56 overflow-y-auto border-b border-slate-100">
+              <CaixaEntradaEquipes
+                grupos={caixa.grupos.filter((grupo) => grupo.conversas.length > 0)}
+                carregando={false}
+                erro={caixa.erro}
+                aceitandoId={aceitandoId}
+                onAceitar={(id) => void aceitar(id)}
+              />
             </div>
+          )}
 
-            <div className="flex items-center gap-2">
-              <label className="relative flex h-10 min-w-0 flex-1 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-slate-400 transition focus-within:border-[var(--brand-primary)]">
-                <IconeBusca tamanho={16} />
-                <span className="sr-only">Buscar conversas</span>
-                <input
-                  type="search"
-                  value={busca}
-                  onChange={(e) => setBusca(e.target.value)}
-                  placeholder="Buscar por contato ou mensagem"
-                  className="min-w-0 flex-1 bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400"
-                />
-              </label>
+          <nav className="flex border-b border-slate-200 text-xs">
+            {visoesDisponiveis(podeAcompanhar).map((v) => (
               <button
+                key={v}
                 type="button"
-                title="Iniciar nova conversa"
-                aria-label="Iniciar nova conversa"
-                onClick={() => setIniciando(true)}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-white transition hover:bg-slate-700"
+                onClick={() => setVisao(v)}
+                className={`flex-1 border-b-2 px-1 py-2.5 transition ${
+                  visao === v
+                    ? 'border-[var(--brand-primary)] font-semibold text-[var(--brand-primary)]'
+                    : 'border-transparent text-slate-500 hover:text-slate-700'
+                }`}
               >
-                <IconeMais tamanho={18} />
+                <span className="block truncate">{LABEL_VISAO_INBOX[v]}</span>
+                <span className="text-[11px] text-slate-500">{contadorDaVisao(v) ?? ''}</span>
               </button>
-              {emDesktop && (
-                <button
-                  type="button"
-                  onClick={listaAjustavel.alternarRecolhida}
-                  title="Recolher lista de conversas"
-                  aria-label="Recolher lista de conversas"
-                  className="flex h-10 w-7 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-                >
-                  «
-                </button>
-              )}
-            </div>
-
-            <div className="flex flex-wrap gap-1.5" aria-label="Filtro rápido">
-              {FILTROS_RAPIDOS.map((f) => {
-                const ativo = filtroRapido === f.id;
-                const n = contagemRapida(f.id);
-                return (
-                  <button
-                    key={f.id}
-                    type="button"
-                    aria-pressed={ativo}
-                    onClick={() => setFiltroRapido(f.id)}
-                    className={`inline-flex h-7 items-center gap-1 rounded-full border px-2 text-[11.5px] font-medium transition ${
-                      ativo
-                        ? 'border-slate-900 bg-slate-900 text-white'
-                        : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
-                    }`}
-                  >
-                    {f.rotulo}
-                    {n !== null && <span className="tabular-nums opacity-75">{n}</span>}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+            ))}
+          </nav>
 
           {visao === 'ACOMPANHAR' && (
             <div className="flex flex-col gap-2 border-b border-slate-100 px-3 py-2">
@@ -828,10 +714,8 @@ export function AtendimentoPage() {
             ) : (
               <ListaConversas
                 conversas={filtradas}
-                // Previa e o espelho do meu celular: pertence a Minhas. Nao e
-                // atendimento formal, entao sai de qualquer filtro rapido.
-                previas={visao === 'MINHAS' && filtroRapido === 'TODAS' ? previas : []}
-                usuarioId={usuario?.id ?? null}
+                // Previa e o espelho do meu celular: pertence a Minhas.
+                previas={visao === 'MINHAS' ? previas : []}
                 onAbrirPrevia={(p) => void abrirPrevia(p)}
                 selecionadaId={aberta?.id ?? null}
                 onSelecionar={(id) => void abrir(id)}
@@ -846,14 +730,12 @@ export function AtendimentoPage() {
         </section>
       )}
 
-      {mostrarLista && mostrarChat && (
-        emDesktop && !listaAjustavel.recolhida
-          ? <Puxador titulo="Arrastar para redimensionar a lista" onArrastar={(e) => listaAjustavel.iniciarArraste(e, 1)} />
-          : <Divisoria />
+      {emDesktop && mostrarLista && mostrarChat && !listaAjustavel.recolhida && (
+        <Puxador titulo="Arrastar para redimensionar a lista" onArrastar={(e) => listaAjustavel.iniciarArraste(e, 1)} />
       )}
 
       {mostrarChat && (
-        <section aria-label="Conversa" className="min-w-0 flex-1 overflow-hidden bg-white">
+        <section className="min-w-0 flex-1 overflow-hidden rounded-xl border border-slate-200 bg-white">
           {erroAberta ? (
             <div className="p-5"><Alerta>{erroAberta}</Alerta></div>
           ) : aberta ? (
@@ -942,12 +824,8 @@ export function AtendimentoPage() {
               </div>
             </div>
           ) : (
-            <div className="flex h-full flex-col items-center justify-center bg-slate-50 px-6 text-center">
-              <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500">
-                <IconeBalao tamanho={22} />
-              </span>
-              <p className="text-sm font-semibold text-slate-700">Selecione uma conversa</p>
-              <p className="mt-1 max-w-xs text-xs text-slate-500">Escolha um atendimento na lista ou use + para iniciar uma nova conversa.</p>
+            <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+              <p className="text-sm font-medium text-slate-700">Selecione uma conversa</p>
 
               {minhaLinha && minhaLinhaConectada && (
                 <div className="mt-4 flex flex-col items-center gap-2">
@@ -1003,32 +881,25 @@ export function AtendimentoPage() {
         quando alguem pediu — reabrir a cada troca de conversa custaria mais
         cliques do que vale, entao o estado fica aberto entre trocas.
       */}
-      {fichaVisivel && aberta && !emMobile && (
-        emDesktop && !fichaAjustavel.recolhida
-          ? <Puxador titulo="Arrastar para redimensionar a ficha" onArrastar={(e) => fichaAjustavel.iniciarArraste(e, -1)} />
-          : <Divisoria />
+      {fichaVisivel && aberta && emDesktop && (
+        <Puxador titulo="Arrastar para redimensionar a ficha" onArrastar={(e) => fichaAjustavel.iniciarArraste(e, -1)} />
       )}
 
       {fichaVisivel && aberta && (
         <aside
-          aria-label="Ficha do contato"
-          className={`flex ${emDesktop ? '' : classesFicha} min-h-0 flex-col overflow-hidden bg-white`}
+          className={`flex ${emDesktop ? '' : classesFicha} flex-col overflow-hidden rounded-xl border border-slate-200 bg-white`}
           style={larguraFichaEstilo}
         >
           {emDesktop && (
-            <div className="flex items-center justify-between border-b border-slate-100 px-2 py-1.5">
+            <div className="flex items-center justify-start border-b border-slate-100 px-1.5 py-1">
               <button
                 type="button"
                 onClick={fichaAjustavel.alternarRecolhida}
                 title={fichaAjustavel.recolhida ? 'Expandir ficha do contato' : 'Recolher ficha do contato'}
-                aria-label={fichaAjustavel.recolhida ? 'Expandir ficha do contato' : 'Recolher ficha do contato'}
-                className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                className="rounded px-1.5 py-0.5 text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-600"
               >
                 {fichaAjustavel.recolhida ? '«' : '»'}
               </button>
-              {!fichaAjustavel.recolhida && (
-                <span className="pr-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Ficha do contato</span>
-              )}
             </div>
           )}
           {(!emDesktop || !fichaAjustavel.recolhida) && (
@@ -1038,7 +909,6 @@ export function AtendimentoPage() {
               conversaId={aberta.id}
               conversaTags={aberta.tags}
               aoMudarConversa={aoMudar}
-              conversa={aberta}
             />
           )}
         </aside>

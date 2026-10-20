@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alerta, Badge, Button, Card, Field, Input } from '../../components/ui';
+import { StatTile } from '../../components/viz/StatTile';
 import { ApiError, api } from '../../lib/api';
-import { ESTADO } from '../../lib/viz';
-import { BarraComAlvo, Indicador } from '../dashboard/blocos';
 import { useAuth } from '../../features/auth/AuthProvider';
 import {
   LABEL_RECURSO_IA,
@@ -118,7 +117,7 @@ export function ConsumoDeIaCard() {
       acao={<Badge tom={TOM[dados.situacao]}>{FRASE[dados.situacao]}</Badge>}
     >
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Indicador
+        <StatTile
           rotulo="Gasto no ciclo"
           valor={custo(dados.custoTotal)}
           detalhe={
@@ -127,40 +126,22 @@ export function ConsumoDeIaCard() {
               : `${dados.usosComCusto} de ${dados.usos} usos com custo informado`
           }
         />
-        <Indicador
+        <StatTile
           rotulo="Projeção do mês"
           valor={custo(dados.projecao)}
           detalhe={dados.projecao === null ? 'sem ritmo para projetar' : 'pelo ritmo até hoje'}
         />
-        <Indicador
+        <StatTile
           rotulo="Teto"
           valor={custo(dados.teto)}
           detalhe={dados.teto === null ? 'nenhum teto definido' : 'limite mensal'}
         />
-        <Indicador
+        <StatTile
           rotulo="Da projeção no teto"
           valor={dados.fracaoDoTeto === null ? '\u2014' : `${Math.round(dados.fracaoDoTeto * 100)}%`}
           detalhe={dados.fracaoDoTeto === null ? 'precisa de teto e de consumo' : 'quanto a projeção ocupa'}
         />
       </div>
-
-      {/* Gasto contra o teto: so com teto e gasto conhecidos — sem eles a barra
-          desenharia uma proporcao inventada. */}
-      {dados.teto !== null && dados.custoTotal !== null && (
-        <div className="mt-4">
-          <p className="mb-1 text-xs font-medium text-slate-600">
-            Gasto até hoje{dados.projecao !== null ? ' e projeção (círculo)' : ''} contra o teto
-          </p>
-          <BarraComAlvo
-            valor={dados.custoTotal}
-            alvo={dados.teto}
-            rotuloAlvo={`teto ${custo(dados.teto)}`}
-            escala={Math.max(dados.teto, dados.projecao ?? 0, dados.custoTotal) * 1.1}
-            projecao={dados.projecao}
-            cor={dados.situacao === 'ESTOUROU' ? ESTADO.grave : dados.situacao === 'PROJETA_ESTOURO' ? ESTADO.atencao : ESTADO.bom}
-          />
-        </div>
-      )}
 
       {dados.porRecurso.length > 0 && (
         <div className="mt-4 overflow-x-auto">

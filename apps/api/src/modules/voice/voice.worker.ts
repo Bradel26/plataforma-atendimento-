@@ -7,9 +7,6 @@ import { notificarChamada } from '../../realtime/hub';
 import { TIPO_TRANSCRICAO_CHAMADA_WHATSAPP } from '../channels/meta-calling.service';
 import { TIPO_GRAVACAO, obterConfig } from './voice.service';
 import { twilio } from './twilio.provider';
-import { transcricaoDisponivel } from './transcription.config';
-import { analisarTranscricaoLocal } from './analise-local.service';
-import { registrarAnalise } from './analise.service';
 
 /**
  * Traz a gravacao para o storage da plataforma.
@@ -57,58 +54,34 @@ registrarHandler<{ chamadaId: string; url: string }>(TIPO_TRANSCRICAO_CHAMADA_WH
     include: { canalConfig: { select: { transcreverChamadasWhatsapp: true } } },
   });
   if (!chamada) throw new ErroPermanente('chamada não encontrada');
-  let transcricao = chamada.transcricao;
+  if (chamada.transcricao) return;
   if (!chamada.canalConfig?.transcreverChamadasWhatsapp) throw new ErroPermanente('transcrição desativada para esta linha');
-  if (!transcricao && !transcricaoDisponivel()) throw new ErroPermanente('provedor de transcrição indisponível ou desativado');
+  if (!env.OPENAI_API_KEY) throw new ErroPermanente('OPENAI_API_KEY não configurada');
 
-  if (!transcricao) {
   const chaveArquivo = url.replace(/^\/api\/arquivos\//, '').split('?')[0]!;
   const buffer = await readFile(caminhoDe(chaveArquivo));
   const tipo = tipoAceito(url.includes('.m4a') ? 'audio/mp4' : 'audio/webm') ? (url.includes('.m4a') ? 'audio/mp4' : 'audio/webm') : 'audio/webm';
   const form = new FormData();
-  const local = env.TRANSCRICAO_PROVEDOR === 'local';
-  form.append('model', local ? env.TRANSCRICAO_LOCAL_MODELO : 'gpt-transcribe');
+  form.append('model', 'gpt-transcribe');
   form.append('file', new Blob([new Uint8Array(buffer)], { type: tipo }), `chamada-${chamada.id}.${tipo === 'audio/mp4' ? 'm4a' : 'webm'}`);
 
-  const resposta = await fetch(local ? env.TRANSCRICAO_LOCAL_URL : 'https://api.openai.com/v1/audio/transcriptions', {
+  const resposta = await fetch('https://api.openai.com/v1/audio/transcriptions', {
     method: 'POST',
-    ...(!local ? { headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}` } } : {}),
+    headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}` },
     body: form,
   });
   const corpo = await resposta.json().catch(() => ({})) as { text?: string; error?: { message?: string } };
   if ([400, 401, 403, 404].includes(resposta.status)) {
-    throw new ErroPermanente(`provedor de transcrição recusou o áudio (HTTP ${resposta.status})`);
+    throw new ErroPermanente(`serviço de transcrição recusou o áudio (HTTP ${resposta.status})`);
   }
   if (!resposta.ok || !corpo.text) throw new Error(corpo.error?.message ?? `transcrição falhou (HTTP ${resposta.status})`);
 
-  transcricao = corpo.text;
   await prisma.call.update({
     where: { id: chamada.id },
-    data: {
-      transcricao,
-      analisadoPor: local ? `Whisper local (${env.TRANSCRICAO_LOCAL_MODELO})` : 'OpenAI gpt-transcribe',
-      analisadoEm: new Date(),
-    },
+    data: { transcricao: corpo.text, analisadoPor: 'OpenAI gpt-transcribe', analisadoEm: new Date() },
   });
   await notificarChamada(
-    { id: chamada.id, contatoId: chamada.contatoId, transcricao },
+    { id: chamada.id, contatoId: chamada.contatoId, transcricao: corpo.text },
     { agenteId: chamada.agenteId, filaId: chamada.filaId },
   );
-  }
-
-  const ollamaConfigurado = env.LIGACAO_IA_OLLAMA_URL || env.OPORTUNIDADE_IA_OLLAMA_URL;
-  if (!chamada.resumo && transcricao && ollamaConfigurado) {
-    const analise = await analisarTranscricaoLocal(transcricao);
-    await registrarAnalise(chamada.id, {
-      resumo: analise.resumo,
-      sentimento: analise.sentimento,
-      proximasAcoes: analise.proximasAcoes,
-      motor: analise.motor,
-      consumo: { unidades: analise.unidades, custo: null },
-    });
-    await notificarChamada(
-      { id: chamada.id, contatoId: chamada.contatoId, resumo: analise.resumo, sentimento: analise.sentimento },
-      { agenteId: chamada.agenteId, filaId: chamada.filaId },
-    );
-  }
 });

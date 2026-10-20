@@ -36,9 +36,6 @@ const schema = z.object({
   META_WEBHOOK_VERIFY_TOKEN: z.string().default(''),
   META_GRAPH_API_VERSION: z.string().regex(/^v\d+\.0$/).default('v25.0'),
   /** Chave do serviço de transcrição automática das gravações de voz. */
-  TRANSCRICAO_PROVEDOR: z.enum(['local', 'openai', 'desativada']).default('desativada'),
-  TRANSCRICAO_LOCAL_URL: z.string().url().default('http://127.0.0.1:3334/v1/audio/transcriptions'),
-  TRANSCRICAO_LOCAL_MODELO: z.string().min(1).default('base'),
   OPENAI_API_KEY: z.string().default(''),
   /**
    * Endereco publico desta API, usado onde a URL precisa ser absoluta e sair da
@@ -52,12 +49,6 @@ const schema = z.object({
   /** Ollama na rede privada; quando definido, substitui o motor HTTP externo. */
   OPORTUNIDADE_IA_OLLAMA_URL: z.string().url().optional(),
   OPORTUNIDADE_IA_OLLAMA_MODELO: z.string().min(1).default('qwen3:4b'),
-  /** Mesmo Ollama pode analisar chamadas; permite URL/modelo próprios para voz. */
-  LIGACAO_IA_OLLAMA_URL: z.string().url().optional(),
-  LIGACAO_IA_OLLAMA_MODELO: z.string().min(1).optional(),
-  /** Assistente conversacional de consultas somente leitura ao CRM. */
-  CRM_IA_OLLAMA_URL: z.string().url().optional(),
-  CRM_IA_OLLAMA_MODELO: z.string().min(1).optional(),
   OPORTUNIDADE_IA_ORGANIZACAO_ID: z.string().uuid().optional(),
   /**
    * Pasta do front compilado, relativa ao cwd da API. Quando ela existe, a
