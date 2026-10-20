@@ -2,6 +2,12 @@
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
 
+# O Prisma precisa do OpenSSL presente durante a geração para escolher o engine
+# Debian 12/OpenSSL 3 usado no container de runtime.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openssl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
 # Copia so os manifests primeiro: enquanto eles nao mudam, o npm ci vem do cache
 # de camada e o build fica em segundos.
 COPY package.json package-lock.json ./
@@ -25,7 +31,7 @@ COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/
 COPY apps/api/transcriber/requirements.txt apps/api/transcriber/
 RUN apt-get update \
- && apt-get install -y --no-install-recommends python3 python3-venv libgomp1 ca-certificates \
+ && apt-get install -y --no-install-recommends openssl python3 python3-venv libgomp1 ca-certificates \
  && python3 -m venv /opt/whisper-venv \
  && /opt/whisper-venv/bin/pip install --no-cache-dir -r apps/api/transcriber/requirements.txt \
  && rm -rf /var/lib/apt/lists/* \
