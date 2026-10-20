@@ -40,11 +40,8 @@ ENV NODE_ENV=production
 # roda migrate deploy, e sem ele o npx tentaria baixar da internet a cada start.
 COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/
-COPY apps/api/transcriber/requirements.txt apps/api/transcriber/
 RUN apt-get update \
- && apt-get install -y --no-install-recommends openssl python3 python3-venv libgomp1 ca-certificates \
- && python3 -m venv /opt/whisper-venv \
- && /opt/whisper-venv/bin/pip install --no-cache-dir -r apps/api/transcriber/requirements.txt \
+ && apt-get install -y --no-install-recommends openssl ca-certificates \
  && rm -rf /var/lib/apt/lists/* \
  && npm ci --omit=dev --workspace @plataforma/api --include-workspace-root
 
@@ -52,11 +49,10 @@ COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=build /app/apps/api/dist ./apps/api/dist
 COPY --from=build /app/apps/web/dist ./apps/web/dist
 COPY apps/api/prisma ./apps/api/prisma
-COPY apps/api/transcriber ./apps/api/transcriber
 COPY apps/api/entrypoint.sh ./apps/api/entrypoint.sh
 
 # Nao roda como root: container comprometido nao vira dono do volume de anexos.
-RUN mkdir -p /app/apps/api/storage/whisper-models && chown -R node:node /app/apps/api/storage
+RUN mkdir -p /app/apps/api/storage && chown -R node:node /app/apps/api/storage
 USER node
 
 WORKDIR /app/apps/api

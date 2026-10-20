@@ -13,7 +13,9 @@ Para parar o serviço: `docker compose --profile transcricao down`.
 
 ## Produção
 
-O container da API já inicia o serviço Whisper automaticamente quando `TRANSCRICAO_PROVEDOR=local` (padrão do entrypoint de produção). O diretório dos modelos deve ficar em armazenamento persistente para evitar novo download após recriar o container. O padrão é modelo `base`, CPU e quantização INT8, com dois threads.
+O Whisper é um serviço separado da API para que a instalação do modelo e das bibliotecas de CPU não atrasem nem derrubem o deploy principal. Publique `apps/api/transcriber/Dockerfile` como um serviço privado na mesma rede da API, configure armazenamento persistente em `/models` e aponte `TRANSCRICAO_LOCAL_URL` para `http://<servico-whisper>:3334/v1/audio/transcriptions`. Só então defina `TRANSCRICAO_PROVEDOR=local`. O padrão da API é `desativada`; nesse modo, as gravações continuam sendo guardadas sem transcrição automática.
+
+O primeiro uso baixa o modelo `base`; configure o diretório `/models` como volume persistente. O processamento usa CPU e memória e ocorre depois da ligação, não ao vivo.
 
 ## Alternativas
 
