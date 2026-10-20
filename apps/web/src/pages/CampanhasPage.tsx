@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alerta, Badge, Button, Card, Field, Input, Select } from '../components/ui';
-import { Tabs } from '../components/ui/Tabs';
-import { StatTile } from '../components/viz/StatTile';
+import { Alerta, Button, Field, Input, Select } from '../components/ui';
+import { Modal } from '../components/ui/Modal';
+import { Segmentado, iniciais } from '../components/ui/Pagina';
 import { useSearchParams } from 'react-router-dom';
 import { MontarPublico } from './campanhas/MontarPublico';
 import { CAMPANHAS_DEMO, ITENS_DEMO, RESULTADO_DEMO } from './campanhas/dadosDemo';
 import { LeadsTab } from './crm/LeadsTab';
 import { CampanhasParceirosTab } from './campanhas/CampanhasParceirosTab';
+import { BarraEmpilhada } from './dashboard/blocos';
 import { useAuth } from '../features/auth/AuthProvider';
 import { ApiError, api } from '../lib/api';
 import { ESTADO } from '../lib/viz';
@@ -24,6 +25,23 @@ const CANAIS: Array<{ valor: Canal; label: string }> = [
   { valor: 'FACEBOOK', label: 'Facebook' },
   { valor: 'VOZ', label: 'Voz (exige telefonia)' },
 ];
+const NOME_CANAL: Partial<Record<Canal, string>> = { WHATSAPP: 'WhatsApp', INSTAGRAM: 'Instagram', FACEBOOK: 'Facebook', VOZ: 'Voz', EMAIL: 'E-mail' };
+const nomeCanal = (c: Canal) => NOME_CANAL[c] ?? c;
+
+const ACEITOS = '.jpg,.jpeg,.png,.webp,.gif,.mp3,.ogg,.opus,.m4a,.aac,.weba,.mp4,.webm,.pdf,.doc,.docx,.xls,.xlsx,.zip,.csv,.txt';
+
+// So tons que o tema escuro remapeia (index.css).
+const CLASSE_STATUS: Record<Campanha['status'], string> = {
+  ATIVA: 'bg-emerald-50 text-emerald-700',
+  PAUSADA: 'bg-amber-50 text-amber-700',
+  RASCUNHO: 'bg-slate-100 text-slate-600',
+  CONCLUIDA: 'bg-slate-100 text-slate-600',
+};
+const CLASSE_ITEM: Partial<Record<CampanhaItem['status'], string>> = {
+  ENVIADO: 'bg-emerald-50 text-emerald-700',
+  FALHOU: 'bg-red-50 text-red-700',
+  IGNORADO: 'bg-amber-50 text-amber-700',
+};
 
 type Resultado = { parceirosQueInteragiram: number; respostasRecebidas: number };
 type Aberta = { campanha: Campanha; itens: CampanhaItem[]; resultado?: Resultado };
@@ -67,6 +85,19 @@ const SUBABAS = [
 ] as const;
 type SubAba = (typeof SUBABAS)[number]['chave'];
 
+/** A mensagem como o parceiro a recebe: balao de conversa com as variaveis trocadas. */
+function Previa({ mensagem, canal }: { mensagem: string; canal: Canal }) {
+  return (
+    <div className="flex flex-col gap-2 rounded-xl bg-slate-100 p-3.5">
+      <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">Prévia no {nomeCanal(canal)}</p>
+      <p className="max-w-[300px] self-end whitespace-pre-wrap rounded-xl rounded-br-sm bg-emerald-50 px-3 py-2 text-[13px] leading-relaxed text-slate-800 shadow-sm">
+        {previa(mensagem)}
+      </p>
+      <span className="text-[11.5px] text-slate-500">Variáveis preenchidas com um parceiro de exemplo</span>
+    </div>
+  );
+}
+
 export function CampanhasPage() {
   // Disparar/gerenciar campanha e ADMIN/SUPERVISOR (ver `campanhasRoutes` na
   // API); GESTOR/COMERCIAL so tem acesso a Leads nesta pagina — sem este
@@ -87,6 +118,7 @@ export function CampanhasPage() {
   const [subAba, setSubAba] = useState<SubAba>(podeVerCampanhas ? 'campanhas' : 'leads');
   const [campanhas, setCampanhas] = useState<Campanha[]>([]);
   const [aberta, setAberta] = useState<Aberta | null>(null);
+  const [novaAberta, setNovaAberta] = useState(false);
   const [nova, setNova] = useState({ nome: '', assunto: '', canal: 'WHATSAPP' as Canal, mensagem: '' });
   const [arquivosNovos, setArquivosNovos] = useState<File[]>([]);
   const [edicao, setEdicao] = useState({ nome: '', assunto: '', mensagem: '' });
@@ -140,20 +172,23 @@ export function CampanhasPage() {
     return () => clearTimeout(t);
   }, [aberta, abrir, demo]);
 
+  /** Devolve `true` quando a acao foi feita (no modo demonstracao nada e feito). */
   const agir = async (acao: () => Promise<unknown>, idParaReabrir?: string) => {
     setErro(null);
     setAviso(null);
     if (demo) {
       setAviso('Modo demonstração: nada é gravado.');
-      return;
+      return false;
     }
     setOcupado(true);
     try {
       await acao();
       await carregar();
       if (idParaReabrir) await abrir(idParaReabrir);
+      return true;
     } catch (e) {
       setErro(e instanceof ApiError ? e.message : 'Falha na operação');
+      return false;
     } finally {
       setOcupado(false);
     }
@@ -161,7 +196,7 @@ export function CampanhasPage() {
 
   const criar = async (e: React.FormEvent) => {
     e.preventDefault();
-    await agir(async () => {
+    const feito = await agir(async () => {
       const { campanha } = await api.post<{ campanha: Campanha }>('/campanhas', { ...nova, assunto: nova.assunto || null });
       for (const arquivo of arquivosNovos) {
         await api.upload(`/campanhas/${campanha.id}/anexos`, arquivo);
@@ -170,6 +205,7 @@ export function CampanhasPage() {
       setNova({ nome: '', assunto: '', canal: 'WHATSAPP', mensagem: '' });
       await abrir(campanha.id);
     });
+    if (feito) setNovaAberta(false);
   };
 
   /** "Enviar agora" = ativar + disparar, os mesmos dois passos de antes. */
@@ -195,188 +231,103 @@ export function CampanhasPage() {
   }, [c?.id, c?.nome, c?.assunto, c?.mensagem]);
 
   return (
-    <div className="space-y-5">
-      <Tabs itens={subAbasVisiveis} ativo={subAba} aoSelecionar={(chave) => setSubAba(chave as SubAba)} />
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Segmentado
+          papel="tab"
+          rotulo="Seções de campanhas"
+          opcoes={subAbasVisiveis.map((s) => ({ valor: s.chave, rotulo: s.rotulo }))}
+          valor={subAba}
+          aoMudar={(v) => setSubAba(v)}
+        />
+        {subAba === 'campanhas' && (
+          <Button onClick={() => { setErro(null); setAviso(null); setNovaAberta(true); }}>+ Nova campanha</Button>
+        )}
+      </div>
 
       {subAba === 'leads' && <LeadsTab />}
       {subAba === 'parceiros' && podeGerirCampanhasParceiros && <CampanhasParceirosTab />}
 
       {subAba === 'campanhas' && (
-        <div className="grid gap-5 lg:grid-cols-[380px_1fr]">
-          <div className="space-y-5">
-            <Card titulo="Campanhas" descricao={`${campanhas.length} cadastrada(s)`}>
-              {erro && !aberta && (
-                <div className="mb-3">
-                  <Alerta>{erro}</Alerta>
-                </div>
-              )}
+        <div className="grid items-start gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
+          <aside className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white" aria-labelledby="lista-campanhas">
+            <div className="flex items-baseline gap-2 border-b border-slate-100 px-4 py-3.5">
+              <h2 id="lista-campanhas" className="text-[15px] font-bold text-slate-900">Campanhas</h2>
+              <span className="text-[12.5px] tabular-nums text-slate-500">{campanhas.length} cadastrada(s)</span>
+            </div>
+            <div className="flex flex-col gap-4 p-2.5">
+              {erro && !aberta && <Alerta>{erro}</Alerta>}
               {campanhas.length === 0 ? (
-                <p className="text-sm text-slate-500">Nenhuma campanha criada.</p>
+                <p className="px-2 py-6 text-center text-sm text-slate-500">Nenhuma campanha criada.</p>
               ) : (
-                <div className="space-y-4">
-                  {GRUPOS.map((g) => {
-                    const lista = campanhas.filter((x) => grupoDa(x) === g.id);
-                    if (lista.length === 0) return null;
-                    return (
-                      <div key={g.id}>
-                        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                          {g.titulo} ({lista.length})
-                        </p>
-                        <ul className="divide-y divide-slate-100">
-                          {lista.map((x) => (
+                GRUPOS.map((g) => {
+                  const lista = campanhas.filter((x) => grupoDa(x) === g.id);
+                  if (lista.length === 0) return null;
+                  return (
+                    <div key={g.id} className="flex flex-col gap-1.5">
+                      <p className="px-1.5 text-[11.5px] font-bold uppercase tracking-[0.08em] text-slate-500">
+                        {g.titulo} · {lista.length}
+                      </p>
+                      <ul className="flex flex-col gap-1.5">
+                        {lista.map((x) => {
+                          const selecionada = c?.id === x.id;
+                          const pct = x.total ? Math.round((x.contagens.ENVIADO / x.total) * 100) : 0;
+                          return (
                             <li key={x.id}>
                               <button
                                 type="button"
+                                aria-current={selecionada ? 'true' : undefined}
                                 onClick={() => void abrir(x.id)}
-                                className={`w-full py-2.5 text-left transition hover:bg-slate-50 ${
-                                  c?.id === x.id ? 'bg-slate-50' : ''
+                                className={`flex w-full flex-col gap-2 rounded-xl border p-3 text-left transition ${
+                                  selecionada ? 'border-[var(--brand-primary)] bg-[var(--brand-primary-soft)]' : 'border-slate-200 bg-white hover:border-slate-300'
                                 }`}
                               >
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="truncate text-sm font-medium text-slate-800">{x.nome}</span>
-                                  <Badge
-                                    tom={x.status === 'ATIVA' ? 'sucesso' : x.status === 'CONCLUIDA' ? 'neutro' : 'alerta'}
-                                  >
+                                <span className="flex items-center gap-2">
+                                  <span className="min-w-0 flex-1 truncate text-[13.5px] font-bold text-slate-900">{x.nome}</span>
+                                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11.5px] font-bold ${CLASSE_STATUS[x.status]}`}>
                                     {LABEL_CAMPANHA_STATUS[x.status]}
-                                  </Badge>
-                                </div>
-                                <p className="text-xs text-slate-500">
-                                  {x.canal} · {x.total} parceiro(s) · {x.contagens.ENVIADO} enviada(s)
+                                  </span>
+                                </span>
+                                <span className="block h-1.5 overflow-hidden rounded-full bg-slate-100" aria-hidden="true">
+                                  <span className="block h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: ESTADO.bom }} />
+                                </span>
+                                <span className="text-xs tabular-nums text-slate-500">
+                                  {nomeCanal(x.canal)} · {x.contagens.ENVIADO} de {x.total} enviada(s)
                                   {x.agendadaPara ? ` · agendada ${dataHora(x.agendadaPara)}` : ''}
-                                </p>
+                                </span>
                               </button>
                             </li>
-                          ))}
-                        </ul>
-                      </div>
-                    );
-                  })}
-                </div>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  );
+                })
               )}
-            </Card>
-    
-            <Card titulo="Nova campanha" descricao="Depois de criar, escolha o público e programe o envio">
-              <form onSubmit={criar} className="space-y-3">
-                <Field label="Nome da campanha">
-                  <Input
-                    required
-                    placeholder="Credenciamento Starlink — Para"
-                    value={nova.nome}
-                    onChange={(e) => setNova({ ...nova, nome: e.target.value })}
-                  />
-                </Field>
-                <Field label="Assunto (opcional)" hint="Usado em comunicados por e-mail; os demais canais enviam a mensagem abaixo">
-                  <Input
-                    maxLength={180}
-                    value={nova.assunto}
-                    onChange={(e) => setNova({ ...nova, assunto: e.target.value })}
-                    placeholder="Novidades e condições deste mês"
-                  />
-                </Field>
-                <Field label="Canal">
-                  <Select value={nova.canal} onChange={(e) => setNova({ ...nova, canal: e.target.value as Canal })}>
-                    {CANAIS.map((o) => (
-                      <option key={o.valor} value={o.valor}>{o.label}</option>
-                    ))}
-                  </Select>
-                </Field>
-                <Field label="Mensagem" hint="Use {{nome}}, {{email}} ou {{telefone}} para personalizar">
-                  <textarea
-                    required
-                    rows={4}
-                    value={nova.mensagem}
-                    onChange={(e) => setNova({ ...nova, mensagem: e.target.value })}
-                    className="w-full resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[var(--brand-primary)]"
-                  />
-                </Field>
-                <Field label="Anexos" hint="Até 20 MB por arquivo. Os destinatários receberão links seguros para baixar os materiais.">
-                  <input
-                    type="file"
-                    multiple
-                    accept=".jpg,.jpeg,.png,.webp,.gif,.mp3,.ogg,.opus,.m4a,.aac,.weba,.mp4,.webm,.pdf,.doc,.docx,.xls,.xlsx,.zip,.csv,.txt"
-                    onChange={(e) => setArquivosNovos(Array.from(e.target.files ?? []))}
-                    className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2"
-                  />
-                  {arquivosNovos.length > 0 && <p className="mt-1 text-xs text-slate-500">{arquivosNovos.map((f) => f.name).join(' · ')}</p>}
-                </Field>
-                {nova.mensagem.trim() && (
-                  <div>
-                    <p className="text-xs font-medium text-slate-500">Pré-visualização</p>
-                    <p className="mt-1 whitespace-pre-wrap rounded-lg bg-emerald-50 p-3 text-sm text-slate-800">
-                      {previa(nova.mensagem)}
+            </div>
+          </aside>
+
+          {aberta && c ? (
+            <div className="flex min-w-0 flex-col gap-4">
+              <section className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-4" aria-labelledby="campanha-aberta">
+                <div className="flex flex-wrap items-start gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <h2 id="campanha-aberta" className="text-xl font-bold tracking-[-0.01em] text-slate-900">{c.nome}</h2>
+                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${CLASSE_STATUS[c.status]}`}>{LABEL_CAMPANHA_STATUS[c.status]}</span>
+                    </div>
+                    <p className="mt-1 text-[12.5px] tabular-nums text-slate-500">
+                      {nomeCanal(c.canal)} · criada em {new Date(c.criadoEm).toLocaleDateString('pt-BR')} · {c.total} parceiro(s) no público
+                      {c.agendadaPara ? ` · envio programado para ${dataHora(c.agendadaPara)}` : ''}
                     </p>
                   </div>
-                )}
-                <Button type="submit" disabled={ocupado} className="w-full">
-                  Criar campanha
-                </Button>
-              </form>
-            </Card>
-          </div>
-    
-          {aberta && c ? (
-            <div className="space-y-5">
-              <Card
-                titulo={c.nome}
-                descricao={`${c.canal} · criada em ${new Date(c.criadoEm).toLocaleDateString('pt-BR')}${
-                  c.agendadaPara ? ` · envio programado para ${dataHora(c.agendadaPara)}` : ''
-                }`}
-                acao={
-                  <Badge tom={c.status === 'ATIVA' ? 'sucesso' : 'neutro'}>{LABEL_CAMPANHA_STATUS[c.status]}</Badge>
-                }
-              >
-                {erro && (
-                  <div className="mb-3">
-                    <Alerta>{erro}</Alerta>
-                  </div>
-                )}
-                {aviso && (
-                  <div className="mb-3">
-                    <Alerta tipo="sucesso">{aviso}</Alerta>
-                  </div>
-                )}
-
-                {c.status === 'RASCUNHO' && (
-                  <div className="mb-4 space-y-3 rounded-lg border border-slate-200 p-3">
-                    <p className="text-sm font-medium text-slate-700">Editar comunicado</p>
-                    <Field label="Nome"><Input value={edicao.nome} onChange={(e) => setEdicao({ ...edicao, nome: e.target.value })} /></Field>
-                    <Field label="Assunto (opcional)"><Input maxLength={180} value={edicao.assunto} onChange={(e) => setEdicao({ ...edicao, assunto: e.target.value })} /></Field>
-                    <Field label="Mensagem"><textarea rows={4} value={edicao.mensagem} onChange={(e) => setEdicao({ ...edicao, mensagem: e.target.value })} className="w-full resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[var(--brand-primary)]" /></Field>
-                    <Button variante="neutro" disabled={ocupado || !edicao.nome.trim() || !edicao.mensagem.trim()} onClick={() => void agir(() => api.patch(`/campanhas/${c.id}`, { nome: edicao.nome, assunto: edicao.assunto || null, mensagem: edicao.mensagem }), c.id)}>Salvar edição</Button>
-                  </div>
-                )}
-    
-                <p className="text-xs font-medium text-slate-500">Pré-visualização da mensagem</p>
-                <p className="mt-1 whitespace-pre-wrap rounded-lg bg-emerald-50 p-3 text-sm text-slate-800">
-                  {previa(c.mensagem)}
-                </p>
-                {c.anexos && c.anexos.length > 0 && (
-                  <div className="mt-3 rounded-lg border border-slate-200 p-3">
-                    <p className="mb-2 text-xs font-medium text-slate-500">Materiais anexados</p>
-                    <ul className="space-y-1 text-sm">
-                      {c.anexos.map((anexo) => <li key={anexo.id} className="flex items-center justify-between gap-2"><a className="truncate text-blue-700 underline" href={anexo.url} target="_blank" rel="noreferrer">{anexo.nome}</a>{c.status === 'RASCUNHO' && <button type="button" className="text-xs text-red-600" disabled={ocupado} onClick={() => void agir(() => api.del(`/campanhas/${c.id}/anexos/${anexo.id}`), c.id)}>Remover</button>}</li>)}
-                    </ul>
-                  </div>
-                )}
-                {c.status === 'RASCUNHO' && (
-                  <div className="mt-3">
-                    <Field label="Adicionar materiais" hint="Os destinatários recebem links seguros para baixar.">
-                      <input type="file" multiple accept=".jpg,.jpeg,.png,.webp,.gif,.mp3,.ogg,.opus,.m4a,.aac,.weba,.mp4,.webm,.pdf,.doc,.docx,.xls,.xlsx,.zip,.csv,.txt" onChange={(e) => {
-                        const selecionados = Array.from(e.target.files ?? []);
-                        e.target.value = '';
-                        if (!selecionados.length) return;
-                        void agir(async () => {
-                          for (const arquivo of selecionados) await api.upload(`/campanhas/${c.id}/anexos`, arquivo);
-                        }, c.id);
-                      }} className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2" />
-                    </Field>
-                  </div>
-                )}
-    
-                {c.status !== 'CONCLUIDA' && (
-                  <div className="mt-4 space-y-3">
+                  {c.status !== 'CONCLUIDA' && (
                     <div className="flex flex-wrap gap-2">
                       <Button disabled={ocupado || c.total === 0} onClick={() => void enviarAgora(c)}>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="m22 2-7 20-4-9-9-4z" />
+                          <path d="M22 2 11 13" />
+                        </svg>
                         Enviar agora{pendentes > 0 ? ` (${pendentes})` : ''}
                       </Button>
                       {c.status === 'ATIVA' && (
@@ -400,7 +351,7 @@ export function CampanhasPage() {
                         </Button>
                       )}
                       <Button
-                        variante="neutro"
+                        variante="perigo"
                         disabled={ocupado}
                         onClick={() => {
                           if (!window.confirm('Cancelar a campanha? O que ainda não saiu não será enviado.')) return;
@@ -410,108 +361,240 @@ export function CampanhasPage() {
                         Cancelar campanha
                       </Button>
                     </div>
-    
-                    {c.status !== 'ATIVA' && (
-                      <div className="flex flex-wrap items-end gap-2">
-                        <Field label="Programar envio">
-                          <Input
-                            type="datetime-local"
-                            min={paraCampoLocal(new Date())}
-                            value={agendarPara}
-                            onChange={(e) => setAgendarPara(e.target.value)}
-                          />
-                        </Field>
-                        <Button
-                          variante="neutro"
-                          disabled={ocupado || !agendarPara || c.total === 0}
-                          onClick={() =>
-                            void agir(async () => {
-                              await api.patch(`/campanhas/${c.id}/agendamento`, {
-                                agendadaPara: new Date(agendarPara).toISOString(),
-                              });
-                              setAgendarPara('');
-                            }, c.id)
-                          }
-                        >
-                          Agendar
-                        </Button>
-                        {c.agendadaPara && (
-                          <Button
-                            variante="neutro"
-                            disabled={ocupado}
-                            onClick={() =>
-                              void agir(() => api.patch(`/campanhas/${c.id}/agendamento`, { agendadaPara: null }), c.id)
-                            }
-                          >
-                            Desfazer agendamento
-                          </Button>
-                        )}
-                      </div>
+                  )}
+                </div>
+
+                {erro && <Alerta>{erro}</Alerta>}
+                {aviso && <Alerta tipo="sucesso">{aviso}</Alerta>}
+
+                {c.status !== 'CONCLUIDA' && c.status !== 'ATIVA' && (
+                  <div className="flex flex-wrap items-end gap-2 rounded-xl bg-slate-50 p-3">
+                    <Field label="Programar envio">
+                      <Input
+                        type="datetime-local"
+                        min={paraCampoLocal(new Date())}
+                        value={agendarPara}
+                        onChange={(e) => setAgendarPara(e.target.value)}
+                      />
+                    </Field>
+                    <Button
+                      variante="neutro"
+                      disabled={ocupado || !agendarPara || c.total === 0}
+                      onClick={() =>
+                        void agir(async () => {
+                          await api.patch(`/campanhas/${c.id}/agendamento`, {
+                            agendadaPara: new Date(agendarPara).toISOString(),
+                          });
+                          setAgendarPara('');
+                        }, c.id)
+                      }
+                    >
+                      Agendar
+                    </Button>
+                    {c.agendadaPara && (
+                      <Button
+                        variante="neutro"
+                        disabled={ocupado}
+                        onClick={() =>
+                          void agir(() => api.patch(`/campanhas/${c.id}/agendamento`, { agendadaPara: null }), c.id)
+                        }
+                      >
+                        Desfazer agendamento
+                      </Button>
                     )}
                     {c.total === 0 && (
-                      <p className="text-xs text-slate-500">Escolha o público abaixo antes de enviar ou agendar.</p>
+                      <p className="basis-full text-xs text-slate-500">Escolha o público abaixo antes de enviar ou agendar.</p>
                     )}
                   </div>
                 )}
-              </Card>
-    
-              <Card titulo="Resultado da campanha" descricao={`${c.total} parceiro(s) no público`}>
-                <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-                  <StatTile rotulo="Enviadas" valor={c.contagens.ENVIADO} estado={c.contagens.ENVIADO ? ESTADO.bom : undefined} />
-                  <StatTile rotulo="Na fila" valor={c.contagens.PENDENTE} />
-                  <StatTile
-                    rotulo="Não entregues"
-                    valor={c.contagens.IGNORADO}
-                    detalhe="sem telefone ou cancelada"
-                    estado={c.contagens.IGNORADO ? ESTADO.atencao : undefined}
-                  />
-                  <StatTile
-                    rotulo="Falhas"
-                    valor={c.contagens.FALHOU}
-                    estado={c.contagens.FALHOU ? ESTADO.grave : undefined}
-                  />
-                  <StatTile rotulo="Respostas recebidas" valor={aberta.resultado?.respostasRecebidas ?? '—'} />
-                  <StatTile rotulo="Parceiros que interagiram" valor={aberta.resultado?.parceirosQueInteragiram ?? '—'} />
+
+                <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+                  <div className="flex min-w-0 flex-col gap-3">
+                    <p className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-slate-500">Resultado do envio</p>
+                    <BarraEmpilhada
+                      rotuloAcessivel={`Enviadas ${c.contagens.ENVIADO}, na fila ${c.contagens.PENDENTE}, não entregues ${c.contagens.IGNORADO}, falhas ${c.contagens.FALHOU}`}
+                      partes={[
+                        { rotulo: 'Enviadas', valor: c.contagens.ENVIADO, cor: ESTADO.bom },
+                        { rotulo: 'Na fila', valor: c.contagens.PENDENTE, cor: ESTADO.info },
+                        { rotulo: 'Não entregues', valor: c.contagens.IGNORADO, cor: ESTADO.atencao },
+                        { rotulo: 'Falhas', valor: c.contagens.FALHOU, cor: ESTADO.grave },
+                      ]}
+                    />
+                    <p className="text-xs text-slate-500">&ldquo;Não entregues&rdquo; são os sem telefone ou cancelados.</p>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div className="rounded-xl bg-blue-50 px-3.5 py-3">
+                        <span className="block text-[22px] font-bold tabular-nums text-blue-700">{aberta.resultado?.respostasRecebidas ?? '—'}</span>
+                        <span className="text-[12.5px] text-slate-700">respostas recebidas</span>
+                      </div>
+                      <div className="rounded-xl bg-blue-50 px-3.5 py-3">
+                        <span className="block text-[22px] font-bold tabular-nums text-blue-700">{aberta.resultado?.parceirosQueInteragiram ?? '—'}</span>
+                        <span className="text-[12.5px] text-slate-700">parceiros interagiram</span>
+                      </div>
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      Respostas contam mensagens do parceiro depois do envio, em qualquer conversa dele.
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-3">
+                    <Previa mensagem={c.mensagem} canal={c.canal} />
+                    {c.anexos && c.anexos.length > 0 && (
+                      <div className="rounded-xl border border-slate-200 p-3">
+                        <p className="mb-2 text-xs font-semibold text-slate-600">Materiais anexados</p>
+                        <ul className="flex flex-col gap-1 text-sm">
+                          {c.anexos.map((anexo) => (
+                            <li key={anexo.id} className="flex items-center justify-between gap-2">
+                              <a className="truncate text-blue-700 underline" href={anexo.url} target="_blank" rel="noreferrer">{anexo.nome}</a>
+                              {c.status === 'RASCUNHO' && (
+                                <button type="button" className="shrink-0 text-xs font-semibold text-red-600" disabled={ocupado} onClick={() => void agir(() => api.del(`/campanhas/${c.id}/anexos/${anexo.id}`), c.id)}>
+                                  Remover
+                                </button>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <p className="mt-2 text-xs text-slate-500">
-                  Respostas contam mensagens do parceiro depois do envio, em qualquer conversa dele.
-                </p>
-              </Card>
-    
-              {c.status !== 'CONCLUIDA' && (
-                <MontarPublico campanhaId={c.id} canal={c.canal} aoAplicar={() => void abrir(c.id)} />
-              )}
-    
-              <Card titulo="Parceiros da campanha" descricao="Primeiros 200">
-                {aberta.itens.length === 0 ? (
-                  <p className="text-sm text-slate-500">Nenhum parceiro na campanha.</p>
-                ) : (
-                  <ul className="max-h-80 divide-y divide-slate-100 overflow-y-auto">
-                    {aberta.itens.map((i) => (
-                      <li key={i.id} className="py-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="truncate text-sm text-slate-800">{i.contato.nome}</span>
-                          <Badge tom={i.status === 'ENVIADO' ? 'sucesso' : i.status === 'FALHOU' ? 'alerta' : 'neutro'}>
-                            {LABEL_ITEM_STATUS[i.status]}
-                          </Badge>
-                        </div>
-                        <p className="text-xs text-slate-500">{i.contato.telefone ?? 'sem telefone'}</p>
-                        {i.erro && <p className="mt-0.5 text-xs text-red-600">{i.erro}</p>}
-                      </li>
-                    ))}
-                  </ul>
+
+                {c.status === 'RASCUNHO' && (
+                  <details className="group rounded-xl border border-slate-200">
+                    <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold text-slate-700">
+                      Editar comunicado e materiais
+                    </summary>
+                    <div className="flex flex-col gap-3 border-t border-slate-100 p-4">
+                      <Field label="Nome"><Input value={edicao.nome} onChange={(e) => setEdicao({ ...edicao, nome: e.target.value })} /></Field>
+                      <Field label="Assunto (opcional)"><Input maxLength={180} value={edicao.assunto} onChange={(e) => setEdicao({ ...edicao, assunto: e.target.value })} /></Field>
+                      <Field label="Mensagem"><textarea rows={4} value={edicao.mensagem} onChange={(e) => setEdicao({ ...edicao, mensagem: e.target.value })} className="w-full resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[var(--brand-primary)]" /></Field>
+                      <div>
+                        <Button variante="neutro" disabled={ocupado || !edicao.nome.trim() || !edicao.mensagem.trim()} onClick={() => void agir(() => api.patch(`/campanhas/${c.id}`, { nome: edicao.nome, assunto: edicao.assunto || null, mensagem: edicao.mensagem }), c.id)}>Salvar edição</Button>
+                      </div>
+                      <Field label="Adicionar materiais" hint="Os destinatários recebem links seguros para baixar.">
+                        <input type="file" multiple accept={ACEITOS} onChange={(e) => {
+                          const selecionados = Array.from(e.target.files ?? []);
+                          e.target.value = '';
+                          if (!selecionados.length) return;
+                          void agir(async () => {
+                            for (const arquivo of selecionados) await api.upload(`/campanhas/${c.id}/anexos`, arquivo);
+                          }, c.id);
+                        }} className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2" />
+                      </Field>
+                    </div>
+                  </details>
                 )}
-              </Card>
+              </section>
+
+              <div className="grid items-start gap-4 2xl:grid-cols-2">
+                {c.status !== 'CONCLUIDA' && (
+                  <MontarPublico campanhaId={c.id} canal={c.canal} aoAplicar={() => void abrir(c.id)} />
+                )}
+
+                <section className="min-w-0 rounded-2xl border border-slate-200 bg-white" aria-labelledby="itens-campanha">
+                  <div className="flex items-baseline gap-2 px-5 py-4">
+                    <h3 id="itens-campanha" className="text-[15px] font-bold text-slate-900">Parceiros da campanha</h3>
+                    <span className="text-[12.5px] text-slate-500">primeiros 200</span>
+                  </div>
+                  {aberta.itens.length === 0 ? (
+                    <p className="px-5 pb-5 text-sm text-slate-500">Nenhum parceiro na campanha.</p>
+                  ) : (
+                    <ul className="max-h-96 divide-y divide-slate-100 overflow-y-auto px-5 pb-3">
+                      {aberta.itens.map((i) => (
+                        <li key={i.id} className="flex items-center gap-2.5 py-2">
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[11px] font-bold text-slate-600" aria-hidden="true">
+                            {iniciais(i.contato.nome)}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-[13px] font-semibold text-slate-800">{i.contato.nome}</span>
+                            <span className={`block truncate text-xs tabular-nums ${i.erro ? 'text-red-600' : 'text-slate-500'}`}>
+                              {i.erro ?? i.contato.telefone ?? 'sem telefone'}
+                            </span>
+                          </span>
+                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11.5px] font-bold ${CLASSE_ITEM[i.status] ?? 'bg-slate-100 text-slate-600'}`}>
+                            {LABEL_ITEM_STATUS[i.status]}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+              </div>
             </div>
           ) : (
-            <Card titulo="Detalhe da campanha">
-              <p className="text-sm text-slate-500">
+            <div className="flex min-h-[320px] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-300 bg-white px-6 text-center">
+              <p className="text-sm font-semibold text-slate-700">Nenhuma campanha selecionada</p>
+              <p className="max-w-sm text-[13px] text-slate-500">
                 Selecione uma campanha para escolher o público, programar o envio e acompanhar o resultado.
               </p>
-            </Card>
+            </div>
           )}
         </div>
       )}
+
+      <Modal
+        aberto={novaAberta}
+        titulo="Nova campanha"
+        aoFechar={() => setNovaAberta(false)}
+        largura="max-w-2xl"
+      >
+        <form id="form-nova-campanha" onSubmit={criar} className="grid gap-4 md:grid-cols-[minmax(0,1fr)_240px]">
+          <div className="flex flex-col gap-3">
+            <p className="text-xs text-slate-500">Depois de criar, escolha o público e programe o envio.</p>
+            {erro ? <Alerta>{erro}</Alerta> : aviso ? <Alerta tipo="sucesso">{aviso}</Alerta> : null}
+            <Field label="Nome da campanha">
+              <Input
+                required
+                placeholder="Credenciamento Starlink — Pará"
+                value={nova.nome}
+                onChange={(e) => setNova({ ...nova, nome: e.target.value })}
+              />
+            </Field>
+            <Field label="Assunto (opcional)" hint="Usado em comunicados por e-mail; os demais canais enviam a mensagem abaixo">
+              <Input
+                maxLength={180}
+                value={nova.assunto}
+                onChange={(e) => setNova({ ...nova, assunto: e.target.value })}
+                placeholder="Novidades e condições deste mês"
+              />
+            </Field>
+            <Field label="Canal">
+              <Select value={nova.canal} onChange={(e) => setNova({ ...nova, canal: e.target.value as Canal })}>
+                {CANAIS.map((o) => (
+                  <option key={o.valor} value={o.valor}>{o.label}</option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Mensagem" hint="Use {{nome}}, {{email}} ou {{telefone}} para personalizar">
+              <textarea
+                required
+                rows={4}
+                value={nova.mensagem}
+                onChange={(e) => setNova({ ...nova, mensagem: e.target.value })}
+                className="w-full resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[var(--brand-primary)]"
+              />
+            </Field>
+            <Field label="Anexos" hint="Até 20 MB por arquivo. Os destinatários receberão links seguros para baixar os materiais.">
+              <input
+                type="file"
+                multiple
+                accept={ACEITOS}
+                onChange={(e) => setArquivosNovos(Array.from(e.target.files ?? []))}
+                className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2"
+              />
+            </Field>
+            {arquivosNovos.length > 0 && <p className="-mt-2 text-xs text-slate-500">{arquivosNovos.map((f) => f.name).join(' · ')}</p>}
+          </div>
+          <div className="flex flex-col gap-3">
+            {nova.mensagem.trim() ? (
+              <Previa mensagem={nova.mensagem} canal={nova.canal} />
+            ) : (
+              <div className="rounded-xl bg-slate-100 p-3.5 text-[12.5px] text-slate-500">A prévia aparece aqui quando você escrever a mensagem.</div>
+            )}
+            <Button type="submit" disabled={ocupado} className="mt-auto w-full">
+              Criar campanha
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

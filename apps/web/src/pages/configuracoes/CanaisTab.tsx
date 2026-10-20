@@ -1071,7 +1071,7 @@ export function CanaisTab() {
                       </label>
                       <label className="flex items-start gap-2 text-xs text-slate-700">
                         <input type="checkbox" className="mt-0.5" checked={numeroForm.transcreverChamadasWhatsapp} onChange={(e) => setNumeroForm({ ...numeroForm, transcreverChamadasWhatsapp: e.target.checked })} />
-                        <span>Transcrever gravações automaticamente<span className="block text-slate-500">Requer OPENAI_API_KEY configurada no servidor.</span></span>
+                        <span>Transcrever gravações automaticamente<span className="block text-slate-500">Usa Whisper local no servidor; não exige chave paga da OpenAI.</span></span>
                       </label>
                     </div>
                   </>

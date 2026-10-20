@@ -134,14 +134,14 @@ export function CrmPage() {
   const hrefDaAba = (abaId: AbaId) => (abaId === 'contatos' ? '/crm' : `/crm?aba=${abaId}`);
 
   return (
-    <div className="space-y-5">
-      <TabsDeNavegacao
+    <div className={registro?.base === '/contatos' && id ? 'h-full min-h-0' : 'space-y-5'}>
+      {!(registro?.base === '/contatos' && id) && <TabsDeNavegacao
         itens={abasVisiveis.map(({ id: abaId, label }) => ({
           rota: hrefDaAba(abaId),
           rotulo: label,
           ativo: aba === abaId,
         }))}
-      />
+      />}
 
       {aba === 'agenda' && <AgendaDaSemana />}
       {aba === 'historico' && <HistoricoTab />}
@@ -152,6 +152,7 @@ export function CrmPage() {
           selecionadoId={registro?.base === '/contatos' ? (id ?? null) : null}
           aoAbrir={abrir('/contatos')}
           aoFechar={fechar('contatos')}
+          aoVoltar={fechar('contatos')}
         />
       )}
       {aba === 'contas' && (

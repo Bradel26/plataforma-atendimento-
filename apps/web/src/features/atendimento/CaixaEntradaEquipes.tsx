@@ -7,12 +7,14 @@ import type { GrupoCaixa } from './caixaEntrada';
 
 const hora = (iso: string) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
-export function CaixaEntradaEquipes({ grupos, carregando, erro, aceitandoId, onAceitar }: {
+export function CaixaEntradaEquipes({ grupos, carregando, erro, aceitandoId, onAceitar, semCabecalho = false }: {
   grupos: GrupoCaixa[];
   carregando: boolean;
   erro: string | null;
   aceitandoId: string | null;
   onAceitar: (conversaId: string) => void;
+  /** Quando embutida num bloco que ja tem o proprio titulo. */
+  semCabecalho?: boolean;
 }) {
   const [abertos, setAbertos] = useState<Record<string, boolean>>({});
   const chave = (grupo: GrupoCaixa) => grupo.fila?.id ?? 'sem-equipe';
@@ -20,9 +22,11 @@ export function CaixaEntradaEquipes({ grupos, carregando, erro, aceitandoId, onA
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="border-b border-slate-100 px-3 py-2.5">
-        <h2 className="text-sm font-semibold text-slate-800">Caixa de entrada</h2>
-      </header>
+      {!semCabecalho && (
+        <header className="border-b border-slate-100 px-3 py-2.5">
+          <h2 className="text-sm font-semibold text-slate-800">Caixa de entrada</h2>
+        </header>
+      )}
       <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-2">
         {erro && <Alerta>{erro}</Alerta>}
         {carregando && grupos.length === 0 && <SkeletonBloco className="h-8 w-full" />}

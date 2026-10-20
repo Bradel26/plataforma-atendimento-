@@ -1,22 +1,64 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
-import { Alerta, Badge, Button, Field, Input } from '../components/ui';
+import { Alerta, Button } from '../components/ui';
 import { AssistenteDaLigacao } from './telefonia/AssistenteDaLigacao';
+import { PainelLigacoes, relogio, type PosLigacao } from './telefonia/PainelLigacoes';
+import { IconeChevron, IconeFeita, IconePlay, IconeRecebida } from './telefonia/icones';
+import { Selo, type Tom } from './dashboard/blocos';
 import { ApiError, api, getAccessToken } from '../lib/api';
 import { conectar, EVENTOS } from '../lib/realtime';
-import { LABEL_CHAMADA_STATUS, type Chamada, type IndicadoresVoz } from '../lib/types';
+import { telefoneLegivel } from '../lib/telefone';
+import { ESTADO } from '../lib/viz';
+import {
+  LABEL_CHAMADA_STATUS,
+  LABEL_SENTIMENTO,
+  moeda,
+  type CallStatus,
+  type Chamada,
+  type IndicadoresVoz,
+  type SentimentoDaLigacao,
+} from '../lib/types';
 
 const dataHora = (iso: string) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-const duracaoCurta = (segundos: number | null) => {
-  if (segundos === null) return '—';
-  const m = Math.floor(segundos / 60);
-  const s = segundos % 60;
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-};
 const custoCurto = (v: number | null | undefined) => v == null ? '—' : `R$ ${v.toFixed(4).replace('.', ',')}`;
-const TOM: Partial<Record<string, 'sucesso' | 'alerta' | 'neutro'>> = {
-  COMPLETADA: 'sucesso', EM_ANDAMENTO: 'sucesso', NAO_ATENDIDA: 'alerta', OCUPADA: 'alerta', FALHOU: 'alerta',
-};
 const STATUS_EM_CURSO = new Set(['CHAMANDO', 'EM_ANDAMENTO']);
+const STATUS_PERDIDA = new Set<CallStatus>(['NAO_ATENDIDA', 'OCUPADA', 'FALHOU', 'CANCELADA']);
+
+/** Mesmo alvo do Dashboards: abaixo disto a operacao esta perdendo ligacao. */
+const TAXA_ATENDIMENTO_ALVO = 90;
+const TAXA_ATENDIMENTO_CRITICA = 80;
+
+// So tons que o tema escuro remapeia em index.css.
+const CLASSE_STATUS: Record<CallStatus, string> = {
+  INICIANDO: 'bg-blue-50 text-blue-700',
+  CHAMANDO: 'bg-blue-50 text-blue-700',
+  EM_ANDAMENTO: 'bg-blue-50 text-blue-700',
+  COMPLETADA: 'bg-emerald-50 text-emerald-700',
+  NAO_ATENDIDA: 'bg-amber-50 text-amber-700',
+  OCUPADA: 'bg-amber-50 text-amber-700',
+  FALHOU: 'bg-red-50 text-red-700',
+  CANCELADA: 'bg-slate-100 text-slate-600',
+};
+
+const COR_SENTIMENTO: Record<SentimentoDaLigacao, string> = {
+  POSITIVO: ESTADO.bom,
+  NEUTRO: ESTADO.neutro,
+  NEGATIVO: ESTADO.grave,
+};
+
+type Filtro = 'todas' | 'recebidas' | 'feitas' | 'perdidas';
+const FILTROS: Array<{ id: Filtro; rotulo: string }> = [
+  { id: 'todas', rotulo: 'Todas' },
+  { id: 'recebidas', rotulo: 'Recebidas' },
+  { id: 'feitas', rotulo: 'Feitas' },
+  { id: 'perdidas', rotulo: 'Perdidas' },
+];
+const passaNoFiltro = (c: Chamada, f: Filtro) =>
+  f === 'todas' ||
+  (f === 'recebidas' && c.direcao === 'ENTRANTE') ||
+  (f === 'feitas' && c.direcao === 'SAINTE') ||
+  (f === 'perdidas' && STATUS_PERDIDA.has(c.status));
+
+const numeroLegivel = (numero: string) => (/^\d+$/.test(numero) ? telefoneLegivel(numero) : numero);
 
 export function TelefoniaPage() {
   const [chamadas, setChamadas] = useState<Chamada[]>([]);
@@ -32,7 +74,14 @@ export function TelefoniaPage() {
   const [audioConectado, setAudioConectado] = useState(false);
   const [linhaCloudAtiva, setLinhaCloudAtiva] = useState(false);
   const [transcricaoAtiva, setTranscricaoAtiva] = useState(false);
-  const [abaPainel, setAbaPainel] = useState<'receber' | 'fazer'>('receber');
+  const [abaPainel, setAbaPainel] = useState<'receber' | 'fazer'>('fazer');
+  const [filtro, setFiltro] = useState<Filtro>('todas');
+  const [ouvindo, setOuvindo] = useState<string | null>(null);
+  /** Numero a quem a plataforma acabou de pedir autorizacao para ligar. */
+  const [autorizacaoPendente, setAutorizacaoPendente] = useState<string | null>(null);
+  const [posLigacao, setPosLigacao] = useState<PosLigacao | null>(null);
+  const [inicioAudio, setInicioAudio] = useState<number | null>(null);
+  const [agora, setAgora] = useState(() => Date.now());
   const audioRef = useRef<HTMLAudioElement>(null);
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const microfoneRef = useRef<MediaStream | null>(null);
@@ -41,6 +90,8 @@ export function TelefoniaPage() {
   const partesGravacaoRef = useRef<Blob[]>([]);
   const idChamadaRef = useRef<string | null>(null);
   const destinoPendenteRef = useRef<string | null>(null);
+  const nomeLigacaoRef = useRef<string | null>(null);
+  const inicioAudioRef = useRef<number | null>(null);
 
   const carregar = useCallback(async () => {
     try {
@@ -86,12 +137,38 @@ export function TelefoniaPage() {
       void encerrarLocal();
     }
   }, [chamadas, chamadaAtivaId]);
+  // Cronometro da ligacao: so roda enquanto ha chamada ativa.
+  useEffect(() => {
+    if (!chamadaAtivaId) return;
+    const timer = window.setInterval(() => setAgora(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [chamadaAtivaId]);
 
-  const ligar = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const ligar = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     if (ocupado || chamadaAtivaId) return;
-    setErro(null); setAviso(null); setOcupado(true);
+    setErro(null); setAviso(null); setAutorizacaoPendente(null); setPosLigacao(null); setOcupado(true);
     try {
+      const telefone = destino.trim();
+      const permissao = await api.get<{ permitida: boolean; podeSolicitar: boolean }>(`/voz/chamadas/whatsapp/permissao?destino=${encodeURIComponent(telefone)}`);
+      if (!permissao.permitida) {
+        if (permissao.podeSolicitar) {
+          const pedido = await api.post<{ permitida: boolean; solicitada: boolean }>('/voz/chamadas/whatsapp/permissao', { destino: telefone });
+          if (pedido.permitida) {
+            setAviso('O cliente já autorizou chamadas. Iniciando a ligação…');
+          } else if (pedido.solicitada) {
+            // O painel mostra o passo a passo do pedido no lugar do aviso de texto.
+            setAutorizacaoPendente(telefone);
+            return;
+          } else {
+            setAviso('Ainda não há autorização para ligar. Peça para o cliente ligar primeiro pelo WhatsApp ou tente novamente mais tarde.');
+            return;
+          }
+        } else {
+          setAviso('Este contato ainda não autorizou chamadas ou a Meta não permite um novo pedido agora. Peça para o cliente ligar primeiro pelo WhatsApp e tente novamente após o aceite.');
+          return;
+        }
+      }
       const pc = await prepararPeer();
       const oferta = await pc.createOffer();
       await pc.setLocalDescription(oferta);
@@ -101,6 +178,7 @@ export function TelefoniaPage() {
       });
       definirChamadaAtiva(resposta.chamada.id);
       destinoPendenteRef.current = destino.trim();
+      nomeLigacaoRef.current = resposta.chamada.contato?.nome ?? destino.trim();
       setAviso(`Chamando ${destino.trim()} pelo WhatsApp…`);
       setDestino('');
       void aguardarRespostaDaMeta(resposta.chamada.id, pc);
@@ -130,6 +208,10 @@ export function TelefoniaPage() {
       }
       iniciarGravacao(microfone, remoto);
       setAudioConectado(true);
+      if (inicioAudioRef.current === null) {
+        inicioAudioRef.current = Date.now();
+        setInicioAudio(inicioAudioRef.current);
+      }
     };
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
@@ -167,14 +249,22 @@ export function TelefoniaPage() {
       if (id && arquivo.size > 0) {
         void api.upload<{ transcricaoPendente: boolean; transcricaoSolicitada: boolean }>(`/voz/chamadas/${id}/whatsapp/gravacao`, arquivo).then((resultado) => {
           setAviso(resultado.transcricaoPendente
-            ? 'Gravação salva. Configure OPENAI_API_KEY no servidor para gerar a transcrição automática.'
+            ? 'Gravação salva. A transcrição está sendo processada no servidor.'
             : resultado.transcricaoSolicitada
-              ? 'Gravação e transcrição salvas no histórico do contato.'
+              ? 'Gravação salva no histórico; a transcrição será anexada assim que terminar.'
               : 'Gravação salva no histórico do contato.');
+          setPosLigacao((p) => p && {
+            ...p,
+            gravacao: 'salva',
+            transcricao: resultado.transcricaoPendente || resultado.transcricaoSolicitada ? 'processando' : null,
+          });
           return carregar();
         }).catch((erro) => {
+          setPosLigacao((p) => p && { ...p, gravacao: 'falhou' });
           setErro(erro instanceof ApiError ? erro.message : 'A chamada terminou, mas não foi possível salvar a gravação.');
         });
+      } else {
+        setPosLigacao((p) => p && { ...p, gravacao: 'sem' });
       }
     };
     gravadorRef.current = gravador;
@@ -202,8 +292,10 @@ export function TelefoniaPage() {
   }
 
   async function atender(id: string) {
-    setErro(null); setOcupado(true);
+    setErro(null); setPosLigacao(null); setOcupado(true);
     try {
+      const recebida = chamadas.find((c) => c.id === id);
+      nomeLigacaoRef.current = recebida?.contato?.nome ?? (recebida ? numeroLegivel(recebida.numeroOrigem) : null);
       const { oferta } = await api.get<{ oferta: { sdp: string } }>(`/voz/chamadas/${id}/whatsapp/oferta`);
       const pc = await prepararPeer();
       await pc.setRemoteDescription({ type: 'offer', sdp: oferta.sdp });
@@ -242,6 +334,17 @@ export function TelefoniaPage() {
   }
 
   async function encerrarLocal() {
+    // Resumo pos-ligacao so quando houve audio: falha antes de conectar nao e "ligacao encerrada".
+    if (inicioAudioRef.current !== null) {
+      setPosLigacao({
+        nome: nomeLigacaoRef.current ?? 'Ligação',
+        segundos: Math.round((Date.now() - inicioAudioRef.current) / 1000),
+        gravacao: gravadorRef.current ? 'enviando' : 'sem',
+        transcricao: null,
+      });
+    }
+    inicioAudioRef.current = null;
+    setInicioAudio(null);
     const gravador = gravadorRef.current;
     gravadorRef.current = null;
     if (gravador && gravador.state !== 'inactive') {
@@ -274,102 +377,269 @@ export function TelefoniaPage() {
 
   const emCurso = chamadas.find((c) => STATUS_EM_CURSO.has(c.status));
   const recebidaTocando = chamadas.find((c) => c.direcao === 'ENTRANTE' && c.status === 'CHAMANDO');
-  const teclas = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'];
+  const visiveis = chamadas.filter((c) => passaNoFiltro(c, filtro));
+
+  const taxa = indicadores?.taxaAtendimento ?? null;
+  const estadoTaxa: { tom: Tom; texto: string } | null =
+    taxa === null ? null
+      : taxa < TAXA_ATENDIMENTO_CRITICA ? { tom: 'grave', texto: 'Crítico' }
+        : taxa < TAXA_ATENDIMENTO_ALVO ? { tom: 'atencao', texto: 'Abaixo do alvo' }
+          : { tom: 'bom', texto: 'No alvo' };
+
+  const kpis: Array<{ rotulo: string; valor: string; detalhe: string; selo?: { tom: Tom; texto: string } | null; destaque?: string }> = [
+    {
+      rotulo: 'Chamadas',
+      valor: String(indicadores?.total ?? '—'),
+      detalhe: `${indicadores?.entrantes ?? 0} recebidas · ${indicadores?.saintes ?? 0} feitas`,
+    },
+    {
+      rotulo: 'Atendidas',
+      valor: taxa === null ? String(indicadores?.atendidas ?? '—') : `${taxa}%`,
+      detalhe: `${indicadores?.atendidas ?? 0} de ${indicadores?.entrantes ?? 0} recebidas · alvo ${TAXA_ATENDIMENTO_ALVO}%`,
+      selo: estadoTaxa,
+    },
+    {
+      rotulo: 'Perdidas',
+      valor: String(indicadores?.naoAtendidas ?? '—'),
+      detalhe: 'não atendidas ou ocupadas',
+      destaque: indicadores && indicadores.naoAtendidas > 0 ? 'text-red-700' : undefined,
+    },
+    { rotulo: 'Tempo médio', valor: relogio(indicadores?.tma ?? null), detalhe: 'por ligação atendida' },
+    {
+      rotulo: 'Custo',
+      valor: indicadores?.custoTotal == null ? '—' : moeda(indicadores.custoTotal),
+      detalhe: indicadores?.chamadasComCusto
+        ? `média ${custoCurto(indicadores.custoMedio)} · ${indicadores.chamadasComCusto} com custo`
+        : 'O provedor não informou custo',
+    },
+  ];
 
   return (
-    <div className="space-y-4">
+    <div className="mx-auto flex max-w-[1360px] flex-col gap-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-[-0.02em] text-slate-900">Ligações</h1>
+          <p className="mt-1.5 text-[13px] text-slate-600">
+            Chamadas de WhatsApp atendidas e feitas no navegador, com gravação no histórico do contato.
+          </p>
+        </div>
+        <span
+          className={`inline-flex h-9 items-center gap-2 rounded-full px-3.5 text-[13px] font-semibold ${
+            linhaCloudAtiva ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+          }`}
+        >
+          <span className={`h-2 w-2 rounded-full ${linhaCloudAtiva ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+          {linhaCloudAtiva ? 'WhatsApp Calling ativo na sua linha' : 'Conecte e habilite sua linha WhatsApp Cloud'}
+        </span>
+      </div>
+
       {erro && <Alerta>{erro}</Alerta>}
       {aviso && <Alerta tipo="sucesso">{aviso}</Alerta>}
 
-      <section className="rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_3px_rgb(15_23_42/0.05)]">
-        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-3">
-          <div><h2 className="text-sm font-semibold text-slate-900">Chamadas</h2><p className="mt-0.5 text-xs text-slate-500">Acompanhe o histórico e inicie chamadas pelo provedor configurado.</p></div>
-          <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1.5 text-xs text-slate-600"><span className={`h-2 w-2 rounded-full ${linhaCloudAtiva ? 'bg-emerald-500' : 'bg-amber-400'}`} /> {linhaCloudAtiva ? 'WhatsApp Calling ativo na sua linha' : 'Conecte e habilite sua linha WhatsApp Cloud'}</span>
-        </header>
-        <div className="grid gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_300px]">
-          <div className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-3">
-              <Metric label="CHAMADAS (24H)" value={indicadores?.total ?? '—'} detail={`${indicadores?.entrantes ?? 0} recebidas`} />
-              <Metric label="ATENDIDAS" value={indicadores?.atendidas ?? '—'} detail="por você e sua equipe" />
-              <Metric label="TEMPO MÉDIO" value={duracaoCurta(indicadores?.tma ?? null)} detail="por ligação atendida" />
+      <section aria-label="Indicadores das últimas 24 horas" className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
+        {kpis.map((k) => (
+          <div key={k.rotulo} className="flex flex-col gap-1 rounded-2xl border border-slate-200 bg-white px-[18px] py-4">
+            <div className="flex min-h-[22px] items-center justify-between gap-1.5">
+              <span className="text-[13px] font-semibold text-slate-700">{k.rotulo}</span>
+              {k.selo && <Selo tom={k.selo.tom}>{k.selo.texto}</Selo>}
             </div>
+            <span className={`text-[28px] font-bold leading-tight tracking-[-0.02em] ${k.destaque ?? 'text-slate-900'}`}>{k.valor}</span>
+            <span className="text-[12.5px] text-slate-500">{k.detalhe}</span>
+          </div>
+        ))}
+      </section>
 
-            <section className="min-h-[390px] rounded-xl border border-slate-200 bg-white">
-              <header className="border-b border-slate-100 px-4 py-3"><h3 className="text-sm font-semibold text-slate-900">Histórico de chamadas</h3><p className="mt-1 text-xs text-slate-500">Registro vinculado ao contato e à linha do tempo do CRM.</p></header>
-              {chamadas.length === 0 ? <p className="p-4 text-sm text-slate-500">Nenhuma chamada registrada.</p> : <div className="overflow-x-auto">
-                <table className="w-full min-w-[700px] text-left text-xs">
-                  <thead><tr className="border-b border-slate-100 text-[10px] font-medium uppercase text-slate-500">{['Horário', 'Contato', 'Direção', 'Resultado', 'Duração', 'Gravação', 'Custo', 'Assistente'].map((x) => <th key={x} className="px-3 py-2">{x}</th>)}</tr></thead>
-                  <tbody>{chamadas.map((c) => <Fragment key={c.id}>
-                    <tr className="border-b border-slate-100 last:border-0">
-                      <td className="whitespace-nowrap px-3 py-3 text-slate-600">{dataHora(c.iniciadoEm)}</td>
-                      <td className="px-3 py-3"><div className="font-medium text-slate-800">{c.contato?.nome ?? (c.direcao === 'ENTRANTE' ? c.numeroOrigem : c.numeroDestino)}</div><div className="mt-0.5 text-[10px] text-slate-500">WhatsApp · {c.direcao === 'ENTRANTE' ? c.numeroOrigem : c.numeroDestino}{c.linha ? ` · linha ${c.linha.nome ?? c.linha.donoNome ?? 'WhatsApp'}` : ''}</div></td>
-                      <td className="px-3 py-3 text-slate-700">{c.direcao === 'ENTRANTE' ? 'Recebida' : 'Realizada'}</td>
-                      <td className="px-3 py-3"><Badge tom={TOM[c.status] ?? 'neutro'}>{LABEL_CHAMADA_STATUS[c.status]}</Badge></td>
-                      <td className="px-3 py-3 tabular-nums text-slate-700">{duracaoCurta(c.duracao)}</td>
-                      <td className="px-3 py-3">{c.gravacaoUrl?.startsWith('/api/arquivos/') ? <audio controls src={c.gravacaoUrl} className="h-7 w-28" /> : <span className="text-slate-400">{c.gravacaoUrl ? 'No provedor' : '—'}</span>}</td>
-                      <td className="px-3 py-3 text-slate-600">{custoCurto(c.custo)}</td>
-                      <td className="px-3 py-3">{c.analisadoEm || c.resumo || c.sentimento || c.transcricao ? <button type="button" onClick={() => setAssistente((a) => a === c.id ? null : c.id)} className="text-blue-700 hover:underline">{assistente === c.id ? 'Fechar' : 'Abrir'}</button> : <span className="text-slate-400">—</span>}</td>
-                    </tr>
-                    {assistente === c.id && <tr className="border-b border-slate-100 bg-slate-50"><td colSpan={8} className="p-3"><AssistenteDaLigacao chamadaId={c.id} /></td></tr>}
-                  </Fragment>)}</tbody>
-                </table>
-              </div>}
-              {cursor && <div className="border-t border-slate-100 p-3"><Button variante="neutro" onClick={() => void carregarMais()}>Carregar chamadas anteriores</Button></div>}
-              <p className="border-t border-slate-100 px-4 py-2.5 text-[10px] text-slate-500">Ao encerrar, duração e gravação ficam disponíveis no histórico do contato quando o provedor envia esses dados.</p>
-            </section>
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_344px]">
+        <section aria-labelledby="titulo-historico" className="order-2 min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white xl:order-1">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 pb-3.5 pt-[18px]">
+            <div>
+              <h2 id="titulo-historico" className="text-base font-semibold text-slate-900">Histórico de chamadas</h2>
+              <p className="mt-0.5 text-[12.5px] text-slate-500">Cada ligação também aparece na linha do tempo do contato no CRM.</p>
+            </div>
+            <div role="group" aria-label="Filtrar chamadas" className="flex flex-wrap gap-1.5">
+              {FILTROS.map((f) => {
+                const ativo = filtro === f.id;
+                return (
+                  <button
+                    key={f.id}
+                    type="button"
+                    aria-pressed={ativo}
+                    onClick={() => setFiltro(f.id)}
+                    className={`inline-flex h-[30px] items-center gap-1.5 rounded-full border px-3 text-[12.5px] font-medium transition ${
+                      ativo ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    {f.rotulo}
+                    {/* Com mais paginas por carregar, a contagem seria so da parte ja carregada. */}
+                    {!cursor && <span className="tabular-nums opacity-75">{chamadas.filter((c) => passaNoFiltro(c, f.id)).length}</span>}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          <aside className="rounded-xl border border-slate-200 bg-white p-3">
-            <div className="flex items-center justify-between"><h3 className="text-sm font-semibold text-slate-900">Painel de ligações</h3><span className={`text-[10px] ${linhaCloudAtiva ? 'text-emerald-700' : 'text-amber-600'}`}>{linhaCloudAtiva ? 'Cloud API' : 'Configuração pendente'}</span></div>
-            <div className="mt-3 grid grid-cols-2 rounded-lg bg-slate-50 p-1 text-center text-[11px]">
-              <button type="button" onClick={() => setAbaPainel('receber')} className={`rounded-md px-2 py-2 ${abaPainel === 'receber' ? 'bg-white font-medium text-slate-800 shadow-sm' : 'text-slate-500'}`}>Receber chamadas</button>
-              <button type="button" onClick={() => setAbaPainel('fazer')} className={`rounded-md px-2 py-2 ${abaPainel === 'fazer' ? 'bg-white font-medium text-slate-800 shadow-sm' : 'text-slate-500'}`}>Fazer chamada</button>
+          {visiveis.length === 0 ? (
+            <p className="px-5 py-10 text-center text-sm text-slate-500">
+              {chamadas.length === 0 ? 'Nenhuma chamada registrada.' : 'Nenhuma chamada neste filtro.'}
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px] border-collapse text-left text-[13px]">
+                <thead>
+                  <tr className="border-b border-slate-200 text-[11.5px] font-semibold text-slate-500">
+                    <th scope="col" className="px-5 py-2.5 font-semibold">Contato</th>
+                    <th scope="col" className="px-3 py-2.5 font-semibold">Horário</th>
+                    <th scope="col" className="px-3 py-2.5 font-semibold">Resultado</th>
+                    <th scope="col" className="px-3 py-2.5 text-right font-semibold">Duração</th>
+                    <th scope="col" className="px-3 py-2.5 font-semibold">Gravação</th>
+                    <th scope="col" className="px-3 py-2.5 text-right font-semibold">Custo</th>
+                    <th scope="col" className="py-2.5 pl-3 pr-5 font-semibold">Análise</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visiveis.map((c) => {
+                    const recebida = c.direcao === 'ENTRANTE';
+                    const numero = recebida ? c.numeroOrigem : c.numeroDestino;
+                    const perdidaRecebida = recebida && STATUS_PERDIDA.has(c.status);
+                    const analisada = Boolean(c.analisadoEm || c.resumo || c.sentimento || c.transcricao);
+                    const aberta = assistente === c.id;
+                    const gravacaoLocal = c.gravacaoUrl?.startsWith('/api/arquivos/');
+                    return (
+                      <Fragment key={c.id}>
+                        <tr className={`border-b border-slate-100 transition ${aberta ? 'bg-slate-50' : 'hover:bg-slate-50'}`}>
+                          <td className="py-3 pl-5 pr-3">
+                            <span className="flex items-center gap-3">
+                              <span
+                                role="img"
+                                aria-label={recebida ? 'Recebida' : 'Feita'}
+                                className={`flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full ${
+                                  perdidaRecebida ? 'bg-red-50 text-red-700' : recebida ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-600'
+                                }`}
+                              >
+                                {recebida ? <IconeRecebida tamanho={16} /> : <IconeFeita tamanho={16} />}
+                              </span>
+                              <span className="min-w-0 max-w-[220px]">
+                                <span className="block truncate font-semibold text-slate-900">
+                                  {c.contato?.nome ?? numeroLegivel(numero)}
+                                </span>
+                                <span className="mt-0.5 block truncate text-xs tabular-nums text-slate-500">
+                                  {recebida ? 'Recebida' : 'Feita'} · {numeroLegivel(numero)}
+                                  {c.linha ? ` · linha ${c.linha.nome ?? c.linha.donoNome ?? 'WhatsApp'}` : ''}
+                                </span>
+                              </span>
+                            </span>
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-3 tabular-nums text-slate-700">{dataHora(c.iniciadoEm)}</td>
+                          <td className="px-3 py-3">
+                            <span className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold ${CLASSE_STATUS[c.status]}`}>
+                              {LABEL_CHAMADA_STATUS[c.status]}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3 text-right tabular-nums text-slate-700">{relogio(c.duracao)}</td>
+                          <td className="px-3 py-3">
+                            {gravacaoLocal ? (
+                              ouvindo === c.id ? (
+                                <audio controls autoPlay src={c.gravacaoUrl!} className="h-8 w-48" aria-label={`Gravação da ligação com ${c.contato?.nome ?? numero}`} />
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setOuvindo(c.id)}
+                                  aria-label={`Ouvir gravação da ligação com ${c.contato?.nome ?? numeroLegivel(numero)}`}
+                                  className="inline-flex h-[30px] items-center gap-1.5 rounded-full border border-slate-200 bg-white pl-1.5 pr-2.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+                                >
+                                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--brand-primary)] texto-sobre-cor-fixa">
+                                    <IconePlay />
+                                  </span>
+                                  Ouvir
+                                </button>
+                              )
+                            ) : (
+                              <span className="whitespace-nowrap text-slate-500">{c.gravacaoUrl ? 'No provedor' : '—'}</span>
+                            )}
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums text-slate-700">{custoCurto(c.custo)}</td>
+                          <td className="py-3 pl-3 pr-4">
+                            {analisada ? (
+                              <button
+                                type="button"
+                                onClick={() => setAssistente((a) => (a === c.id ? null : c.id))}
+                                aria-expanded={aberta}
+                                className={`inline-flex h-[30px] items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 text-[12.5px] font-semibold transition ${
+                                  aberta ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                                }`}
+                              >
+                                {c.sentimento && (
+                                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: COR_SENTIMENTO[c.sentimento] }} aria-hidden="true" />
+                                )}
+                                {c.sentimento ? LABEL_SENTIMENTO[c.sentimento] : 'Ver análise'}
+                                <IconeChevron tamanho={14} className={`transition ${aberta ? 'rotate-180' : ''}`} />
+                              </button>
+                            ) : (
+                              <span className="text-slate-500">—</span>
+                            )}
+                          </td>
+                        </tr>
+                        {aberta && (
+                          <tr className="border-b border-slate-200 bg-slate-50">
+                            <td colSpan={7} className="px-5 pb-5 pt-4 md:pl-[66px]">
+                              <AssistenteDaLigacao chamadaId={c.id} />
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
+          )}
+          <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
+            <span className="text-xs text-slate-500">Duração e gravação chegam ao histórico quando o provedor envia esses dados.</span>
+            {cursor && (
+              <Button variante="neutro" tamanho="sm" onClick={() => void carregarMais()}>
+                Carregar chamadas anteriores
+              </Button>
+            )}
+          </div>
+        </section>
 
-            {abaPainel === 'receber' && <>
-            <h4 className="mb-2 mt-4 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Chamada recebida</h4>
-            {recebidaTocando ? <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3">
-              <div className="flex items-center gap-2"><Avatar nome={recebidaTocando.contato?.nome ?? recebidaTocando.numeroOrigem} /><div className="min-w-0"><p className="truncate text-xs font-semibold text-slate-800">{recebidaTocando.contato?.nome ?? recebidaTocando.numeroOrigem}</p><p className="text-[10px] text-slate-500">WhatsApp · {recebidaTocando.numeroOrigem}</p></div></div>
-              <p className="mt-3 flex items-center gap-1.5 text-[10px] text-amber-700"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" /> Ligação recebida no WhatsApp</p>
-              <div className="mt-3 grid grid-cols-2 gap-2"><button type="button" disabled={ocupado || Boolean(chamadaAtivaId) || !linhaCloudAtiva} onClick={() => void atender(recebidaTocando.id)} className="rounded-md bg-emerald-600 px-2 py-2 text-[10px] font-semibold text-white disabled:bg-slate-200 disabled:text-slate-400">{ocupado ? 'Conectando…' : 'Atender'}</button><button type="button" disabled={ocupado || !linhaCloudAtiva} onClick={() => void recusar(recebidaTocando.id)} className="rounded-md border border-red-200 bg-white px-2 py-2 text-[10px] font-semibold text-red-600 disabled:text-slate-400">Recusar</button></div>
-            </div> : <div className="rounded-lg border border-dashed border-slate-200 px-3 py-4 text-center text-[11px] text-slate-500">{emCurso ? `Ligação ${LABEL_CHAMADA_STATUS[emCurso.status].toLocaleLowerCase()} registrada.` : 'Nenhuma chamada recebida no momento.'}</div>}
-            </>}
-
-            <h4 className="mb-2 mt-4 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Durante a ligação</h4>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <div className="flex items-center justify-between text-[11px]"><span className="flex items-center gap-1.5 font-medium text-slate-700"><span className={`h-1.5 w-1.5 rounded-full ${audioConectado ? 'bg-emerald-500' : 'bg-amber-400'}`} />{audioConectado ? 'Áudio conectado' : emCurso?.status === 'EM_ANDAMENTO' ? 'Ligação em andamento' : chamadaAtivaId ? 'Chamando…' : 'Aguardando ligação'}</span><span className="font-semibold tabular-nums text-slate-700">{duracaoCurta(emCurso?.duracao ?? null)}</span></div>
-              <p className="mt-1 text-[10px] text-slate-500">{emCurso?.contato?.nome ?? (chamadaAtivaId ? destinoPendenteRef.current : 'O áudio do navegador aparecerá aqui.')}</p>
-              <div className="mt-3 grid grid-cols-2 gap-1.5"><button type="button" disabled={!chamadaAtivaId} onClick={alternarMicrofone} className="rounded-md border border-slate-200 bg-white px-1 py-1.5 text-[9px] text-slate-700 disabled:text-slate-400">{microfoneMudo ? 'Ativar microfone' : 'Silenciar'}</button><button type="button" disabled={!chamadaAtivaId} onClick={() => void desligar()} className="rounded-md bg-red-600 px-1 py-1.5 text-[9px] font-semibold text-white disabled:bg-slate-200 disabled:text-slate-400">Desligar</button></div>
-            </div>
-
-            {abaPainel === 'fazer' && <form onSubmit={ligar} className="mt-4">
-              <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Fazer chamada</h4>
-              <Field label="Número ou contato"><Input value={destino} onChange={(e) => setDestino(e.target.value)} placeholder="Digite um número" className="!py-2 !text-xs" /></Field>
-              <div className="mt-2 grid grid-cols-3 gap-1.5">{teclas.map((tecla) => <button key={tecla} type="button" onClick={() => setDestino((d) => `${d}${tecla}`)} className="rounded-md border border-slate-200 bg-slate-50 py-1.5 text-xs text-slate-700 hover:bg-slate-100">{tecla}</button>)}</div>
-              <Button type="submit" disabled={ocupado || Boolean(chamadaAtivaId) || !linhaCloudAtiva || destino.trim().length < 10} className="mt-2 w-full !py-2 text-xs">{ocupado ? 'Conectando…' : 'Ligar pelo WhatsApp'}</Button>
-              <p className="mt-2 text-[9px] leading-relaxed text-slate-500">Use o telefone com código do país. A Meta pode exigir permissão de ligação concedida pelo contato.</p>
-              {!transcricaoAtiva && <p className="mt-1 text-[9px] leading-relaxed text-amber-700">A gravação será salva; a transcrição automática depende de configurar OPENAI_API_KEY no servidor.</p>}
-            </form>}
-          </aside>
+        <div className="order-1 xl:sticky xl:top-0 xl:order-2">
+          <PainelLigacoes
+            linhaCloudAtiva={linhaCloudAtiva}
+            transcricaoAtiva={transcricaoAtiva}
+            aba={abaPainel}
+            aoTrocarAba={setAbaPainel}
+            destino={destino}
+            aoMudarDestino={setDestino}
+            aoLigar={(e) => void ligar(e)}
+            ocupado={ocupado}
+            recebida={chamadaAtivaId ? undefined : recebidaTocando}
+            aoAtender={(id) => void atender(id)}
+            aoRecusar={(id) => void recusar(id)}
+            emLigacao={
+              chamadaAtivaId
+                ? {
+                    nome: emCurso?.contato?.nome ?? nomeLigacaoRef.current ?? destinoPendenteRef.current ?? 'Ligação',
+                    conectado: audioConectado,
+                    segundos: inicioAudio === null ? null : Math.max(0, Math.floor((agora - inicioAudio) / 1000)),
+                    mudo: microfoneMudo,
+                    gravando: audioConectado,
+                  }
+                : null
+            }
+            aoAlternarMudo={alternarMicrofone}
+            aoDesligar={() => void desligar()}
+            autorizacaoPendente={autorizacaoPendente}
+            aoLigarDeNovo={() => void ligar()}
+            aoFecharAutorizacao={() => setAutorizacaoPendente(null)}
+            posLigacao={posLigacao}
+            aoNovaChamada={() => { setPosLigacao(null); setAbaPainel('fazer'); }}
+          />
         </div>
-      </section>
-      <audio ref={audioRef} autoPlay className="hidden" />
-      <div className="grid gap-3 sm:grid-cols-2">
-        <SmallMetric label="Custo (24h)" value={custoCurto(indicadores?.custoTotal)} detail={indicadores?.chamadasComCusto ? `${indicadores.chamadasComCusto} chamada(s) com custo informado` : 'O provedor não informou custo'} />
-        <SmallMetric label="Custo médio" value={custoCurto(indicadores?.custoMedio)} detail="Por chamada com custo informado" />
       </div>
+      <audio ref={audioRef} autoPlay className="hidden" />
     </div>
   );
-}
-
-function Metric({ label, value, detail }: { label: string; value: string | number; detail: string }) {
-  return <div className="rounded-xl border border-slate-200 bg-white px-3.5 py-3"><p className="text-[9px] font-medium uppercase tracking-wide text-slate-500">{label}</p><div className="mt-1 flex items-baseline gap-2"><strong className="text-xl leading-none text-slate-900">{value}</strong><span className="text-[9px] text-slate-500">{detail}</span></div></div>;
-}
-function SmallMetric({ label, value, detail }: { label: string; value: string; detail: string }) {
-  return <div className="rounded-xl border border-slate-200 bg-white px-4 py-3"><p className="text-[10px] font-medium uppercase text-slate-500">{label}</p><strong className="mt-1 block text-xl text-slate-900">{value}</strong><p className="mt-1 text-[10px] text-slate-500">{detail}</p></div>;
-}
-function Avatar({ nome }: { nome: string }) {
-  return <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-blue-100 text-[10px] font-semibold text-blue-700">{nome.trim().charAt(0).toLocaleUpperCase()}</span>;
 }
 
 function aguardarIce(pc: RTCPeerConnection): Promise<void> {

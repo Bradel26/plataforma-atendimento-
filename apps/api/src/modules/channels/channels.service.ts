@@ -9,6 +9,7 @@ import { modoEfetivo } from './whatsapp.modo';
 import { obterConfigGlobalPonte } from '../../config/ponte.config';
 import { getWhatsAppProvider } from './whatsapp-provider.factory';
 import { env } from '../../env';
+import { transcricaoDisponivel } from '../voice/transcription.config';
 
 export const CANAIS_EXTERNOS = ['WHATSAPP', 'INSTAGRAM', 'FACEBOOK'] as const;
 export type CanalExterno = (typeof CANAIS_EXTERNOS)[number];
@@ -502,7 +503,7 @@ export async function minhaLinhaWhatsapp(usuarioId: string) {
     whatsappCallingHabilitado: config.whatsappCallingHabilitado,
     gravarChamadasWhatsapp: config.gravarChamadasWhatsapp,
     transcreverChamadasWhatsapp: config.transcreverChamadasWhatsapp,
-    transcricaoAutomaticaAtiva: config.transcreverChamadasWhatsapp && Boolean(env.OPENAI_API_KEY),
+    transcricaoAutomaticaAtiva: config.transcreverChamadasWhatsapp && transcricaoDisponivel(),
   };
 }
 
@@ -728,6 +729,7 @@ export async function organizacaoDoWebhook(
     const ativos = await prismaSemIsolamento.channelConfig.findMany({
       where: { canal, ativo: true },
       select: { organizacaoId: true },
+      distinct: ['organizacaoId'],
       take: 2,
     });
     if (ativos.length === 1) return ativos[0]!.organizacaoId;
