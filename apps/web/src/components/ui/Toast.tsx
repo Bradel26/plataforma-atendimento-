@@ -49,7 +49,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             key={item.id}
             role="status"
             aria-live="polite"
-            className={`anim-entrada-toast pointer-events-auto rounded-lg border px-3.5 py-2.5 text-sm shadow-lg ${TONS[item.tipo]}`}
+            className={`anim-entrada-suave pointer-events-auto rounded-lg border px-3.5 py-2.5 text-sm shadow-lg ${TONS[item.tipo]}`}
           >
             {item.mensagem}
           </div>

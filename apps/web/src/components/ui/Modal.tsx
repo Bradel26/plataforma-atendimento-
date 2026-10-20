@@ -38,7 +38,7 @@ export function Modal({
       onClick={aoFechar}
     >
       <div
-        className={`anim-entrada-diálogo flex max-h-[90vh] w-full ${largura} flex-col rounded-xl border border-slate-200 bg-white shadow-xl`}
+        className={`anim-entrada-dialogo flex max-h-[90vh] w-full ${largura} flex-col rounded-xl border border-slate-200 bg-white shadow-xl`}
         onClick={(evento) => evento.stopPropagation()}
       >
         <header className="flex items-center justify-between border-b border-slate-100 px-5 py-3">

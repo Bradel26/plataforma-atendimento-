@@ -34,6 +34,23 @@ services:
       timeout: 5s
       retries: 10
 
+  # Whisper local opcional para transcrever chamadas sem enviar áudio a uma API
+  # paga. Inicie com `docker compose --profile transcricao up -d transcriber`.
+  transcriber:
+    profiles: ["transcricao"]
+    build:
+      context: .
+      dockerfile: apps/api/transcriber/Dockerfile
+    restart: unless-stopped
+    environment:
+      TRANSCRICAO_LOCAL_MODELO: ${TRANSCRICAO_LOCAL_MODELO:-base}
+      WHISPER_MODEL_DIR: /models
+      WHISPER_CPU_THREADS: ${WHISPER_CPU_THREADS:-2}
+    ports:
+      - "127.0.0.1:3334:3334"
+    volumes:
+      - transcriber-models:/models
+
   # Ponte do WhatsApp nao oficial (Baileys). Opcional: so sobe com o perfil
   # "ponte" (`docker compose --profile ponte up -d`), porque quem usa a Cloud
   # API oficial nao precisa dela — e porque este modo viola os termos de uso do
@@ -73,3 +90,4 @@ volumes:
   postgres-data:
   redis-data:
   ponte-dados:
+  transcriber-models:

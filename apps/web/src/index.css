@@ -228,6 +228,64 @@ html.tema-escuro {
     animation: none;
   }
 }
+
+/*
+ * Icones do menu lateral. O icone mora numa "pastilha" que acende no hover e
+ * fica cheia (cor da marca) no item ativo; ao passar o mouse, cada icone faz um
+ * gesto curto que combina com o modulo — o telefone balanca, a engrenagem gira.
+ * Uma vez so por hover (nao em loop): animacao repetindo no menu tira a atencao
+ * da tela de trabalho.
+ */
+.icone-menu {
+  transition: background-color 150ms ease, color 150ms ease, transform 150ms ease;
+}
+.item-menu:hover .icone-menu {
+  transform: scale(1.06);
+}
+.item-menu:hover .icone-menu[data-anim='pulo'] svg { animation: icone-pulo 420ms ease; }
+.item-menu:hover .icone-menu[data-anim='balancar'] svg { animation: icone-balancar 520ms ease; }
+.item-menu:hover .icone-menu[data-anim='girar'] svg { animation: icone-girar 600ms ease; }
+.item-menu:hover .icone-menu[data-anim='inclinar'] svg { animation: icone-inclinar 520ms ease; }
+.item-menu:hover .icone-menu[data-anim='deslizar'] svg { animation: icone-deslizar 460ms ease; }
+.item-menu:hover .icone-menu[data-anim='pulsar'] svg { animation: icone-pulsar 520ms ease; }
+@keyframes icone-pulo {
+  0%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-3px); }
+  70% { transform: translateY(1px); }
+}
+@keyframes icone-balancar {
+  0%, 100% { transform: rotate(0); }
+  20% { transform: rotate(-14deg); }
+  45% { transform: rotate(10deg); }
+  70% { transform: rotate(-5deg); }
+}
+@keyframes icone-girar {
+  from { transform: rotate(0); }
+  to { transform: rotate(90deg); }
+}
+@keyframes icone-inclinar {
+  0%, 100% { transform: rotate(0); }
+  35% { transform: rotate(-12deg) scale(1.08); }
+  70% { transform: rotate(4deg); }
+}
+@keyframes icone-deslizar {
+  0%, 100% { transform: translateX(0); }
+  45% { transform: translateX(2px); }
+}
+@keyframes icone-pulsar {
+  0%, 100% { transform: scale(1); }
+  45% { transform: scale(1.18); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .icone-menu,
+  .item-menu:hover .icone-menu {
+    transition: none;
+    transform: none;
+  }
+  .item-menu:hover .icone-menu svg {
+    animation: none !important;
+  }
+}
 /* Barra discreta e cinza nas listas independentes do quadro de chamados. */
 .barra-rolagem-cinza {
   scrollbar-color: #94a3b8 #f1f5f9;

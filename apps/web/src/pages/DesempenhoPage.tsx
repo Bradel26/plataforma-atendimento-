@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alerta, Card, Field, Input, Select } from '../components/ui';
-import { BarList } from '../components/viz/BarList';
-import { StatTile } from '../components/viz/StatTile';
+import { Alerta, Input, Select } from '../components/ui';
+import { CabecalhoPagina } from '../components/ui/Pagina';
 import { ApiError, api } from '../lib/api';
 import { ESTADO, SERIES, duracao } from '../lib/viz';
 import type { AgenteMonitorado, DesempenhoOperacional, OperacaoEsteira } from '../lib/types';
+import { Barras, Indicador, Painel, Selo, type Tom } from './dashboard/blocos';
 import { UFS_ATENDIDAS } from './esteira/ufs';
 import { RelatoriosPage } from './RelatoriosPage';
 
@@ -22,6 +22,23 @@ function estadoDoSla(cumprido: number | null) {
   return ESTADO.grave;
 }
 
+function tomDoSla(cumprido: number | null): Tom | undefined {
+  if (cumprido === null) return undefined;
+  return cumprido >= 90 ? 'bom' : cumprido >= 80 ? 'atencao' : 'grave';
+}
+
+const ROTULO_TOM: Record<Tom, string> = { bom: 'No alvo', atencao: 'Atenção', grave: 'Abaixo' };
+
+/** Rotulo em cima, controle embaixo — o mesmo desenho da barra de filtros da Gestao. */
+function Filtro({ rotulo, children }: { rotulo: string; children: React.ReactNode }) {
+  return (
+    <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+      {rotulo}
+      {children}
+    </label>
+  );
+}
+
 /**
  * Desempenho Operacional (antiga aba Relatorios): compara a eficiencia dos
  * consultores sem repetir a Area da Gestao. La esta "onde a esteira trava";
@@ -34,6 +51,7 @@ export function DesempenhoPage() {
   const [consultores, setConsultores] = useState<Array<{ id: string; nome: string }>>([]);
   const [f, setF] = useState({ desde: trintaDias(), ate: hoje(), consultorId: '', uf: '', funilId: '', estagioId: '' });
   const [erro, setErro] = useState<string | null>(null);
+  const [exportarAberto, setExportarAberto] = useState(false);
 
   useEffect(() => {
     void api
@@ -64,178 +82,203 @@ export function DesempenhoPage() {
 
   const estagios = (operacoes.find((o) => o.id === f.funilId) ?? operacoes[0])?.estagios ?? [];
   const i = dados?.indicadores;
+  const tomSla = tomDoSla(i?.slaCumpridoPct ?? null);
 
   return (
-    <div className="space-y-5">
-      <Card titulo="Filtros">
-        <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          <Field label="De">
-            <Input type="date" value={f.desde} onChange={(e) => setF({ ...f, desde: e.target.value })} />
-          </Field>
-          <Field label="Até">
-            <Input type="date" value={f.ate} onChange={(e) => setF({ ...f, ate: e.target.value })} />
-          </Field>
-          <Field label="Consultor">
-            <Select value={f.consultorId} onChange={(e) => setF({ ...f, consultorId: e.target.value })}>
-              <option value="">Todos</option>
-              {consultores.map((c) => (
-                <option key={c.id} value={c.id}>{c.nome}</option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Estado">
-            <Select value={f.uf} onChange={(e) => setF({ ...f, uf: e.target.value })}>
-              <option value="">Todos</option>
-              {UFS_ATENDIDAS.map((u) => (
-                <option key={u.sigla} value={u.sigla}>{u.nome}</option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Operação">
-            <Select value={f.funilId} onChange={(e) => setF({ ...f, funilId: e.target.value, estagioId: '' })}>
-              <option value="">Todas</option>
-              {operacoes.map((o) => (
-                <option key={o.id} value={o.id}>{o.nome}</option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Etapa">
-            <Select value={f.estagioId} onChange={(e) => setF({ ...f, estagioId: e.target.value })}>
-              <option value="">Todas</option>
-              {estagios.map((e) => (
-                <option key={e.id} value={e.id}>{e.nome}</option>
-              ))}
-            </Select>
-          </Field>
-        </div>
-      </Card>
+    <div className="flex flex-col gap-5">
+      <CabecalhoPagina
+        titulo="Desempenho operacional"
+        descricao="Quem responde e resolve mais rápido — a esteira parada fica na Gestão, o volume no Dashboard"
+      />
+
+      <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+        <Filtro rotulo="De">
+          <Input type="date" value={f.desde} onChange={(e) => setF({ ...f, desde: e.target.value })} className="w-[150px]" />
+        </Filtro>
+        <Filtro rotulo="Até">
+          <Input type="date" value={f.ate} onChange={(e) => setF({ ...f, ate: e.target.value })} className="w-[150px]" />
+        </Filtro>
+        <Filtro rotulo="Consultor">
+          <Select value={f.consultorId} onChange={(e) => setF({ ...f, consultorId: e.target.value })} className="w-44">
+            <option value="">Todos</option>
+            {consultores.map((c) => (
+              <option key={c.id} value={c.id}>{c.nome}</option>
+            ))}
+          </Select>
+        </Filtro>
+        <Filtro rotulo="Estado">
+          <Select value={f.uf} onChange={(e) => setF({ ...f, uf: e.target.value })} className="w-40">
+            <option value="">Todos</option>
+            {UFS_ATENDIDAS.map((u) => (
+              <option key={u.sigla} value={u.sigla}>{u.nome}</option>
+            ))}
+          </Select>
+        </Filtro>
+        <Filtro rotulo="Operação">
+          <Select value={f.funilId} onChange={(e) => setF({ ...f, funilId: e.target.value, estagioId: '' })} className="w-44">
+            <option value="">Todas</option>
+            {operacoes.map((o) => (
+              <option key={o.id} value={o.id}>{o.nome}</option>
+            ))}
+          </Select>
+        </Filtro>
+        <Filtro rotulo="Etapa">
+          <Select value={f.estagioId} onChange={(e) => setF({ ...f, estagioId: e.target.value })} className="w-44">
+            <option value="">Todas</option>
+            {estagios.map((e) => (
+              <option key={e.id} value={e.id}>{e.nome}</option>
+            ))}
+          </Select>
+        </Filtro>
+      </div>
 
       {erro && <Alerta>{erro}</Alerta>}
 
-      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <StatTile rotulo="1a resposta" valor={duracao(i?.primeiraRespostaSegundos ?? null)} detalhe="média até o 1o retorno" />
-        <StatTile
-          rotulo="Tempo de atendimento"
-          valor={duracao(i?.tempoMedioAtendimentoSegundos ?? null)}
-          detalhe="da atribuição ao fim"
-        />
-        <StatTile rotulo="Tempo de análise" valor={dias(i?.tempoMedioAnaliseDias ?? null)} detalhe="etapas de análise/aprovação" />
-        <StatTile
-          rotulo="Tempo de credenciamento"
-          valor={dias(i?.tempoMedioCredenciamentoDias ?? null)}
-          detalhe="do cadastro ao credenciado"
-        />
-        <StatTile
+      <section aria-label="Indicadores" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <Indicador rotulo="1ª resposta" valor={duracao(i?.primeiraRespostaSegundos ?? null)} detalhe="média até o 1º retorno" />
+        <Indicador rotulo="Tempo de atendimento" valor={duracao(i?.tempoMedioAtendimentoSegundos ?? null)} detalhe="da atribuição ao fim" />
+        <Indicador rotulo="Tempo de análise" valor={dias(i?.tempoMedioAnaliseDias ?? null)} detalhe="etapas de análise/aprovação" />
+        <Indicador rotulo="Tempo de credenciamento" valor={dias(i?.tempoMedioCredenciamentoDias ?? null)} detalhe="do cadastro ao credenciado" />
+        <Indicador
           rotulo="SLA cumprido"
           valor={pct(i?.slaCumpridoPct ?? null)}
-          detalhe={`${i?.protocolosComSla ?? 0} protocolo(s) com prazo`}
-          estado={estadoDoSla(i?.slaCumpridoPct ?? null)}
+          detalhe={`${i?.protocolosComSla ?? 0} protocolo(s) com prazo · alvo 90%`}
+          selo={tomSla ? <Selo tom={tomSla}>{ROTULO_TOM[tomSla]}</Selo> : undefined}
         />
-        <StatTile
+        <Indicador
           rotulo="SLA vencido"
           valor={pct(i?.slaVencidoPct ?? null)}
-          estado={i?.slaVencidoPct ? ESTADO.grave : undefined}
+          detalhe="dos protocolos com prazo"
+          selo={i?.slaVencidoPct ? <Selo tom="grave">Vencido</Selo> : undefined}
         />
-      </div>
+      </section>
 
-      <Card titulo="Performance por consultor" descricao="Quem está sendo mais agil e quem está demorando mais">
+      <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white" aria-labelledby="desempenho-consultores">
+        <div className="px-5 py-4">
+          <h2 id="desempenho-consultores" className="text-[15px] font-semibold text-slate-800">Performance por consultor</h2>
+          <p className="mt-0.5 text-[12.5px] text-slate-500">Quem está sendo mais ágil e quem está demorando mais</p>
+        </div>
         {!dados || dados.consultores.length === 0 ? (
-          <p className="text-sm text-slate-500">Nenhum atendimento no período.</p>
+          <p className="px-5 pb-5 text-sm text-slate-500">Nenhum atendimento no período.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="text-xs uppercase tracking-wide text-slate-500">
+            <table className="w-full text-left text-[13px]">
+              <thead className="border-y border-slate-200 bg-slate-50 text-[11.5px] text-slate-500">
                 <tr>
-                  <th className="pb-2 pr-3 font-medium">Consultor</th>
-                  <th className="pb-2 pr-3 font-medium">Atendimentos</th>
-                  <th className="pb-2 pr-3 font-medium">1a resposta</th>
-                  <th className="pb-2 pr-3 font-medium">Tempo médio</th>
-                  <th className="pb-2 pr-3 font-medium">Credenciados</th>
-                  <th className="pb-2 pr-3 font-medium">Tempo de cred.</th>
-                  <th className="pb-2 pr-3 font-medium">SLA cumprido</th>
-                  <th className="pb-2 font-medium">SLA vencido</th>
+                  {['Consultor', 'Atendimentos', '1ª resposta', 'Tempo médio', 'Credenciados', 'Tempo de cred.', 'SLA cumprido', 'SLA vencido'].map((h, idx) => (
+                    <th key={h} className={`whitespace-nowrap px-4 py-2.5 font-semibold ${idx > 0 ? 'text-right' : ''}`}>{h}</th>
+                  ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
-                {dados.consultores.map((c) => (
-                  <tr key={c.id}>
-                    <td className="py-2.5 pr-3 font-medium text-slate-800">{c.nome}</td>
-                    <td className="py-2.5 pr-3 tabular-nums text-slate-600">{c.atendimentos}</td>
-                    <td className="py-2.5 pr-3 tabular-nums text-slate-600">{duracao(c.primeiraRespostaSegundos)}</td>
-                    <td className="py-2.5 pr-3 tabular-nums text-slate-600">{duracao(c.tempoMedioAtendimentoSegundos)}</td>
-                    <td className="py-2.5 pr-3 tabular-nums text-slate-600">{c.credenciamentosConcluidos}</td>
-                    <td className="py-2.5 pr-3 tabular-nums text-slate-600">{dias(c.tempoMedioCredenciamentoDias)}</td>
-                    <td className="py-2.5 pr-3 tabular-nums" style={{ color: estadoDoSla(c.slaCumpridoPct) }}>
-                      {pct(c.slaCumpridoPct)}
-                    </td>
-                    <td className="py-2.5 tabular-nums text-slate-600">{pct(c.slaVencidoPct)}</td>
-                  </tr>
-                ))}
+              <tbody className="divide-y divide-slate-100 text-slate-700">
+                {dados.consultores.map((c) => {
+                  const tom = tomDoSla(c.slaCumpridoPct);
+                  return (
+                    <tr key={c.id} className="hover:bg-slate-50">
+                      <td className="whitespace-nowrap px-4 py-2.5 font-bold text-slate-900">{c.nome}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums">{c.atendimentos}</td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">{duracao(c.primeiraRespostaSegundos)}</td>
+                      <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums">{duracao(c.tempoMedioAtendimentoSegundos)}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums">{c.credenciamentosConcluidos}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums">{dias(c.tempoMedioCredenciamentoDias)}</td>
+                      <td className="px-4 py-2.5 text-right">
+                        {tom ? (
+                          <span className="inline-flex items-center gap-1.5 font-semibold tabular-nums text-slate-800">
+                            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: estadoDoSla(c.slaCumpridoPct) }} aria-hidden="true" />
+                            {pct(c.slaCumpridoPct)}
+                            <span className="sr-only"> ({ROTULO_TOM[tom]})</span>
+                          </span>
+                        ) : (
+                          <span className="tabular-nums">{pct(c.slaCumpridoPct)}</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 text-right tabular-nums">{pct(c.slaVencidoPct)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
-      </Card>
+      </section>
 
-      <div className="grid gap-5 lg:grid-cols-2">
-        <Card titulo="Tempo médio por etapa" descricao="Cadastro → Análise → Pendência → Aprovação → Credenciado → Ativo">
-          <BarList
-            itens={(dados?.tempoMedioPorEtapa ?? []).map((e) => ({
-              rotulo: e.etapa,
-              valor: e.mediaDias ?? 0,
-              cor: SERIES[0],
-            }))}
-            unidade="dias"
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Painel titulo="Tempo médio por etapa" descricao="Cadastro → Análise → Pendência → Aprovação → Credenciado → Ativo">
+          <Barras
+            itens={(dados?.tempoMedioPorEtapa ?? []).map((e) => ({ rotulo: e.etapa, valor: e.mediaDias ?? 0 }))}
+            larguraRotulo={130}
+            unidade="d"
+            cor={SERIES[0]}
+            formatar={(v) => v.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}
             vazio="Nenhuma passagem de etapa no período"
           />
-        </Card>
+        </Painel>
 
-        <Card titulo="Evolução do tempo de credenciamento" descricao="Período atual comparado aos três anteriores de mesmo tamanho">
+        <Painel titulo="Evolução do tempo de credenciamento" descricao="Período atual comparado aos três anteriores de mesmo tamanho">
           {!dados ? (
             <p className="text-sm text-slate-500">Carregando...</p>
           ) : (
-            <ol className="flex flex-wrap items-end gap-2">
+            <ol className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {dados.evolucao.map((e, idx) => {
                 const anterior = idx > 0 ? dados.evolucao[idx - 1]!.tempoMedioCredenciamentoDias : null;
                 const atual = e.tempoMedioCredenciamentoDias;
                 const melhorou = anterior !== null && atual !== null && atual < anterior;
                 const piorou = anterior !== null && atual !== null && atual > anterior;
+                const ultimo = idx === dados.evolucao.length - 1;
                 return (
-                  <li key={e.desde} className="flex items-center gap-2">
-                    {idx > 0 && <span className="text-slate-400" aria-hidden>→</span>}
-                    <div
-                      className={`rounded-lg border px-3 py-2 text-center ${
-                        idx === dados.evolucao.length - 1 ? 'border-[var(--brand-primary)]' : 'border-slate-200'
-                      }`}
-                    >
-                      <p
-                        className="text-lg font-semibold tabular-nums"
-                        style={{ color: melhorou ? ESTADO.bom : piorou ? ESTADO.grave : undefined }}
-                      >
-                        {dias(atual)}
-                      </p>
-                      <p className="text-[11px] text-slate-500">
-                        {new Date(e.desde).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}–
-                        {new Date(e.ate).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} ·{' '}
-                        {e.credenciados}
-                      </p>
-                    </div>
+                  <li
+                    key={e.desde}
+                    className={`flex flex-col gap-1 rounded-xl border px-3 py-2.5 ${
+                      ultimo ? 'border-[var(--brand-primary)] bg-[var(--brand-primary-soft)]' : 'border-slate-200'
+                    }`}
+                  >
+                    <span className="text-[11px] tabular-nums text-slate-500">
+                      {new Date(e.desde).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}–
+                      {new Date(e.ate).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                      {ultimo ? ' · atual' : ''}
+                    </span>
+                    <span className="text-lg font-bold tabular-nums text-slate-900">{dias(atual)}</span>
+                    {(melhorou || piorou) && (
+                      <span className={`text-xs font-semibold ${melhorou ? 'text-emerald-700' : 'text-red-700'}`}>
+                        {melhorou ? '▼ mais rápido' : '▲ mais lento'}
+                      </span>
+                    )}
+                    <span className="text-[11.5px] text-slate-500">{e.credenciados} credenciado(s)</span>
                   </li>
                 );
               })}
             </ol>
           )}
-          <p className="mt-2 text-xs text-slate-500">Verde: mais rápido que o período anterior. Vermelho: mais lento.</p>
-        </Card>
+        </Painel>
       </div>
 
       {/* Os relatorios tabulares antigos continuam, para quem exporta CSV/PDF. */}
-      <details className="rounded-xl border border-slate-200 bg-white p-4">
-        <summary className="cursor-pointer text-sm font-medium text-slate-700">Exportar relatórios (CSV/PDF)</summary>
-        <div className="mt-4">
-          <RelatoriosPage />
-        </div>
-      </details>
+      <section className="rounded-2xl border border-slate-200 bg-white">
+        <button
+          type="button"
+          aria-expanded={exportarAberto}
+          onClick={() => setExportarAberto((a) => !a)}
+          className="flex w-full items-center gap-3 px-5 py-4 text-left"
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-slate-100 text-slate-600">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 3v12M7 10l5 5 5-5M5 21h14" />
+            </svg>
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] font-semibold text-slate-800">Exportar relatórios (CSV/PDF)</span>
+            <span className="text-[12.5px] text-slate-500">Atendimentos por agente, filas, protocolos, jornada e funil de leads</span>
+          </span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={`shrink-0 text-slate-500 transition ${exportarAberto ? 'rotate-180' : ''}`}>
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </button>
+        {exportarAberto && (
+          <div className="border-t border-slate-100 p-5">
+            <RelatoriosPage />
+          </div>
+        )}
+      </section>
     </div>
   );
 }

@@ -5,8 +5,24 @@ import { Dropdown } from '../../components/ui/Dropdown';
 import { useToast } from '../../components/ui/Toast';
 import { useAuth } from '../auth/AuthProvider';
 import { ApiError, api } from '../../lib/api';
+import { telefoneLegivel } from '../../lib/telefone';
 import { LABEL_CONVERSA_STATUS, type ConversaDetalhe, type Mensagem } from '../../lib/types';
 import { AvatarConversa } from './AvatarConversa';
+import { CLASSE_STATUS, clienteAguardandoDesde, esperaPorExtenso, rotuloDoDia } from './apresentacao';
+import {
+  IconeCadeado,
+  IconeCheck,
+  IconeClipe,
+  IconeCopiar,
+  IconeEncerrar,
+  IconeEnviar,
+  IconeFicha,
+  IconeMaisAcoes,
+  IconeRaio,
+  IconeRelogio,
+  IconeTransferir,
+  IconeVoltar,
+} from './icones';
 import { partesComLinks } from './links';
 import { useAtendimentosAnteriores, type BlocoAnterior } from './useAtendimentosAnteriores';
 
@@ -18,12 +34,17 @@ const dataHora = (iso: string) =>
     day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit',
   });
 
+const BOTAO_SECUNDARIO =
+  'inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-[13px] font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50';
+const BOTAO_FERRAMENTA =
+  'inline-flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50';
+
 function TextoComLinks({ texto }: { texto: string }) {
   return (
     <p className="whitespace-pre-wrap break-words">
       {partesComLinks(texto).map((parte, i) =>
         parte.href ? (
-          <a key={i} href={parte.href} target="_blank" rel="noopener noreferrer" className="text-sky-700 underline">
+          <a key={i} href={parte.href} target="_blank" rel="noopener noreferrer" className="text-[var(--brand-primary)] underline">
             {parte.texto}
           </a>
         ) : (
@@ -37,9 +58,10 @@ function TextoComLinks({ texto }: { texto: string }) {
 function EventoConversa({ mensagem }: { mensagem: Mensagem }) {
   return (
     <li className="my-2 flex justify-center">
-      <span className="inline-flex flex-col items-center rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs text-slate-700 shadow-sm">
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">
+        <IconeCheck tamanho={13} />
         <span className="font-medium">{mensagem.conteudo}</span>
-        <span className="text-[10px] text-slate-400">{dataHora(mensagem.criadoEm)}</span>
+        <span className="tabular-nums text-slate-500">{dataHora(mensagem.criadoEm)}</span>
       </span>
     </li>
   );
@@ -49,10 +71,38 @@ function SeparadorAnterior({ bloco }: { bloco: BlocoAnterior }) {
   const data = new Date(bloco.criadoEm).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
   return (
     <li className="my-3 flex justify-center">
-      <span className="rounded-full bg-slate-200/80 px-3 py-1 text-xs text-slate-600">
+      <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600">
         {data} - Conversa anterior{bloco.protocolo ? ` - ${bloco.protocolo}` : ''}
       </span>
     </li>
+  );
+}
+
+function SeparadorDia({ iso }: { iso: string }) {
+  return (
+    <li className="my-3 flex items-center gap-3" aria-hidden="true">
+      <span className="h-px flex-1 bg-slate-200" />
+      <span className="text-xs font-medium text-slate-500">{rotuloDoDia(iso)}</span>
+      <span className="h-px flex-1 bg-slate-200" />
+    </li>
+  );
+}
+
+/** Mensagens com um separador sempre que o dia muda. */
+function MensagensComDias({ mensagens }: { mensagens: Mensagem[] }) {
+  return (
+    <>
+      {mensagens.map((m, i) => {
+        const anterior = mensagens[i - 1];
+        const novoDia = !anterior || new Date(anterior.criadoEm).toDateString() !== new Date(m.criadoEm).toDateString();
+        return (
+          <Fragment key={m.id}>
+            {novoDia && <SeparadorDia iso={m.criadoEm} />}
+            <Bolha mensagem={m} />
+          </Fragment>
+        );
+      })}
+    </>
   );
 }
 
@@ -111,7 +161,7 @@ function TiqueDeStatus({ status }: { status: Mensagem['status'] }) {
   }
   if (!status || status === 'PENDENTE') return null;
 
-  const cor = status === 'LIDA' ? '#53bdeb' : '#8696a0';
+  const cor = status === 'LIDA' ? '#2a8fd6' : '#8696a0';
   const duplo = status === 'ENTREGUE' || status === 'LIDA';
   const rotulo = status === 'ENTREGUE' ? 'Entregue' : status === 'LIDA' ? 'Lida' : 'Enviada';
 
@@ -133,7 +183,7 @@ function Bolha({ mensagem }: { mensagem: Mensagem }) {
     if (mensagem.evento) return <EventoConversa mensagem={mensagem} />;
     return (
       <li className="my-2 text-center">
-        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-500">{mensagem.conteudo}</span>
+        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">{mensagem.conteudo}</span>
       </li>
     );
   }
@@ -141,32 +191,35 @@ function Bolha({ mensagem }: { mensagem: Mensagem }) {
   if (mensagem.interno) {
     return (
       <li className="flex justify-end">
-        <div className="max-w-[75%] rounded-2xl border border-amber-200 bg-amber-50 px-3.5 py-2 text-sm text-slate-800">
-          <p className="mb-1 text-xs font-semibold text-amber-700">
+        <div className="max-w-[75%] rounded-2xl rounded-br-md border border-amber-200 bg-amber-50 px-3.5 py-2 text-sm text-slate-800">
+          <p className="mb-1 flex items-center gap-1 text-xs font-semibold text-amber-700">
+            <IconeCadeado tamanho={12} />
             Nota interna{mensagem.autorNome ? ` · ${mensagem.autorNome}` : ''}
           </p>
           <Anexo mensagem={mensagem} />
           <TextoComLinks texto={mensagem.conteudo} />
-          <p className="mt-1 text-right text-[10px] text-amber-700/70">{hora(mensagem.criadoEm)}</p>
+          <p className="mt-1 text-right text-[11px] tabular-nums text-amber-700">{hora(mensagem.criadoEm)}</p>
         </div>
       </li>
     );
   }
 
   const daEmpresa = mensagem.autor !== 'CLIENTE';
+  const doAgente = mensagem.autor === 'AGENTE' && !mensagem.enviadaPorDispositivo;
   const rotulo = rotuloDoAutor(mensagem);
+  const forma = daEmpresa ? 'rounded-2xl rounded-br-md' : 'rounded-2xl rounded-bl-md';
+  const cores = doAgente
+    ? 'border border-[color-mix(in_srgb,var(--brand-primary)_22%,transparent)] bg-[var(--brand-primary-soft)]'
+    : 'border border-slate-200 bg-white shadow-[0_1px_1px_rgba(15,23,42,0.04)]';
   return (
     <li className={`flex ${daEmpresa ? 'justify-end' : 'justify-start'}`}>
-      <div
-        className={`max-w-[75%] rounded-2xl px-3.5 py-2 text-sm ${
-          daEmpresa ? 'text-slate-800' : 'border border-slate-200 bg-white text-slate-800'
-        }`}
-        style={daEmpresa ? { backgroundColor: mensagem.autor === 'BOT' ? '#ffffff' : '#d9fdd3' } : undefined}
-      >
-        {rotulo && <p className="mb-1 text-xs font-semibold text-slate-600">{rotulo}</p>}
+      <div className={`max-w-[75%] px-3.5 py-2 text-sm leading-relaxed text-slate-800 ${forma} ${cores}`}>
+        {rotulo && (
+          <p className={`mb-0.5 text-xs font-semibold ${doAgente ? 'text-[var(--brand-primary)]' : 'text-slate-600'}`}>{rotulo}</p>
+        )}
         <Anexo mensagem={mensagem} />
         <TextoComLinks texto={mensagem.conteudo} />
-        <p className="mt-1 flex items-center justify-end gap-1 text-right text-[10px] text-slate-500">
+        <p className="mt-1 flex items-center justify-end gap-1 text-right text-[11px] tabular-nums text-slate-500">
           {hora(mensagem.criadoEm)}
           {daEmpresa && <TiqueDeStatus status={mensagem.status} />}
         </p>
@@ -255,17 +308,8 @@ export function PainelChat({
   /*
    * O rascunho nao enviado troca junto com a conversa, em vez de vazar de uma
    * pra outra ou se perder. Cobre tanto a resposta normal (`texto`) quanto a
-   * nota interna (`textoPrivado`) — achado da revisao final: antes so `texto`
-   * passava por aqui, entao um rascunho de nota interna pro cliente A
-   * continuava na caixa ao abrir a conversa do cliente B, com risco real de
-   * ir parar no destinatario errado.
-   *
-   * Sem isto, o campo de texto e um unico `useState` que sobrevive a troca de
-   * conversa (o componente nao desmonta): quem comecava a escrever pra um
-   * cliente, trocava de aba pra atender outro, e via o texto do primeiro
-   * aparecer na caixa do segundo — ou pior, mandava sem perceber. Guardar por
-   * `conversa.id` deixa cada conversa com o proprio rascunho, do jeito que
-   * WhatsApp Web e qualquer mensageiro profissional ja fazem.
+   * nota interna (`textoPrivado`) — um rascunho de nota interna pro cliente A
+   * nao pode continuar na caixa ao abrir a conversa do cliente B.
    *
    * A aba do rodape tambem volta para "Responder" ao trocar de conversa: e o
    * comportamento mais seguro (nunca abre sozinho numa aba que manda pro
@@ -284,6 +328,7 @@ export function PainelChat({
   }, [conversa.id]);
 
   const finalizada = conversa.status === 'FINALIZADO';
+  const aguardandoDesde = clienteAguardandoDesde(conversa.status, conversa.mensagens);
 
   const visiveisRapidas = respostasRapidas.filter((item) =>
     `${item.titulo} ${item.atalho ?? ''} ${item.categoria} ${item.conteudo}`.toLocaleLowerCase('pt-BR')
@@ -321,12 +366,16 @@ export function PainelChat({
     }
   };
 
-  const encerrar = () =>
+  // Antes ficava escondido num menu; agora e um botao visivel, entao pede
+  // confirmacao para um clique acidental nao encerrar o atendimento do cliente.
+  const encerrar = () => {
+    if (!window.confirm(`Encerrar o atendimento de ${conversa.contato.nome}?`)) return;
     void executar(async () => {
       const r = await api.post<{ conversa: ConversaDetalhe }>(`/conversas/${conversa.id}/finalizar`);
       mostrar('sucesso', 'Chat encerrado com sucesso.');
       return r;
     });
+  };
 
   const enviar = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -395,11 +444,8 @@ export function PainelChat({
    * Anexo do agente. A legenda vai junto quando o campo de texto tem algo
    * escrito: e o comportamento que o agente espera de qualquer mensageiro.
    *
-   * `interno` (Achado 4 da revisao final: a spec original pedia o mesmo botao
-   * "Anexar" reaproveitado na aba Mensagem Privada, com `interno: true` — o
-   * plano de implementacao tinha esquecido) manda o anexo como nota interna:
-   * legenda vem de `textoPrivado`, nunca sai pelo canal externo, e o campo
-   * limpo depois e o da aba certa.
+   * `interno` manda o anexo como nota interna: legenda vem de `textoPrivado`,
+   * nunca sai pelo canal externo, e o campo limpo depois e o da aba certa.
    */
   const anexar = async (arquivo: File, interno = false) => {
     setErro(null);
@@ -422,121 +468,146 @@ export function PainelChat({
     }
   };
 
+  const contatoLegivel = conversa.contato.telefone
+    ? telefoneLegivel(conversa.contato.telefone)
+    : (conversa.contato.email ?? 'Sem contato informado');
+
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <header className="flex flex-col gap-1.5 border-b border-slate-200 bg-white px-5 py-2.5">
-        <div className="flex min-w-0 items-center gap-2.5">
+    // `@container`: os rotulos dos botoes do cabecalho somem quando o PAINEL fica
+    // estreito (ficha aberta ao lado), nao quando a janela fica estreita.
+    <div className="@container flex h-full min-h-0 flex-col">
+      <header className="border-b border-slate-200 bg-white px-5 py-3">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           {/* So existe no passo mobile "chat" — no notebook/tablet/desktop a
               lista fica sempre visivel ao lado, sem precisar de volta. */}
           {aoVoltarParaLista && (
-            <Button
-              variante="neutro"
-              tamanho="sm"
-              onClick={aoVoltarParaLista}
-              aria-label="Voltar para a lista de conversas"
-              className="shrink-0"
-            >
-              &larr;
-            </Button>
-          )}
-          <AvatarConversa conversaId={conversa.id} nome={conversa.contato.nome} className="h-9 w-9" />
-          <div className="min-w-0 flex-1">
-            <p className="truncate font-medium text-slate-800">{conversa.contato.nome}</p>
-            <p className="truncate text-xs text-slate-500">
-              {conversa.contato.telefone ?? conversa.contato.email ?? 'Sem contato informado'}
-              {conversa.linha?.nome ? ` · ${conversa.linha.nome}` : ''}
-              {conversa.fila ? ` · ${conversa.fila.nome}` : ''}
-            </p>
-          </div>
-
-          {conversa.protocolo && (
             <button
               type="button"
-              title="Copiar protocolo"
-              onClick={() => {
-                void navigator.clipboard?.writeText(conversa.protocolo!);
-                mostrar('info', `Protocolo ${conversa.protocolo} copiado`);
-              }}
-              className="shrink-0 rounded border border-slate-200 px-2 py-0.5 font-mono text-xs text-slate-600 hover:bg-slate-50"
+              onClick={aoVoltarParaLista}
+              aria-label="Voltar para a lista de conversas"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100"
             >
-              {conversa.protocolo}
+              <IconeVoltar tamanho={18} />
             </button>
           )}
-
-          {/* So existe fora do desktop: la a ficha e coluna fixa e sempre
-              visivel, entao um botao pra abrir o que ja esta aberto so
-              ocuparia espaco atoa. */}
-          {aoAlternarFicha && (
-            <Button
-              variante={fichaAberta ? 'primario' : 'neutro'}
-              tamanho="sm"
-              onClick={aoAlternarFicha}
-              aria-pressed={fichaAberta}
-              className="shrink-0"
-            >
-              Ficha do contato
-            </Button>
-          )}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge tom={finalizada ? 'neutro' : conversa.status === 'AGUARDANDO_CLIENTE' ? 'alerta' : 'sucesso'}>
-            {LABEL_CONVERSA_STATUS[conversa.status]}
-          </Badge>
-          {conversa.arquivada && <Badge tom="neutro">Arquivada</Badge>}
-          <span className="text-xs text-slate-400">{conversa.origem === 'ATIVO' ? '↗ Ativo' : '↙ Receptivo'}</span>
-          {!somenteLeitura && (
-            <div className="ml-auto flex items-center gap-2">
-              {conversa.status === 'EM_ESPERA' && (
-                <Button disabled={ocupado} onClick={() => void executar(() => api.post(`/conversas/${conversa.id}/assumir`))}>
-                  Aceitar
-                </Button>
-              )}
-              <Dropdown
-                rotulo={<span aria-label="Ações da conversa">⋮</span>}
-                itens={[
-                  ...(!finalizada
-                    ? [
-                        { chave: 'encerrar', rotulo: 'Encerrar', aoSelecionar: encerrar, desabilitado: ocupado },
-                        ...(aoTransferir ? [{ chave: 'transferir', rotulo: 'Transferir', aoSelecionar: aoTransferir, desabilitado: ocupado }] : []),
-                        ...(conversa.fila && conversa.agente
-                          ? [{
-                              chave: 'devolver',
-                              rotulo: `Devolver à equipe ${conversa.fila.nome}`,
-                              desabilitado: ocupado,
-                              aoSelecionar: () => void executar(() => api.post(`/conversas/${conversa.id}/transferir`, { filaId: conversa.fila!.id })),
-                            }]
-                          : []),
-                      ]
-                    : []),
-                  {
-                    chave: 'arquivar',
-                    rotulo: conversa.arquivada ? 'Desarquivar' : 'Arquivar',
-                    desabilitado: ocupado,
-                    aoSelecionar: () =>
-                      void executar(() => api.post(`/conversas/${conversa.id}/${conversa.arquivada ? 'desarquivar' : 'arquivar'}`)),
-                  },
-                ]}
-              />
+          <AvatarConversa conversaId={conversa.id} nome={conversa.contato.nome} className="h-10 w-10 text-sm" />
+          <div className="min-w-[14rem] flex-1">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <h2 className="truncate text-[15px] font-semibold text-slate-800">{conversa.contato.nome}</h2>
+              <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${CLASSE_STATUS[conversa.status]}`}>
+                {LABEL_CONVERSA_STATUS[conversa.status]}
+              </span>
+              {conversa.arquivada && <Badge tom="neutro">Arquivada</Badge>}
             </div>
-          )}
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500">
+              <span className="tabular-nums">{contatoLegivel}</span>
+              {conversa.linha?.nome && <span>· {conversa.linha.nome}</span>}
+              {conversa.fila && <span>· {conversa.fila.nome}</span>}
+              <span>· {conversa.origem === 'ATIVO' ? '↗ Ativo' : '↙ Receptivo'}</span>
+              {conversa.protocolo && (
+                <button
+                  type="button"
+                  title="Copiar protocolo"
+                  onClick={() => {
+                    void navigator.clipboard?.writeText(conversa.protocolo!);
+                    mostrar('info', `Protocolo ${conversa.protocolo} copiado`);
+                  }}
+                  className="inline-flex items-center gap-1 rounded px-1 py-0.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                >
+                  · Protocolo <span className="font-mono text-slate-700">{conversa.protocolo}</span>
+                  <IconeCopiar tamanho={12} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* So existe fora do desktop: la a ficha e coluna fixa e sempre
+                visivel, entao um botao pra abrir o que ja esta aberto so
+                ocuparia espaco atoa. */}
+            {aoAlternarFicha && (
+              <button
+                type="button"
+                onClick={aoAlternarFicha}
+                aria-pressed={fichaAberta}
+                aria-label="Ficha do contato"
+                title="Ficha do contato"
+                className={`${BOTAO_SECUNDARIO} ${fichaAberta ? 'border-[var(--brand-primary)] text-[var(--brand-primary)]' : ''}`}
+              >
+                <IconeFicha tamanho={15} />
+                <span className="hidden @[52rem]:inline">Ficha do contato</span>
+              </button>
+            )}
+            {!somenteLeitura && (
+              <>
+                {conversa.status === 'EM_ESPERA' && (
+                  <Button disabled={ocupado} onClick={() => void executar(() => api.post(`/conversas/${conversa.id}/assumir`))}>
+                    Aceitar
+                  </Button>
+                )}
+                {!finalizada && aoTransferir && (
+                  <button type="button" disabled={ocupado} onClick={aoTransferir} aria-label="Transferir" title="Transferir" className={BOTAO_SECUNDARIO}>
+                    <IconeTransferir tamanho={15} />
+                    <span className="hidden @[46rem]:inline">Transferir</span>
+                  </button>
+                )}
+                {!finalizada && (
+                  <button
+                    type="button"
+                    disabled={ocupado}
+                    onClick={encerrar}
+                    className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-slate-900 px-3 text-[13px] font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <IconeEncerrar tamanho={15} />
+                    Encerrar
+                  </button>
+                )}
+                <Dropdown
+                  rotulo={
+                    <span aria-label="Ações da conversa" className="flex items-center">
+                      <IconeMaisAcoes tamanho={16} />
+                    </span>
+                  }
+                  itens={[
+                    ...(!finalizada && conversa.fila && conversa.agente
+                      ? [{
+                          chave: 'devolver',
+                          rotulo: `Devolver à equipe ${conversa.fila.nome}`,
+                          desabilitado: ocupado,
+                          aoSelecionar: () => void executar(() => api.post(`/conversas/${conversa.id}/transferir`, { filaId: conversa.fila!.id })),
+                        }]
+                      : []),
+                    {
+                      chave: 'arquivar',
+                      rotulo: conversa.arquivada ? 'Desarquivar' : 'Arquivar',
+                      desabilitado: ocupado,
+                      aoSelecionar: () =>
+                        void executar(() => api.post(`/conversas/${conversa.id}/${conversa.arquivada ? 'desarquivar' : 'arquivar'}`)),
+                    },
+                  ]}
+                />
+              </>
+            )}
+          </div>
         </div>
       </header>
 
+      {aguardandoDesde && !somenteLeitura && (
+        <div role="status" className="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-5 py-2 text-[13px] text-amber-700">
+          <IconeRelogio tamanho={15} />
+          <span>
+            <strong className="font-semibold">Cliente aguardando resposta há {esperaPorExtenso(aguardandoDesde)}</strong>
+            {' · '}última mensagem em {dataHora(aguardandoDesde)}
+          </span>
+        </div>
+      )}
+
       {/*
         Largura maxima no conteudo, nao no fundo: o painel continua esticando
-        em telas largas (sem faixa vazia estranha do lado), mas a linha de
-        texto para de crescer alem do confortavel pra ler — 75% de uma coluna
-        de 1800px+ vira uma bolha do tamanho da tela inteira sem isto.
+        em telas largas, mas a linha de texto para de crescer alem do
+        confortavel pra ler.
       */}
-      <div
-        className="min-h-0 flex-1 overflow-y-auto px-5 py-4"
-        style={{
-          backgroundColor: '#efeae2',
-          backgroundImage:
-            "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cg fill='none' stroke='%23d9d2c7' stroke-width='1'%3E%3Ccircle cx='20' cy='20' r='6'/%3E%3Ccircle cx='60' cy='60' r='6'/%3E%3Cpath d='M40 10 L46 20 L40 30 L34 20 Z'/%3E%3Cpath d='M10 50 L16 60 L10 70 L4 60 Z'/%3E%3C/g%3E%3C/svg%3E\")",
-        }}
-      >
+      <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50 px-5 py-5">
         <div className="mx-auto max-w-3xl">
           <div ref={topo} aria-hidden="true" />
           {atendimentosAnteriores.carregando && (
@@ -547,7 +618,7 @@ export function PainelChat({
               type="button"
               onClick={() => void carregarAnteriores()}
               disabled={ocupado}
-              className="mx-auto mb-3 block rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+              className="mx-auto mb-3 block rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-50"
             >
               Carregar mensagens anteriores
             </button>
@@ -562,38 +633,38 @@ export function PainelChat({
             ))}
             {atendimentosAnteriores.blocos.length > 0 && (
               <li className="my-3 flex justify-center">
-                <span className="rounded-full bg-slate-200/80 px-3 py-1 text-xs text-slate-600">
+                <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600">
                   Atendimento atual{conversa.protocolo ? ` - ${conversa.protocolo}` : ''}
                 </span>
               </li>
             )}
-            {[...anterioresDaConversa, ...conversa.mensagens].map((m) => (
-              <Bolha key={m.id} mensagem={m} />
-            ))}
+            <MensagensComDias mensagens={[...anterioresDaConversa, ...conversa.mensagens]} />
           </ul>
           <div ref={fim} />
         </div>
       </div>
 
-      {!somenteLeitura && <footer className="border-t border-slate-200 bg-white p-4">
+      {!somenteLeitura && <footer className="border-t border-slate-200 bg-white px-5 pb-4">
         <div className="mx-auto max-w-3xl">
-        {erro && <div className="mb-3"><Alerta>{erro}</Alerta></div>}
         {finalizada ? (
-          <p className="text-center text-sm text-slate-500">
-            Atendimento finalizado em {new Date(conversa.finalizadoEm!).toLocaleString('pt-BR')}.
-          </p>
+          <>
+            {erro && <div className="pt-3"><Alerta>{erro}</Alerta></div>}
+            <p className="pt-4 text-center text-sm text-slate-500">
+              Atendimento finalizado em {new Date(conversa.finalizadoEm!).toLocaleString('pt-BR')}.
+            </p>
+          </>
         ) : (
           <>
-            <div role="tablist" className="mb-2 flex gap-1 border-b border-slate-200">
+            <div role="tablist" className="mb-3 flex gap-5 border-b border-slate-100">
               <button
                 type="button"
                 role="tab"
                 aria-selected={abaRodape === 'responder'}
                 onClick={() => setAbaRodape('responder')}
-                className={`px-3 py-1.5 text-sm font-medium ${
+                className={`-mb-px h-11 border-b-2 text-sm font-semibold transition ${
                   abaRodape === 'responder'
-                    ? 'border-b-2 border-[var(--brand-primary)] text-[var(--brand-primary)]'
-                    : 'text-slate-500'
+                    ? 'border-[var(--brand-primary)] text-slate-800'
+                    : 'border-transparent text-slate-500 hover:text-slate-700'
                 }`}
               >
                 Responder
@@ -603,23 +674,25 @@ export function PainelChat({
                 role="tab"
                 aria-selected={abaRodape === 'privada'}
                 onClick={() => setAbaRodape('privada')}
-                className={`px-3 py-1.5 text-sm font-medium ${
-                  abaRodape === 'privada' ? 'border-b-2 border-amber-500 text-amber-700' : 'text-slate-500'
+                className={`-mb-px inline-flex h-11 items-center gap-1.5 border-b-2 text-sm font-semibold transition ${
+                  abaRodape === 'privada' ? 'border-amber-500 text-amber-700' : 'border-transparent text-slate-500 hover:text-slate-700'
                 }`}
               >
+                <IconeCadeado tamanho={14} />
                 Mensagem Privada
               </button>
             </div>
 
+            {erro && <div className="mb-3"><Alerta>{erro}</Alerta></div>}
+
             {abaRodape === 'responder' ? (
               <>
               {janelaFechada && (
-                <div role="status" className="mb-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                <div role="status" className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
                   Janela de 24 horas fechada. Texto livre e mensagens rápidas estão bloqueados. Envie um template aprovado pelo WhatsApp Manager e aguarde a resposta do cliente para reabrir a janela. O envio de templates ainda não está disponível nesta tela.
                 </div>
               )}
-              <form onSubmit={enviar} className="flex min-w-0 items-end gap-2">
-                <div className="relative min-w-0 flex-1">
+              <form onSubmit={enviar} className="relative">
                 {seletorRapido && (
                   <div role="listbox" aria-label="Mensagens rápidas" className="absolute bottom-full left-0 z-20 mb-2 max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-xl">
                     {visiveisRapidas.length ? visiveisRapidas.map((item) => (
@@ -635,60 +708,79 @@ export function PainelChat({
                     ) : <p className="px-3 py-2 text-sm text-slate-500">Nenhuma mensagem encontrada. Esc para fechar.</p>}
                   </div>
                 )}
-                <textarea
-                  ref={textareaResposta}
-                  value={texto}
-                  onChange={(e) => {
-                    const valor = e.target.value;
-                    const caret = e.target.selectionStart;
-                    setTexto(valor);
-                    const trecho = valor.slice(0, caret);
-                    const gatilho = /(?:^|\s)\/([^\s]*)$/.exec(trecho);
-                    if (gatilho) {
-                      const token = gatilho[0];
-                      setSeletorRapido({ inicio: caret - token.length, fim: caret, busca: gatilho[1] ?? '' });
-                    } else setSeletorRapido(null);
-                  }}
-                  onKeyDown={(e) => {
-                    if (seletorRapido && e.key === 'Escape') { e.preventDefault(); setSeletorRapido(null); return; }
-                    if (seletorRapido && e.key === 'Enter' && visiveisRapidas[0]) { e.preventDefault(); escolherRapida(visiveisRapidas[0]); return; }
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      void enviar(e);
-                    }
-                  }}
-                  rows={2}
-                  disabled={janelaFechada || ocupado}
-                  placeholder={janelaFechada ? 'Janela fechada — texto livre indisponível' : 'Escreva sua resposta... (Enter envia, Shift+Enter quebra linha)'}
-                  className="max-h-32 min-h-[44px] w-full min-w-0 resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[var(--brand-primary)]"
-                />
-                </div>
-                <Button type="button" variante="neutro" disabled={janelaFechada || ocupado || respostasRapidas.length === 0} title="Inserir mensagem rápida" onClick={() => {
-                  const campo = textareaResposta.current;
-                  const pos = campo?.selectionStart ?? texto.length;
-                  const fim = campo?.selectionEnd ?? pos;
-                  setSeletorRapido({ inicio: pos, fim, busca: '' });
-                  campo?.focus();
-                }}>⚡ Rápidas</Button>
-                <label
-                  title="Anexar arquivo"
-                  className="flex h-[44px] cursor-pointer items-center rounded-lg border border-slate-300 px-3 text-sm text-slate-600 hover:bg-slate-50"
-                >
-                  Anexar
-                  <input
-                    type="file"
-                    className="hidden"
-                    disabled={ocupado || janelaFechada}
+                <div className="rounded-xl border border-slate-300 bg-white shadow-sm transition focus-within:border-[var(--brand-primary)]">
+                  <label htmlFor={`resposta-${conversa.id}`} className="sr-only">Resposta para o cliente</label>
+                  <textarea
+                    id={`resposta-${conversa.id}`}
+                    ref={textareaResposta}
+                    value={texto}
                     onChange={(e) => {
-                      const arquivo = e.target.files?.[0];
-                      e.target.value = '';
-                      if (arquivo) void anexar(arquivo);
+                      const valor = e.target.value;
+                      const caret = e.target.selectionStart;
+                      setTexto(valor);
+                      const trecho = valor.slice(0, caret);
+                      const gatilho = /(?:^|\s)\/([^\s]*)$/.exec(trecho);
+                      if (gatilho) {
+                        const token = gatilho[0];
+                        setSeletorRapido({ inicio: caret - token.length, fim: caret, busca: gatilho[1] ?? '' });
+                      } else setSeletorRapido(null);
                     }}
+                    onKeyDown={(e) => {
+                      if (seletorRapido && e.key === 'Escape') { e.preventDefault(); setSeletorRapido(null); return; }
+                      if (seletorRapido && e.key === 'Enter' && visiveisRapidas[0]) { e.preventDefault(); escolherRapida(visiveisRapidas[0]); return; }
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        void enviar(e);
+                      }
+                    }}
+                    rows={2}
+                    disabled={janelaFechada || ocupado}
+                    placeholder={janelaFechada ? 'Janela fechada — texto livre indisponível' : 'Escreva sua resposta…  Digite / para mensagens rápidas'}
+                    className="block max-h-40 min-h-[52px] w-full resize-none rounded-t-xl bg-transparent px-3.5 pb-1 pt-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed"
                   />
-                </label>
-                <Button type="submit" disabled={ocupado || janelaFechada || !texto.trim()}>
-                  Enviar
-                </Button>
+                  <div className="flex flex-wrap items-center gap-1 px-2 pb-2 pt-1">
+                    <button
+                      type="button"
+                      className={BOTAO_FERRAMENTA}
+                      disabled={janelaFechada || ocupado || respostasRapidas.length === 0}
+                      title="Inserir mensagem rápida"
+                      onClick={() => {
+                        const campo = textareaResposta.current;
+                        const pos = campo?.selectionStart ?? texto.length;
+                        const fim = campo?.selectionEnd ?? pos;
+                        setSeletorRapido({ inicio: pos, fim, busca: '' });
+                        campo?.focus();
+                      }}
+                    >
+                      <IconeRaio tamanho={15} />
+                      Rápidas
+                      <kbd className="rounded border border-slate-300 px-1 font-mono text-[11px] text-slate-500">/</kbd>
+                    </button>
+                    <label title="Anexar arquivo" className={`${BOTAO_FERRAMENTA} ${ocupado || janelaFechada ? 'pointer-events-none opacity-50' : ''}`}>
+                      <IconeClipe tamanho={15} />
+                      Anexar
+                      <input
+                        type="file"
+                        className="hidden"
+                        disabled={ocupado || janelaFechada}
+                        onChange={(e) => {
+                          const arquivo = e.target.files?.[0];
+                          e.target.value = '';
+                          if (arquivo) void anexar(arquivo);
+                        }}
+                      />
+                    </label>
+                    <span className="ml-auto hidden pr-1 text-xs text-slate-500 md:inline">Enter envia · Shift+Enter quebra linha</span>
+                    <button
+                      type="submit"
+                      disabled={ocupado || janelaFechada || !texto.trim()}
+                      className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--brand-primary)] px-4 text-[13px] font-semibold texto-sobre-cor-fixa transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50 md:ml-0"
+                    >
+                      Enviar
+                      <IconeEnviar tamanho={14} />
+                    </button>
+                  </div>
+                </div>
               </form>
               </>
             ) : (
@@ -711,40 +803,56 @@ export function PainelChat({
                     setOcupado(false);
                   }
                 }}
-                className="flex items-end gap-2"
               >
-                <textarea
-                  value={textoPrivado}
-                  onChange={(e) => setTextoPrivado(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      (e.target as HTMLTextAreaElement).form?.requestSubmit();
-                    }
-                  }}
-                  rows={2}
-                  placeholder="Escreva uma nota interna... só a equipe vê (Enter envia, Shift+Enter quebra linha)"
-                  className="max-h-32 min-h-[44px] flex-1 resize-y rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm outline-none focus:border-amber-500"
-                />
-                <label
-                  title="Anexar arquivo (nota interna)"
-                  className="flex h-[44px] cursor-pointer items-center rounded-lg border border-amber-300 px-3 text-sm text-amber-700 hover:bg-amber-50"
-                >
-                  Anexar
-                  <input
-                    type="file"
-                    className="hidden"
-                    disabled={ocupado}
-                    onChange={(e) => {
-                      const arquivo = e.target.files?.[0];
-                      e.target.value = '';
-                      if (arquivo) void anexar(arquivo, true);
+                <div className="relative rounded-xl border border-amber-200 bg-amber-50 transition focus-within:border-amber-500">
+                  <label htmlFor={`nota-${conversa.id}`} className="sr-only">Nota interna para a equipe</label>
+                  <textarea
+                    id={`nota-${conversa.id}`}
+                    value={textoPrivado}
+                    onChange={(e) => setTextoPrivado(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        (e.target as HTMLTextAreaElement).form?.requestSubmit();
+                      }
                     }}
+                    rows={2}
+                    placeholder="Escreva uma nota interna... só a equipe vê (Enter envia, Shift+Enter quebra linha)"
+                    className="block max-h-40 min-h-[52px] w-full resize-none rounded-t-xl bg-transparent px-3.5 pb-1 pt-3 text-sm text-slate-800 outline-none placeholder:text-slate-500"
                   />
-                </label>
-                <Button type="submit" disabled={ocupado || !textoPrivado.trim()}>
-                  Enviar
-                </Button>
+                  <div className="flex flex-wrap items-center gap-1 px-2 pb-2 pt-1">
+                    <span className="inline-flex items-center gap-1.5 px-1.5 text-xs text-amber-700">
+                      <IconeCadeado tamanho={13} />
+                      O cliente não vê esta nota
+                    </span>
+                    <label
+                      title="Anexar arquivo (nota interna)"
+                      className={`inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium text-amber-700 hover:bg-amber-200/40 ${ocupado ? 'pointer-events-none opacity-50' : ''}`}
+                    >
+                      <IconeClipe tamanho={15} />
+                      Anexar
+                      <input
+                        type="file"
+                        className="hidden"
+                        disabled={ocupado}
+                        onChange={(e) => {
+                          const arquivo = e.target.files?.[0];
+                          e.target.value = '';
+                          if (arquivo) void anexar(arquivo, true);
+                        }}
+                      />
+                    </label>
+                    {/* Cor fixa nos dois temas: o ambar da escala vira tom claro no escuro e apagaria o texto branco. */}
+                    <button
+                      type="submit"
+                      disabled={ocupado || !textoPrivado.trim()}
+                      className="ml-auto inline-flex h-9 items-center rounded-lg px-4 text-[13px] font-semibold texto-sobre-cor-fixa transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                      style={{ backgroundColor: '#b54708' }}
+                    >
+                      Salvar nota
+                    </button>
+                  </div>
+                </div>
               </form>
             )}
           </>

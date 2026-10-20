@@ -2,6 +2,7 @@ import type { ComponentType } from 'react';
 import type { Perfil } from '../../lib/types';
 import {
   IconAtendimento,
+  IconAuditoria,
   IconCampanhas,
   IconChamadoTi,
   IconConfiguracoes,
@@ -18,6 +19,8 @@ export type NavItem = {
   rota: string;
   label: string;
   icone: ComponentType<{ className?: string }>;
+  /** Microanimacao do icone ao passar o mouse (ver `.icone-menu` em index.css). */
+  animacao?: AnimacaoIcone;
   fase: number;
   /**
    * Rotas de registro que pertencem a este modulo — `/contatos/:id` e do CRM.
@@ -33,6 +36,8 @@ export type NavItem = {
    */
   subrotas?: SubRota[];
 };
+
+export type AnimacaoIcone = 'pulo' | 'balancar' | 'girar' | 'inclinar' | 'deslizar' | 'pulsar';
 
 export type SubRota = {
   rota: string;
@@ -83,9 +88,9 @@ export function subrotaDaRota(pathname: string): { item: NavItem; sub: SubRota }
 
 /** Menu lateral fixo — ordem definida no SCOPE.md (Fase 0). */
 export const NAV: NavItem[] = [
-  { rota: '/dashboards', label: 'Dashboards', icone: IconDashboards, fase: 3 },
-  { rota: '/atendimento', label: 'Atendimento', icone: IconAtendimento, fase: 1 },
-  { rota: '/telefonia', label: 'Telefonia', icone: IconTelefonia, fase: 1 },
+  { rota: '/dashboards', label: 'Dashboards', icone: IconDashboards, animacao: 'pulo', fase: 3 },
+  { rota: '/atendimento', label: 'Atendimento', icone: IconAtendimento, animacao: 'balancar', fase: 1 },
+  { rota: '/telefonia', label: 'Telefonia', icone: IconTelefonia, animacao: 'balancar', fase: 1 },
   // Esteira de Credenciamento logo depois do Atendimento: e a ordem de trabalho
   // da operacao TIM/Starlink (SUGESTOES.docx). So aparece para a organizacao
   // que tem funil ESTEIRA — ver o filtro em Sidebar.tsx.
@@ -93,19 +98,21 @@ export const NAV: NavItem[] = [
     rota: '/esteira',
     label: 'Esteira',
     icone: IconEsteira,
+    animacao: 'deslizar',
     fase: 5,
   },
-  { rota: '/monitoramento', label: 'Monitoramento', icone: IconMonitoramento, fase: 3 },
-  { rota: '/auditoria', label: 'Auditoria', icone: IconMonitoramento, fase: 3 },
-  { rota: '/gestao', label: 'Área da Gestão', icone: IconGestao, fase: 3 },
+  { rota: '/monitoramento', label: 'Monitoramento', icone: IconMonitoramento, animacao: 'pulsar', fase: 3 },
+  { rota: '/auditoria', label: 'Auditoria', icone: IconAuditoria, animacao: 'pulo', fase: 3 },
+  { rota: '/gestao', label: 'Área da Gestão', icone: IconGestao, animacao: 'pulsar', fase: 3 },
   // GESTOR e COMERCIAL entram aqui pelo mesmo motivo que entravam na aba Leads
   // do CRM antes dela mudar de casa: leitura/trabalho do proprio funil.
-  { rota: '/campanhas', label: 'Campanhas', icone: IconCampanhas, fase: 4 },
-  { rota: '/relatorios', label: 'Desempenho Operacional', icone: IconRelatorios, fase: 3 },
+  { rota: '/campanhas', label: 'Campanhas', icone: IconCampanhas, animacao: 'inclinar', fase: 4 },
+  { rota: '/relatorios', label: 'Desempenho Operacional', icone: IconRelatorios, animacao: 'deslizar', fase: 3 },
   {
     rota: '/crm',
     label: 'CRM',
     icone: IconCrm,
+    animacao: 'pulo',
     fase: 1,
     // Cada registro principal com endereco proprio, para poder ser mandado por
     // mensagem e sobreviver a um F5. A tela e a mesma: `/crm` continua sendo a
@@ -120,13 +127,14 @@ export const NAV: NavItem[] = [
       { rota: '/oportunidades/:id', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'] },
     ],
   },
-  { rota: '/configuracoes', label: 'Configurações', icone: IconConfiguracoes, fase: 0 },
+  { rota: '/configuracoes', label: 'Configurações', icone: IconConfiguracoes, animacao: 'girar', fase: 0 },
   // Visivel a todo perfil, de proposito: problema de sistema afeta
   // qualquer pessoa que usa a plataforma, nao so quem administra.
   {
     rota: '/chamado-ti',
     label: 'Chamado de TI',
     icone: IconChamadoTi,
+    animacao: 'girar',
     fase: 6,
   },
 ];

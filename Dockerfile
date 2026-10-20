@@ -8,7 +8,7 @@
 # Dockerfiles de apps/api e apps/web.
 
 # ---- build ----
-FROM node:22-alpine AS build
+FROM node:22-bookworm-slim AS build
 WORKDIR /app
 
 # Manifests primeiro: enquanto nao mudam, o npm ci vem do cache de camada.
@@ -26,7 +26,7 @@ RUN npm run db:generate --workspace @plataforma/api \
  && npm run build
 
 # ---- runtime ----
-FROM node:22-alpine
+FROM node:22-bookworm-slim
 WORKDIR /app
 ENV NODE_ENV=production
 
@@ -34,15 +34,23 @@ ENV NODE_ENV=production
 # roda migrate deploy, e sem ele o npx tentaria baixar da internet a cada start.
 COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/
-RUN npm ci --omit=dev --workspace @plataforma/api --include-workspace-root
+COPY apps/api/transcriber/requirements.txt apps/api/transcriber/
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends python3 python3-venv libgomp1 ca-certificates \
+ && python3 -m venv /opt/whisper-venv \
+ && /opt/whisper-venv/bin/pip install --no-cache-dir -r apps/api/transcriber/requirements.txt \
+ && rm -rf /var/lib/apt/lists/* \
+ && npm ci --omit=dev --workspace @plataforma/api --include-workspace-root
 
 COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=build /app/apps/api/dist ./apps/api/dist
 COPY --from=build /app/apps/web/dist ./apps/web/dist
 COPY apps/api/prisma ./apps/api/prisma
+COPY apps/api/transcriber ./apps/api/transcriber
+COPY apps/api/entrypoint.sh ./apps/api/entrypoint.sh
 
 # Nao roda como root: container comprometido nao vira dono do volume de anexos.
-RUN mkdir -p /app/apps/api/storage && chown -R node:node /app/apps/api/storage
+RUN mkdir -p /app/apps/api/storage/whisper-models && chown -R node:node /app/apps/api/storage
 USER node
 
 WORKDIR /app/apps/api
@@ -50,4 +58,4 @@ EXPOSE 3333
 
 # Migrations no arranque: deploy sem migrar sobe codigo novo em banco velho, que
 # e a forma mais rapida de derrubar a producao.
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/src/main.js"]
+CMD ["sh", "entrypoint.sh"]

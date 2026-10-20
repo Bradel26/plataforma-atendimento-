@@ -10,7 +10,7 @@ import { prismaSemIsolamento } from '../../lib/prisma';
 import { ORGANIZACAO_INICIAL, comOrganizacao, semOrganizacao } from '../../lib/tenant';
 import { limiteBytes } from '../../lib/storage';
 import { getBranding } from '../branding/branding.service';
-import { controlarChamadaMeta, guardarGravacaoDaChamada, obterOfertaDaChamada, originarChamadaMeta } from '../channels/meta-calling.service';
+import { consultarPermissaoDeChamadaMeta, controlarChamadaMeta, guardarGravacaoDaChamada, obterOfertaDaChamada, originarChamadaMeta, solicitarPermissaoDeChamadaMeta } from '../channels/meta-calling.service';
 import { acaoViraTarefa, analiseDaChamada, descartarAcao } from './analise.service';
 import {
   aplicarEvento,
@@ -103,6 +103,24 @@ vozRoutes.post(
   validateBody(z.object({ destino: z.string().trim().min(8, 'Informe o número com DDD').max(20) })),
   asyncHandler(async (req, res) => {
     res.status(201).json({ chamada: await originarChamada(req.user!.sub, req.body.destino) });
+  }),
+);
+
+vozRoutes.post(
+  '/chamadas/whatsapp/permissao',
+  requireAuth,
+  validateBody(z.object({ destino: z.string().trim().min(10).max(20) })),
+  asyncHandler(async (req, res) => {
+    res.json(await solicitarPermissaoDeChamadaMeta({ usuarioId: req.user!.sub, destino: req.body.destino }));
+  }),
+);
+
+vozRoutes.get(
+  '/chamadas/whatsapp/permissao',
+  requireAuth,
+  validateQuery(z.object({ destino: z.string().trim().min(10).max(20) })),
+  asyncHandler(async (req, res) => {
+    res.json(await consultarPermissaoDeChamadaMeta({ usuarioId: req.user!.sub, destino: String(req.query.destino) }));
   }),
 );
 

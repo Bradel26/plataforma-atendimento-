@@ -61,6 +61,7 @@ type Props = {
   aoAbrir: (id: string) => void;
   /** Voltar para a lista sem registro aberto. */
   aoFechar: () => void;
+  aoVoltar: () => void;
 };
 
 /**
@@ -69,7 +70,7 @@ type Props = {
  * A lista carrega so o resumo e o painel busca a ficha ao abrir. Trazer tudo de
  * uma vez seria oito consultas por contato listado para mostrar uma.
  */
-export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
+export function ContatosTab({ selecionadoId, aoAbrir, aoFechar, aoVoltar }: Props) {
   const [contatos, setContatos] = useState<Contato[]>([]);
   const [totalContatos, setTotalContatos] = useState<number | null>(null);
   const [proximoCursor, setProximoCursor] = useState<string | null>(null);
@@ -128,7 +129,6 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   const { ref: containerRef, faixa } = useFaixaDeLargura<HTMLDivElement>();
   const ladoALado = faixa === 'desktop' || faixa === 'notebook';
   const buscaRef = useRef<HTMLInputElement>(null);
-  const voltarRef = useRef<HTMLButtonElement>(null);
   const montado = useRef(false);
 
   // Foco previsivel ao alternar entre lista e ficha em modo de foco unico: ao
@@ -142,8 +142,7 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
       return;
     }
     if (ladoALado) return;
-    if (selecionadoId) voltarRef.current?.focus();
-    else buscaRef.current?.focus();
+    if (!selecionadoId) buscaRef.current?.focus();
   }, [ladoALado, selecionadoId]);
 
   const carregar = useCallback(async () => {
@@ -639,7 +638,7 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   );
 
   const painelFicha = (
-    <div className="space-y-5">
+    <div className="flex h-full min-h-0 flex-col gap-3 overflow-hidden">
       {duplicado && (
         /* Fechavel: o aviso fica acima da ficha e nao tem por que sobreviver ao
            proximo clique — quem conferiu quer a tela de volta. */
@@ -657,19 +656,6 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
           </button>
         </div>
       )}
-      {/* Com o registro na URL, o caminho de volta precisa existir na tela: sem
-          isto, sair de `/contatos/abc` para a lista limpa exigiria clicar no
-          menu, que recarrega o modulo inteiro. */}
-      {selecionado && (
-        <button
-          ref={voltarRef}
-          type="button"
-          onClick={aoFechar}
-          className="anel-de-foco rounded text-xs text-slate-500 underline-offset-2 transition hover:text-slate-700 hover:underline"
-        >
-          &larr; Todos os contatos
-        </button>
-      )}
       {/* `key` no id: trocar de contato remonta a ficha e zera o cursor da linha
           do tempo. Sem isso, a primeira pagina do contato novo viria depois dos
           eventos do anterior. */}
@@ -677,6 +663,7 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
         <FichaContato
           key={selecionado}
           contatoId={selecionado}
+          aoVoltar={aoVoltar}
           aoMudarEtiquetas={() => {
             setVersaoTags((v) => v + 1);
             void carregar();
@@ -693,21 +680,13 @@ export function ContatosTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
   );
 
   return (
-    <div ref={containerRef}>
+    <div ref={containerRef} className={selecionado ? 'h-[calc(100dvh-8rem)] min-h-[30rem] overflow-hidden' : undefined}>
       {!selecionado && <div className="mb-5"><SolicitacoesExclusaoContatos /></div>}
-      {ladoALado ? (
+      {selecionado ? painelFicha : ladoALado ? (
         <div className="grid gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
           {painelLista}
-          <div className="space-y-5">
-            {painelFunil}
-            {painelFicha}
-          </div>
+          <div className="space-y-5">{painelFunil}</div>
         </div>
-      ) : selecionado ? (
-        // Uma coisa por vez em espaco real estreito: a lista some enquanto a
-        // ficha esta aberta, em vez de empilhar as duas e obrigar a rolar por
-        // uma pagina inteira para chegar no que se abriu.
-        painelFicha
       ) : (
         <div className="space-y-5">
           {painelLista}

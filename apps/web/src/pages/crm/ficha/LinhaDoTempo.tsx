@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alerta, Badge, Button, EmptyState } from '../../../components/ui';
+import { Alerta, Badge, EmptyState } from '../../../components/ui';
 import { ApiError, api, getAccessToken } from '../../../lib/api';
 import { conectar, EVENTOS } from '../../../lib/realtime';
 import {
   LABEL_TIPO_EVENTO,
-  TIPOS_EVENTO,
   moeda,
   type EventoFicha,
   type Timeline,
@@ -62,18 +61,34 @@ type Props = {
   raizId: string;
   /** Recarrega quando o pai registra algo novo. */
   recarregar?: number;
+  /** Eventos temporarios de demonstração, somente para ficha ficticia em dev. */
+  eventosDemonstracao?: boolean;
 };
 
-export function LinhaDoTempo({ base, raizId, recarregar = 0 }: Props) {
+export function LinhaDoTempo({ base, raizId, recarregar = 0, eventosDemonstracao = false }: Props) {
   const [eventos, setEventos] = useState<EventoFicha[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [tipos, setTipos] = useState<TipoEvento[]>([]);
+  const [busca, setBusca] = useState('');
+  const [periodo, setPeriodo] = useState<'TODOS' | 'HOJE' | '7_DIAS' | '30_DIAS'>('TODOS');
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
   // Lista vazia = sem filtro (todos os tipos). Guardar os oito selecionados
   // daria o mesmo resultado com uma URL tres vezes maior.
   const filtrando = tipos.length > 0;
+  const termo = busca.trim().toLocaleLowerCase('pt-BR');
+  const agoraDemo = Date.now();
+  const eventosDemo: EventoFicha[] = eventosDemonstracao ? [
+    { tipo: 'ATIVIDADE', id: 'demo-nota-1', ocorridoEm: new Date(agoraDemo - 26 * 60 * 60_000).toISOString(), titulo: 'Primeiro contato', detalhe: 'Registro fictício para testar o resumo do histórico. O cliente demonstrou interesse em conhecer os serviços; ficou combinado enviar informações e retornar em dois dias.', canal: null, situacao: 'Nota manual', valor: null, referencia: null, escopo: 'CONTATO', usuario: 'Administrador' },
+  ] : [];
+  const eventosBase = [...eventosDemo, ...eventos].sort((a, b) => new Date(b.ocorridoEm).getTime() - new Date(a.ocorridoEm).getTime());
+  const limitePeriodo = periodo === 'HOJE' ? 24 * 60 * 60_000 : periodo === '7_DIAS' ? 7 * 24 * 60 * 60_000 : periodo === '30_DIAS' ? 30 * 24 * 60 * 60_000 : null;
+  const eventosVisiveis = eventosBase.filter((evento) =>
+    (!limitePeriodo || agoraDemo - new Date(evento.ocorridoEm).getTime() <= limitePeriodo) &&
+    (!termo || [evento.titulo, evento.detalhe, evento.usuario, evento.canal, evento.situacao, LABEL_TIPO_EVENTO[evento.tipo]]
+      .some((valor) => valor?.toLocaleLowerCase('pt-BR').includes(termo))),
+  ).filter((evento) => tipos.length === 0 || tipos.includes(evento.tipo) || (tipos.includes('ETAPA') && ['OPORTUNIDADE', 'LEAD', 'PESQUISA', 'CREDENCIAMENTO'].includes(evento.tipo)));
 
   const buscar = useCallback(
     async (de: string | null) => {
@@ -115,11 +130,30 @@ export function LinhaDoTempo({ base, raizId, recarregar = 0 }: Props) {
     };
   }, [buscar, raizId]);
 
-  const alternar = (tipo: TipoEvento) =>
-    setTipos((atuais) => (atuais.includes(tipo) ? atuais.filter((t) => t !== tipo) : [...atuais, tipo]));
+  const filtros = [
+    { label: 'Conversas', tipos: ['CONVERSA'] as TipoEvento[] },
+    { label: 'Ligações', tipos: ['CHAMADA'] as TipoEvento[] },
+    { label: 'Atividades', tipos: ['ATIVIDADE'] as TipoEvento[] },
+    { label: 'Protocolos', tipos: ['PROTOCOLO'] as TipoEvento[] },
+    { label: 'Etapas e leads', tipos: ['OPORTUNIDADE', 'ETAPA', 'LEAD', 'PESQUISA', 'CREDENCIAMENTO'] as TipoEvento[] },
+  ];
+  const alternar = (grupo: TipoEvento[]) => setTipos((atuais) => {
+    const todosAtivos = grupo.every((tipo) => atuais.includes(tipo));
+    return todosAtivos ? atuais.filter((tipo) => !grupo.includes(tipo)) : [...new Set([...atuais, ...grupo])];
+  });
 
   return (
     <div>
+      <div className="mb-3 flex flex-wrap gap-2">
+        <label className="min-w-[220px] flex-1">
+          <span className="sr-only">Buscar na linha do tempo</span>
+          <input type="search" value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="⌕  Buscar em mensagens, notas e transcrições" className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800 placeholder:text-slate-500 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100" />
+        </label>
+        <label className="sr-only" htmlFor="periodo-linha-do-tempo">Período</label>
+        <select id="periodo-linha-do-tempo" value={periodo} onChange={(e) => setPeriodo(e.target.value as typeof periodo)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 focus:border-blue-400 focus:outline-none">
+          <option value="TODOS">Todo o período</option><option value="HOJE">Hoje</option><option value="7_DIAS">Últimos 7 dias</option><option value="30_DIAS">Últimos 30 dias</option>
+        </select>
+      </div>
       <div className="flex flex-wrap items-center gap-1.5">
         <button
           type="button"
@@ -127,26 +161,25 @@ export function LinhaDoTempo({ base, raizId, recarregar = 0 }: Props) {
           className={`rounded-full border px-2.5 py-1 text-xs transition ${
             filtrando
               ? 'border-slate-300 text-slate-600 hover:bg-slate-50'
-              : 'border-[var(--brand-primary)] bg-[var(--brand-primary)]/10 font-medium text-[var(--brand-primary)]'
+              : 'border-blue-600 bg-blue-600 font-medium text-white'
           }`}
         >
           Tudo
         </button>
-        {TIPOS_EVENTO.map((tipo) => {
-          const ativo = tipos.includes(tipo);
+        {filtros.map((grupo) => {
+          const ativo = grupo.tipos.every((tipo) => tipos.includes(tipo));
           return (
             <button
-              key={tipo}
+              key={grupo.label}
               type="button"
-              onClick={() => alternar(tipo)}
+              onClick={() => alternar(grupo.tipos)}
               className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition ${
                 ativo
-                  ? 'border-[var(--brand-primary)] bg-[var(--brand-primary)]/10 font-medium text-[var(--brand-primary)]'
-                  : 'border-slate-300 text-slate-600 hover:bg-slate-50'
+                  ? 'border-blue-600 bg-blue-600 font-medium text-white'
+                  : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
               }`}
             >
-              <span className={`h-1.5 w-1.5 rounded-full ${COR[tipo]}`} aria-hidden />
-              {LABEL_TIPO_EVENTO[tipo]}
+              {grupo.label}
             </button>
           );
         })}
@@ -159,33 +192,35 @@ export function LinhaDoTempo({ base, raizId, recarregar = 0 }: Props) {
       )}
 
       <div className="mt-4">
-        {eventos.length === 0 && !carregando ? (
+        {eventosVisiveis.length === 0 && !carregando ? (
           <EmptyState
-            titulo={filtrando ? 'Nada neste filtro' : 'Sem histórico'}
+            titulo={termo ? 'Nenhum resultado para esta busca' : filtrando ? 'Nada neste filtro' : 'Sem histórico'}
             descricao={
-              filtrando
+              termo
+                ? 'Experimente outros termos ou carregue mais eventos para ampliar a busca.'
+                : filtrando
                 ? 'Nenhum evento dos tipos selecionados. Tire um filtro para ver o resto.'
                 : 'Assim que houver conversa, ligação, proposta ou atividade, aparece aqui.'
             }
           />
         ) : (
           <ol className="relative">
-            {eventos.map((evento, indice) => {
-              const anterior = eventos[indice - 1];
+            {eventosVisiveis.map((evento, indice) => {
+              const anterior = eventosVisiveis[indice - 1];
               const novoDia = !anterior || chave(anterior.ocorridoEm) !== chave(evento.ocorridoEm);
+              const notaDemo = evento.id === 'demo-nota-1';
+              const dataEvento = new Date(evento.ocorridoEm);
+              const dataTitulo = dataEvento.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
 
               return (
                 <li key={`${evento.tipo}-${evento.id}`}>
                   {novoDia && (
-                    <p className="pb-2 pt-4 text-xs font-semibold uppercase tracking-wide text-slate-500 first:pt-0">
-                      {diaLegivel(evento.ocorridoEm)}
-                    </p>
+                    <p className="pb-2 pt-4 text-[10px] font-semibold uppercase tracking-wide text-slate-500 first:pt-0">{diaLegivel(evento.ocorridoEm)} · {dataTitulo} <span className="ml-4 font-normal normal-case">{eventosVisiveis.filter((item) => chave(item.ocorridoEm) === chave(evento.ocorridoEm)).length} registro(s)</span></p>
                   )}
-                  <div className="flex gap-3">
+                  <div className="mb-2 flex gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
                     {/* A linha vertical liga os pontos e some no ultimo item. */}
                     <div className="flex flex-col items-center">
-                      <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${COR[evento.tipo]}`} aria-hidden />
-                      {indice < eventos.length - 1 && <span className="w-px flex-1 bg-slate-200" aria-hidden />}
+                      <span className={`grid size-8 shrink-0 place-items-center rounded-lg text-xs font-bold ${notaDemo ? 'bg-amber-50 text-amber-700' : `${COR[evento.tipo]} text-white`}`} aria-hidden>{notaDemo ? 'N' : LABEL_TIPO_EVENTO[evento.tipo].slice(0, 1)}</span>
                     </div>
 
                     <div className="min-w-0 flex-1 pb-4">
@@ -200,7 +235,7 @@ export function LinhaDoTempo({ base, raizId, recarregar = 0 }: Props) {
                         >
                           {hora(evento.ocorridoEm)}
                         </time>
-                        <span className="text-xs text-slate-500">{LABEL_TIPO_EVENTO[evento.tipo]}</span>
+                        <span className="text-xs text-slate-500">{evento.situacao ?? LABEL_TIPO_EVENTO[evento.tipo]}</span>
                         {/* Marca so o que vem da empresa: na ficha do contato, o
                             resto e dele, e um selo em cada linha seria ruido. */}
                         {evento.escopo === 'CONTA' && <Badge>Da empresa</Badge>}
@@ -211,9 +246,13 @@ export function LinhaDoTempo({ base, raizId, recarregar = 0 }: Props) {
 
                       <p className="mt-0.5 text-sm font-medium text-slate-800">{evento.titulo}</p>
                       {evento.detalhe && (
-                        <p className="mt-0.5 line-clamp-3 text-sm text-slate-600">{evento.detalhe}</p>
+                        <p className="mt-2 line-clamp-3 text-xs leading-relaxed text-slate-700">{evento.detalhe}</p>
                       )}
-                      {evento.usuario && <p className="mt-0.5 text-xs text-slate-500">{evento.usuario}</p>}
+                      {evento.tipo === 'CHAMADA' && evento.gravacaoUrl && (
+                        <audio className="mt-3 h-9 w-full max-w-md" controls preload="none" src={evento.gravacaoUrl} aria-label={`Gravação da chamada: ${evento.titulo}`} />
+                      )}
+                      {notaDemo && <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-2 text-[10px] font-medium text-amber-800">● &nbsp;Retorno citado na nota; ainda sem tarefa agendada.</p>}
+                      <div className="mt-3 flex justify-between gap-2 text-[10px]"><span className="text-slate-500">Registro manual · histórico original preservado</span><button type="button" className="font-semibold text-blue-600 hover:underline">Ver detalhes</button></div>
                     </div>
                   </div>
                 </li>
@@ -222,14 +261,11 @@ export function LinhaDoTempo({ base, raizId, recarregar = 0 }: Props) {
           </ol>
         )}
 
-        {cursor && (
-          <div className="pt-2">
-            <Button variante="neutro" disabled={carregando} onClick={() => void buscar(cursor)}>
-              {carregando ? 'Carregando...' : 'Carregar mais'}
-            </Button>
-          </div>
-        )}
-        {carregando && eventos.length === 0 && <p className="text-sm text-slate-500">Carregando histórico...</p>}
+        {eventosDemonstracao && <div className="mt-2 grid gap-2 sm:grid-cols-2"><div className="rounded-xl border border-slate-200 bg-slate-50 p-3"><span className="mb-1 block size-2 rounded-full bg-blue-600"/><p className="text-[11px] font-semibold text-slate-900">Conversas</p><p className="mt-1 text-[10px] text-slate-500">Nenhuma conversa registrada para este contato.</p></div><div className="rounded-xl border border-slate-200 bg-slate-50 p-3"><span className="mb-1 block size-2 rounded-full bg-violet-600"/><p className="text-[11px] font-semibold text-slate-900">Ligações</p><p className="mt-1 text-[10px] text-slate-500">Nenhuma ligação registrada para este contato.</p></div></div>}
+
+        <div className="mt-2 flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-[10px] text-slate-500"><span>Mostrando todos os registros encontrados.</span>{cursor && <button type="button" onClick={() => void buscar(cursor)} disabled={carregando} className="font-semibold text-blue-600 disabled:opacity-50">Carregar anteriores</button>}</div>
+
+        {carregando && eventos.length === 0 && !eventosDemonstracao && <p className="text-sm text-slate-500">Carregando histórico...</p>}
       </div>
     </div>
   );

@@ -55,6 +55,7 @@ import { permissoesModuloRoutes } from './modules/permissoes/permissoesModulo.ro
 import { ticketsRoutes } from './modules/tickets/tickets.routes';
 import { webchatRoutes } from './modules/webchat/webchat.routes';
 import { fluxosRoutes } from './modules/fluxos/fluxos.routes';
+import { assistenteCrmRoutes } from './modules/crm/assistente.routes';
 
 export function createApp() {
   const app = express();
@@ -165,6 +166,7 @@ export function createApp() {
   app.use('/api/visoes-salvas', visoesRoutes);
   app.use('/api/campos-customizados', camposCustomizadosRoutes);
   app.use('/api/busca', buscaRoutes);
+  app.use('/api/assistente-crm', assistenteCrmRoutes);
   // Medidor de consumo (item 6.8). Nome diferente do motor de IA em
   // `/api/bots/ia`, que e a ponte para o plugin externo.
   app.use('/api/ia', consumoIaRoutes);

@@ -93,19 +93,27 @@ export function Sidebar({ aberta, aoFechar }: { aberta: boolean; aoFechar: () =>
         to={item.rota}
         aria-current={estaAtivo ? 'page' : undefined}
         aria-label={colapsada ? item.label : undefined}
-        className={`anel-de-foco relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${
-          estaAtivo ? 'font-semibold texto-sobre-cor-fixa' : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
-        } ${colapsada ? 'md:justify-center' : ''}`}
+        className={`item-menu group anel-de-foco relative flex items-center gap-3 rounded-xl px-2 py-1.5 text-sm transition ${
+          estaAtivo ? 'font-semibold texto-sobre-cor-fixa' : 'text-slate-400 hover:bg-[rgb(255_255_255/0.06)] hover:text-[#F1F5F9]'
+        } ${colapsada ? 'md:justify-center md:px-0' : ''}`}
         style={
           estaAtivo
-            ? {
-                backgroundColor: 'color-mix(in srgb, var(--brand-primary) 30%, transparent)',
-                boxShadow: 'inset 3px 0 0 var(--brand-primary)',
-              }
+            ? { backgroundColor: 'color-mix(in srgb, var(--brand-primary) 22%, transparent)' }
             : undefined
         }
       >
-        <Icone />
+        {/* Pastilha do icone: cheia na cor da marca quando ativo, acende no hover.
+            Cores fixas (rgb/hex), nao white/slate: o menu e escuro nos dois temas,
+            e essas escalas invertem no tema escuro — o item sumia no hover. */}
+        <span
+          data-anim={item.animacao}
+          className={`icone-menu flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+            estaAtivo ? 'texto-sobre-cor-fixa shadow-[0_4px_12px_-4px_var(--brand-primary)]' : 'bg-[rgb(255_255_255/0.05)] group-hover:bg-[rgb(255_255_255/0.12)]'
+          }`}
+          style={estaAtivo ? { backgroundColor: 'var(--brand-primary)' } : undefined}
+        >
+          <Icone className="h-[18px] w-[18px]" />
+        </span>
         {/*
           So esconde a partir de `md` — no drawer mobile o rotulo sempre
           aparece, colapso e conceito exclusivo do modo em fluxo. O link
@@ -172,9 +180,12 @@ export function Sidebar({ aberta, aoFechar }: { aberta: boolean; aoFechar: () =>
           onClick={alternarColapso}
           aria-expanded={!colapsada}
           aria-label={colapsada ? 'Expandir menu' : 'Recolher menu'}
-          className="anel-de-foco hidden items-center justify-center border-t border-white/10 py-3 text-slate-400 hover:bg-white/5 hover:text-slate-200 md:flex"
+          className="anel-de-foco hidden items-center justify-center gap-2 border-t border-white/10 py-3 text-[13px] text-slate-400 hover:bg-white/5 hover:text-slate-200 md:flex"
         >
-          {colapsada ? '»' : '« Recolher'}
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={`transition ${colapsada ? 'rotate-180' : ''}`}>
+            <path d="m11 17-5-5 5-5M18 17l-5-5 5-5" />
+          </svg>
+          {!colapsada && 'Recolher'}
         </button>
       </aside>
     </>

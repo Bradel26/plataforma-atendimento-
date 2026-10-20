@@ -5,6 +5,7 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
+    host: '0.0.0.0',
     port: 5173,
     // Proxy mantem front e API na mesma origem em dev — o cookie de refresh
     // (httpOnly, sameSite=lax) funciona sem configuracao extra.

@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { notFound } from '../../lib/errors';
 import { prisma } from '../../lib/prisma';
+import { urlAssinada } from '../../lib/storage';
 import { filtroDe, politicaContas, politicaContatos } from '../../lib/politicas';
 import { apenasVisivel } from '../../lib/visibilidade';
 import { codificarCursor, decodificarCursor } from '../../lib/paginacao';
@@ -58,6 +59,7 @@ type LinhaEvento = {
   /** CONTATO quando o evento e do proprio contato, CONTA quando vem da empresa. */
   escopo: 'CONTATO' | 'CONTA';
   usuario_nome: string | null;
+  gravacao_url: string | null;
 };
 
 export type Evento = {
@@ -72,6 +74,7 @@ export type Evento = {
   referencia: string | null;
   escopo: 'CONTATO' | 'CONTA';
   usuario: string | null;
+  gravacaoUrl: string | null;
 };
 
 const paraEvento = (l: LinhaEvento): Evento => ({
@@ -86,6 +89,7 @@ const paraEvento = (l: LinhaEvento): Evento => ({
   referencia: l.referencia,
   escopo: l.escopo,
   usuario: l.usuario_nome,
+  gravacaoUrl: l.gravacao_url ? urlAssinada(l.gravacao_url) : null,
 });
 
 type Raiz = { contatoId: string | null; contaId: string | null };
@@ -125,7 +129,7 @@ function fontes(raiz: Raiz) {
                  ORDER BY m.criado_em DESC LIMIT 1) AS detalhe,
                cv.canal::text AS canal, cv.status::text AS situacao,
                NULL::numeric AS valor, cv.id AS referencia,
-               'CONTATO' AS escopo, u.nome AS usuario_nome
+               'CONTATO' AS escopo, u.nome AS usuario_nome, NULL::text AS gravacao_url
           FROM conversas cv
           LEFT JOIN usuarios u ON u.id = cv.agente_id
          WHERE cv.contato_id = ${c}`,
@@ -144,7 +148,7 @@ function fontes(raiz: Raiz) {
                       THEN 'Transcrição: ' || ch.transcricao END) AS detalhe,
                'VOZ' AS canal, ch.status::text AS situacao,
                NULL::numeric AS valor, ch.id AS referencia,
-               'CONTATO' AS escopo, u.nome AS usuario_nome
+               'CONTATO' AS escopo, u.nome AS usuario_nome, ch.gravacao_url
           FROM chamadas ch
           LEFT JOIN usuarios u ON u.id = ch.agente_id
          WHERE ch.contato_id = ${c}`,
@@ -174,7 +178,7 @@ function fontes(raiz: Raiz) {
                     WHEN at.prazo < now() THEN 'ATRASADA'
                     ELSE 'PENDENTE' END AS situacao,
                NULL::numeric AS valor, at.id AS referencia,
-               ${escopo('at.contato_id')} AS escopo, COALESCE(uc.nome, u.nome) AS usuario_nome
+               ${escopo('at.contato_id')} AS escopo, COALESCE(uc.nome, u.nome) AS usuario_nome, NULL::text AS gravacao_url
           FROM atividades at
           LEFT JOIN usuarios u ON u.id = at.responsavel_id
           LEFT JOIN usuarios uc ON uc.id = at.concluido_por_id
@@ -189,7 +193,7 @@ function fontes(raiz: Raiz) {
                pr.descricao AS detalhe,
                pr.prioridade::text AS canal, pr.status::text AS situacao,
                NULL::numeric AS valor, pr.id AS referencia,
-               ${escopo('pr.contato_id')} AS escopo, u.nome AS usuario_nome
+               ${escopo('pr.contato_id')} AS escopo, u.nome AS usuario_nome, NULL::text AS gravacao_url
           FROM protocolos pr
           LEFT JOIN usuarios u ON u.id = pr.responsavel_id
          WHERE pr.contato_id = ${c} OR pr.conta_id = ${a}`,
@@ -201,7 +205,7 @@ function fontes(raiz: Raiz) {
                op.titulo, f.nome AS detalhe,
                NULL AS canal, op.status::text AS situacao,
                op.valor, op.id AS referencia,
-               'CONTA' AS escopo, u.nome AS usuario_nome
+               'CONTA' AS escopo, u.nome AS usuario_nome, NULL::text AS gravacao_url
           FROM oportunidades op
           JOIN funis f ON f.id = op.funil_id
           LEFT JOIN usuarios u ON u.id = op.responsavel_id
@@ -216,7 +220,7 @@ function fontes(raiz: Raiz) {
                CASE WHEN h.segundos_no_estagio IS NULL THEN NULL
                     ELSE (h.segundos_no_estagio / 86400)::text || 'd' END AS situacao,
                NULL::numeric AS valor, op.id AS referencia,
-               'CONTA' AS escopo, u.nome AS usuario_nome
+               'CONTA' AS escopo, u.nome AS usuario_nome, NULL::text AS gravacao_url
           FROM oportunidade_historico_estagio h
           JOIN oportunidades op ON op.id = h.oportunidade_id
           JOIN funil_estagios pa ON pa.id = h.para_estagio_id
@@ -231,7 +235,7 @@ function fontes(raiz: Raiz) {
                'Lead ' || ld.tipo::text AS titulo, ld.observacoes AS detalhe,
                ld.canal_origem::text AS canal, ld.fase::text AS situacao,
                ld.valor_estimado AS valor, ld.id AS referencia,
-               ${escopo('ld.contato_id')} AS escopo, u.nome AS usuario_nome
+               ${escopo('ld.contato_id')} AS escopo, u.nome AS usuario_nome, NULL::text AS gravacao_url
           FROM leads ld
           LEFT JOIN usuarios u ON u.id = ld.responsavel_id
          WHERE ld.contato_id = ${c} OR ld.conta_id = ${a}`,
@@ -243,7 +247,7 @@ function fontes(raiz: Raiz) {
                pe.tipo::text AS titulo, pe.comentario AS detalhe,
                cv.canal::text AS canal, pe.nota::text AS situacao,
                NULL::numeric AS valor, pe.conversa_id AS referencia,
-               'CONTATO' AS escopo, NULL AS usuario_nome
+               'CONTATO' AS escopo, NULL AS usuario_nome, NULL::text AS gravacao_url
           FROM pesquisas pe
           JOIN conversas cv ON cv.id = pe.conversa_id
          WHERE cv.contato_id = ${c} AND pe.respondido_em IS NOT NULL`,
@@ -260,7 +264,7 @@ function fontes(raiz: Raiz) {
                CASE WHEN h.segundos_no_estagio IS NULL THEN NULL
                     ELSE (h.segundos_no_estagio / 86400)::text || 'd' END AS situacao,
                NULL::numeric AS valor, cr.id AS referencia,
-               'CONTATO' AS escopo, u.nome AS usuario_nome
+               'CONTATO' AS escopo, u.nome AS usuario_nome, NULL::text AS gravacao_url
           FROM credenciamento_historico h
           JOIN credenciamentos cr ON cr.id = h.credenciamento_id
           JOIN funis f ON f.id = cr.funil_id

@@ -1,15 +1,98 @@
 import type { CallStatus } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
-import { badRequest, forbidden, notFound, serviceUnavailable } from '../../lib/errors';
+import { badRequest, conflict, forbidden, notFound, serviceUnavailable } from '../../lib/errors';
 import { decifrar } from '../../lib/crypto-box';
 import { env } from '../../env';
 import { limiteBytes, salvar, tipoAceito, urlAssinada } from '../../lib/storage';
 import { enfileirar } from '../../lib/fila';
 import { notificarChamada } from '../../realtime/hub';
+import { transcricaoDisponivel } from '../voice/transcription.config';
 import type { MetaWebhook } from './meta.types';
 
 type AcaoChamadaMeta = 'accept' | 'reject' | 'terminate';
 export const TIPO_TRANSCRICAO_CHAMADA_WHATSAPP = 'voz:transcricao-whatsapp';
+
+type PermissaoDeChamadaMeta = {
+  permission?: { status?: string; expiration_time?: number };
+  actions?: Array<{ action_name?: string; can_perform_action?: boolean }>;
+};
+
+function normalizarDestino(destino: string) {
+  const digitos = destino.replace(/\D/g, '');
+  if (digitos.length < 10 || digitos.length > 15) throw badRequest('Informe um telefone válido com DDD e código do país.');
+  return digitos;
+}
+
+async function linhaCloudDoUsuario(usuarioId: string) {
+  const linha = await prisma.channelConfig.findFirst({
+    where: { canal: 'WHATSAPP', donoId: usuarioId, ativo: true, whatsappCallingHabilitado: true },
+  });
+  const phoneNumberId = linha?.phoneNumberId;
+  const accessToken = linha?.accessToken;
+  if (!linha || !phoneNumberId || !accessToken) {
+    throw serviceUnavailable('Conecte seu número WhatsApp Cloud e habilite chamadas antes de ligar.');
+  }
+  return { ...linha, phoneNumberId, accessToken };
+}
+
+/** Consulta ao vivo se a pessoa autorizou a linha empresarial a ligar. */
+export async function consultarPermissaoDeChamadaMeta(input: { usuarioId: string; destino: string }) {
+  const destino = normalizarDestino(input.destino);
+  const linha = await linhaCloudDoUsuario(input.usuarioId);
+  const url = new URL(`https://graph.facebook.com/${env.META_GRAPH_API_VERSION}/${encodeURIComponent(linha.phoneNumberId!)}/call_permissions`);
+  url.searchParams.set('user_wa_id', destino);
+  const resposta = await fetch(url, {
+    headers: { Authorization: `Bearer ${decifrar(linha.accessToken!)}` },
+  });
+  const corpo = await resposta.json().catch(() => ({})) as PermissaoDeChamadaMeta & { error?: { message?: string } };
+  if (!resposta.ok) {
+    throw serviceUnavailable(`A Meta não conseguiu consultar a autorização de chamada${corpo.error?.message ? `: ${corpo.error.message}` : ` (HTTP ${resposta.status})`}.`);
+  }
+  const acaoPode = (nome: string) => corpo.actions?.find((a) => a.action_name === nome)?.can_perform_action === true;
+  const estado = corpo.permission?.status?.toLowerCase() ?? 'unknown';
+  // O status mostra o consentimento, mas a ação também aplica os limites
+  // temporários da Meta (por exemplo, chamadas restantes no período). Só
+  // permitimos discar quando a API confirma a ação agora.
+  const permitida = acaoPode('start_call');
+  return {
+    permitida,
+    podeSolicitar: acaoPode('send_call_permission_request'),
+    status: estado,
+    expiraEm: corpo.permission?.expiration_time ? new Date(corpo.permission.expiration_time * 1000).toISOString() : null,
+  };
+}
+
+/** Envia ao contato a solicitação interativa de autorização para chamadas. */
+export async function solicitarPermissaoDeChamadaMeta(input: { usuarioId: string; destino: string }) {
+  const destino = normalizarDestino(input.destino);
+  const linha = await linhaCloudDoUsuario(input.usuarioId);
+  const permissao = await consultarPermissaoDeChamadaMeta(input);
+  if (permissao.permitida) return { ...permissao, solicitada: false, mensagem: 'O contato já autorizou chamadas.' };
+  if (!permissao.podeSolicitar) {
+    throw conflict('A Meta não permite enviar outro pedido de autorização agora. Aguarde o limite ou peça ao cliente para ligar primeiro.');
+  }
+
+  const resposta = await fetch(`https://graph.facebook.com/${env.META_GRAPH_API_VERSION}/${encodeURIComponent(linha.phoneNumberId!)}/messages`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${decifrar(linha.accessToken!)}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: destino,
+      type: 'interactive',
+      interactive: {
+        type: 'call_permission_request',
+        action: { name: 'call_permission_request' },
+        body: { text: 'Podemos ligar para você pelo WhatsApp para conversar sobre seu atendimento?' },
+      },
+    }),
+  });
+  const corpo = await resposta.json().catch(() => ({})) as { messages?: Array<{ id?: string }>; error?: { message?: string } };
+  if (!resposta.ok) {
+    throw serviceUnavailable(`A Meta não enviou o pedido de autorização${corpo.error?.message ? `: ${corpo.error.message}` : ` (HTTP ${resposta.status})`}. Se a conversa estiver fora da janela de atendimento, será necessário um modelo aprovado.`);
+  }
+  return { permitida: false, podeSolicitar: false, status: 'pending', expiraEm: null, solicitada: true, mensagemId: corpo.messages?.[0]?.id ?? null };
+}
 
 /** Busca uma chamada Cloud API apenas para o dono da linha (ou gestão). */
 async function chamadaDaLinha(chamadaId: string, usuarioId: string, gestor: boolean) {
@@ -114,16 +197,12 @@ export async function originarChamadaMeta(input: {
   destino: string;
   sdp: string;
 }) {
-  const destino = input.destino.replace(/\D/g, '');
-  if (destino.length < 10 || destino.length > 15) throw badRequest('Informe um telefone válido com DDD e código do país.');
+  const destino = normalizarDestino(input.destino);
   if (!input.sdp || input.sdp.length > 100_000) throw badRequest('A oferta de áudio do navegador está ausente ou inválida.');
 
-  const linha = await prisma.channelConfig.findFirst({
-    where: { canal: 'WHATSAPP', donoId: input.usuarioId, ativo: true, whatsappCallingHabilitado: true },
-  });
-  if (!linha?.phoneNumberId || !linha.accessToken) {
-    throw serviceUnavailable('Conecte seu número WhatsApp Cloud e habilite chamadas antes de ligar.');
-  }
+  const linha = await linhaCloudDoUsuario(input.usuarioId);
+  const permissao = await consultarPermissaoDeChamadaMeta(input);
+  if (!permissao.permitida) throw conflict('O cliente ainda não autorizou chamadas. Solicite a autorização pelo WhatsApp e tente novamente após o aceite.');
 
   const resposta = await fetch(`https://graph.facebook.com/${env.META_GRAPH_API_VERSION}/${encodeURIComponent(linha.phoneNumberId)}/calls`, {
     method: 'POST',
@@ -195,9 +274,7 @@ export async function guardarGravacaoDaChamada(input: {
   let transcricao = chamada.transcricao;
   let transcricaoPendente = false;
   if (chamada.canalConfig.transcreverChamadasWhatsapp && !transcricao) {
-    if (!env.OPENAI_API_KEY) {
-      transcricaoPendente = true;
-    } else {
+    if (transcricaoDisponivel()) {
       await enfileirar(TIPO_TRANSCRICAO_CHAMADA_WHATSAPP, { chamadaId: chamada.id, url });
       transcricaoPendente = true;
     }
@@ -212,7 +289,7 @@ export async function guardarGravacaoDaChamada(input: {
     chamadaId: chamada.id,
     gravacaoUrl: url ? urlAssinada(url) : null,
     transcricao,
-    transcricaoSolicitada: chamada.canalConfig.transcreverChamadasWhatsapp,
+    transcricaoSolicitada: chamada.canalConfig.transcreverChamadasWhatsapp && transcricaoDisponivel(),
     transcricaoPendente,
   };
 }
@@ -342,14 +419,20 @@ export async function registrarChamadasMeta(payload: MetaWebhook) {
 async function contatoDoTelefone(numero: string) {
   const digitos = numero.replace(/\D/g, '');
   if (digitos.length < 8) return null;
+  const canonico = (valor: string) => {
+    const limpo = valor.replace(/\D/g, '');
+    return limpo.startsWith('55') && (limpo.length === 12 || limpo.length === 13)
+      ? limpo.slice(2)
+      : limpo;
+  };
   const candidatos = await prisma.contact.findMany({
     where: { telefone: { contains: digitos.slice(-8) } },
     select: { id: true, telefone: true },
     take: 20,
   });
-  const exatos = candidatos.filter((contato) => contato.telefone?.replace(/\D/g, '') === digitos);
+  const exatos = candidatos.filter((contato) => contato.telefone && canonico(contato.telefone) === canonico(digitos));
   if (exatos.length === 1) return exatos[0]!.id;
-  return candidatos.length === 1 ? candidatos[0]!.id : null;
+  return null;
 }
 
 function direcaoDoEvento(direcao?: string): 'ENTRANTE' | 'SAINTE' {

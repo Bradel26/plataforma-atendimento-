@@ -6,6 +6,7 @@ import {
   type AnaliseDaLigacao,
   type SentimentoDaLigacao,
 } from '../../lib/types';
+import { IconeTexto } from './icones';
 
 /**
  * Assistente da ligacao (item E.2): resumo, sentimento, transcricao e proximas
@@ -113,100 +114,93 @@ export function AssistenteDaLigacao({ chamadaId }: { chamadaId: string }) {
 
   const pendentes = analise.acoes.filter((a) => a.estado === 'PENDENTE');
   const resolvidas = analise.acoes.filter((a) => a.estado !== 'PENDENTE');
+  const tituloSecao = 'text-xs font-bold uppercase tracking-[0.06em] text-slate-500';
 
   return (
-    <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+    <div className="space-y-3">
       {aviso && <Alerta tipo="sucesso">{aviso}</Alerta>}
 
-      <div className="flex flex-wrap items-center gap-2">
-        {analise.sentimento ? (
-          <Badge tom={TOM[analise.sentimento]}>{LABEL_SENTIMENTO[analise.sentimento]}</Badge>
-        ) : (
-          <span className="text-xs text-slate-500">Sentimento não lido pelo motor</span>
-        )}
-        {analise.analisadoPor && (
-          <span className="text-xs text-slate-500">
-            análise de <strong className="font-medium text-slate-600">{analise.analisadoPor}</strong>
-          </span>
-        )}
-      </div>
-
-      {analise.resumo ? (
-        <div>
-          <p className="text-xs font-medium text-slate-500">Resumo</p>
-          <p className="mt-0.5 text-sm text-slate-800">{analise.resumo}</p>
-        </div>
-      ) : (
-        <p className="text-xs text-slate-500">O motor não mandou resumo desta ligação.</p>
-      )}
-
-      <div>
-        <p className="text-xs font-medium text-slate-500">
-          Próximas ações {pendentes.length > 0 && `(${pendentes.length} em aberto)`}
-        </p>
-        {analise.acoes.length === 0 ? (
-          // Analisada e sem sugestao e resultado legitimo, e a frase diz isso —
-          // "nenhuma acao" aqui nao significa "o motor falhou".
-          <p className="mt-0.5 text-sm text-slate-600">
-            O motor ouviu a ligação é não sugeriu nenhuma próxima ação.
-          </p>
-        ) : (
-          <ul className="mt-1 space-y-1.5">
-            {[...pendentes, ...resolvidas].map((a) => (
-              <li key={a.id} className="flex flex-wrap items-center gap-2 text-sm">
-                <span className={a.estado === 'PENDENTE' ? 'text-slate-800' : 'text-slate-400 line-through'}>
-                  {a.texto}
-                </span>
-                {a.estado === 'VIROU_TAREFA' && <Badge tom="sucesso">virou tarefa</Badge>}
-                {a.estado === 'DESCARTADA' && <Badge tom="neutro">descartada</Badge>}
-                {a.estado === 'PENDENTE' &&
-                  // O motivo aparece NO LUGAR do botao. Um botao que falha depois
-                  // do clique ensina a nao clicar.
-                  (a.impedimento ? (
-                    <span className="text-xs text-slate-500">{a.impedimento}</span>
-                  ) : (
-                    <>
-                      <Button
-                        variante="neutro"
-                        onClick={() => void criarTarefa(a.id)}
-                        disabled={ocupado === a.id}
-                      >
-                        Criar tarefa
-                      </Button>
-                      <button
-                        type="button"
-                        onClick={() => void descartar(a.id)}
-                        disabled={ocupado === a.id}
-                        className="text-xs text-slate-500 underline-offset-2 hover:underline"
-                      >
-                        Descartar
-                      </button>
-                    </>
-                  ))}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      {analise.transcricao && (
-        <div>
-          <button
-            type="button"
-            onClick={() => setVerTranscricao((v) => !v)}
-            className="text-xs text-slate-600 underline-offset-2 hover:underline"
-          >
-            {verTranscricao ? 'Esconder transcrição' : 'Ver transcrição'}
-          </button>
-          {/* Fechada por padrao: transcricao de tres minutos empurraria o resumo
-              e as acoes para fora da tela, e sao eles que decidem o que fazer. */}
-          {verTranscricao && (
-            <pre className="mt-1.5 max-h-64 overflow-auto whitespace-pre-wrap rounded border border-slate-200 bg-white p-2 text-xs text-slate-700">
-              {analise.transcricao}
-            </pre>
+      <div className="grid gap-5 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+        <div className="flex flex-col gap-2.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={tituloSecao}>Resumo da ligação</span>
+            {analise.sentimento ? (
+              <Badge tom={TOM[analise.sentimento]}>{LABEL_SENTIMENTO[analise.sentimento]}</Badge>
+            ) : (
+              <span className="text-xs text-slate-500">· sentimento não lido pelo motor</span>
+            )}
+            {analise.analisadoPor && <span className="text-xs text-slate-500">· análise de {analise.analisadoPor}</span>}
+          </div>
+          {analise.resumo ? (
+            <p className="text-sm leading-relaxed text-slate-800">{analise.resumo}</p>
+          ) : (
+            <p className="text-sm text-slate-500">O motor não mandou resumo desta ligação.</p>
+          )}
+          {analise.transcricao && (
+            <div>
+              <button
+                type="button"
+                onClick={() => setVerTranscricao((v) => !v)}
+                aria-expanded={verTranscricao}
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-[12.5px] font-semibold text-[var(--brand-primary)] hover:bg-slate-100"
+              >
+                <IconeTexto tamanho={14} />
+                {verTranscricao ? 'Esconder transcrição' : 'Ver transcrição'}
+              </button>
+              {/* Fechada por padrao: transcricao de tres minutos empurraria o resumo
+                  e as acoes para fora da tela, e sao eles que decidem o que fazer. */}
+              {verTranscricao && (
+                <pre className="mt-1.5 max-h-64 overflow-auto whitespace-pre-wrap rounded-lg border border-slate-200 bg-white p-3 font-sans text-xs leading-relaxed text-slate-700">
+                  {analise.transcricao}
+                </pre>
+              )}
+            </div>
           )}
         </div>
-      )}
+
+        <div className="flex flex-col gap-2.5">
+          <span className={tituloSecao}>
+            Próximas ações{pendentes.length > 0 && ` · ${pendentes.length} em aberto`}
+          </span>
+          {analise.acoes.length === 0 ? (
+            // Analisada e sem sugestao e resultado legitimo, e a frase diz isso —
+            // "nenhuma acao" aqui nao significa "o motor falhou".
+            <p className="text-sm text-slate-600">O motor ouviu a ligação e não sugeriu nenhuma próxima ação.</p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {[...pendentes, ...resolvidas].map((a) => (
+                <li key={a.id} className="flex flex-wrap items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                  <span className={`min-w-0 flex-1 text-[13.5px] ${a.estado === 'PENDENTE' ? 'text-slate-800' : 'text-slate-500 line-through'}`}>
+                    {a.texto}
+                  </span>
+                  {a.estado === 'VIROU_TAREFA' && <Badge tom="sucesso">virou tarefa</Badge>}
+                  {a.estado === 'DESCARTADA' && <Badge tom="neutro">descartada</Badge>}
+                  {a.estado === 'PENDENTE' &&
+                    // O motivo aparece NO LUGAR do botao. Um botao que falha depois
+                    // do clique ensina a nao clicar.
+                    (a.impedimento ? (
+                      <span className="text-xs text-slate-500">{a.impedimento}</span>
+                    ) : (
+                      <span className="flex items-center gap-1">
+                        <Button tamanho="sm" onClick={() => void criarTarefa(a.id)} disabled={ocupado === a.id}>
+                          Criar tarefa
+                        </Button>
+                        <button
+                          type="button"
+                          onClick={() => void descartar(a.id)}
+                          disabled={ocupado === a.id}
+                          className="h-8 px-1.5 text-xs text-slate-500 underline underline-offset-2 hover:text-slate-700"
+                        >
+                          Descartar
+                        </button>
+                      </span>
+                    ))}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

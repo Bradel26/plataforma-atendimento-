@@ -1,4 +1,4 @@
-import { cloneElement, forwardRef, isValidElement, useId } from 'react';
+import { Children, cloneElement, forwardRef, isValidElement, useId } from 'react';
 import type {
   ButtonHTMLAttributes,
   InputHTMLAttributes,
@@ -8,16 +8,18 @@ import type {
   TextareaHTMLAttributes,
 } from 'react';
 
-export function Card({ titulo, descricao, acao, children }: {
-  titulo?: string;
+export function Card({ titulo, descricao, acao, children, compact = false }: {
+  titulo?: ReactNode;
   descricao?: string;
   acao?: ReactNode;
   children: ReactNode;
+  compact?: boolean;
 }) {
+  const conteudo = Children.toArray(children);
   return (
     <section className="rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_3px_rgb(15_23_42/0.05)]">
       {(titulo || acao) && (
-        <header className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
+        <header className={`flex items-start justify-between gap-3 border-b border-slate-100 ${compact ? 'px-3 py-2.5' : 'px-5 py-4'}`}>
           <div>
             {titulo && <h2 className="text-[15px] font-semibold tracking-tight text-slate-900">{titulo}</h2>}
             {descricao && <p className="mt-1 text-xs leading-relaxed text-slate-500">{descricao}</p>}
@@ -25,7 +27,7 @@ export function Card({ titulo, descricao, acao, children }: {
           {acao}
         </header>
       )}
-      <div className="p-5">{children}</div>
+      {conteudo.length > 0 && <div className={compact ? 'p-3' : 'p-5'}>{conteudo}</div>}
     </section>
   );
 }

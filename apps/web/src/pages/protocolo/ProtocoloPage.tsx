@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alerta, Badge, Button, Card, Field, Input, Select } from '../../components/ui';
+import { Alerta, Button, Card, Field, Input, Select } from '../../components/ui';
+import { Gaveta } from '../../components/ui/Gaveta';
+import { CampoBusca, Pilula, iniciais } from '../../components/ui/Pagina';
 import { ApiError, api, getAccessToken } from '../../lib/api';
 import { EVENTOS, conectar } from '../../lib/realtime';
 import {
@@ -29,33 +31,16 @@ const vazio: Colunas = {
 
 const STATUS_HISTORICO_TI: TicketStatus[] = ['ABERTO', 'EM_ANDAMENTO', 'RESOLVIDO', 'FECHADO'];
 
-const TOM_STATUS: Record<TicketStatus, { coluna: string; etiqueta: string; cartao: string }> = {
-  ABERTO: {
-    coluna: 'border-red-200 bg-red-50 text-red-800',
-    etiqueta: 'bg-red-100 text-red-800',
-    cartao: 'border-l-4 border-l-red-500',
-  },
-  EM_ANDAMENTO: {
-    coluna: 'border-amber-200 bg-amber-50 text-amber-800',
-    etiqueta: 'bg-amber-100 text-amber-800',
-    cartao: 'border-l-4 border-l-amber-500',
-  },
-  AGUARDANDO_CLIENTE: {
-    coluna: 'border-sky-200 bg-sky-50 text-sky-800',
-    etiqueta: 'bg-sky-100 text-sky-800',
-    cartao: 'border-l-4 border-l-sky-500',
-  },
-  RESOLVIDO: {
-    coluna: 'border-emerald-200 bg-emerald-50 text-emerald-800',
-    etiqueta: 'bg-emerald-100 text-emerald-800',
-    cartao: 'border-l-4 border-l-emerald-500',
-  },
-  FECHADO: {
-    coluna: 'border-slate-300 bg-slate-100 text-slate-700',
-    etiqueta: 'bg-slate-200 text-slate-700',
-    cartao: 'border-l-4 border-l-slate-400',
-  },
+/** Cor de cada status: ponto no cabecalho da coluna e na pilula do historico. */
+const COR_STATUS: Record<TicketStatus, string> = {
+  ABERTO: '#DC2626',
+  EM_ANDAMENTO: '#F59E0B',
+  AGUARDANDO_CLIENTE: '#3B82F6',
+  RESOLVIDO: '#10B981',
+  FECHADO: '#94A3B8',
 };
+
+const diaMes = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 
 export function ProtocoloPage({ somenteTi = false }: { somenteTi?: boolean }) {
   const [colunas, setColunas] = useState<Colunas>(vazio);
@@ -66,6 +51,7 @@ export function ProtocoloPage({ somenteTi = false }: { somenteTi?: boolean }) {
     prioridade: '', responsavelId: '', slaVencido: '', busca: '', categoria: somenteTi ? 'TI_INTERNO' : '',
   });
   const [arrastando, setArrastando] = useState<string | null>(null);
+  const [alvoDrop, setAlvoDrop] = useState<TicketStatus | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [novo, setNovo] = useState({
     titulo: '',
@@ -137,6 +123,7 @@ export function ProtocoloPage({ somenteTi = false }: { somenteTi?: boolean }) {
   const mover = async (status: TicketStatus) => {
     const id = arrastando;
     setArrastando(null);
+    setAlvoDrop(null);
     if (!id) return;
     try {
       const { protocolo } = await api.patch<{ protocolo: Protocolo }>(`/protocolos/${id}`, { status });
@@ -165,106 +152,152 @@ export function ProtocoloPage({ somenteTi = false }: { somenteTi?: boolean }) {
     }
   };
 
+  const rotuloStatus = (status: TicketStatus) =>
+    somenteTi && status === 'FECHADO' ? 'Concluídos' : LABEL_STATUS_PROTOCOLO[status];
+
   return (
-    <div className="space-y-5">
-      <Card titulo="Filtros">
-        <div className={`grid gap-3 ${somenteTi ? 'sm:grid-cols-2' : 'sm:grid-cols-5'}`}>
-          {!somenteTi && <Field label="Categoria">
-            <Select value={filtros.categoria} onChange={(e) => setFiltros({ ...filtros, categoria: e.target.value })}>
-              <option value="">Todas</option>
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-2.5">
+        <CampoBusca
+          valor={filtros.busca}
+          aoMudar={(busca) => setFiltros({ ...filtros, busca })}
+          placeholder="Título, descrição, contato ou número"
+          rotulo="Buscar chamado"
+        />
+        {!somenteTi && (
+          <div className="w-40">
+            <Select aria-label="Categoria" value={filtros.categoria} onChange={(e) => setFiltros({ ...filtros, categoria: e.target.value })}>
+              <option value="">Categoria: todas</option>
               <option value="ATENDIMENTO">Atendimento</option>
               <option value="TI_INTERNO">TI interno</option>
             </Select>
-          </Field>}
-          {!somenteTi && <Field label="Prioridade">
-            <Select
-              value={filtros.prioridade}
-              onChange={(e) => setFiltros({ ...filtros, prioridade: e.target.value })}
-            >
-              <option value="">Todas</option>
+          </div>
+        )}
+        {!somenteTi && (
+          <div className="w-40">
+            <Select aria-label="Prioridade" value={filtros.prioridade} onChange={(e) => setFiltros({ ...filtros, prioridade: e.target.value })}>
+              <option value="">Prioridade: todas</option>
               {PRIORIDADES_PROTOCOLO.map((p) => (
                 <option key={p} value={p}>{LABEL_PRIORIDADE[p]}</option>
               ))}
             </Select>
-          </Field>}
-          <Field label="Responsável">
-            <Select
-              value={filtros.responsavelId}
-              onChange={(e) => setFiltros({ ...filtros, responsavelId: e.target.value })}
-            >
-              <option value="">Todos</option>
-              {agentes.map((a) => (
-                <option key={a.id} value={a.id}>{a.nome}</option>
-              ))}
-            </Select>
-          </Field>
-          {!somenteTi && <Field label="SLA">
-            <Select value={filtros.slaVencido} onChange={(e) => setFiltros({ ...filtros, slaVencido: e.target.value })}>
-              <option value="">Todos</option>
+          </div>
+        )}
+        <div className="w-full sm:w-52">
+          <Select aria-label="Responsável" value={filtros.responsavelId} onChange={(e) => setFiltros({ ...filtros, responsavelId: e.target.value })}>
+            <option value="">Responsável: todos</option>
+            {agentes.map((a) => (
+              <option key={a.id} value={a.id}>{a.nome}</option>
+            ))}
+          </Select>
+        </div>
+        {!somenteTi && (
+          <div className="w-40">
+            <Select aria-label="SLA" value={filtros.slaVencido} onChange={(e) => setFiltros({ ...filtros, slaVencido: e.target.value })}>
+              <option value="">SLA: todos</option>
               <option value="true">Somente vencidos</option>
             </Select>
-          </Field>}
-          <Field label="Busca" hint="Título, descrição, contato ou número">
-            <Input value={filtros.busca} onChange={(e) => setFiltros({ ...filtros, busca: e.target.value })} />
-          </Field>
-        </div>
-      </Card>
+          </div>
+        )}
+      </div>
 
       {erro && <Alerta>{erro}</Alerta>}
 
-      <div className="flex gap-3 overflow-x-auto pb-2">
+      <div className="flex gap-3.5 overflow-x-auto pb-2">
         {STATUS_PROTOCOLO.filter((status) =>
           !somenteTi || status !== 'AGUARDANDO_CLIENTE',
         ).map((status) => {
           const lista = colunas[status];
           const vencidos = lista.filter((p) => p.slaVencido).length;
+          const destacar = alvoDrop === status && arrastando !== null;
           return (
-            <div
+            <section
               key={status}
-              onDragOver={(e) => e.preventDefault()}
+              aria-label={rotuloStatus(status)}
+              onDragOver={(e) => {
+                e.preventDefault();
+                if (alvoDrop !== status) setAlvoDrop(status);
+              }}
+              onDragLeave={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setAlvoDrop(null);
+              }}
               onDrop={() => void mover(status)}
-              className={`flex h-[420px] w-64 shrink-0 flex-col rounded-xl border bg-slate-50 ${TOM_STATUS[status].coluna}`}
+              className={`flex h-[440px] min-w-[240px] flex-1 basis-0 flex-col rounded-2xl p-2.5 transition ${
+                destacar ? 'bg-blue-50 ring-2 ring-blue-500' : 'bg-slate-200/60'
+              }`}
             >
-              <header className={`border-b px-3 py-2.5 ${TOM_STATUS[status].coluna}`}>
-                <p className="text-sm font-semibold">
-                  {somenteTi && status === 'FECHADO' ? 'Concluídos' : LABEL_STATUS_PROTOCOLO[status]}
-                </p>
-                <p className="text-xs text-slate-500">
-                  {lista.length} chamado{lista.length === 1 ? '' : 's'}
-                  {vencidos > 0 ? ` · ${vencidos} com SLA vencido` : ''}
-                </p>
+              <header className="flex items-center gap-2 px-1.5 pb-2.5 pt-1">
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: COR_STATUS[status] }} aria-hidden="true" />
+                <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-slate-900">{rotuloStatus(status)}</span>
+                {vencidos > 0 && (
+                  <span className="whitespace-nowrap rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-bold text-red-700">
+                    {vencidos} SLA
+                  </span>
+                )}
+                <span className="rounded-full bg-white px-2 py-0.5 text-xs font-bold tabular-nums text-slate-700">{lista.length}</span>
               </header>
-              <ul className="barra-rolagem-cinza min-h-0 flex-1 space-y-2 overflow-y-auto p-2">
+              <ul className="barra-rolagem-cinza flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
+                {lista.length === 0 && (
+                  <li className="rounded-xl border border-dashed border-slate-300 px-3 py-6 text-center text-xs text-slate-500">Nenhum chamado</li>
+                )}
                 {lista.map((p) => (
                   <li
                     key={p.id}
                     draggable
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Chamado ${p.numero}: ${p.titulo}`}
                     onDragStart={() => setArrastando(p.id)}
+                    onDragEnd={() => {
+                      setArrastando(null);
+                      setAlvoDrop(null);
+                    }}
                     onClick={() => setAberto(p)}
-                    className={`cursor-grab rounded-lg border bg-white p-2.5 shadow-sm active:cursor-grabbing ${TOM_STATUS[status].cartao} ${
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setAberto(p);
+                      }
+                    }}
+                    className={`anel-de-foco flex cursor-grab flex-col gap-2 rounded-xl border bg-white p-3 shadow-sm transition hover:border-slate-300 active:cursor-grabbing ${
                       aberto?.id === p.id ? 'border-[var(--brand-primary)]' : 'border-slate-200'
-                    }`}
+                    } ${arrastando === p.id ? 'opacity-50' : ''}`}
                   >
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span className="font-mono text-xs text-slate-500">#{p.numero}</span>
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${COR_PRIORIDADE[p.prioridade]}`}>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="font-mono text-xs tabular-nums text-slate-500">#{p.numero}</span>
+                      {p.tipoTi && (
+                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${p.tipoTi === 'ERRO' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>
+                          {LABEL_TIPO_TI[p.tipoTi]}
+                        </span>
+                      )}
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${COR_PRIORIDADE[p.prioridade]}`}>
                         {LABEL_PRIORIDADE[p.prioridade]}
                       </span>
+                      {p.slaVencido && <span className="ml-auto rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-bold text-red-700">SLA</span>}
                     </div>
-                    <p className="mt-1 truncate text-sm font-medium text-slate-800">{p.titulo}</p>
-                    <p className="truncate text-xs text-slate-500">
-                      {p.tipoTi ? LABEL_TIPO_TI[p.tipoTi] : (p.contato?.nome ?? 'Sem contato')}
-                    </p>
-                    <div className="mt-1.5 flex flex-wrap gap-1">
-                      {p.categoria === 'TI_INTERNO' && <Badge tom="neutro">TI interno</Badge>}
-                      {p.responsavel && <Badge tom="marca">{p.responsavel.nome}</Badge>}
-                      {p.slaVencido && <Badge tom="alerta">SLA</Badge>}
-                      {p.agendamentos.some((a) => !a.concluido) && <Badge tom="neutro">agendado</Badge>}
+                    <p className="line-clamp-2 text-[13.5px] font-bold leading-snug text-slate-900">{p.titulo}</p>
+                    {!p.tipoTi && <p className="truncate text-xs text-slate-500">{p.contato?.nome ?? 'Sem contato'}</p>}
+                    {(p.categoria === 'TI_INTERNO' && !somenteTi) || p.agendamentos.some((a) => !a.concluido) ? (
+                      <div className="flex flex-wrap gap-1">
+                        {p.categoria === 'TI_INTERNO' && !somenteTi && (
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">TI interno</span>
+                        )}
+                        {p.agendamentos.some((a) => !a.concluido) && (
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">agendado</span>
+                        )}
+                      </div>
+                    ) : null}
+                    <div className="flex items-center gap-2 border-t border-slate-100 pt-2 text-xs text-slate-500">
+                      <span className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-blue-50 text-[10.5px] font-bold text-blue-700" aria-hidden="true">
+                        {p.responsavel ? iniciais(p.responsavel.nome) : '—'}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate">{p.responsavel?.nome ?? 'Sem responsável'}</span>
+                      <span className="tabular-nums">{diaMes(p.criadoEm)}</span>
                     </div>
                   </li>
                 ))}
               </ul>
-            </div>
+            </section>
           );
         })}
       </div>
@@ -275,63 +308,58 @@ export function ProtocoloPage({ somenteTi = false }: { somenteTi?: boolean }) {
           .filter((p) => STATUS_HISTORICO_TI.includes(p.status))
           .sort((a, b) => new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime());
         return (
-          <Card titulo="Histórico de chamados de TI" descricao={`${historico.length} chamado(s), do mais recente ao mais antigo`}>
+          <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white" aria-labelledby="historico-ti">
+            <div className="flex flex-wrap items-baseline gap-2.5 px-5 py-4">
+              <h2 id="historico-ti" className="text-[15px] font-bold text-slate-900">Histórico de chamados de TI</h2>
+              <span className="text-[12.5px] text-slate-500">{historico.length} chamado(s), do mais recente ao mais antigo</span>
+            </div>
             {historico.length === 0 ? (
-              <p className="text-sm text-slate-500">Nenhum chamado de TI encontrado.</p>
+              <p className="px-5 pb-5 text-sm text-slate-500">Nenhum chamado de TI encontrado.</p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[720px] text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-200 text-xs text-slate-500">
-                      <th className="px-3 py-2 font-medium">Chamado</th>
-                      <th className="px-3 py-2 font-medium">Descrição</th>
-                      <th className="px-3 py-2 font-medium">Status</th>
-                      <th className="px-3 py-2 font-medium">Aberto em</th>
-                      <th className="px-3 py-2 font-medium">Solicitante</th>
+                <table className="w-full min-w-[720px] text-left text-[13px]">
+                  <thead className="border-y border-slate-200 bg-slate-50 text-[11.5px] text-slate-500">
+                    <tr>
+                      <th className="px-4 py-2.5 font-semibold">Chamado</th>
+                      <th className="px-4 py-2.5 font-semibold">Descrição</th>
+                      <th className="px-4 py-2.5 font-semibold">Status</th>
+                      <th className="px-4 py-2.5 font-semibold">Aberto em</th>
+                      <th className="px-4 py-2.5 font-semibold">Solicitante</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-slate-100">
                     {historico.map((p) => (
-                      <tr key={p.id} className="border-b border-slate-100 align-top last:border-0">
-                        <td className="px-3 py-3">
+                      <tr key={p.id} className="cursor-pointer align-top hover:bg-slate-50" onClick={() => setAberto(p)}>
+                        <td className="px-4 py-3">
                           <p className="font-mono text-xs text-slate-500">#{p.numero}</p>
-                          <p className="mt-1 font-medium text-slate-800">{p.titulo}</p>
-                          <p className="mt-1 text-xs text-slate-500">{p.tipoTi ? LABEL_TIPO_TI[p.tipoTi] : 'Chamado de TI'}</p>
+                          <button type="button" onClick={(e) => { e.stopPropagation(); setAberto(p); }} className="mt-1 text-left font-bold text-slate-900 hover:underline">
+                            {p.titulo}
+                          </button>
+                          <p className="mt-0.5 text-xs text-slate-500">{p.tipoTi ? LABEL_TIPO_TI[p.tipoTi] : 'Chamado de TI'}</p>
                         </td>
-                        <td className="max-w-lg whitespace-pre-wrap px-3 py-3 text-slate-600">{p.descricao}</td>
-                        <td className="px-3 py-3">
-                          <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${TOM_STATUS[p.status].etiqueta}`}>
+                        <td className="max-w-lg whitespace-pre-wrap px-4 py-3 text-slate-600">
+                          <span className="line-clamp-3">{p.descricao}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <Pilula cor={COR_STATUS[p.status]}>
                             {somenteTi && p.status === 'FECHADO' ? 'Concluído' : LABEL_STATUS_PROTOCOLO[p.status]}
-                          </span>
+                          </Pilula>
                         </td>
-                        <td className="whitespace-nowrap px-3 py-3 text-slate-600">
+                        <td className="whitespace-nowrap px-4 py-3 tabular-nums text-slate-600">
                           {new Date(p.criadoEm).toLocaleString('pt-BR')}
                         </td>
-                        <td className="px-3 py-3 text-slate-600">{p.solicitante?.nome ?? 'Não identificado'}</td>
+                        <td className="px-4 py-3 text-slate-600">{p.solicitante?.nome ?? 'Não identificado'}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             )}
-          </Card>
+          </section>
         );
       })()}
 
-      {aberto ? (
-        <>
-          <Button variante="neutro" onClick={() => setAberto(null)}>
-            {somenteTi ? 'Fechar detalhes' : 'Fechar detalhe e abrir novo chamado'}
-          </Button>
-          <DetalheProtocolo
-            protocolo={aberto}
-            onMudou={(p) => {
-              setAberto(p.status === 'FECHADO' ? null : p);
-              void carregar();
-            }}
-          />
-        </>
-      ) : !somenteTi ? (
+      {!somenteTi && (
         <Card titulo="Novo chamado" descricao="Clique em um cartão para abrir os detalhes">
           <form onSubmit={criar} className="grid gap-3 sm:grid-cols-2">
             <Field label="Título">
@@ -376,7 +404,24 @@ export function ProtocoloPage({ somenteTi = false }: { somenteTi?: boolean }) {
             <Button type="submit" className="sm:col-span-2">Abrir chamado</Button>
           </form>
         </Card>
-      ) : null}
+      )}
+
+      <Gaveta
+        aberta={aberto !== null}
+        titulo={aberto ? `#${aberto.numero} · ${aberto.titulo}` : ''}
+        aoFechar={() => setAberto(null)}
+        largura="max-w-xl"
+      >
+        {aberto && (
+          <DetalheProtocolo
+            protocolo={aberto}
+            onMudou={(p) => {
+              setAberto(p.status === 'FECHADO' ? null : p);
+              void carregar();
+            }}
+          />
+        )}
+      </Gaveta>
     </div>
   );
 }
