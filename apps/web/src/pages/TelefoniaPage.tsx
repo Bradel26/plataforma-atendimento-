@@ -387,7 +387,11 @@ export function TelefoniaPage() {
           }`}
         >
           <span className={`h-2 w-2 rounded-full ${linhaCloudAtiva ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-          {linhaCloudAtiva ? 'WhatsApp Calling ativo na sua linha' : 'Chamadas pelo conector WhatsApp Web local'}
+          {linhaCloudAtiva
+            ? 'WhatsApp Calling ativo na sua linha'
+            : import.meta.env.DEV
+              ? 'Chamadas pelo conector WhatsApp Web local'
+              : 'Chamadas WhatsApp aguardando ativação da Meta'}
         </span>
       </div>
 
