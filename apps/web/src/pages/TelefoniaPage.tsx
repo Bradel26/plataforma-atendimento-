@@ -1,68 +1,29 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
-import { Alerta, Button } from '../components/ui';
-import { AssistenteDaLigacao } from './telefonia/AssistenteDaLigacao';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Alerta } from '../components/ui';
+import { HistoricoDeChamadas } from './telefonia/HistoricoDeChamadas';
 import { PainelLigacoes, relogio, type PosLigacao } from './telefonia/PainelLigacoes';
-import { IconeChevron, IconeFeita, IconePlay, IconeRecebida } from './telefonia/icones';
+import { WhatsAppWebCallPanel } from './telefonia/WhatsAppWebCallPanel';
 import { Selo, type Tom } from './dashboard/blocos';
 import { ApiError, api, getAccessToken } from '../lib/api';
 import { conectar, EVENTOS } from '../lib/realtime';
 import { telefoneLegivel } from '../lib/telefone';
-import { ESTADO } from '../lib/viz';
 import {
-  LABEL_CHAMADA_STATUS,
-  LABEL_SENTIMENTO,
   moeda,
-  type CallStatus,
   type Chamada,
   type IndicadoresVoz,
-  type SentimentoDaLigacao,
 } from '../lib/types';
 
-const dataHora = (iso: string) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 const custoCurto = (v: number | null | undefined) => v == null ? '—' : `R$ ${v.toFixed(4).replace('.', ',')}`;
 const STATUS_EM_CURSO = new Set(['CHAMANDO', 'EM_ANDAMENTO']);
-const STATUS_PERDIDA = new Set<CallStatus>(['NAO_ATENDIDA', 'OCUPADA', 'FALHOU', 'CANCELADA']);
 
 /** Mesmo alvo do Dashboards: abaixo disto a operacao esta perdendo ligacao. */
 const TAXA_ATENDIMENTO_ALVO = 90;
 const TAXA_ATENDIMENTO_CRITICA = 80;
 
-// So tons que o tema escuro remapeia em index.css.
-const CLASSE_STATUS: Record<CallStatus, string> = {
-  INICIANDO: 'bg-blue-50 text-blue-700',
-  CHAMANDO: 'bg-blue-50 text-blue-700',
-  EM_ANDAMENTO: 'bg-blue-50 text-blue-700',
-  COMPLETADA: 'bg-emerald-50 text-emerald-700',
-  NAO_ATENDIDA: 'bg-amber-50 text-amber-700',
-  OCUPADA: 'bg-amber-50 text-amber-700',
-  FALHOU: 'bg-red-50 text-red-700',
-  CANCELADA: 'bg-slate-100 text-slate-600',
-};
-
-const COR_SENTIMENTO: Record<SentimentoDaLigacao, string> = {
-  POSITIVO: ESTADO.bom,
-  NEUTRO: ESTADO.neutro,
-  NEGATIVO: ESTADO.grave,
-};
-
-type Filtro = 'todas' | 'recebidas' | 'feitas' | 'perdidas';
-const FILTROS: Array<{ id: Filtro; rotulo: string }> = [
-  { id: 'todas', rotulo: 'Todas' },
-  { id: 'recebidas', rotulo: 'Recebidas' },
-  { id: 'feitas', rotulo: 'Feitas' },
-  { id: 'perdidas', rotulo: 'Perdidas' },
-];
-const passaNoFiltro = (c: Chamada, f: Filtro) =>
-  f === 'todas' ||
-  (f === 'recebidas' && c.direcao === 'ENTRANTE') ||
-  (f === 'feitas' && c.direcao === 'SAINTE') ||
-  (f === 'perdidas' && STATUS_PERDIDA.has(c.status));
-
 const numeroLegivel = (numero: string) => (/^\d+$/.test(numero) ? telefoneLegivel(numero) : numero);
 
 export function TelefoniaPage() {
   const [chamadas, setChamadas] = useState<Chamada[]>([]);
-  const [assistente, setAssistente] = useState<string | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
   const [indicadores, setIndicadores] = useState<IndicadoresVoz | null>(null);
   const [destino, setDestino] = useState('');
@@ -75,8 +36,6 @@ export function TelefoniaPage() {
   const [linhaCloudAtiva, setLinhaCloudAtiva] = useState(false);
   const [transcricaoAtiva, setTranscricaoAtiva] = useState(false);
   const [abaPainel, setAbaPainel] = useState<'receber' | 'fazer'>('fazer');
-  const [filtro, setFiltro] = useState<Filtro>('todas');
-  const [ouvindo, setOuvindo] = useState<string | null>(null);
   /** Numero a quem a plataforma acabou de pedir autorizacao para ligar. */
   const [autorizacaoPendente, setAutorizacaoPendente] = useState<string | null>(null);
   const [posLigacao, setPosLigacao] = useState<PosLigacao | null>(null);
@@ -377,7 +336,6 @@ export function TelefoniaPage() {
 
   const emCurso = chamadas.find((c) => STATUS_EM_CURSO.has(c.status));
   const recebidaTocando = chamadas.find((c) => c.direcao === 'ENTRANTE' && c.status === 'CHAMANDO');
-  const visiveis = chamadas.filter((c) => passaNoFiltro(c, filtro));
 
   const taxa = indicadores?.taxaAtendimento ?? null;
   const estadoTaxa: { tom: Tom; texto: string } | null =
@@ -429,7 +387,7 @@ export function TelefoniaPage() {
           }`}
         >
           <span className={`h-2 w-2 rounded-full ${linhaCloudAtiva ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-          {linhaCloudAtiva ? 'WhatsApp Calling ativo na sua linha' : 'Conecte e habilite sua linha WhatsApp Cloud'}
+          {linhaCloudAtiva ? 'WhatsApp Calling ativo na sua linha' : 'Chamadas pelo conector WhatsApp Web local'}
         </span>
       </div>
 
@@ -449,162 +407,9 @@ export function TelefoniaPage() {
         ))}
       </section>
 
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_344px]">
-        <section aria-labelledby="titulo-historico" className="order-2 min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white xl:order-1">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 pb-3.5 pt-[18px]">
-            <div>
-              <h2 id="titulo-historico" className="text-base font-semibold text-slate-900">Histórico de chamadas</h2>
-              <p className="mt-0.5 text-[12.5px] text-slate-500">Cada ligação também aparece na linha do tempo do contato no CRM.</p>
-            </div>
-            <div role="group" aria-label="Filtrar chamadas" className="flex flex-wrap gap-1.5">
-              {FILTROS.map((f) => {
-                const ativo = filtro === f.id;
-                return (
-                  <button
-                    key={f.id}
-                    type="button"
-                    aria-pressed={ativo}
-                    onClick={() => setFiltro(f.id)}
-                    className={`inline-flex h-[30px] items-center gap-1.5 rounded-full border px-3 text-[12.5px] font-medium transition ${
-                      ativo ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    {f.rotulo}
-                    {/* Com mais paginas por carregar, a contagem seria so da parte ja carregada. */}
-                    {!cursor && <span className="tabular-nums opacity-75">{chamadas.filter((c) => passaNoFiltro(c, f.id)).length}</span>}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {visiveis.length === 0 ? (
-            <p className="px-5 py-10 text-center text-sm text-slate-500">
-              {chamadas.length === 0 ? 'Nenhuma chamada registrada.' : 'Nenhuma chamada neste filtro.'}
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[760px] border-collapse text-left text-[13px]">
-                <thead>
-                  <tr className="border-b border-slate-200 text-[11.5px] font-semibold text-slate-500">
-                    <th scope="col" className="px-5 py-2.5 font-semibold">Contato</th>
-                    <th scope="col" className="px-3 py-2.5 font-semibold">Horário</th>
-                    <th scope="col" className="px-3 py-2.5 font-semibold">Resultado</th>
-                    <th scope="col" className="px-3 py-2.5 text-right font-semibold">Duração</th>
-                    <th scope="col" className="px-3 py-2.5 font-semibold">Gravação</th>
-                    <th scope="col" className="px-3 py-2.5 text-right font-semibold">Custo</th>
-                    <th scope="col" className="py-2.5 pl-3 pr-5 font-semibold">Análise</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visiveis.map((c) => {
-                    const recebida = c.direcao === 'ENTRANTE';
-                    const numero = recebida ? c.numeroOrigem : c.numeroDestino;
-                    const perdidaRecebida = recebida && STATUS_PERDIDA.has(c.status);
-                    const analisada = Boolean(c.analisadoEm || c.resumo || c.sentimento || c.transcricao);
-                    const aberta = assistente === c.id;
-                    const gravacaoLocal = c.gravacaoUrl?.startsWith('/api/arquivos/');
-                    return (
-                      <Fragment key={c.id}>
-                        <tr className={`border-b border-slate-100 transition ${aberta ? 'bg-slate-50' : 'hover:bg-slate-50'}`}>
-                          <td className="py-3 pl-5 pr-3">
-                            <span className="flex items-center gap-3">
-                              <span
-                                role="img"
-                                aria-label={recebida ? 'Recebida' : 'Feita'}
-                                className={`flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full ${
-                                  perdidaRecebida ? 'bg-red-50 text-red-700' : recebida ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-600'
-                                }`}
-                              >
-                                {recebida ? <IconeRecebida tamanho={16} /> : <IconeFeita tamanho={16} />}
-                              </span>
-                              <span className="min-w-0 max-w-[220px]">
-                                <span className="block truncate font-semibold text-slate-900">
-                                  {c.contato?.nome ?? numeroLegivel(numero)}
-                                </span>
-                                <span className="mt-0.5 block truncate text-xs tabular-nums text-slate-500">
-                                  {recebida ? 'Recebida' : 'Feita'} · {numeroLegivel(numero)}
-                                  {c.linha ? ` · linha ${c.linha.nome ?? c.linha.donoNome ?? 'WhatsApp'}` : ''}
-                                </span>
-                              </span>
-                            </span>
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-3 tabular-nums text-slate-700">{dataHora(c.iniciadoEm)}</td>
-                          <td className="px-3 py-3">
-                            <span className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold ${CLASSE_STATUS[c.status]}`}>
-                              {LABEL_CHAMADA_STATUS[c.status]}
-                            </span>
-                          </td>
-                          <td className="px-3 py-3 text-right tabular-nums text-slate-700">{relogio(c.duracao)}</td>
-                          <td className="px-3 py-3">
-                            {gravacaoLocal ? (
-                              ouvindo === c.id ? (
-                                <audio controls autoPlay src={c.gravacaoUrl!} className="h-8 w-48" aria-label={`Gravação da ligação com ${c.contato?.nome ?? numero}`} />
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => setOuvindo(c.id)}
-                                  aria-label={`Ouvir gravação da ligação com ${c.contato?.nome ?? numeroLegivel(numero)}`}
-                                  className="inline-flex h-[30px] items-center gap-1.5 rounded-full border border-slate-200 bg-white pl-1.5 pr-2.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
-                                >
-                                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--brand-primary)] texto-sobre-cor-fixa">
-                                    <IconePlay />
-                                  </span>
-                                  Ouvir
-                                </button>
-                              )
-                            ) : (
-                              <span className="whitespace-nowrap text-slate-500">{c.gravacaoUrl ? 'No provedor' : '—'}</span>
-                            )}
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums text-slate-700">{custoCurto(c.custo)}</td>
-                          <td className="py-3 pl-3 pr-4">
-                            {analisada ? (
-                              <button
-                                type="button"
-                                onClick={() => setAssistente((a) => (a === c.id ? null : c.id))}
-                                aria-expanded={aberta}
-                                className={`inline-flex h-[30px] items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 text-[12.5px] font-semibold transition ${
-                                  aberta ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                                }`}
-                              >
-                                {c.sentimento && (
-                                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: COR_SENTIMENTO[c.sentimento] }} aria-hidden="true" />
-                                )}
-                                {c.sentimento ? LABEL_SENTIMENTO[c.sentimento] : 'Ver análise'}
-                                <IconeChevron tamanho={14} className={`transition ${aberta ? 'rotate-180' : ''}`} />
-                              </button>
-                            ) : (
-                              <span className="text-slate-500">—</span>
-                            )}
-                          </td>
-                        </tr>
-                        {aberta && (
-                          <tr className="border-b border-slate-200 bg-slate-50">
-                            <td colSpan={7} className="px-5 pb-5 pt-4 md:pl-[66px]">
-                              <AssistenteDaLigacao chamadaId={c.id} />
-                            </td>
-                          </tr>
-                        )}
-                      </Fragment>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-          <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
-            <span className="text-xs text-slate-500">Duração e gravação chegam ao histórico quando o provedor envia esses dados.</span>
-            {cursor && (
-              <Button variante="neutro" tamanho="sm" onClick={() => void carregarMais()}>
-                Carregar chamadas anteriores
-              </Button>
-            )}
-          </div>
-        </section>
-
-        <div className="order-1 xl:sticky xl:top-0 xl:order-2">
-          <PainelLigacoes
+      <div className="flex flex-col gap-5">
+        <div className="w-full">
+          {linhaCloudAtiva || !import.meta.env.DEV ? <PainelLigacoes
             linhaCloudAtiva={linhaCloudAtiva}
             transcricaoAtiva={transcricaoAtiva}
             aba={abaPainel}
@@ -634,8 +439,9 @@ export function TelefoniaPage() {
             aoFecharAutorizacao={() => setAutorizacaoPendente(null)}
             posLigacao={posLigacao}
             aoNovaChamada={() => { setPosLigacao(null); setAbaPainel('fazer'); }}
-          />
+          /> : <WhatsAppWebCallPanel />}
         </div>
+        <HistoricoDeChamadas chamadas={chamadas} cursor={cursor} onCarregarMais={() => void carregarMais()} />
       </div>
       <audio ref={audioRef} autoPlay className="hidden" />
     </div>

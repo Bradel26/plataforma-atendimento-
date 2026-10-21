@@ -12,6 +12,7 @@ import { useConversas } from '../features/atendimento/useConversas';
 import { useCaixaEntrada } from '../features/atendimento/useCaixaEntrada';
 import { upsertPrevia } from '../features/atendimento/previas';
 import { ConectarWhatsAppCloud } from '../features/atendimento/ConectarWhatsAppCloud';
+import { WhatsAppWebCallPanel } from './telefonia/WhatsAppWebCallPanel';
 import { clienteAguardandoDesde } from '../features/atendimento/apresentacao';
 import { IconeBalao, IconeBusca, IconeChevron, IconeEntrada, IconeMais } from '../features/atendimento/icones';
 import {
@@ -995,6 +996,7 @@ export function AtendimentoPage() {
         />
       )}
       <ModalIniciarConversa aberto={iniciando} aoFechar={() => setIniciando(false)} aoIniciar={(id) => void abrir(id)} />
+      {import.meta.env.DEV && <WhatsAppWebCallPanel somenteRecebidas />}
 
       {/*
         Quem e essa pessoa, sem sair da conversa.

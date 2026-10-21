@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alerta, Button, Field, Input } from '../../components/ui';
+import { Alerta, Button } from '../../components/ui';
 import { ApiError, api } from '../../lib/api';
 
-type ConfigSignup = { disponivel: boolean; appId: string | null; configId: string | null; apiVersion: string | null };
-type SessaoMeta = { wabaId: string; phoneNumberId: string };
+type ConfigSignup = { disponivel: boolean; appId: string | null; coexistenciaConfigId: string | null; apiVersion: string | null };
+type SessaoMeta = { wabaId: string; phoneNumberId?: string };
 type MetaLoginResult = { authResponse?: { code?: string }; status?: string };
 type MetaSdk = {
   init: (options: { appId: string; autoLogAppEvents: boolean; xfbml: boolean; version: string }) => void;
@@ -19,7 +19,6 @@ export function ConectarWhatsAppCloud({ onConnected, className = '' }: { onConne
   const [erro, setErro] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
-  const [pin, setPin] = useState('');
   const codeRef = useRef<string | null>(null);
   const sessaoRef = useRef<SessaoMeta | null>(null);
   const finalizandoRef = useRef(false);
@@ -28,7 +27,7 @@ export function ConectarWhatsAppCloud({ onConnected, className = '' }: { onConne
     let ativo = true;
     void api.get<ConfigSignup>('/canais/whatsapp/meta/embedded-signup')
       .then((valor) => { if (ativo) setConfig(valor); })
-      .catch(() => { if (ativo) setConfig({ disponivel: false, appId: null, configId: null, apiVersion: null }); });
+      .catch(() => { if (ativo) setConfig({ disponivel: false, appId: null, coexistenciaConfigId: null, apiVersion: null }); });
     return () => { ativo = false; };
   }, []);
 
@@ -57,8 +56,8 @@ export function ConectarWhatsAppCloud({ onConnected, className = '' }: { onConne
     if (!codeRef.current || !sessaoRef.current || finalizandoRef.current) return;
     finalizandoRef.current = true; setOcupado(true); setErro(null); setAviso(null);
     try {
-      const resposta = await api.post<{ callingAtivo: boolean; aviso: string | null }>('/canais/whatsapp/pessoal/meta/conectar', {
-        codigo: codeRef.current, wabaId: sessaoRef.current.wabaId, phoneNumberId: sessaoRef.current.phoneNumberId, pin,
+      const resposta = await api.post<{ callingAtivo: boolean; aviso: string | null }>('/canais/whatsapp/pessoal/meta/conectar-coexistencia', {
+        codigo: codeRef.current, ...sessaoRef.current,
       });
       setAviso(resposta.aviso ?? 'Número oficial conectado.');
       onConnected();
@@ -67,7 +66,7 @@ export function ConectarWhatsAppCloud({ onConnected, className = '' }: { onConne
     } finally {
       setOcupado(false); codeRef.current = null; sessaoRef.current = null; finalizandoRef.current = false;
     }
-  }, [onConnected, pin]);
+  }, [onConnected]);
 
   useEffect(() => {
     const receber = (event: MessageEvent) => {
@@ -77,11 +76,11 @@ export function ConectarWhatsAppCloud({ onConnected, className = '' }: { onConne
       if (!data || typeof data !== 'object') return;
       const mensagem = data as { type?: string; event?: string; data?: Record<string, unknown> };
       if (mensagem.type !== 'WA_EMBEDDED_SIGNUP') return;
-      if (mensagem.event === 'FINISH' || mensagem.event === 'FINISH_ONLY_WABA') {
+      if (mensagem.event === 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING' || mensagem.event === 'FINISH') {
         const d = mensagem.data ?? {};
         const wabaId = String(d.waba_id ?? d.wabaId ?? '');
         const phoneNumberId = String(d.phone_number_id ?? d.phoneNumberId ?? '');
-        if (wabaId && phoneNumberId) { sessaoRef.current = { wabaId, phoneNumberId }; void concluir(); }
+        if (wabaId) { sessaoRef.current = { wabaId, ...(phoneNumberId ? { phoneNumberId } : {}) }; void concluir(); }
       } else if (mensagem.event === 'CANCEL') {
         setOcupado(false);
         codeRef.current = null;
@@ -93,9 +92,8 @@ export function ConectarWhatsAppCloud({ onConnected, className = '' }: { onConne
   }, [concluir]);
 
   const conectar = () => {
-    if (!window.FB || !config?.configId) return;
-    if (!/^\d{6}$/.test(pin)) { setErro('Defina um PIN de segurança com 6 dígitos antes de continuar.'); return; }
-    if (!window.confirm('A conexão oficial substitui o pareamento por QR deste número. O PIN de segurança deve ser guardado pela pessoa dona da linha. Deseja continuar?')) return;
+    if (!window.FB || !config?.coexistenciaConfigId) return;
+    if (!window.confirm('A Meta vai conectar seu WhatsApp Business à plataforma mantendo o aplicativo ativo no celular. Deseja continuar?')) return;
     codeRef.current = null; sessaoRef.current = null; finalizandoRef.current = false;
     setErro(null); setAviso(null); setOcupado(true);
     window.FB.login((result) => {
@@ -105,24 +103,21 @@ export function ConectarWhatsAppCloud({ onConnected, className = '' }: { onConne
       // Alguns fluxos enviam a mensagem de conclusão antes do callback OAuth.
       void concluir();
     }, {
-      config_id: config.configId,
+      config_id: config.coexistenciaConfigId,
       response_type: 'code',
       override_default_response_type: true,
-      extras: { setup: {} },
+      extras: { setup: {}, featureType: 'whatsapp_business_app_onboarding' },
     });
   };
 
-  if (config && !config.disponivel) return <p className="text-xs text-slate-500">A conexão oficial ainda aguarda a configuração do app Meta pelo administrador.</p>;
+  if (config && (!config.disponivel || !config.coexistenciaConfigId)) return <p className="text-xs text-slate-500">A conexão mantendo o WhatsApp Business no celular ainda aguarda a configuração de coexistência no app Meta.</p>;
   return <div className={className}>
-    <Field label="PIN de segurança da linha" hint="Crie um PIN de 6 dígitos e guarde-o. Ele não será salvo pela plataforma.">
-      <Input inputMode="numeric" autoComplete="off" maxLength={6} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="6 dígitos" className="!py-2 !text-xs" />
-    </Field>
-    <Button type="button" variante="neutro" onClick={conectar} disabled={!sdkPronto || ocupado || pin.length !== 6} className="mt-2 w-full">
-      {ocupado ? 'Conectando com a Meta…' : sdkPronto ? 'Conectar número pela Meta' : 'Carregando conexão Meta…'}
+    <Button type="button" variante="neutro" onClick={conectar} disabled={!sdkPronto || ocupado} className="mt-2 w-full">
+      {ocupado ? 'Conectando com a Meta…' : sdkPronto ? 'Conectar WhatsApp Business mantendo o app' : 'Carregando conexão Meta…'}
     </Button>
     {erro && <div className="mt-2"><Alerta>{erro}</Alerta></div>}
     {aviso && <div className="mt-2"><Alerta tipo="sucesso">{aviso}</Alerta></div>}
-    <p className="mt-2 text-[10px] leading-relaxed text-slate-500">Cada usuário autoriza somente os ativos WhatsApp da própria conta Meta. O token é armazenado cifrado no servidor.</p>
+    <p className="mt-2 text-[10px] leading-relaxed text-slate-500">A Meta precisa mostrar a opção de conectar a conta WhatsApp Business existente. O token é armazenado cifrado no servidor.</p>
     <p className="mt-1 text-[10px] leading-relaxed text-slate-500">Para receber chamadas, o administrador da plataforma precisa habilitar o campo <code>calls</code> no webhook do app Meta e a Calling API para cada número.</p>
   </div>;
 }

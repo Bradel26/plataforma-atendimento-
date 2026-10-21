@@ -5,7 +5,8 @@ import { asyncHandler } from '../../http/async-handler';
 import { requireAuth, requireRole } from '../../http/middleware/auth';
 import { validateBody } from '../../http/middleware/validate';
 import { param } from '../../http/params';
-import { badRequest, forbidden, notFound } from '../../lib/errors';
+import { env } from '../../env';
+import { badRequest, forbidden, notFound, serviceUnavailable } from '../../lib/errors';
 import { prisma } from '../../lib/prisma';
 import { organizacaoAtual } from '../../lib/tenant';
 import { notificarStatusCanal } from '../../realtime/hub';
@@ -327,7 +328,27 @@ channelsRoutes.post(
     pin: z.string().regex(/^\d{6}$/, 'Defina um PIN de segurança com 6 dígitos'),
   })),
   asyncHandler(async (req, res) => {
+    if (!env.META_EMBEDDED_SIGNUP_CONFIG_ID) {
+      throw serviceUnavailable('O cadastro padrão do WhatsApp ainda não foi configurado pela Meta.');
+    }
     const resultado = await conectarNumeroMeta({ ...req.body, donoId: req.user!.sub });
+    res.status(201).json(resultado);
+  }),
+);
+
+/** Conecta uma linha WhatsApp Business App por coexistência, mantendo o app ativo. */
+channelsRoutes.post(
+  '/whatsapp/pessoal/meta/conectar-coexistencia',
+  validateBody(z.object({
+    codigo: z.string().trim().min(10).max(4000),
+    wabaId: z.string().trim().min(4).max(80),
+    phoneNumberId: z.string().trim().min(4).max(80).optional(),
+  })),
+  asyncHandler(async (req, res) => {
+    if (!env.META_EMBEDDED_SIGNUP_COEX_CONFIG_ID) {
+      throw serviceUnavailable('A conexão mantendo o WhatsApp Business no celular ainda não foi configurada pela Meta.');
+    }
+    const resultado = await conectarNumeroMeta({ ...req.body, coexistencia: true, donoId: req.user!.sub });
     res.status(201).json(resultado);
   }),
 );

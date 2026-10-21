@@ -7,13 +7,19 @@ import { atualizarNumero, criarNumero } from './channels.service';
 type MetaPhone = { id: string; display_phone_number?: string; verified_name?: string };
 type MetaError = { error?: { message?: string; code?: number; error_subcode?: number } };
 
-const metaConfigurada = () => Boolean(env.META_APP_ID && env.META_APP_SECRET && env.META_EMBEDDED_SIGNUP_CONFIG_ID && env.META_WEBHOOK_VERIFY_TOKEN);
+const credenciaisMetaConfiguradas = () => Boolean(env.META_APP_ID && env.META_APP_SECRET && env.META_WEBHOOK_VERIFY_TOKEN);
+const metaConfigurada = () => Boolean(
+  credenciaisMetaConfiguradas() && (env.META_EMBEDDED_SIGNUP_CONFIG_ID || env.META_EMBEDDED_SIGNUP_COEX_CONFIG_ID),
+);
 
 export function estadoDoEmbeddedSignup() {
   return {
     disponivel: metaConfigurada(),
     appId: metaConfigurada() ? env.META_APP_ID : null,
-    configId: metaConfigurada() ? env.META_EMBEDDED_SIGNUP_CONFIG_ID : null,
+    configId: credenciaisMetaConfiguradas() && env.META_EMBEDDED_SIGNUP_CONFIG_ID ? env.META_EMBEDDED_SIGNUP_CONFIG_ID : null,
+    coexistenciaConfigId: credenciaisMetaConfiguradas() && env.META_EMBEDDED_SIGNUP_COEX_CONFIG_ID
+      ? env.META_EMBEDDED_SIGNUP_COEX_CONFIG_ID
+      : null,
     apiVersion: metaConfigurada() ? env.META_GRAPH_API_VERSION : null,
   };
 }
@@ -39,9 +45,10 @@ async function graph<T>(path: string, token: string, init?: RequestInit): Promis
 export async function conectarNumeroMeta(input: {
   codigo: string;
   wabaId: string;
-  phoneNumberId: string;
-  pin: string;
+  phoneNumberId?: string;
+  pin?: string;
   donoId: string;
+  coexistencia?: boolean;
 }) {
   if (!metaConfigurada()) {
     throw serviceUnavailable('O administrador ainda precisa configurar o app Meta e o Embedded Signup da plataforma.');
@@ -71,14 +78,21 @@ export async function conectarNumeroMeta(input: {
   // Verifica pelo próprio WABA que o número retornado pelo fluxo pertence ao
   // ativo autorizado; não confiamos nos IDs enviados pelo navegador isoladamente.
   const phones = await graph<{ data?: MetaPhone[] }>(`${encodeURIComponent(input.wabaId)}/phone_numbers?fields=id,display_phone_number,verified_name&limit=100`, token);
-  const phone = phones.data?.find((item) => item.id === input.phoneNumberId);
-  if (!phone) throw badRequest('O número escolhido não pertence ao WhatsApp Business Account autorizado.');
+  const phone = input.phoneNumberId
+    ? phones.data?.find((item) => item.id === input.phoneNumberId)
+    : phones.data?.length === 1 ? phones.data[0] : undefined;
+  if (!phone) throw badRequest(input.phoneNumberId
+    ? 'O número escolhido não pertence ao WhatsApp Business Account autorizado.'
+    : 'A Meta não identificou qual linha conectar. O WABA tem mais de um número; tente novamente pelo fluxo oficial.');
 
-  // A Cloud API exige registro do número e PIN de verificação em duas etapas.
-  // O PIN é usado somente nesta chamada e nunca é persistido nem devolvido.
-  await graph(`${encodeURIComponent(input.phoneNumberId)}/register`, token, {
-    method: 'POST', body: JSON.stringify({ messaging_product: 'whatsapp', pin: input.pin }),
-  });
+  // Na coexistência a linha continua registrada no WhatsApp Business App.
+  // Registrar novamente pode interromper o uso do app; só o fluxo padrão faz isso.
+  if (!input.coexistencia) {
+    if (!input.pin || !/^\d{6}$/.test(input.pin)) throw badRequest('Defina um PIN de segurança com 6 dígitos.');
+    await graph(`${encodeURIComponent(phone.id)}/register`, token, {
+      method: 'POST', body: JSON.stringify({ messaging_product: 'whatsapp', pin: input.pin }),
+    });
+  }
 
   // A assinatura do app no WABA habilita entrega de eventos de mensagem e voz.
   await graph(`${encodeURIComponent(input.wabaId)}/subscribed_apps`, token, { method: 'POST', body: '{}' });
@@ -87,7 +101,7 @@ export async function conectarNumeroMeta(input: {
   // pode ficar conectada para mensagens mesmo se Meta ainda não liberar voz.
   let callingAtivo = false;
   try {
-    await graph(`${encodeURIComponent(input.phoneNumberId)}/settings`, token, {
+    await graph(`${encodeURIComponent(phone.id)}/settings`, token, {
       method: 'POST', body: JSON.stringify({ calling: { status: 'ENABLED' } }),
     });
     callingAtivo = true;
@@ -100,7 +114,7 @@ export async function conectarNumeroMeta(input: {
     donoId: input.donoId,
     modo: 'OFICIAL' as const,
     ativo: true,
-    phoneNumberId: input.phoneNumberId,
+    phoneNumberId: phone.id,
     wabaId: input.wabaId,
     accessToken: token,
     appSecret: env.META_APP_SECRET,
