@@ -3,6 +3,7 @@ import { asyncHandler } from '../../http/async-handler';
 import { param } from '../../http/params';
 import { notFound } from '../../lib/errors';
 import { comOrganizacao } from '../../lib/tenant';
+import { env } from '../../env';
 import {
   CANAIS_EXTERNOS,
   assinaturaValida,
@@ -34,14 +35,27 @@ webhooksRoutes.get(
   '/:canal',
   asyncHandler(async (req, res) => {
     const canal = canalDaRota(param(req, 'canal'));
+    const modo = req.query['hub.mode'];
+    const token = req.query['hub.verify_token'];
+    const challenge = req.query['hub.challenge'];
+
+    // A Meta valida o callback global do app antes que qualquer número tenha
+    // sido conectado. Nesse momento ainda não existe ChannelConfig para usar
+    // como fonte do token; use o token global configurado no servidor.
+    if (
+      canal === 'WHATSAPP' &&
+      modo === 'subscribe' &&
+      env.META_WEBHOOK_VERIFY_TOKEN &&
+      token === env.META_WEBHOOK_VERIFY_TOKEN
+    ) {
+      res.type('text/plain').send(String(challenge ?? ''));
+      return;
+    }
+
     // Verificacao da Meta nao tem corpo, so query: resolve pelo unico canal
     // ativo daquele tipo.
     const org = await organizacaoDoWebhook(canal, null);
     const config = org ? await comOrganizacao(org, () => obterConfig(canal)) : null;
-
-    const modo = req.query['hub.mode'];
-    const token = req.query['hub.verify_token'];
-    const challenge = req.query['hub.challenge'];
 
     if (modo === 'subscribe' && config?.verifyToken && token === config.verifyToken) {
       res.type('text/plain').send(String(challenge ?? ''));
