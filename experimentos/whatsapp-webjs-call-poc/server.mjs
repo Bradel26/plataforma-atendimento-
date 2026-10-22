@@ -67,20 +67,14 @@ function obterSessao(nome = 'teste-local') {
   return sessao;
 }
 
-// Keep the local POC server alive if the experimental library rejects during
-// a WhatsApp Web navigation (for example, its logout cleanup racing Chrome).
+// whatsapp-web.js/Puppeteer can emit transient unhandled rejections while
+// WhatsApp Web navigates between its QR, pairing, and chat views. A rejection
+// here has no reliable session identity; tearing down every client caused a
+// successful phone-side QR scan to be immediately invalidated. Session health
+// is handled by each client's auth_failure/disconnected/initialize events.
 process.on('unhandledRejection', (reason) => {
   const detail = reason instanceof Error ? reason : new Error(String(reason));
-  console.error('Falha assíncrona do cliente WhatsApp:', detail);
-  for (const sessao of sessoes.values()) {
-    if (!sessao.client) continue;
-    sessao.status = 'sessão interrompida';
-    const interrupted = sessao.client;
-    sessao.client = null;
-    broadcast(sessao, { type: 'status', data: sessao.status });
-    broadcast(sessao, { type: 'error', data: 'A sessão do WhatsApp foi interrompida. Atualize e reconecte a linha.' });
-    interrupted?.destroy().catch((error) => console.error('Falha ao fechar sessão interrompida:', error));
-  }
+  console.error('Rejeição assíncrona do cliente WhatsApp (sessão preservada):', detail);
 });
 
 app.use((req, res, next) => {

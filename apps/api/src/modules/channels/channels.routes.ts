@@ -592,12 +592,6 @@ channelsRoutes.get(
       res.json({ qr: null, conectado: false, motivo: 'este número não está no modo não oficial' });
       return;
     }
-    // TEMP-DEBUG (auditoria WhatsApp — remover apos investigacao): confirma
-    // qual canalConfigId/donoId/ponteSessao chegou de fato ate a chamada para
-    // a Ponte, para este pedido especifico de QR.
-    console.log(
-      `[crm] GET /números/:id/ponte/qr usuarioAutenticado=${req.user!.sub} canalConfigId=${config.id} donoId=${config.donoId ?? 'nenhum (linha compartilhada)'} ponteSessao=${config.ponteSessao ?? 'nenhum'}`,
-    );
     res.json(await whatsAppProvider.getQRCode(config));
   }),
 );
