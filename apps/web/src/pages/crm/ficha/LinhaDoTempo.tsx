@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alerta, Badge, EmptyState } from '../../../components/ui';
+import { Modal } from '../../../components/ui/Modal';
 import { ApiError, api, getAccessToken } from '../../../lib/api';
 import { conectar, EVENTOS } from '../../../lib/realtime';
 import {
@@ -73,6 +74,7 @@ export function LinhaDoTempo({ base, raizId, recarregar = 0, eventosDemonstracao
   const [periodo, setPeriodo] = useState<'TODOS' | 'HOJE' | '7_DIAS' | '30_DIAS'>('TODOS');
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [eventoSelecionado, setEventoSelecionado] = useState<EventoFicha | null>(null);
 
   // Lista vazia = sem filtro (todos os tipos). Guardar os oito selecionados
   // daria o mesmo resultado com uma URL tres vezes maior.
@@ -252,7 +254,19 @@ export function LinhaDoTempo({ base, raizId, recarregar = 0, eventosDemonstracao
                         <audio className="mt-3 h-9 w-full max-w-md" controls preload="none" src={evento.gravacaoUrl} aria-label={`Gravação da chamada: ${evento.titulo}`} />
                       )}
                       {notaDemo && <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-2 text-[10px] font-medium text-amber-800">● &nbsp;Retorno citado na nota; ainda sem tarefa agendada.</p>}
-                      <div className="mt-3 flex justify-between gap-2 text-[10px]"><span className="text-slate-500">Registro manual · histórico original preservado</span><button type="button" className="font-semibold text-blue-600 hover:underline">Ver detalhes</button></div>
+                      <div className="mt-3 flex justify-between gap-2 text-[10px]">
+                        <span className="text-slate-500">
+                          {evento.usuario ? `Registrado por ${evento.usuario}` : 'Registro do sistema'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setEventoSelecionado(evento)}
+                          aria-label={`Ver detalhes: ${evento.titulo}`}
+                          className="font-semibold text-blue-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                        >
+                          Ver detalhes
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </li>
@@ -267,6 +281,62 @@ export function LinhaDoTempo({ base, raizId, recarregar = 0, eventosDemonstracao
 
         {carregando && eventos.length === 0 && !eventosDemonstracao && <p className="text-sm text-slate-500">Carregando histórico...</p>}
       </div>
+      <Modal
+        aberto={eventoSelecionado !== null}
+        titulo={eventoSelecionado ? `Detalhes · ${LABEL_TIPO_EVENTO[eventoSelecionado.tipo]}` : 'Detalhes do registro'}
+        aoFechar={() => setEventoSelecionado(null)}
+        largura="max-w-2xl"
+      >
+        {eventoSelecionado && <div className="space-y-4">
+          <div>
+            <h3 className="text-base font-semibold text-slate-900">{eventoSelecionado.titulo}</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              {new Date(eventoSelecionado.ocorridoEm).toLocaleString('pt-BR', {
+                dateStyle: 'long',
+                timeStyle: 'short',
+              })}
+            </p>
+          </div>
+          <dl className="grid gap-3 rounded-xl bg-slate-50 p-4 sm:grid-cols-2">
+            <div>
+              <dt className="text-xs font-medium text-slate-500">Tipo</dt>
+              <dd className="mt-1 text-sm text-slate-800">{LABEL_TIPO_EVENTO[eventoSelecionado.tipo]}</dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-slate-500">Situação</dt>
+              <dd className="mt-1 text-sm text-slate-800">{eventoSelecionado.situacao || 'Não informada'}</dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-slate-500">Canal</dt>
+              <dd className="mt-1 text-sm text-slate-800">{eventoSelecionado.canal || 'Não informado'}</dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-slate-500">Responsável</dt>
+              <dd className="mt-1 text-sm text-slate-800">{eventoSelecionado.usuario || 'Sistema'}</dd>
+            </div>
+            {eventoSelecionado.valor !== null && <div>
+              <dt className="text-xs font-medium text-slate-500">Valor</dt>
+              <dd className="mt-1 text-sm text-slate-800">{moeda(eventoSelecionado.valor)}</dd>
+            </div>}
+          </dl>
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Detalhes</h4>
+            <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-800">
+              {eventoSelecionado.detalhe || 'Este registro não possui observações adicionais.'}
+            </p>
+          </div>
+          {eventoSelecionado.gravacaoUrl && <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Gravação</h4>
+            <audio
+              className="mt-2 h-10 w-full"
+              controls
+              preload="none"
+              src={eventoSelecionado.gravacaoUrl}
+              aria-label={`Gravação: ${eventoSelecionado.titulo}`}
+            />
+          </div>}
+        </div>}
+      </Modal>
     </div>
   );
 }
