@@ -115,6 +115,14 @@ function obterSessao(nome = 'teste-local') {
   return sessao;
 }
 
+function explicarDesconexaoWhatsApp(motivo) {
+  const codigo = String(motivo || '').trim().toUpperCase();
+  if (codigo === 'LOGOUT') {
+    return 'O WhatsApp encerrou esta sessão. O pareamento por QR exige que o número esteja ativo no WhatsApp Business do celular. Se ele foi migrado para a API Oficial/ChatPro, conecte-o pela integração desse provedor; o QR não substitui essa conexão.';
+  }
+  return `WhatsApp desconectado (${String(motivo || 'motivo não informado')}). Tente conectar novamente pelo QR.`;
+}
+
 // whatsapp-web.js/Puppeteer can emit transient unhandled rejections while
 // WhatsApp Web navigates between its QR, pairing, and chat views. A rejection
 // here has no reliable session identity; tearing down every client caused a
@@ -325,10 +333,10 @@ async function iniciarCliente(nomeSessao = 'teste-local') {
       limparTimeout();
       console.warn(`[whatsapp:${sessao.nome}] sessao desconectada: ${String(reason || 'motivo nao informado')}`);
       sessao.status = 'desconectado';
-      sessao.lastError = String(reason || 'WhatsApp desconectado');
+      sessao.lastError = explicarDesconexaoWhatsApp(reason);
       sessao.retryAfter = Date.now() + 60_000;
       sessao.latestQr = null;
-      broadcast(sessao, { type: 'status', data: `${sessao.status}: ${reason}` });
+      broadcast(sessao, { type: 'status', data: `${sessao.status}: ${sessao.lastError}` });
       if (sessao.client === thisClient) sessao.client = null;
       thisClient.destroy().catch((error) => console.error(`[whatsapp:${sessao.nome}] falha ao fechar cliente WhatsApp:`, error));
     });
