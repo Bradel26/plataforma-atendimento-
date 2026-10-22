@@ -422,8 +422,10 @@ async function responderComEvidencias(pergunta: string, fonte: string, total: nu
   ], formatoRespostaFinal);
   let resposta: string | null = null;
   try {
-    const estruturada = respostaFinalSchema.safeParse(JSON.parse(respostaBruta));
+    const parseada: unknown = JSON.parse(respostaBruta);
+    const estruturada = respostaFinalSchema.safeParse(parseada);
     if (estruturada.success) resposta = estruturada.data.resposta;
+    else if (typeof parseada === 'string' && parseada.trim()) resposta = parseada.trim();
   } catch {
     // Se o modelo ignorar o formato exigido, não exiba o rascunho que ele devolveu.
   }
