@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { api } from '../../lib/api';
 import { IconeCheck, IconeDesligar, IconeMicrofone, IconeMicrofoneMudo, IconeTelefone } from './icones';
 
 type Evento = { type: string; data?: any };
@@ -22,8 +23,8 @@ function nomeCurto(valor: string) {
 }
 
 /** Painel integrado para o conector Web testado localmente. */
-export function WhatsAppWebCallPanel({ somenteRecebidas = false }: { somenteRecebidas?: boolean }) {
-  const [status, setStatus] = useState('verificando conector local');
+export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste-local', numeroId = null }: { somenteRecebidas?: boolean; sessao?: string; numeroId?: string | null }) {
+  const [status, setStatus] = useState('verificando conexão');
   const [qr, setQr] = useState<string | null>(null);
   const [destino, setDestino] = useState('');
   const [chamada, setChamada] = useState<ChamadaAtiva | null>(null);
@@ -56,15 +57,25 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false }: { somenteRece
   const destinoRef = useRef('');
   const baseGravacaoRef = useRef<string | null>(null);
 
+  const querySessao = `?session=${encodeURIComponent(sessao)}`;
+
   function registrar(texto: string) {
     setEventos((anteriores) => [texto, ...anteriores].slice(0, 4));
   }
 
-  async function requisitar(caminho: string, corpo?: object) {
+  async function requisitar(caminho: string, corpo?: Record<string, unknown>) {
+    if (numeroId) {
+      const base = `/canais/numeros/${encodeURIComponent(numeroId)}/webjs-call`;
+      if (caminho.startsWith('/api/status')) return api.get<Record<string, any>>(`${base}/status`);
+      if (caminho === '/api/call') return api.post<Record<string, any>>(`${base}/originar`, { phone: corpo?.phone });
+      const acao = caminho.match(/^\/api\/call\/(accept|reject|hangup)$/)?.[1];
+      if (acao) return api.post<Record<string, any>>(`${base}/action/${acao}`, {});
+      throw new Error('Ação de chamada desconhecida.');
+    }
     const resposta = await fetch(`${SERVICO_LOCAL}${caminho}`, {
       method: corpo ? 'POST' : 'GET',
       headers: corpo ? { 'Content-Type': 'application/json' } : undefined,
-      body: corpo ? JSON.stringify(corpo) : undefined,
+      body: corpo ? JSON.stringify({ ...corpo, session: sessao }) : undefined,
     });
     const dados = await resposta.json().catch(() => ({}));
     if (!resposta.ok) throw new Error(dados.error || `Conector respondeu ${resposta.status}`);
@@ -93,17 +104,29 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false }: { somenteRece
   }
 
   useEffect(() => {
-    const ws = new WebSocket('ws://127.0.0.1:4174/audio');
-    ws.binaryType = 'arraybuffer';
-    socketRef.current = ws;
-    ws.onopen = () => { setErro(null); void requisitar('/api/status').then((d) => {
-      setStatus(d.status ?? 'desconectado');
-      if (d.call) {
-        const atual = { from: d.call.from, fromMe: Boolean(d.call.fromMe) };
-        chamadaRef.current = atual;
-        setChamada(atual);
+    let vivo = true;
+    let ws: WebSocket | null = null;
+    void (async () => {
+      let url: string;
+      if (numeroId) {
+        const { ticket } = await api.post<{ ticket: string }>(`/canais/numeros/${encodeURIComponent(numeroId)}/webjs-call/audio-ticket`, {});
+        const protocolo = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        url = `${protocolo}//${window.location.host}/api/canais/whatsapp/chamadas/audio?ticket=${encodeURIComponent(ticket)}`;
+      } else {
+        url = `ws://127.0.0.1:4174/audio${querySessao}`;
       }
-    }).catch(() => undefined); };
+      if (!vivo) return;
+      ws = new WebSocket(url);
+      ws.binaryType = 'arraybuffer';
+      socketRef.current = ws;
+      ws.onopen = () => { setErro(null); void requisitar(`/api/status${querySessao}`).then((d) => {
+        setStatus(d.status ?? 'desconectado');
+        if (d.call) {
+          const atual = { from: d.call.from, fromMe: Boolean(d.call.fromMe) };
+          chamadaRef.current = atual;
+          setChamada(atual);
+        }
+      }).catch(() => undefined); };
     ws.onmessage = async (event) => {
       if (typeof event.data !== 'string') {
         try {
@@ -158,7 +181,7 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false }: { somenteRece
       }
       if (msg.type === 'recording') {
         const arquivo = String(msg.data?.name ?? 'Gravação WAV');
-        const base = arquivo.match(/^(chamada-.+?)-(?:audio-remoto|microfone-atendente)\.wav$/)?.[1];
+        const base = arquivo.match(/^(sessao-[a-zA-Z0-9_-]+-chamada-.+?)-(?:audio-remoto|microfone-atendente)\.wav$/)?.[1];
         if (base) baseGravacaoRef.current = base;
         gravacaoRef.current = arquivo;
         setGravacaoAtual(arquivo);
@@ -167,15 +190,19 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false }: { somenteRece
       if (msg.type === 'recordings-ready' && msg.data?.base) void analisarGravacao(String(msg.data.base));
       if (msg.type === 'error') setErro(String(msg.data));
     };
-    ws.onerror = () => { setStatus('conector local indisponível'); setErro('Inicie o serviço local de chamadas na porta 4174.'); };
-    ws.onclose = () => { if (socketRef.current === ws) setStatus('conector local desconectado'); };
+      ws.onerror = () => { setStatus('conector indisponível'); setErro(numeroId ? 'O serviço de chamadas não respondeu. Tente recarregar a página.' : 'Inicie o serviço local de chamadas na porta 4174.'); };
+    ws.onclose = () => { if (socketRef.current === ws) setStatus(numeroId ? 'conector desconectado' : 'conector local desconectado'); };
+    })().catch((e) => {
+      if (vivo) setErro(e instanceof Error ? e.message : 'Não foi possível conectar o áudio da chamada.');
+    });
     return () => {
-      ws.close();
+      vivo = false;
+      ws?.close();
       if (socketRef.current === ws) socketRef.current = null;
       limparAudio();
       void contextRef.current?.close(); contextRef.current = null;
     };
-  }, []);
+  }, [querySessao, sessao, numeroId]);
 
   useEffect(() => { mudoRef.current = mudo; }, [mudo]);
   useEffect(() => {
@@ -244,10 +271,15 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false }: { somenteRece
     setErroAnalise(null);
     setAnalise(null);
     try {
-      const response = await fetch(`${ANALISE_LOCAL}/api/recordings/${encodeURIComponent(base)}/analyze`, { method: 'POST' });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(body.error || `Análise local respondeu ${response.status}`);
-      const resultado = body as AnaliseChamada;
+      let resultado: AnaliseChamada;
+      if (numeroId) {
+        resultado = await api.post<AnaliseChamada>(`/canais/numeros/${encodeURIComponent(numeroId)}/webjs-call/recordings/${encodeURIComponent(base)}/analyze`, {});
+      } else {
+        const response = await fetch(`${ANALISE_LOCAL}/api/recordings/${encodeURIComponent(base)}/analyze`, { method: 'POST' });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(body.error || `Análise local respondeu ${response.status}`);
+        resultado = body as AnaliseChamada;
+      }
       setAnalise(resultado);
     } catch (e) {
       setErroAnalise(e instanceof Error ? e.message : 'Não foi possível analisar esta chamada.');
@@ -255,7 +287,6 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false }: { somenteRece
       setAnalisando(false);
     }
   }
-
   const conectadoAoWhatsApp = status === 'conectado';
   const etapaAtual = resumo ? 3 : conectada ? 2 : chamada ? etapaLigacao : -1;
   const chamadaPendente = Boolean(chamada && !conectada);
@@ -418,7 +449,9 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false }: { somenteRece
               </div>
               {analise?.parts?.map((parte) => <div key={parte.speaker} className="mt-3">
                 <p className="mb-1 text-xs font-medium text-slate-500">{parte.speaker}</p>
-                <audio controls preload="none" className="h-9 w-full" src={`${ANALISE_LOCAL}/api/recordings/${encodeURIComponent(analise.base + (parte.speaker === 'Cliente' ? '-audio-remoto.wav' : '-microfone-atendente.wav'))}/audio`} />
+                <audio controls preload="none" className="h-9 w-full" src={numeroId
+                  ? `/api/canais/numeros/${encodeURIComponent(numeroId)}/webjs-call/recordings/${encodeURIComponent(analise.base + (parte.speaker === 'Cliente' ? '-audio-remoto.wav' : '-microfone-atendente.wav'))}/audio`
+                  : `${ANALISE_LOCAL}/api/recordings/${encodeURIComponent(analise.base + (parte.speaker === 'Cliente' ? '-audio-remoto.wav' : '-microfone-atendente.wav'))}/audio`} />
               </div>)}
               {transcricaoAberta && analise && <div className="mt-4 max-h-80 overflow-y-auto rounded-lg border border-slate-200 bg-white p-3 text-sm leading-relaxed text-slate-700">
                 {analise.parts.map((parte) => <p key={parte.speaker} className="mb-3 last:mb-0"><strong className="text-slate-900">{parte.speaker}: </strong>{parte.text}</p>)}

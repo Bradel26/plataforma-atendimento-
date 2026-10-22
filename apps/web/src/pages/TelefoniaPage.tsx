@@ -34,6 +34,9 @@ export function TelefoniaPage() {
   const [microfoneMudo, setMicrofoneMudo] = useState(false);
   const [audioConectado, setAudioConectado] = useState(false);
   const [linhaCloudAtiva, setLinhaCloudAtiva] = useState(false);
+  const [sessaoChamadasWeb, setSessaoChamadasWeb] = useState('teste-local');
+  const [linhaWebId, setLinhaWebId] = useState<string | null>(null);
+  const [linhaWebAtiva, setLinhaWebAtiva] = useState(false);
   const [transcricaoAtiva, setTranscricaoAtiva] = useState(false);
   const [abaPainel, setAbaPainel] = useState<'receber' | 'fazer'>('fazer');
   /** Numero a quem a plataforma acabou de pedir autorizacao para ligar. */
@@ -69,12 +72,16 @@ export function TelefoniaPage() {
 
   useEffect(() => { void carregar(); }, [carregar]);
   useEffect(() => {
-    void api.get<{ numero: { modo?: string | null; ativo?: boolean; phoneNumberId?: string | null; whatsappCallingHabilitado?: boolean; transcricaoAutomaticaAtiva?: boolean } | null }>('/canais/numeros/meu')
+    void api.get<{ numero: { id?: string; modo?: string | null; ativo?: boolean; ponteSessao?: string | null; phoneNumberId?: string | null; whatsappCallingHabilitado?: boolean; transcricaoAutomaticaAtiva?: boolean } | null }>('/canais/numeros/meu')
       .then(({ numero }) => {
         setLinhaCloudAtiva(Boolean(numero?.ativo && numero.modo === 'OFICIAL' && numero.phoneNumberId && numero.whatsappCallingHabilitado));
+        const usaWeb = Boolean(numero?.modo === 'NAO_OFICIAL' && numero.ativo && numero.id && numero.ponteSessao);
+        setLinhaWebAtiva(usaWeb);
+        setLinhaWebId(usaWeb ? numero!.id! : null);
+        if (usaWeb && numero?.ponteSessao) setSessaoChamadasWeb(numero.ponteSessao);
         setTranscricaoAtiva(Boolean(numero?.transcricaoAutomaticaAtiva));
       })
-      .catch(() => setLinhaCloudAtiva(false));
+      .catch(() => { setLinhaCloudAtiva(false); setLinhaWebAtiva(false); setLinhaWebId(null); });
   }, []);
   useEffect(() => () => {
     peerRef.current?.close();
@@ -413,7 +420,7 @@ export function TelefoniaPage() {
 
       <div className="flex flex-col gap-5">
         <div className="w-full">
-          {linhaCloudAtiva || !import.meta.env.DEV ? <PainelLigacoes
+          {linhaWebAtiva && linhaWebId ? <WhatsAppWebCallPanel sessao={sessaoChamadasWeb} numeroId={linhaWebId} /> : linhaCloudAtiva || !import.meta.env.DEV ? <PainelLigacoes
             linhaCloudAtiva={linhaCloudAtiva}
             transcricaoAtiva={transcricaoAtiva}
             aba={abaPainel}
@@ -443,7 +450,7 @@ export function TelefoniaPage() {
             aoFecharAutorizacao={() => setAutorizacaoPendente(null)}
             posLigacao={posLigacao}
             aoNovaChamada={() => { setPosLigacao(null); setAbaPainel('fazer'); }}
-          /> : <WhatsAppWebCallPanel />}
+          /> : <WhatsAppWebCallPanel sessao={sessaoChamadasWeb} />}
         </div>
         <HistoricoDeChamadas chamadas={chamadas} cursor={cursor} onCarregarMais={() => void carregarMais()} />
       </div>

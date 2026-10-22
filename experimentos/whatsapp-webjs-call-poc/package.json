@@ -1,0 +1,15 @@
+{
+  "name": "whatsapp-webjs-call-poc",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Prova de conceito local e isolada para mensagens e chamadas do WhatsApp Web",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "qrcode": "^1.5.4",
+    "ws": "^8.18.3",
+    "whatsapp-web.js": "github:alpersamur3/whatsapp-web.js#8d46caf822ac35e805f4749e1ebeb8e5c56b4c6d"
+  }
+}

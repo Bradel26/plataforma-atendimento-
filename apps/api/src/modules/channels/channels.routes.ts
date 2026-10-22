@@ -1,4 +1,5 @@
 import { Router, type Request } from 'express';
+import { AppError } from '../../lib/errors';
 import { z } from 'zod';
 import type { Channel } from '@prisma/client';
 import { asyncHandler } from '../../http/async-handler';
@@ -28,8 +29,53 @@ import { AVISO_NAO_OFICIAL, modoEfetivo } from './whatsapp.modo';
 import { getWhatsAppProvider } from './whatsapp-provider.factory';
 import { estadoDaIa, estadoDaIaDoNumero, salvarIa, salvarIaDoNumero } from '../bots/ia.service';
 import { conectarNumeroMeta, estadoDoEmbeddedSignup } from './meta-embedded-signup.service';
+import { emitirTicketWebJsCall } from './webjs-call-ticket';
 
 export const channelsRoutes = Router();
+
+const WEBJS_CALL_TICKET_TTL_SECONDS = 45;
+
+function webJsBridgeConfig() {
+  const port = process.env.WEBJS_LOCAL_PORT?.trim() || '4174';
+  const base = (process.env.WEBJS_LOCAL_URL?.trim() || `http://127.0.0.1:${port}/api/platform`).replace(/\/+$/, '');
+  const token = process.env.WEBJS_LOCAL_TOKEN?.trim() || process.env.WPP_CONNECT_WEBHOOK_SECRET?.trim() || '';
+  return { base, token };
+}
+
+async function chamarWebJsBridge(path: string, init: RequestInit = {}, timeoutMs = 20_000) {
+  const { base, token } = webJsBridgeConfig();
+  if ((process.env.WHATSAPP_PROVIDER?.trim().toLowerCase() || 'webjs') !== 'webjs' || !token) {
+    throw serviceUnavailable('O conector de chamadas WhatsApp Web não está configurado no servidor.');
+  }
+  let resposta: Response;
+  try {
+    resposta = await fetch(`${base}${path}`, {
+      ...init,
+      headers: { Authorization: `Bearer ${token}`, ...(init.headers ?? {}) },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch {
+    throw serviceUnavailable('O serviço de chamadas WhatsApp Web não respondeu.');
+  }
+  const corpo = await resposta.json().catch(() => ({})) as Record<string, unknown>;
+  if (!resposta.ok) {
+    throw new AppError(resposta.status >= 500 ? 502 : resposta.status, 'CHAMADA_WHATSAPP_RECUSADA', String(corpo.error ?? 'O serviço de chamadas recusou a operação.'));
+  }
+  return corpo;
+}
+
+async function configDeChamadaWebJs(req: Request) {
+  if ((process.env.WHATSAPP_PROVIDER?.trim().toLowerCase() || 'webjs') !== 'webjs' || !webJsBridgeConfig().token) {
+    throw serviceUnavailable('O conector de chamadas WhatsApp Web não está configurado no servidor.');
+  }
+  const config = await obterConfigPorId(param(req, 'id'));
+  if (!config || config.canal !== 'WHATSAPP') throw notFound('Linha WhatsApp não encontrada.');
+  exigirDonoOuAdmin(req, config.donoId);
+  if (!config.ativo || modoEfetivo(config.modo) !== 'NAO_OFICIAL' || !config.ponteSessao) {
+    throw serviceUnavailable('Conecte uma linha WhatsApp no modo não oficial pelo Atendimento primeiro.');
+  }
+  return config;
+}
 
 /**
  * QR/estado/desconexao passam pelo `WhatsAppProvider` em vez de falar direto
@@ -310,6 +356,90 @@ channelsRoutes.get(
   asyncHandler(async (req, res) => {
     const numero = await minhaLinhaWhatsapp(req.user!.sub);
     res.json({ numero });
+  }),
+);
+
+channelsRoutes.get(
+  '/numeros/:id/webjs-call/status',
+  asyncHandler(async (req, res) => {
+    const config = await configDeChamadaWebJs(req);
+    const estado = await chamarWebJsBridge(`/status?session=${encodeURIComponent(config.ponteSessao!)}`);
+    res.json(estado);
+  }),
+);
+
+channelsRoutes.post(
+  '/numeros/:id/webjs-call/originar',
+  validateBody(z.object({ phone: z.string().trim().min(10).max(30) })),
+  asyncHandler(async (req, res) => {
+    const config = await configDeChamadaWebJs(req);
+    const resultado = await chamarWebJsBridge('/call', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session: config.ponteSessao, phone: req.body.phone }),
+    }, 55_000);
+    res.json(resultado);
+  }),
+);
+
+channelsRoutes.post(
+  '/numeros/:id/webjs-call/action/:acao',
+  asyncHandler(async (req, res) => {
+    const config = await configDeChamadaWebJs(req);
+    const acao = param(req, 'acao');
+    if (!['accept', 'reject', 'hangup'].includes(acao)) throw notFound('Ação de chamada não encontrada.');
+    const resultado = await chamarWebJsBridge(`/call/${acao}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session: config.ponteSessao }),
+    });
+    res.json(resultado);
+  }),
+);
+
+channelsRoutes.post(
+  '/numeros/:id/webjs-call/audio-ticket',
+  asyncHandler(async (req, res) => {
+    const config = await configDeChamadaWebJs(req);
+    const ticket = await emitirTicketWebJsCall({
+      organizacaoId: organizacaoAtual(),
+      usuarioId: req.user!.sub,
+      canalConfigId: config.id,
+      sessao: config.ponteSessao!,
+    });
+    res.json({ ticket, expiresIn: WEBJS_CALL_TICKET_TTL_SECONDS });
+  }),
+);
+
+channelsRoutes.post(
+  '/numeros/:id/webjs-call/recordings/:base/analyze',
+  asyncHandler(async (req, res) => {
+    const config = await configDeChamadaWebJs(req);
+    const base = param(req, 'base');
+    if (!base.startsWith(`sessao-${config.ponteSessao}-`)) throw notFound('Gravação não encontrada nesta linha.');
+    const resultado = await chamarWebJsBridge(`/recordings/${encodeURIComponent(base)}/analyze?session=${encodeURIComponent(config.ponteSessao!)}`, { method: 'POST' });
+    res.json(resultado);
+  }),
+);
+
+channelsRoutes.get(
+  '/numeros/:id/webjs-call/recordings/:name/audio',
+  asyncHandler(async (req, res) => {
+    const config = await configDeChamadaWebJs(req);
+    const name = param(req, 'name');
+    if (!name.startsWith(`sessao-${config.ponteSessao}-`)) throw notFound('Gravação não encontrada nesta linha.');
+    const { base, token } = webJsBridgeConfig();
+    let resposta: Response;
+    try {
+      resposta = await fetch(`${base}/recordings/${encodeURIComponent(name)}/audio?session=${encodeURIComponent(config.ponteSessao!)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(30_000),
+      });
+    } catch {
+      throw serviceUnavailable('O serviço de gravações WhatsApp não respondeu.');
+    }
+    if (!resposta.ok) throw new AppError(resposta.status, 'GRAVACAO_NAO_DISPONIVEL', 'A gravação ainda não está disponível.');
+    res.type('audio/wav').send(Buffer.from(await resposta.arrayBuffer()));
   }),
 );
 

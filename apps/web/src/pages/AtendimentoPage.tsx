@@ -996,7 +996,9 @@ export function AtendimentoPage() {
         />
       )}
       <ModalIniciarConversa aberto={iniciando} aoFechar={() => setIniciando(false)} aoIniciar={(id) => void abrir(id)} />
-      {import.meta.env.DEV && <WhatsAppWebCallPanel somenteRecebidas />}
+      {minhaLinha?.modo === 'NAO_OFICIAL' && minhaLinha.ativo && minhaLinhaConectada && (
+        <WhatsAppWebCallPanel somenteRecebidas sessao={minhaLinha.ponteSessao ?? 'teste-local'} numeroId={minhaLinha.id} />
+      )}
 
       {/*
         Quem e essa pessoa, sem sair da conversa.

@@ -13,6 +13,11 @@ apps/api/storage
 # WhatsApp linked-device credentials and session data
 apps/ponte/dados
 
+# Sessao QR do WhatsApp e gravacoes locais nunca entram na imagem.
+experimentos/whatsapp-webjs-call-poc/.auth
+experimentos/whatsapp-webjs-call-poc/recordings
+experimentos/whatsapp-webjs-call-poc/node_modules
+
 # Arquivos de trabalho e referencias que nao fazem parte do container.
 backups
 .worktrees

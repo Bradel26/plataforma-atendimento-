@@ -1,5 +1,6 @@
 import { BaileysProvider } from './providers/baileys.provider';
 import { WPPConnectProvider } from './providers/wppconnect.provider';
+import { WebJsLocalProvider } from './providers/webjs-local.provider';
 import { WhatsAppProviderLegado } from './providers/legado';
 import { obterProvider } from './providers/registro';
 import type { WhatsAppProvider } from './whatsapp.provider';
@@ -19,6 +20,7 @@ import type { WhatsAppProvider } from './whatsapp.provider';
 const FABRICAS: Record<string, () => WhatsAppProvider> = {
   baileys: () => new BaileysProvider(),
   wppconnect: () => new WPPConnectProvider(),
+  webjs: () => new WebJsLocalProvider(),
   // Contrato novo (`ChannelProvider`), servido as rotas atuais pelo adaptador legado.
   waha: () => new WhatsAppProviderLegado(obterProvider('waha')!),
   gowa: () => new WhatsAppProviderLegado(obterProvider('gowa')!),
@@ -34,9 +36,9 @@ function nomeConfigurado(): string | null {
 }
 
 /**
- * Sem `WHATSAPP_PROVIDER`: mantem o comportamento anterior a esta migracao
- * (Baileys), para nenhuma instalacao existente quebrar so por atualizar o
- * codigo. Com valor que nao seja `baileys` nem `wppconnect`: falha cedo, no
+ * Sem `WHATSAPP_PROVIDER`: mantem Baileys como provider legado. Em produção a
+ * imagem define WebJS para compartilhar o QR com as chamadas. Com valor que
+ * nao seja um provider suportado: falha cedo, no
  * boot — e sempre erro de configuracao (nome digitado errado), e cair de
  * volta num padrao silencioso mandaria mensagem pelo provider errado sem
  * ninguem perceber.

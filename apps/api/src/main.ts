@@ -16,10 +16,12 @@ import { agendarCicloParceiro } from './modules/crm/cicloParceiro.agendador';
 import { agendarReativacao } from './modules/crm/reativacao.agendador';
 import { agendarExpansaoDeSeries } from './modules/crm/seriesAtividades.agendador';
 import { criarServidorRealtime } from './realtime/server';
+import { registrarGatewayDeAudioWebJs } from './modules/channels/webjs-call-audio.gateway';
 
 // O Socket.IO precisa do servidor HTTP cru, por isso nao usamos app.listen().
 const server = createServer(createApp());
 const io = criarServidorRealtime(server);
+registrarGatewayDeAudioWebJs(server);
 
 avisarChaveDerivada();
 

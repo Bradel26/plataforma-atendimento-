@@ -35,6 +35,8 @@ RUN npm run db:generate --workspace @plataforma/api \
 FROM node:22-bookworm-slim
 WORKDIR /app
 ENV NODE_ENV=production
+ENV WHATSAPP_PROVIDER=webjs
+ENV PUPPETEER_CACHE_DIR=/opt/puppeteer
 
 # Producao apenas. O prisma (CLI) esta em dependencies de proposito: o arranque
 # roda migrate deploy, e sem ele o npx tentaria baixar da internet a cada start.
@@ -42,6 +44,10 @@ COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/
 RUN apt-get update \
  && apt-get install -y --no-install-recommends openssl ca-certificates \
+    libasound2 libatk-bridge2.0-0 libatk1.0-0 libatspi2.0-0 libcairo2 libcups2 \
+    libdbus-1-3 libdrm2 libgbm1 libglib2.0-0 libgtk-3-0 libnss3 libpango-1.0-0 \
+    libx11-xcb1 libxcomposite1 libxdamage1 libxfixes3 libxkbcommon0 libxrandr2 \
+    libxrender1 libxshmfence1 fonts-liberation xdg-utils \
  && rm -rf /var/lib/apt/lists/* \
  && npm ci --omit=dev --workspace @plataforma/api --include-workspace-root
 
@@ -50,9 +56,12 @@ COPY --from=build /app/apps/api/dist ./apps/api/dist
 COPY --from=build /app/apps/web/dist ./apps/web/dist
 COPY apps/api/prisma ./apps/api/prisma
 COPY apps/api/entrypoint.sh ./apps/api/entrypoint.sh
+COPY experimentos/whatsapp-webjs-call-poc /app/experimentos/whatsapp-webjs-call-poc
 
 # Nao roda como root: container comprometido nao vira dono do volume de anexos.
-RUN mkdir -p /app/apps/api/storage && chown -R node:node /app/apps/api/storage
+RUN mkdir -p /app/apps/api/storage/whatsapp-webjs /opt/puppeteer \
+ && npm install --omit=dev --prefix /app/experimentos/whatsapp-webjs-call-poc \
+ && chown -R node:node /app/apps/api/storage /app/experimentos/whatsapp-webjs-call-poc /opt/puppeteer
 USER node
 
 WORKDIR /app/apps/api
