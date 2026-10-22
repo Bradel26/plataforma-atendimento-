@@ -34,6 +34,7 @@ const TRANSCRICAO_URL = process.env.TRANSCRICAO_LOCAL_URL || localEnv.TRANSCRICA
 const TRANSCRICAO_MODELO = process.env.TRANSCRICAO_LOCAL_MODELO || localEnv.TRANSCRICAO_LOCAL_MODELO || 'base';
 const OLLAMA_URL = process.env.LIGACAO_IA_OLLAMA_URL || localEnv.LIGACAO_IA_OLLAMA_URL || process.env.OPORTUNIDADE_IA_OLLAMA_URL || localEnv.OPORTUNIDADE_IA_OLLAMA_URL || 'http://127.0.0.1:11434';
 const OLLAMA_MODELO = process.env.LIGACAO_IA_OLLAMA_MODELO || localEnv.LIGACAO_IA_OLLAMA_MODELO || process.env.OPORTUNIDADE_IA_OLLAMA_MODELO || localEnv.OPORTUNIDADE_IA_OLLAMA_MODELO || 'qwen3:4b';
+const INICIALIZACAO_TIMEOUT_MS = Number(process.env.WEBJS_INITIALIZATION_TIMEOUT_MS || 120_000);
 const API_WEBHOOK = `http://127.0.0.1:${API_PORT}/api/webhooks/wppconnect`;
 const app = express();
 const server = createServer(app);
@@ -60,6 +61,8 @@ function obterSessao(nome = 'teste-local') {
       micRecordingChunks: [],
       status: 'desconectado',
       latestQr: null,
+      retryAfter: 0,
+      lastError: null,
       peers: new Set(),
     };
     sessoes.set(identificador, sessao);
@@ -186,60 +189,144 @@ app.post('/api/recordings/:base/analyze', async (req, res) => {
 });
 async function iniciarCliente(nomeSessao = 'teste-local') {
   const sessao = obterSessao(nomeSessao);
+  if (sessao.retryAfter > Date.now()) return { ok: false, status: sessao.status, error: sessao.lastError };
   if (sessao.client) return { ok: true, status: sessao.status };
   if (sessao.starting) return sessao.starting;
   const inicializacao = (async () => {
-  sessao.status = 'conectando';
-  broadcast(sessao, { type: 'status', data: sessao.status });
-  await mkdir(AUTH_DIR, { recursive: true });
-  const clientId = sessao.nome === 'teste-local' ? 'teste-local' : `linha-${sessao.nome}`;
-  const client = new Client({
-    authStrategy: new LocalAuth({ clientId, dataPath: AUTH_DIR }),
-    puppeteer: { headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--autoplay-policy=no-user-gesture-required'] },
-  });
-  sessao.client = client;
-  client.on('qr', async (qr) => { sessao.status = 'aguardando QR'; sessao.latestQr = await QRCode.toDataURL(qr); broadcast(sessao, { type: 'status', data: sessao.status }); broadcast(sessao, { type: 'qr', data: sessao.latestQr }); });
-  client.on('authenticated', () => { sessao.status = 'autenticado'; broadcast(sessao, { type: 'status', data: sessao.status }); });
-  client.on('ready', () => { sessao.status = 'conectado'; sessao.latestQr = null; broadcast(sessao, { type: 'status', data: sessao.status }); });
-  client.on('auth_failure', (message) => { sessao.status = 'falha de autenticação'; broadcast(sessao, { type: 'error', data: String(message) }); });
-  const thisClient = client;
-  client.on('disconnected', (reason) => {
-    sessao.status = 'desconectado';
-    sessao.latestQr = null;
-    broadcast(sessao, { type: 'status', data: `${sessao.status}: ${reason}` });
-    if (sessao.client === thisClient) sessao.client = null;
-    thisClient.destroy().catch((error) => console.error('Falha ao fechar cliente WhatsApp:', error));
-  });
-  client.on('message', (message) => {
-    broadcast(sessao, { type: 'message', data: { from: message.from, body: message.body, timestamp: message.timestamp, fromMe: false } });
-    void entregarMensagemNaPlataforma(sessao, message, false);
-  });
-  client.on('message_create', (message) => {
-    if (message.fromMe) {
-      broadcast(sessao, { type: 'message', data: { from: message.to, body: message.body, timestamp: message.timestamp, fromMe: true } });
-      void entregarMensagemNaPlataforma(sessao, message, true);
-    }
-  });
-  client.on('call', async (call) => {
-    sessao.currentCall = call;
-    sessao.recordingChunks = [];
-    sessao.micRecordingChunks = [];
-    broadcast(sessao, { type: 'call', data: { from: call.from, isVideo: call.isVideo, fromMe: call.fromMe, canHandleLocally: call.canHandleLocally } });
-    call.on?.('end', async () => { stopMic(sessao); await persistRecording(sessao); sessao.currentCall = null; broadcast(sessao, { type: 'call-ended' }); });
-  });
-  client.initialize().catch((error) => {
-    sessao.status = 'erro';
-    broadcast(sessao, { type: 'error', data: error.message });
-    if (sessao.client === thisClient) sessao.client = null;
-    thisClient.destroy().catch((destroyError) => console.error('Falha ao encerrar inicialização:', destroyError));
-  });
-  return { ok: true, status: sessao.status };
+    sessao.status = 'conectando';
+    sessao.lastError = null;
+    broadcast(sessao, { type: 'status', data: sessao.status });
+    console.info(`[whatsapp:${sessao.nome}] inicializacao iniciada`);
+    await mkdir(AUTH_DIR, { recursive: true });
+    const clientId = sessao.nome === 'teste-local' ? 'teste-local' : `linha-${sessao.nome}`;
+    const client = new Client({
+      authStrategy: new LocalAuth({ clientId, dataPath: AUTH_DIR }),
+      puppeteer: { headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--autoplay-policy=no-user-gesture-required'] },
+    });
+    const thisClient = client;
+    sessao.client = client;
+    let timeoutInicializacao;
+    const limparTimeout = () => {
+      if (timeoutInicializacao) clearTimeout(timeoutInicializacao);
+      timeoutInicializacao = null;
+    };
+    const aguardarProximoEstado = (estado) => {
+      limparTimeout();
+      timeoutInicializacao = setTimeout(() => {
+        if (sessao.client !== thisClient || sessao.status === 'conectado') return;
+        const message = `Tempo limite ao inicializar WhatsApp (${estado}); nenhum novo estado foi recebido.`;
+        console.error(`[whatsapp:${sessao.nome}] ${message}`);
+        sessao.status = 'erro';
+        sessao.lastError = message;
+        sessao.retryAfter = Date.now() + 60_000;
+        sessao.latestQr = null;
+        broadcast(sessao, { type: 'error', data: message });
+        sessao.client = null;
+        thisClient.destroy().catch((error) => console.error(`[whatsapp:${sessao.nome}] falha ao encerrar cliente apos timeout:`, error));
+      }, INICIALIZACAO_TIMEOUT_MS);
+      timeoutInicializacao.unref?.();
+    };
+    aguardarProximoEstado('conectando');
+    client.on('qr', async (qr) => {
+      if (sessao.client !== thisClient) return;
+      console.info(`[whatsapp:${sessao.nome}] QR emitido`);
+      aguardarProximoEstado('leitura do QR');
+      try {
+        const imagemQr = await QRCode.toDataURL(qr);
+        if (sessao.client !== thisClient) return;
+        sessao.status = 'aguardando QR';
+        sessao.latestQr = imagemQr;
+        broadcast(sessao, { type: 'status', data: sessao.status });
+        broadcast(sessao, { type: 'qr', data: sessao.latestQr });
+      } catch (error) {
+        console.error(`[whatsapp:${sessao.nome}] falha ao gerar imagem do QR:`, error);
+      }
+    });
+    client.on('authenticated', () => {
+      if (sessao.client !== thisClient) return;
+      console.info(`[whatsapp:${sessao.nome}] telefone autenticado; aguardando WhatsApp Web pronto`);
+      aguardarProximoEstado('finalizacao da autenticacao');
+      sessao.status = 'autenticado';
+      broadcast(sessao, { type: 'status', data: sessao.status });
+    });
+    client.on('ready', () => {
+      if (sessao.client !== thisClient) return;
+      limparTimeout();
+      sessao.retryAfter = 0;
+      sessao.lastError = null;
+      console.info(`[whatsapp:${sessao.nome}] sessao pronta`);
+      sessao.status = 'conectado';
+      sessao.latestQr = null;
+      broadcast(sessao, { type: 'status', data: sessao.status });
+    });
+    client.on('auth_failure', (message) => {
+      if (sessao.client !== thisClient) return;
+      limparTimeout();
+      const detail = String(message || 'falha sem detalhe informado');
+      console.error(`[whatsapp:${sessao.nome}] falha de autenticacao: ${detail}`);
+      sessao.status = 'falha de autenticacao';
+      sessao.lastError = detail;
+      sessao.retryAfter = Date.now() + 60_000;
+      sessao.latestQr = null;
+      broadcast(sessao, { type: 'error', data: detail });
+      sessao.client = null;
+      thisClient.destroy().catch((error) => console.error(`[whatsapp:${sessao.nome}] falha ao fechar cliente nao autenticado:`, error));
+    });
+    client.on('disconnected', (reason) => {
+      if (sessao.client !== thisClient) return;
+      limparTimeout();
+      console.warn(`[whatsapp:${sessao.nome}] sessao desconectada: ${String(reason || 'motivo nao informado')}`);
+      sessao.status = 'desconectado';
+      sessao.lastError = String(reason || 'WhatsApp desconectado');
+      sessao.retryAfter = Date.now() + 60_000;
+      sessao.latestQr = null;
+      broadcast(sessao, { type: 'status', data: `${sessao.status}: ${reason}` });
+      if (sessao.client === thisClient) sessao.client = null;
+      thisClient.destroy().catch((error) => console.error(`[whatsapp:${sessao.nome}] falha ao fechar cliente WhatsApp:`, error));
+    });
+    client.on('message', (message) => {
+      broadcast(sessao, { type: 'message', data: { from: message.from, body: message.body, timestamp: message.timestamp, fromMe: false } });
+      void entregarMensagemNaPlataforma(sessao, message, false);
+    });
+    client.on('message_create', (message) => {
+      if (message.fromMe) {
+        broadcast(sessao, { type: 'message', data: { from: message.to, body: message.body, timestamp: message.timestamp, fromMe: true } });
+        void entregarMensagemNaPlataforma(sessao, message, true);
+      }
+    });
+    client.on('call', async (call) => {
+      sessao.currentCall = call;
+      sessao.recordingChunks = [];
+      sessao.micRecordingChunks = [];
+      broadcast(sessao, { type: 'call', data: { from: call.from, isVideo: call.isVideo, fromMe: call.fromMe, canHandleLocally: call.canHandleLocally } });
+      call.on?.('end', async () => { stopMic(sessao); await persistRecording(sessao); sessao.currentCall = null; broadcast(sessao, { type: 'call-ended' }); });
+    });
+    client.initialize().catch((error) => {
+      limparTimeout();
+      console.error(`[whatsapp:${sessao.nome}] falha em initialize():`, error);
+      if (sessao.client !== thisClient) return;
+      sessao.status = 'erro';
+      sessao.lastError = error instanceof Error ? error.message : String(error);
+      sessao.retryAfter = Date.now() + 60_000;
+      sessao.latestQr = null;
+      broadcast(sessao, { type: 'error', data: sessao.lastError });
+      sessao.client = null;
+      thisClient.destroy().catch((destroyError) => console.error(`[whatsapp:${sessao.nome}] falha ao encerrar inicializacao:`, destroyError));
+    });
+    return { ok: true, status: sessao.status };
   })();
   sessao.starting = inicializacao;
   try { return await inicializacao; }
+  catch (error) {
+    sessao.status = 'erro';
+    sessao.lastError = error instanceof Error ? error.message : String(error);
+    sessao.retryAfter = Date.now() + 60_000;
+    console.error(`[whatsapp:${sessao.nome}] falha ao preparar sessao:`, error);
+    broadcast(sessao, { type: 'error', data: sessao.lastError });
+    throw error;
+  }
   finally { if (sessao.starting === inicializacao) sessao.starting = null; }
 }
-
 async function entregarMensagemNaPlataforma(sessao, message, fromMe) {
   if (!WEBHOOK_SECRET || !message?.id?._serialized) return;
   try {
@@ -325,13 +412,13 @@ app.get('/api/platform/status', (req, res) => {
   if (!sessao.client) {
     void iniciarCliente(sessao.nome).catch((error) => broadcast(sessao, { type: 'error', data: error.message }));
   }
-  res.json({ status: sessao.status, connected: sessao.status === 'conectado', telefone: sessao.client?.info?.wid?.user || null, call: sessao.currentCall ? { from: sessao.currentCall.from, isVideo: sessao.currentCall.isVideo, fromMe: sessao.currentCall.fromMe } : null });
+  res.json({ status: sessao.status, error: sessao.lastError, connected: sessao.status === 'conectado', telefone: sessao.client?.info?.wid?.user || null, call: sessao.currentCall ? { from: sessao.currentCall.from, isVideo: sessao.currentCall.isVideo, fromMe: sessao.currentCall.fromMe } : null });
 });
 app.get('/api/platform/qr', async (req, res) => {
   const sessao = obterSessao(req.query.session || 'teste-local');
   try {
     await iniciarCliente(sessao.nome);
-    res.json({ qr: sessao.status === 'conectado' ? null : sessao.latestQr || null, connected: sessao.status === 'conectado', status: sessao.status, motivo: sessao.latestQr || sessao.status === 'conectado' ? null : `Sessão ${sessao.status}` });
+    res.json({ qr: sessao.status === 'conectado' ? null : sessao.latestQr || null, connected: sessao.status === 'conectado', status: sessao.status, motivo: sessao.latestQr || sessao.status === 'conectado' ? null : sessao.lastError || `Sessão ${sessao.status}` });
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
 app.post('/api/platform/call', async (req, res) => {

@@ -315,8 +315,14 @@ export function AtendimentoPage() {
           setMinhaLinhaConectada(true);
           setMostrarConectar(false);
         }
-      } catch {
-        // Silencio proposital: a ponte cair nao pode apagar o QR ja exibido.
+      } catch (erro) {
+        // Se ainda nao existe QR, mostre a falha da ponte em vez de deixar a
+        // tela presa em "Gerando o QR Code...". Preserve um QR ja recebido.
+        setQrConectar((atual) => atual?.qr ? atual : {
+          qr: null,
+          conectado: false,
+          motivo: erro instanceof ApiError ? erro.message : 'Não foi possível consultar o conector do WhatsApp. Tente novamente.',
+        });
       }
     };
 
@@ -895,7 +901,7 @@ export function AtendimentoPage() {
                           {conectandoLinha ? 'Conectando...' : erroConectar ? 'Tentar novamente' : 'Conectar WhatsApp'}
                         </Button>
                         <div className="w-full border-t border-slate-100 pt-3">
-                          <p className="mb-2 text-left text-xs font-medium text-slate-700">Conexão oficial da Cloud API</p>
+                          <p className="mb-2 text-left text-xs font-medium text-slate-700">Alternativa: API Oficial (sem QR)</p>
                           <ConectarWhatsAppCloud onConnected={() => void atualizarMinhaLinha()} />
                         </div>
                       </>
@@ -924,6 +930,9 @@ export function AtendimentoPage() {
                         ) : (
                           <p className="text-xs text-slate-500">{qrConectar?.motivo ?? 'Gerando o QR Code...'}</p>
                         )}
+                        <p className="w-full rounded-lg bg-amber-50 p-2 text-left text-xs text-amber-800">
+                          O QR conecta uma conta ativa no aplicativo WhatsApp Business. Se este número foi migrado exclusivamente para a API Oficial, ele não poderá ser pareado por QR.
+                        </p>
                         <Button
                           type="button"
                           variante="neutro"
@@ -933,7 +942,7 @@ export function AtendimentoPage() {
                           Cancelar
                         </Button>
                         <div className="w-full border-t border-slate-100 pt-3">
-                          <p className="mb-2 text-left text-xs font-medium text-slate-700">Migrar para a conexão oficial</p>
+                          <p className="mb-2 text-left text-xs font-medium text-slate-700">Ou migrar para a API Oficial (sem QR)</p>
                           <ConectarWhatsAppCloud onConnected={() => void atualizarMinhaLinha()} />
                         </div>
                       </>

@@ -51,7 +51,8 @@ export class WebJsLocalProvider implements WhatsAppProvider {
     try {
       const d = await request(`/status${qs(config)}`);
       const conectado = d.connected === true;
-      return { situacao: conectado ? 'CONECTADO' : d.status === 'aguardando QR' ? 'AGUARDANDO_QR' : 'DESCONECTADO', detalhe: typeof d.status === 'string' ? d.status : null, telefone: typeof d.telefone === 'string' ? d.telefone : null };
+      const detalhe = typeof d.error === 'string' ? d.error : typeof d.status === 'string' ? d.status : null;
+      return { situacao: conectado ? 'CONECTADO' : d.status === 'aguardando QR' ? 'AGUARDANDO_QR' : 'DESCONECTADO', detalhe, telefone: typeof d.telefone === 'string' ? d.telefone : null };
     } catch (erro) {
       return { situacao: 'DESCONHECIDO', detalhe: erro instanceof Error ? erro.message : 'Conector local indisponível' };
     }
