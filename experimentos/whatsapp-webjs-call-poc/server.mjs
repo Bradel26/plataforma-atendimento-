@@ -1,8 +1,9 @@
 import express from 'express';
 import { createServer } from 'node:http';
-import { mkdir, writeFile, readdir, stat, readFile } from 'node:fs/promises';
+import { mkdir, writeFile, readdir, stat, readFile, lstat, readlink, unlink } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { hostname } from 'node:os';
 import { PassThrough } from 'node:stream';
 import { WebSocketServer, WebSocket } from 'ws';
 import QRCode from 'qrcode';
@@ -35,6 +36,7 @@ const TRANSCRICAO_MODELO = process.env.TRANSCRICAO_LOCAL_MODELO || localEnv.TRAN
 const OLLAMA_URL = process.env.LIGACAO_IA_OLLAMA_URL || localEnv.LIGACAO_IA_OLLAMA_URL || process.env.OPORTUNIDADE_IA_OLLAMA_URL || localEnv.OPORTUNIDADE_IA_OLLAMA_URL || 'http://127.0.0.1:11434';
 const OLLAMA_MODELO = process.env.LIGACAO_IA_OLLAMA_MODELO || localEnv.LIGACAO_IA_OLLAMA_MODELO || process.env.OPORTUNIDADE_IA_OLLAMA_MODELO || localEnv.OPORTUNIDADE_IA_OLLAMA_MODELO || 'qwen3:4b';
 const INICIALIZACAO_TIMEOUT_MS = Number(process.env.WEBJS_INITIALIZATION_TIMEOUT_MS || 120_000);
+const LIMPAR_LOCKS_DE_OUTRA_INSTANCIA = process.env.WEBJS_SINGLE_INSTANCE !== 'false';
 const API_WEBHOOK = `http://127.0.0.1:${API_PORT}/api/webhooks/wppconnect`;
 const app = express();
 const server = createServer(app);
@@ -45,6 +47,49 @@ const wss = new WebSocketServer({
   verifyClient: ({ origin }, done) => done(origemPermitida(origin), 403, 'Origem local nao autorizada'),
 });
 const sessoes = new Map();
+let encerrando = false;
+
+async function prepararPerfilChrome(profileDir, nomeSessao) {
+  await mkdir(profileDir, { recursive: true });
+  const lockPath = path.join(profileDir, 'SingletonLock');
+  let lockTarget;
+  try {
+    const lockStat = await lstat(lockPath);
+    if (!lockStat.isSymbolicLink()) {
+      throw new Error(`O perfil WhatsApp da sessão ${nomeSessao} contém um SingletonLock que não é link simbólico; verifique o volume antes de removê-lo.`);
+    }
+    lockTarget = await readlink(lockPath);
+  } catch (error) {
+    if (error?.code === 'ENOENT') return;
+    throw error;
+  }
+
+  const owner = path.basename(lockTarget);
+  const separator = owner.lastIndexOf('-');
+  const ownerHost = separator > 0 ? owner.slice(0, separator) : '';
+  const ownerPid = separator > 0 ? Number(owner.slice(separator + 1)) : NaN;
+  if (ownerHost === hostname() && Number.isInteger(ownerPid) && ownerPid > 0) {
+    try {
+      process.kill(ownerPid, 0);
+      throw new Error(`O perfil WhatsApp da sessão ${nomeSessao} ainda está aberto pelo processo Chromium ${ownerPid}.`);
+    } catch (error) {
+      if (error?.code !== 'ESRCH') throw error;
+    }
+  } else if (!LIMPAR_LOCKS_DE_OUTRA_INSTANCIA) {
+    throw new Error(`O perfil WhatsApp da sessão ${nomeSessao} está bloqueado pela instância ${owner || 'desconhecida'}.`);
+  }
+
+  // A implantação é de instância única. Se o bloqueio veio de outro hostname,
+  // ele pertence ao container anterior, já encerrado durante o deploy.
+  for (const name of ['SingletonLock', 'SingletonCookie', 'SingletonSocket']) {
+    try {
+      await unlink(path.join(profileDir, name));
+      console.info(`[whatsapp:${nomeSessao}] removido bloqueio Chromium obsoleto (${name})`);
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+    }
+  }
+}
 
 function obterSessao(nome = 'teste-local') {
   const identificador = String(nome || '').trim();
@@ -188,6 +233,7 @@ app.post('/api/recordings/:base/analyze', async (req, res) => {
   res.json(result);
 });
 async function iniciarCliente(nomeSessao = 'teste-local') {
+  if (encerrando) return { ok: false, status: 'encerrando', error: 'O conector está reiniciando. Atualize a página em alguns segundos.' };
   const sessao = obterSessao(nomeSessao);
   if (sessao.retryAfter > Date.now()) return { ok: false, status: sessao.status, error: sessao.lastError };
   if (sessao.client) return { ok: true, status: sessao.status };
@@ -199,6 +245,8 @@ async function iniciarCliente(nomeSessao = 'teste-local') {
     console.info(`[whatsapp:${sessao.nome}] inicializacao iniciada`);
     await mkdir(AUTH_DIR, { recursive: true });
     const clientId = sessao.nome === 'teste-local' ? 'teste-local' : `linha-${sessao.nome}`;
+    const profileDir = path.join(AUTH_DIR, `session-${clientId}`);
+    await prepararPerfilChrome(profileDir, sessao.nome);
     const client = new Client({
       authStrategy: new LocalAuth({ clientId, dataPath: AUTH_DIR }),
       puppeteer: { headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--autoplay-policy=no-user-gesture-required'] },
@@ -577,3 +625,28 @@ async function persistRecording(sessao) {
 }
 
 server.listen(PORT, HOST, () => console.log(`POC local: http://${HOST}:${PORT}`));
+
+async function encerrar(signal) {
+  if (encerrando) return;
+  encerrando = true;
+  console.info(`Encerrando conector WhatsApp (${signal}); fechando sessões do Chromium.`);
+  const timeoutForcado = setTimeout(() => process.exit(1), 15_000);
+  timeoutForcado.unref?.();
+  for (const sessao of sessoes.values()) {
+    stopMic(sessao);
+    for (const peer of sessao.peers) peer.terminate();
+  }
+  await Promise.allSettled([...sessoes.values()].map(async (sessao) => {
+    const client = sessao.client;
+    sessao.client = null;
+    if (client) await client.destroy();
+  }));
+  wss.close();
+  server.close(() => {
+    clearTimeout(timeoutForcado);
+    process.exit(0);
+  });
+}
+
+process.once('SIGTERM', () => void encerrar('SIGTERM'));
+process.once('SIGINT', () => void encerrar('SIGINT'));
