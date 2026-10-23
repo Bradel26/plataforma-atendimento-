@@ -1,6 +1,6 @@
 import express from 'express';
 import { createServer } from 'node:http';
-import { mkdir, writeFile, readdir, stat, readFile, lstat, readlink, unlink } from 'node:fs/promises';
+import { mkdir, writeFile, readdir, stat, readFile, lstat, readlink, unlink, rm } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { hostname } from 'node:os';
@@ -334,11 +334,25 @@ async function iniciarCliente(nomeSessao = 'teste-local') {
       console.warn(`[whatsapp:${sessao.nome}] sessao desconectada: ${String(reason || 'motivo nao informado')}`);
       sessao.status = 'desconectado';
       sessao.lastError = explicarDesconexaoWhatsApp(reason);
-      sessao.retryAfter = Date.now() + 60_000;
+      const logout = String(reason || '').trim().toUpperCase() === 'LOGOUT';
+      // LOGOUT invalida somente a autenticacao desse aparelho vinculado. Fecha
+      // o Chrome e remove o perfil dessa linha para que a proxima consulta gere
+      // um QR novo; os dados do app no celular e as outras linhas nao mudam.
+      sessao.retryAfter = Date.now() + (logout ? 3_000 : 60_000);
       sessao.latestQr = null;
       broadcast(sessao, { type: 'status', data: `${sessao.status}: ${sessao.lastError}` });
       if (sessao.client === thisClient) sessao.client = null;
-      thisClient.destroy().catch((error) => console.error(`[whatsapp:${sessao.nome}] falha ao fechar cliente WhatsApp:`, error));
+      void (async () => {
+        try {
+          await thisClient.destroy();
+          if (logout) {
+            await rm(profileDir, { recursive: true, force: true });
+            console.info(`[whatsapp:${sessao.nome}] perfil de autenticacao local renovado apos LOGOUT`);
+          }
+        } catch (error) {
+          console.error(`[whatsapp:${sessao.nome}] falha ao encerrar/renovar sessao:`, error);
+        }
+      })();
     });
     client.on('message', (message) => {
       broadcast(sessao, { type: 'message', data: { from: message.from, body: message.body, timestamp: message.timestamp, fromMe: false } });
