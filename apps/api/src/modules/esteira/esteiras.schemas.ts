@@ -136,7 +136,8 @@ export const vendedorSchema = z.object({
     .nullable()
     .optional(),
   telefone: textoOpcional(30),
-  status: z.nativeEnum(StatusVendedor).default('ATIVO'),
+  /** Criação: padrão ATIVO. Atualização: omitido mantém o atual (não reativa em silêncio). */
+  status: z.nativeEnum(StatusVendedor).optional(),
 });
 
 export type CriarVinculoInput = z.infer<typeof criarVinculoSchema>;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { diferencas, diferencasDoVendedor, valorAuditavel } from './auditoria';
+import { CAMPO_JUSTIFICATIVA, diferencas, diferencasDoVendedor, mesclarVendedor, valorAuditavel } from './auditoria';
 
 describe('diferencas', () => {
   it('datas iguais em instâncias diferentes não são diferença', () => {
@@ -78,5 +78,26 @@ describe('diferencasDoVendedor', () => {
         { nome: 'Ana', cpf: null, telefone: null, status: 'INATIVO' },
       ),
     ).toEqual([{ campo: 'vendedores.v1.status', de: 'ATIVO', para: 'INATIVO' }]);
+  });
+});
+
+describe('CAMPO_JUSTIFICATIVA', () => {
+  it('usa prefixo reservado, que não colide com campo real', () => {
+    expect(CAMPO_JUSTIFICATIVA).toBe('_justificativa');
+  });
+});
+
+describe('mesclarVendedor', () => {
+  const inativo = { nome: 'Ana', cpf: '12345678901', telefone: '11999990000', status: 'INATIVO' as const };
+
+  it('criação: status padrão ATIVO, cpf/telefone omitidos ficam nulos', () => {
+    expect(mesclarVendedor(null, { nome: 'Bia' })).toEqual({ nome: 'Bia', cpf: null, telefone: null, status: 'ATIVO' });
+  });
+  it('atualização sem status mantém o atual (não reativa em silêncio)', () => {
+    expect(mesclarVendedor(inativo, { nome: 'Ana Souza' })).toEqual({ ...inativo, nome: 'Ana Souza' });
+  });
+  it('atualização: omitido mantém, null explícito limpa', () => {
+    expect(mesclarVendedor(inativo, { nome: 'Ana', telefone: null })).toEqual({ ...inativo, telefone: null });
+    expect(mesclarVendedor(inativo, { nome: 'Ana', status: 'ATIVO', cpf: null })).toEqual({ ...inativo, cpf: null, status: 'ATIVO' });
   });
 });

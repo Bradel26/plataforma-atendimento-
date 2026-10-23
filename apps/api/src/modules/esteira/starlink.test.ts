@@ -5,6 +5,7 @@ import {
   avaliarMudancaStarlink,
   derivarEtapaStarlink,
   patchParaColuna,
+  perdaSemMotivo,
   sugereDescarte,
   type CamposStarlink,
 } from './starlink';
@@ -407,5 +408,21 @@ describe('sugereDescarte', () => {
     expect(sugereDescarte(c({ cnpjApto: false, altCnae: true }))).toBe(false);
     expect(sugereDescarte(c({ cnpjApto: null }))).toBe(false);
     expect(sugereDescarte(c({ cnpjApto: true }))).toBe(false);
+  });
+});
+
+describe('perdaSemMotivo', () => {
+  it('perdido sem motivo é perda sem motivo (Nurture com o motivo limpo cairia em Descartado)', () => {
+    const nurture = c({ ...emAtendimento, perdido: true, motivoPerda: 'NAO_RESPONDEU' });
+    expect(perdaSemMotivo(aplicarTravas(nurture, { motivoPerda: null }))).toBe(true);
+    expect(perdaSemMotivo(c({ perdido: true }))).toBe(true);
+  });
+  it('perdido com motivo, ou não perdido, não é', () => {
+    expect(perdaSemMotivo(c({ perdido: true, motivoPerda: 'SEM_INTERESSE' }))).toBe(false);
+    expect(perdaSemMotivo(c({ perdido: false }))).toBe(false);
+    expect(perdaSemMotivo(c())).toBe(false);
+  });
+  it('Vivensis reprovada traz o motivo pela trava', () => {
+    expect(perdaSemMotivo(aplicarTravas(emCredenciamento, { vivensisStatus: 'REPROVADO' }))).toBe(false);
   });
 });

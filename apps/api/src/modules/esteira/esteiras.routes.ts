@@ -7,7 +7,7 @@ import { param } from '../../http/params';
 import { notFound } from '../../lib/errors';
 import { requireModulo } from '../../lib/modulos';
 import { exigirOperacao } from './acesso';
-import type { ChaveEtapa } from './catalogo';
+import { operacaoDaUrl, type ChaveEtapa } from './catalogo';
 import {
   criarVinculoSchema,
   editarVinculoSchemas,
@@ -41,9 +41,12 @@ const validarPorOperacao =
   (req, res, next) =>
     validateBody(schemas[res.locals.operacao as Operacao])(req, res, next);
 
-/** Vendedores do PDV só existem na TIM: na Starlink a rota "não existe". */
-const somenteTim: RequestHandler = (_req, res, next) =>
-  next(res.locals.operacao === 'TIM' ? undefined : notFound('Recurso não encontrado'));
+/**
+ * Vendedores do PDV só existem na TIM: na Starlink a rota "não existe" (404).
+ * Vem antes de `exigirOperacao`, senão quem só lê a Starlink receberia 403.
+ */
+const somenteTim: RequestHandler = (req, _res, next) =>
+  next(operacaoDaUrl(String(req.params.operacao ?? '')) === 'TIM' ? undefined : notFound('Recurso não encontrado'));
 
 esteirasRoutes.use(requireAuth);
 esteirasRoutes.use(requireModulo('esteira'));
@@ -102,8 +105,8 @@ esteirasRoutes.post(
 
 esteirasRoutes.put(
   '/:operacao/vinculos/:id/vendedores',
-  exigirOperacao('EDICAO'),
   somenteTim,
+  exigirOperacao('EDICAO'),
   validateBody(vendedorSchema),
   asyncHandler(async (req, res) => {
     res.json({ vinculo: await salvarVendedor('TIM', param(req, 'id'), req.body as VendedorInput) });
@@ -112,8 +115,8 @@ esteirasRoutes.put(
 
 esteirasRoutes.delete(
   '/:operacao/vinculos/:id/vendedores/:vendedorId',
-  exigirOperacao('EDICAO'),
   somenteTim,
+  exigirOperacao('EDICAO'),
   asyncHandler(async (req, res) => {
     res.json({ vinculo: await inativarVendedor('TIM', param(req, 'id'), param(req, 'vendedorId')) });
   }),

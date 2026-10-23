@@ -137,6 +137,14 @@ export function deveLiberarVenda(etapaAtual: ChaveTim, c: CamposTim): boolean {
   return etapaAtual === 'TIM_POS_CRED' && prontoTim(c);
 }
 
+/**
+ * Edição em Pós-cred libera a venda só quando o "pronto" VIRA verdadeiro (spec 5.1);
+ * pronto que já era verdadeiro não dispara (gates não são retroativos, spec 7).
+ */
+export function liberaVendaNaEdicao(etapaAtual: ChaveTim | null, antes: CamposPronto, depois: CamposTim): boolean {
+  return etapaAtual != null && !prontoTim(antes) && deveLiberarVenda(etapaAtual, depois);
+}
+
 /** Algum sistema passou a "Sim" sem vendedor ativo no PDV: pendência `vendedorAtivo`. */
 export function pendenciasDeCamposTim(antes: CamposTim, depois: CamposTim, vendedoresAtivos: number): string[] {
   const virouSim = SISTEMAS.some((s) => antes[s] !== true && depois[s] === true);

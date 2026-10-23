@@ -249,6 +249,14 @@ function conferirDestino(destino: ChaveStarlink, atual: CamposStarlink, patch: P
   return patch;
 }
 
+/**
+ * Perdido sem motivo: a derivação o mandaria para Descartado sem situação.
+ * Toda gravação (mover ou editar) exige o motivo.
+ */
+export function perdaSemMotivo(c: CamposStarlink): boolean {
+  return c.perdido === true && c.motivoPerda == null;
+}
+
 /** `cnpjApto = NÃO` sem MEI e sem alteração de CNAE: sugerir descarte (o operador confirma). */
 export function sugereDescarte(c: CamposStarlink): boolean {
   return c.cnpjApto === false && c.mei !== true && c.altCnae !== true;

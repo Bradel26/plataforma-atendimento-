@@ -7,6 +7,9 @@ import type { StatusVendedor } from '@prisma/client';
 
 export type Diferenca = { campo: string; de: unknown; para: unknown };
 
+/** Campo da linha que guarda a justificativa de uma alteração fora da regra (prefixo reservado). */
+export const CAMPO_JUSTIFICATIVA = '_justificativa';
+
 const vazio = (v: unknown): boolean => v === null || v === undefined;
 
 /** Igualdade de valor de campo: nulo ≡ ausente, data pelo instante, objeto pelo conteúdo. */
@@ -50,4 +53,21 @@ export type DadosVendedor = { nome: string; cpf: string | null; telefone: string
  */
 export function diferencasDoVendedor(id: string, antes: DadosVendedor | null, depois: DadosVendedor): Diferenca[] {
   return diferencas(antes ?? {}, depois).map((d) => ({ ...d, campo: `vendedores.${id}.${d.campo}` }));
+}
+
+/**
+ * Dados finais do vendedor. Criação (`antes` nulo): status padrão ATIVO, cpf e
+ * telefone omitidos ficam nulos. Atualização: omitido mantém o valor atual (não
+ * reativa um INATIVO em silêncio); só `null` explícito limpa.
+ */
+export function mesclarVendedor(
+  antes: DadosVendedor | null,
+  input: { nome: string; cpf?: string | null; telefone?: string | null; status?: StatusVendedor },
+): DadosVendedor {
+  return {
+    nome: input.nome,
+    cpf: input.cpf !== undefined ? input.cpf : (antes?.cpf ?? null),
+    telefone: input.telefone !== undefined ? input.telefone : (antes?.telefone ?? null),
+    status: input.status ?? antes?.status ?? 'ATIVO',
+  };
 }

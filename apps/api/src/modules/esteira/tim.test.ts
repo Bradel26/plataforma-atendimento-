@@ -4,6 +4,7 @@ import {
   camposBloqueadosTim,
   deveLiberarVenda,
   efeitosDeEntradaTim,
+  liberaVendaNaEdicao,
   pendenciasDeCamposTim,
   prontoDesfeito,
   prontoTim,
@@ -219,5 +220,21 @@ describe('prontoDesfeito', () => {
     expect(prontoDesfeito('TIM_VENDA_LIBERADA', vazio, vazio)).toBe(false);
     expect(prontoDesfeito('TIM_DESCREDENCIADO', pronto, desfeito)).toBe(false);
     expect(prontoDesfeito(null, pronto, desfeito)).toBe(false);
+  });
+});
+
+describe('liberaVendaNaEdicao', () => {
+  it('só quando o pronto VIRA verdadeiro em Pós-cred', () => {
+    const quase = { ...pronto, treinamento: 'PENDENTE' as const };
+    expect(liberaVendaNaEdicao('TIM_POS_CRED', quase, pronto)).toBe(true);
+  });
+  it('pronto que já era verdadeiro não libera (gates não são retroativos)', () => {
+    expect(liberaVendaNaEdicao('TIM_POS_CRED', pronto, { ...pronto, dep: 'TIM' })).toBe(false);
+  });
+  it('fora de Pós-cred ou sem ficar pronto não libera', () => {
+    const quase = { ...pronto, treinamento: 'PENDENTE' as const };
+    expect(liberaVendaNaEdicao('TIM_CRED_OK', quase, pronto)).toBe(false);
+    expect(liberaVendaNaEdicao('TIM_POS_CRED', vazio, quase)).toBe(false);
+    expect(liberaVendaNaEdicao(null, quase, pronto)).toBe(false);
   });
 });

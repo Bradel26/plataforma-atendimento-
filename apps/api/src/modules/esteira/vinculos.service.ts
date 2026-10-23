@@ -31,7 +31,15 @@ import { estagioIniciaCiclo } from '../crm/cicloParceiro';
 import { iniciarCiclos } from '../crm/cicloParceiro.service';
 import { diasDesde } from '../crm/esteira';
 import { acessoDoUsuarioAtual } from './acesso';
-import { diferencas, diferencasDoVendedor, valorAuditavel, type DadosVendedor, type Diferenca } from './auditoria';
+import {
+  CAMPO_JUSTIFICATIVA,
+  diferencas,
+  diferencasDoVendedor,
+  mesclarVendedor,
+  valorAuditavel,
+  type DadosVendedor,
+  type Diferenca,
+} from './auditoria';
 import { ETAPAS, MOTIVOS_PERDA, chaveConhecida, etapa, type ChaveEtapa, type ChaveStarlink, type ChaveTim } from './catalogo';
 import type { CriarVinculoInput } from './esteiras.schemas';
 import {
@@ -51,13 +59,21 @@ import {
   type ErroDeMovimento,
   type Situacao,
 } from './movimento';
-import { CAMPOS_STARLINK_VAZIO, aplicarTravas, avaliarMudancaStarlink, derivarEtapaStarlink, type CamposStarlink } from './starlink';
+import {
+  CAMPOS_STARLINK_VAZIO,
+  aplicarTravas,
+  avaliarMudancaStarlink,
+  derivarEtapaStarlink,
+  perdaSemMotivo,
+  type CamposStarlink,
+} from './starlink';
 import {
   CAMPOS_TIM_VAZIO,
   avaliarMovimentoTim,
   camposBloqueadosTim,
   deveLiberarVenda,
   efeitosDeEntradaTim,
+  liberaVendaNaEdicao,
   pendenciasDeCamposTim,
   prontoDesfeito,
   prontoTim,
@@ -541,7 +557,7 @@ function auditoriaDaGravacao(v: VinculoDb, g: Gravacao): Diferenca[] {
     ...(g.auditoriaExtra ?? []),
   ];
   // Com movimento, a justificativa fica no histórico.
-  if (!g.movimento && g.justificativa && linhas.length > 0) linhas.push({ campo: 'justificativa', de: null, para: g.justificativa });
+  if (!g.movimento && g.justificativa && linhas.length > 0) linhas.push({ campo: CAMPO_JUSTIFICATIVA, de: null, para: g.justificativa });
   return linhas;
 }
 
@@ -663,9 +679,14 @@ async function liberarVendaSePronta(atual: VinculoDb, agora: Date): Promise<Vinc
   return recarregar(atual.id);
 }
 
-/** Depois de gravar: liberação automática da venda, ciclo do parceiro e o detalhe. */
-async function concluir(id: string, agora: Date): Promise<VinculoDetalhe> {
-  const atual = await liberarVendaSePronta(await recarregar(id), agora);
+/**
+ * Depois de gravar: liberação automática da venda (quando quem gravou pede —
+ * mover para Pós-cred, ou edição em que o "pronto" virou verdadeiro), ciclo do
+ * parceiro e o detalhe.
+ */
+async function concluir(id: string, agora: Date, liberarVenda: boolean): Promise<VinculoDetalhe> {
+  const relido = await recarregar(id);
+  const atual = liberarVenda ? await liberarVendaSePronta(relido, agora) : relido;
   // Ciclo do parceiro: a mesma regra de `iniciarCiclos` (TIM em Acompanhamento, Starlink em Pronto p/ venda).
   if (estagioIniciaCiclo(atual.estagio)) await iniciarCicloSemFalhar(id);
   return montarDetalhe(atual);
@@ -689,6 +710,8 @@ function avaliarGravacaoStarlink(
   depois: CamposStarlink,
   ctx: { justificativa: string | null; perfil: Role; nivel: NivelOperacao | undefined; motivo: string | null },
 ) {
+  // Perdido sem motivo cairia em Descartado sem situação (ex.: limpar o motivo de um Nurture).
+  if (perdaSemMotivo(depois)) throw erroHttp({ status: 400, code: 'EXIGE_MOTIVO', mensagem: 'Informe o motivo da perda' });
   const avaliacao = avaliarMudancaStarlink(antes, depois);
   const rotuloPerda = depois.motivoPerda ? MOTIVOS_PERDA[depois.motivoPerda].rotulo : null;
   const erro = errosDeMovimento(avaliacao, { ...ctx, motivo: ctx.motivo ?? rotuloPerda });
@@ -781,7 +804,8 @@ export async function moverVinculo(
   }
 
   await prisma.$transaction((tx) => gravar(tx, v, gravacao, agora));
-  return concluir(id, agora);
+  // Entrar em Pós-cred já "pronto" libera a venda (5 → 6).
+  return concluir(id, agora, true);
 }
 
 // ---------------------------------------------------------------------------
@@ -823,6 +847,7 @@ export async function editarCampos(operacao: Operacao, id: string, input: Editar
   });
   const avisosExtras: Aviso[] = [];
   let gravacao: Gravacao;
+  let liberarVenda = false;
 
   if (operacao === 'TIM') {
     const chave = chaveAtual(v) as ChaveTim | null;
@@ -842,6 +867,7 @@ export async function editarCampos(operacao: Operacao, id: string, input: Editar
       if (erro) throw erroHttp(erro);
     }
     if (prontoDesfeito(chave, antes, depois)) avisosExtras.push('PRONTO_DESFEITO');
+    liberarVenda = liberaVendaNaEdicao(chave, antes, depois);
     gravacao = { usuarioId: usuario.id, movimento: null, tim: patch, vinculo, justificativa: pendencias.length > 0 ? justificativa : null };
   } else {
     const antes = camposStarlink(v);
@@ -869,7 +895,7 @@ export async function editarCampos(operacao: Operacao, id: string, input: Editar
   if (!gravacao.movimento && auditoriaDaGravacao(v, gravacao).length === 0) return montarDetalhe(v);
 
   await prisma.$transaction((tx) => gravar(tx, v, gravacao, agora));
-  const detalhe = await concluir(id, agora);
+  const detalhe = await concluir(id, agora, liberarVenda);
   return avisosExtras.length > 0 ? { ...detalhe, avisos: [...detalhe.avisos, ...avisosExtras] } : detalhe;
 }
 
@@ -915,14 +941,16 @@ export async function adicionarNota(operacao: Operacao, id: string, textoNota: s
     await tx.credenciamentoNota.create({ data: { credenciamentoId: v.id, autorId: usuario.id, texto: textoNota } });
     await gravar(tx, v, gravacao, agora);
   });
-  return concluir(id, agora);
+  // Nota não libera a venda: o "pronto" não muda.
+  return concluir(id, agora, false);
 }
 
 // ---------------------------------------------------------------------------
 // Vendedores do PDV (só TIM)
 // ---------------------------------------------------------------------------
 
-export type SalvarVendedorInput = { id?: string; nome: string; cpf?: string | null; telefone?: string | null; status: StatusVendedor };
+/** Omitido na atualização mantém o valor atual; `null` explícito limpa (ver `mesclarVendedor`). */
+export type SalvarVendedorInput = { id?: string; nome: string; cpf?: string | null; telefone?: string | null; status?: StatusVendedor };
 
 const dadosDoVendedor = (p: DadosVendedor): DadosVendedor => ({ nome: p.nome, cpf: p.cpf, telefone: p.telefone, status: p.status });
 
@@ -948,12 +976,11 @@ async function vendedorDoVinculo(v: VinculoDb, vendedorId: string) {
 /** Cria (sem `id`) ou atualiza um vendedor do PDV. */
 export async function salvarVendedor(operacao: 'TIM', id: string, dados: SalvarVendedorInput): Promise<VinculoDetalhe> {
   const v = await carregarVisivel(operacao, id);
-  const depois: DadosVendedor = { nome: dados.nome, cpf: dados.cpf ?? null, telefone: dados.telefone ?? null, status: dados.status };
   if (dados.id) {
-    const atual = await vendedorDoVinculo(v, dados.id);
-    await gravarVendedor(v, atual.id, dadosDoVendedor(atual), depois);
+    const atual = dadosDoVendedor(await vendedorDoVinculo(v, dados.id));
+    await gravarVendedor(v, dados.id, atual, mesclarVendedor(atual, dados));
   } else {
-    await gravarVendedor(v, randomUUID(), null, depois);
+    await gravarVendedor(v, randomUUID(), null, mesclarVendedor(null, dados));
   }
   return montarDetalhe(await recarregar(id));
 }
