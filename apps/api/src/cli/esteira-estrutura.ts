@@ -13,17 +13,17 @@
  *     (ou ESTEIRA_TODAS=true: '--flag' nem sempre atravessa o npm de workspace)
  */
 import 'dotenv/config';
-import type { ClasseMotivo, CredenciamentoStarlink, TipoHistoricoEsteira } from '@prisma/client';
+import type { TipoHistoricoEsteira } from '@prisma/client';
 import { prisma, prismaSemIsolamento } from '../lib/prisma';
 import { comOrganizacao } from '../lib/tenant';
-import { etapa, type ChaveEtapa, type ChaveStarlink } from '../modules/esteira/catalogo';
+import { etapa, type ChaveEtapa } from '../modules/esteira/catalogo';
 import { sincronizarEstrutura } from '../modules/esteira/estrutura.service';
 import { saidaDaExcecaoAntiga } from '../modules/esteira/migracao';
+import { reposicionarStarlink } from '../modules/esteira/reposicionarStarlink';
 
 const MIGRATION_DE_DADOS = '20261023130000_esteiras_dados';
 export const MOTIVO_MIGRACAO_CICLO = 'Migração: já tinha ciclo do parceiro';
 export const MOTIVO_MIGRACAO_SAIDA = 'Migração: situação de exceção antiga';
-export const MOTIVO_MIGRACAO_STARLINK = 'Migração: etapa derivada dos campos';
 
 /** Quando a migration de dados terminou; nulo se ainda não foi aplicada. */
 async function momentoDaMigracao(): Promise<Date | null> {
@@ -148,64 +148,6 @@ async function reposicionarTimComExcecao() {
   return cards.length;
 }
 
-/** O que a derivação da Starlink lê: os campos 1:1 e a classe do motivo de perda. */
-export type CamposParaDerivar = Omit<CredenciamentoStarlink, 'credenciamentoId'> & { classeMotivo: ClasseMotivo | null };
-export type DerivarEtapaStarlink = (campos: CamposParaDerivar) => ChaveStarlink;
-
-const STARLINK_VAZIO: Omit<CredenciamentoStarlink, 'credenciamentoId'> = {
-  tipoCaptacao: null,
-  primeiroContatoEm: null,
-  cnpjApto: null,
-  mei: null,
-  altCnae: null,
-  vsm: null,
-  treinamento: null,
-  parceiro: null,
-  contrato: null,
-  prontoVenda: null,
-  perdido: null,
-  vivensisStatus: null,
-  motivoPerda: null,
-};
-
-/**
- * Starlink: `estagioId` passa a ser a etapa derivada dos campos (retropreenchidos
- * pela SQL). Quem vai para uma saída guarda a etapa em que estava.
- *
- * Recebe a derivação por parâmetro: `derivarEtapaStarlink` nasce na Task 5
- * (`../modules/esteira/starlink`), que liga esta função no `main` abaixo.
- */
-export async function reposicionarStarlink(derivar: DerivarEtapaStarlink) {
-  const etapas = await etapasPorChave('STARLINK');
-  const cards = await prisma.credenciamento.findMany({
-    where: { operacao: 'STARLINK', arquivadoEm: null },
-    select: {
-      id: true,
-      operacao: true,
-      estagioId: true,
-      estagioDesde: true,
-      classeMotivo: true,
-      estagio: { select: { tipoEtapa: true } },
-      starlink: true,
-    },
-  });
-  let movidos = 0;
-  for (const card of cards) {
-    const { credenciamentoId: _, ...campos } = card.starlink ?? { credenciamentoId: card.id, ...STARLINK_VAZIO };
-    const destino = etapas.get(derivar({ ...campos, classeMotivo: card.classeMotivo }));
-    if (!destino || destino.id === card.estagioId) continue;
-    const vaiSair = destino.tipoEtapa === 'SAIDA' && card.estagio.tipoEtapa !== 'SAIDA';
-    await mover(
-      card,
-      destino.id,
-      { tipo: 'CORRECAO', motivo: MOTIVO_MIGRACAO_STARLINK },
-      vaiSair ? { estagioAntesDaSaidaId: card.estagioId } : {},
-    );
-    movidos += 1;
-  }
-  return movidos;
-}
-
 /** Cards que ficaram em etapa inativa (nome antigo sem equivalente): só avisa. */
 async function cardsEmEtapaInativa() {
   return prisma.credenciamento.groupBy({
@@ -220,9 +162,7 @@ async function processarOrganizacao(organizacaoId: string, migradoEm: Date) {
   await comOrganizacao(organizacaoId, async () => {
     const comCiclo = await reposicionarTimComCiclo(migradoEm);
     const comExcecao = await reposicionarTimComExcecao();
-    // TODO(Task 5): ligar a derivação —
-    //   import { derivarEtapaStarlink } from '../modules/esteira/starlink';
-    //   const starlink = await reposicionarStarlink(derivarEtapaStarlink);
+    const starlink = await reposicionarStarlink(prisma, await etapasPorChave('STARLINK'), mover);
     const inativas = await cardsEmEtapaInativa();
 
     console.log(`Organização ${organizacaoId}:`);
@@ -231,7 +171,7 @@ async function processarOrganizacao(organizacaoId: string, migradoEm: Date) {
     );
     console.log(`  TIM → Acompanhamento (já tinha ciclo): ${comCiclo}`);
     console.log(`  TIM → saída (exceção antiga): ${comExcecao}`);
-    console.log('  Starlink: reposicionamento pela etapa derivada pendente (liga na Task 5)');
+    console.log(`  Starlink → etapa derivada dos campos: ${starlink}`);
     for (const linha of inativas) {
       console.warn(`  AVISO: ${linha._count._all} card(s) ${linha.operacao} na etapa inativa ${linha.estagioId}`);
     }
