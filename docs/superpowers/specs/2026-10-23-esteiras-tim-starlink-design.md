@@ -226,13 +226,17 @@ Na UI, botões SIM/NÃO tri-estado: clicar no valor ativo volta para NULL.
 
 ### 4.9 Permissão por operação
 
-- Tabela `usuario_operacoes (userId, operacao, nivel LEITURA|EDICAO)`.
-  ADMIN tem EDICAO nas duas implicitamente.
+- **Padrão: todo usuário com o módulo Esteira acessa as duas operações**
+  (decisão do usuário, 2026-10-23: "o usuário deve poder acessar os dois
+  fluxos, porque trabalham nos mesmos projetos"). Isso vale também para
+  usuários criados depois — ninguém começa sem acesso.
+- Tabela `usuario_operacoes (userId, operacao, nivel SEM_ACESSO|LEITURA|EDICAO)`
+  guarda só **exceções** configuradas pelo ADMIN. Sem linha = EDICAO.
+  ADMIN tem EDICAO nas duas sempre.
 - Concedida pelo ADMIN na tela de usuários existente (Configurações).
-- Migração (preserva o que cada um vê hoje): usuário cujo perfil vê o módulo
-  `esteira` recebe EDICAO nas duas; usuário cujo perfil não vê `esteira`
-  mas vê Dashboard, Gestão, Desempenho ou Campanhas recebe LEITURA nas duas.
-  O ADMIN restringe depois. **[decisão do builder/Claude]**
+- Migração: não grava nada (sem linha = acesso às duas). Quem vê os números
+  da esteira em Dashboard/Gestão/Desempenho/Campanhas continua vendo as duas
+  operações. **[decisão do builder/Claude]**
 - LEITURA: vê e exporta (se o perfil puder exportar), não move nem edita.
 - Forçar gate / mover fora da regra (exceção autorizada): perfis ADMIN,
   SUPERVISOR e GESTOR com EDICAO na operação. **[decisão do builder/Claude]**
