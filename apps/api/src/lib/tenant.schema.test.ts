@@ -35,6 +35,17 @@ const FILHAS: Record<string, string> = {
   OpportunityStageLog: 'Opportunity',
   OpportunityAnalysis: 'Opportunity',
   CredenciamentoHistorico: 'Credenciamento',
+  // Esteiras TIM/Starlink: campos exclusivos, vendedores, notas e auditoria
+  // chegam sempre pelo vinculo (Credenciamento), que ja carrega a organizacao
+  // e passa pelo filtro de carteira/operacao antes de qualquer leitura.
+  CredenciamentoTim: 'Credenciamento',
+  CredenciamentoStarlink: 'Credenciamento',
+  PdvVendedor: 'Credenciamento',
+  CredenciamentoNota: 'Credenciamento',
+  CredenciamentoAuditoria: 'Credenciamento',
+  // Permissao por operacao e preferencias: sempre pelo usuario, ja da organizacao.
+  UsuarioOperacao: 'User',
+  PreferenciaUsuario: 'User',
   // Ciclo do parceiro: etapas e historico chegam sempre pelo ciclo, que ja
   // carrega a organizacao e so e lido depois de conferir o credenciamento visivel.
   CicloParceiroEtapa: 'CicloParceiro',

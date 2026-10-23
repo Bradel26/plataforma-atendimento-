@@ -69,6 +69,7 @@ const COM_ORGANIZACAO = new Set([
   'MetaOperacional',
   // Permissao de modulo por perfil: tabela raiz, com organizacao e CHECK proprio.
   'ModulePermission',
+  'RegistroEsteira',
 ]);
 
 /** Operacoes que leem ou alteram por filtro: ganham `where`. */

@@ -110,6 +110,7 @@ model Organizacao {
   produtosDoCliente           ProdutoDoCliente[]
   visoesSalvas                VisaoSalva[]
   permissoesModulo            ModulePermission[]
+  registrosEsteira            RegistroEsteira[]
   filiais                     Filial[]
   camposCustomizados          CampoCustomizado[]
   mensagensRapidas            MensagemRapida[]
@@ -196,6 +197,8 @@ model User {
   cicloParceiroHistorico      CicloParceiroHistorico[]  @relation("CicloHistoricoUsuario")
   cicloParceiroEtapas         CicloParceiroEtapa[]      @relation("CicloEtapaUsuario")
   metasOperacionais           MetaOperacional[]
+  operacoesEsteira            UsuarioOperacao[]
+  preferencias                PreferenciaUsuario[]
   organizacao                 Organizacao               @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
   /// SetNull: desligar o gestor nao pode apagar a equipe dele.
   gestor                      User?                     @relation("Equipe", fields: [gestorId], references: [id], onDelete: SetNull)
@@ -349,31 +352,33 @@ enum AttachmentType {
 
 /// Contato/cliente final. Base do CRM (expandido na Fase 2 com Conta, Lead e Oportunidade).
 model Contact {
-  id               String    @id @default(uuid())
-  organizacaoId    String    @default("") @map("organizacao_id")
-  nome             String
-  telefone         String?
+  id                  String    @id @default(uuid())
+  organizacaoId       String    @default("") @map("organizacao_id")
+  nome                String
+  telefone            String?
   /// Telefone em dígitos E.164, mantido por trigger para deduplicação entre formatos.
-  telefoneNormalizado String? @map("telefone_normalizado")
-  email            String?
-  canalOrigem      Channel   @default(WEBCHAT) @map("canal_origem")
-  origemImportacao String?   @map("origem_importacao")
-  tags             String[]  @default([])
-  observacoes      String?
+  telefoneNormalizado String?   @map("telefone_normalizado")
+  /// CPF so com digitos. Busca na esteira e vinculo de vendedores/responsaveis.
+  cpf                 String?
+  email               String?
+  canalOrigem         Channel   @default(WEBCHAT) @map("canal_origem")
+  origemImportacao    String?   @map("origem_importacao")
+  tags                String[]  @default([])
+  observacoes         String?
   /// Linha de negócio reconhecida na importação: TIM ou Starlink.
-  segmentoParceiro String?   @map("segmento_parceiro")
+  segmentoParceiro    String?   @map("segmento_parceiro")
   /// Estado (UF, duas letras maiusculas) e cidade do parceiro. Alimentam o
   /// "parceiros por estado/regiao" do Dashboard e o filtro de publico de
   /// campanha. Anulaveis: o contato que nasce no webchat nao tem endereco.
-  uf               String?   @db.VarChar(2)
-  cidade           String?
+  uf                  String?   @db.VarChar(2)
+  cidade              String?
   /// Momento em que o titular aceitou o aviso de privacidade (LGPD art. 8).
-  consentimentoEm  DateTime? @map("consentimento_em")
+  consentimentoEm     DateTime? @map("consentimento_em")
   /// Preenchido quando os dados pessoais foram substituidos por placeholders.
-  anonimizadoEm    DateTime? @map("anonimizado_em")
-  excluidoEm       DateTime? @map("excluido_em")
-  criadoEm         DateTime  @default(now()) @map("criado_em")
-  atualizadoEm     DateTime  @updatedAt @map("atualizado_em")
+  anonimizadoEm       DateTime? @map("anonimizado_em")
+  excluidoEm          DateTime? @map("excluido_em")
+  criadoEm            DateTime  @default(now()) @map("criado_em")
+  atualizadoEm        DateTime  @updatedAt @map("atualizado_em")
 
   contaId         String?       @map("conta_id")
   /// Papel desta pessoa na conta (item 5.2). Nulo = ninguem classificou ainda.
@@ -409,6 +414,7 @@ model Contact {
   @@index([organizacaoId, email])
   @@index([organizacaoId, telefone])
   @@index([organizacaoId, telefoneNormalizado])
+  @@index([organizacaoId, cpf])
   @@index([organizacaoId, responsavelId])
   @@index([organizacaoId, uf])
   /// "Quem sao as pessoas desta conta, e o que cada uma faz nela."
@@ -570,28 +576,28 @@ model ContadorProtocolo {
 }
 
 model Message {
-  id                    String          @id @default(uuid())
-  organizacaoId         String          @default("") @map("organizacao_id")
-  conversaId            String          @map("conversa_id")
+  id                    String           @id @default(uuid())
+  organizacaoId         String           @default("") @map("organizacao_id")
+  conversaId            String           @map("conversa_id")
   autor                 MessageAuthor
   /// Preenchido quando autor = AGENTE.
-  autorId               String?         @map("autor_id")
+  autorId               String?          @map("autor_id")
   conteudo              String
-  tipoAnexo             AttachmentType  @default(TEXTO) @map("tipo_anexo")
-  anexoUrl              String?         @map("anexo_url")
+  tipoAnexo             AttachmentType   @default(TEXTO) @map("tipo_anexo")
+  anexoUrl              String?          @map("anexo_url")
   /// Id da mensagem no provedor externo. Unico: o webhook da Meta reentrega.
-  idExterno             String?         @unique @map("id_externo")
+  idExterno             String?          @unique @map("id_externo")
   /// true = nota interna, visivel so a equipe; nunca sai pelo canal externo.
   /// Mesmo campo/semantica de TicketComment.interno, agora tambem em Message.
-  interno               Boolean         @default(false)
+  interno               Boolean          @default(false)
   /// Evento que mudou o responsavel (aceite, transferencia, encerramento). So em autor SISTEMA.
   evento                EventoConversa?
   /// true = digitada no celular/WhatsApp Web do numero, espelhada pela ponte (autor AGENTE, autorId nulo).
-  enviadaPorDispositivo Boolean         @default(false) @map("enviada_por_dispositivo")
+  enviadaPorDispositivo Boolean          @default(false) @map("enviada_por_dispositivo")
   /// Ack do provider (`mensagem.status` em eventos-de-canal.ts), por `idExterno`.
   /// Null = engine nao informa (ou mensagem ainda sem resposta do provider).
   status                StatusDeEntrega?
-  criadoEm              DateTime        @default(now()) @map("criado_em")
+  criadoEm              DateTime         @default(now()) @map("criado_em")
 
   conversa     Conversation @relation(fields: [conversaId], references: [id], onDelete: Cascade)
   autorUsuario User?        @relation(fields: [autorId], references: [id], onDelete: SetNull)
@@ -816,6 +822,9 @@ model Funnel {
   ativo          Boolean    @default(true)
   /// Prazo para criar tarefa interna de retomada. Nulo desliga a automacao.
   reativacaoDias Int?       @default(30) @map("reativacao_dias")
+  /// Operacao da esteira (so funis tipo ESTEIRA). Unico por organizacao via
+  /// indice parcial `funis_organizacao_operacao_esteira_key` (so na migration).
+  operacao       Operacao?
   criadoEm       DateTime   @default(now()) @map("criado_em")
 
   estagios        FunnelStage[]
@@ -848,16 +857,26 @@ model FunnelStage {
   /// Enunciados GPCT desta etapa; nulo usa as perguntas padrao da ficha.
   perguntasGpct     Json?   @map("perguntas_gpct")
 
-  funil           Funnel                    @relation(fields: [funilId], references: [id], onDelete: Cascade)
-  oportunidades   Opportunity[]
-  credenciamentos Credenciamento[]
-  atividades      Activity[]
-  saidas          OpportunityStageLog[]     @relation("EstagioSaida")
-  entradas        OpportunityStageLog[]     @relation("EstagioEntrada")
-  credSaidas      CredenciamentoHistorico[] @relation("CredEstagioSaida")
-  credEntradas    CredenciamentoHistorico[] @relation("CredEstagioEntrada")
+  /// Chave estavel da etapa (ex.: TIM_NEGOCIACAO). As regras usam a chave, nao o nome.
+  chave      String?
+  tipoEtapa  TipoEtapa @default(NORMAL) @map("tipo_etapa")
+  /// Dias sem movimento para o card ser considerado parado. Nulo = sem limite.
+  diasParado Int?      @map("dias_parado")
+  /// Etapa desativada some do kanban sem apagar o historico.
+  ativa      Boolean   @default(true)
+
+  funil            Funnel                    @relation(fields: [funilId], references: [id], onDelete: Cascade)
+  oportunidades    Opportunity[]
+  credenciamentos  Credenciamento[]
+  atividades       Activity[]
+  saidas           OpportunityStageLog[]     @relation("EstagioSaida")
+  entradas         OpportunityStageLog[]     @relation("EstagioEntrada")
+  credSaidas       CredenciamentoHistorico[] @relation("CredEstagioSaida")
+  credEntradas     CredenciamentoHistorico[] @relation("CredEstagioEntrada")
+  credAntesDaSaida Credenciamento[]          @relation("CredEstagioAntesDaSaida")
 
   @@unique([funilId, ordem])
+  @@unique([funilId, chave])
   @@map("funil_estagios")
 }
 
@@ -1114,12 +1133,12 @@ model Activity {
   registroPai   Activity?            @relation("TarefaDoRegistroManual", fields: [registroPaiId], references: [id], onDelete: SetNull)
   tarefaGerada  Activity?            @relation("TarefaDoRegistroManual")
 
+  @@unique([serieId, prazo])
   @@index([organizacaoId, contatoId, criadoEm])
   @@index([organizacaoId, contaId, criadoEm])
   @@index([organizacaoId, oportunidadeId, criadoEm])
   @@index([organizacaoId, responsavelId, prazo])
   @@index([organizacaoId, prazo])
-  @@unique([serieId, prazo])
   /// A pergunta do bloqueio: "esta oportunidade tem tarefa de etapa em aberto?"
   @@index([organizacaoId, oportunidadeId, obrigatoria, concluidoEm])
   /// "Que visitas estao em andamento agora?" — check-in feito, check-out nao.
@@ -1848,27 +1867,46 @@ model Credenciamento {
   estagioId     String  @map("estagio_id")
   responsavelId String? @map("responsavel_id")
 
+  /// Esteira a que o vinculo pertence. Um parceiro tem no maximo um vinculo ativo por operacao.
+  /// Transitorio: nullable ate a migration de dados (Task 3) preencher e exigir NOT NULL.
+  operacao Operacao?
+
   situacaoExcecao SituacaoCredenciamento? @map("situacao_excecao")
   motivoExcecao   String?                 @map("motivo_excecao")
   observacoes     String?
 
   /// Desde quando esta no estagio atual. Diferente de `atualizadoEm`: editar a
   /// observacao do card nao pode zerar o "tempo parado" da Area da Gestao.
-  estagioDesde DateTime  @default(now()) @map("estagio_desde")
-  criadoEm     DateTime  @default(now()) @map("criado_em")
-  atualizadoEm DateTime  @updatedAt @map("atualizado_em")
-  fechadoEm    DateTime? @map("fechado_em")
+  estagioDesde          DateTime      @default(now()) @map("estagio_desde")
+  criadoEm              DateTime      @default(now()) @map("criado_em")
+  atualizadoEm          DateTime      @updatedAt @map("atualizado_em")
+  fechadoEm             DateTime?     @map("fechado_em")
+  /// Vinculo arquivado (duplicata ou saida definitiva) sai das listagens.
+  arquivadoEm           DateTime?     @map("arquivado_em")
+  motivoSituacao        String?       @map("motivo_situacao")
+  classeMotivo          ClasseMotivo? @map("classe_motivo")
+  situacaoDesde         DateTime?     @map("situacao_desde")
+  /// Etapa em que estava antes de uma saida, para reativar no ponto certo.
+  estagioAntesDaSaidaId String?       @map("estagio_antes_da_saida_id")
+  ultimaInteracaoEm     DateTime      @default(now()) @map("ultima_interacao_em")
 
-  historico     CredenciamentoHistorico[]
-  cicloParceiro CicloParceiro?
-  contato       Contact                   @relation(fields: [contatoId], references: [id], onDelete: Cascade)
-  conta         Account?                  @relation(fields: [contaId], references: [id], onDelete: SetNull)
-  funil         Funnel                    @relation(fields: [funilId], references: [id], onDelete: Cascade)
-  estagio       FunnelStage               @relation(fields: [estagioId], references: [id])
-  responsavel   User?                     @relation(fields: [responsavelId], references: [id], onDelete: SetNull)
-  organizacao   Organizacao               @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  historico           CredenciamentoHistorico[]
+  tim                 CredenciamentoTim?
+  starlink            CredenciamentoStarlink?
+  notas               CredenciamentoNota[]
+  auditoria           CredenciamentoAuditoria[]
+  cicloParceiro       CicloParceiro?
+  contato             Contact                   @relation(fields: [contatoId], references: [id], onDelete: Cascade)
+  conta               Account?                  @relation(fields: [contaId], references: [id], onDelete: SetNull)
+  funil               Funnel                    @relation(fields: [funilId], references: [id], onDelete: Cascade)
+  estagio             FunnelStage               @relation(fields: [estagioId], references: [id])
+  responsavel         User?                     @relation(fields: [responsavelId], references: [id], onDelete: SetNull)
+  estagioAntesDaSaida FunnelStage?              @relation("CredEstagioAntesDaSaida", fields: [estagioAntesDaSaidaId], references: [id], onDelete: SetNull)
+  organizacao         Organizacao               @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
   @@index([organizacaoId, estagioId, atualizadoEm])
+  @@index([organizacaoId, operacao, estagioId, atualizadoEm])
+  @@index([organizacaoId, operacao, responsavelId])
   @@index([organizacaoId, funilId, estagioDesde])
   @@map("credenciamentos")
 }
@@ -1877,14 +1915,19 @@ model Credenciamento {
 /// `OpportunityStageLog`. E a base do "tempo medio na etapa" e do "tempo medio
 /// de credenciamento" da Area da Gestao e do Desempenho Operacional.
 model CredenciamentoHistorico {
-  id                String   @id @default(uuid())
-  credenciamentoId  String   @map("credenciamento_id")
-  deEstagioId       String?  @map("de_estagio_id")
-  paraEstagioId     String   @map("para_estagio_id")
-  usuarioId         String?  @map("usuario_id")
+  id                String               @id @default(uuid())
+  credenciamentoId  String               @map("credenciamento_id")
+  deEstagioId       String?              @map("de_estagio_id")
+  paraEstagioId     String               @map("para_estagio_id")
+  usuarioId         String?              @map("usuario_id")
   /// Quanto tempo ficou no estagio de origem. Nulo no registro de entrada.
-  segundosNoEstagio Int?     @map("segundos_no_estagio")
-  criadoEm          DateTime @default(now()) @map("criado_em")
+  segundosNoEstagio Int?                 @map("segundos_no_estagio")
+  criadoEm          DateTime             @default(now()) @map("criado_em")
+  /// Transitorio: nullable ate a migration de dados (Task 3) preencher e exigir NOT NULL.
+  operacao          Operacao?
+  tipo              TipoHistoricoEsteira @default(MOVIMENTO)
+  motivo            String?
+  observacao        String?
 
   credenciamento Credenciamento @relation(fields: [credenciamentoId], references: [id], onDelete: Cascade)
   deEstagio      FunnelStage?   @relation("CredEstagioSaida", fields: [deEstagioId], references: [id], onDelete: SetNull)
@@ -2037,17 +2080,17 @@ model ChannelConfig {
   /// Fica em coluna propria, e nao reaproveita `accessToken`/`phoneNumberId`: os
   /// campos da Meta continuam significando o que significam, e um dia em que os
   /// dois modos estiverem configurados a troca de modo nao perde credencial.
-  ponteUrl      String?   @map("ponte_url")
+  ponteUrl         String?   @map("ponte_url")
   /// Token com que a plataforma se autentica NA ponte. Cifrado em repouso.
-  ponteToken    String?   @map("ponte_token")
+  ponteToken       String?   @map("ponte_token")
   /// Segredo HMAC com que a PONTE assina o que envia para ca. Cifrado.
-  ponteSegredo  String?   @map("ponte_segredo")
+  ponteSegredo     String?   @map("ponte_segredo")
   /// Nome da sessao/instancia na ponte, quando ela hospeda mais de um numero.
-  ponteSessao   String?   @map("ponte_sessao")
+  ponteSessao      String?   @map("ponte_sessao")
   /// Ultimo status de conexao (CONECTADO/DESCONECTADO/AGUARDANDO_QR). Nulo antes do primeiro aviso.
-  ponteStatus   String?   @map("ponte_status")
+  ponteStatus      String?   @map("ponte_status")
   /// Quando `ponteStatus` mudou pela ultima vez.
-  ponteStatusEm DateTime? @map("ponte_status_em")
+  ponteStatusEm    DateTime? @map("ponte_status_em")
   /// Primeira conexao confirmada. Distingue linha nunca pareada de WhatsApp que caiu.
   ponteConectadoEm DateTime? @map("ponte_conectado_em")
 
@@ -2079,8 +2122,8 @@ model ChannelConfig {
   iaSegredo    String? @map("ia_segredo")
 
   /// Calling API e gravacao configuradas nesta linha individual de WhatsApp.
-  whatsappCallingHabilitado Boolean @default(false) @map("whatsapp_calling_habilitado")
-  gravarChamadasWhatsapp Boolean @default(false) @map("gravar_chamadas_whatsapp")
+  whatsappCallingHabilitado   Boolean @default(false) @map("whatsapp_calling_habilitado")
+  gravarChamadasWhatsapp      Boolean @default(false) @map("gravar_chamadas_whatsapp")
   transcreverChamadasWhatsapp Boolean @default(false) @map("transcrever_chamadas_whatsapp")
 
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
@@ -2609,15 +2652,15 @@ model Call {
   direcao       CallDirecao
   status        CallStatus  @default(INICIANDO)
 
-  numeroOrigem  String @map("numero_origem")
-  numeroDestino String @map("numero_destino")
+  numeroOrigem  String  @map("numero_origem")
+  numeroDestino String  @map("numero_destino")
   /// SDP remoto temporário para sinalizar uma chamada WhatsApp Cloud no navegador.
-  sdpRemoto String? @map("sdp_remoto")
+  sdpRemoto     String? @map("sdp_remoto")
 
-  contatoId  String? @map("contato_id")
-  conversaId String? @map("conversa_id")
-  agenteId   String? @map("agente_id")
-  filaId     String? @map("fila_id")
+  contatoId     String? @map("contato_id")
+  conversaId    String? @map("conversa_id")
+  agenteId      String? @map("agente_id")
+  filaId        String? @map("fila_id")
   /// Linha WhatsApp que transportou a chamada; nulo para telefonia organizacional.
   canalConfigId String? @map("canal_config_id")
 
@@ -2746,4 +2789,233 @@ model IntegrationToken {
 
 enum EscopoIntegracao {
   IA
+}
+
+/// Operacao da esteira de parceiros: duas esteiras independentes sobre o mesmo cadastro.
+enum Operacao {
+  TIM
+  STARLINK
+}
+
+enum AcaoRegistroEsteira {
+  EXPORTACAO
+  IMPORTACAO
+}
+
+/// Registro de exportacoes e importacoes da esteira (operacao, filtros, quantidade).
+model RegistroEsteira {
+  id            String              @id @default(uuid())
+  organizacaoId String              @default("") @map("organizacao_id")
+  operacao      Operacao
+  acao          AcaoRegistroEsteira
+  usuarioId     String?             @map("usuario_id")
+  detalhe       Json
+  criadoEm      DateTime            @default(now()) @map("criado_em")
+
+  organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+
+  @@index([organizacaoId, operacao, criadoEm])
+  @@map("registros_esteira")
+}
+
+enum TipoEtapa {
+  NORMAL
+  DESVIO
+  SAIDA
+}
+
+enum NivelOperacao {
+  SEM_ACESSO
+  LEITURA
+  EDICAO
+}
+
+enum ClasseMotivo {
+  RECUPERAVEL
+  DEFINITIVO
+}
+
+enum TipoHistoricoEsteira {
+  MOVIMENTO
+  EXCECAO
+  AUTOMATICO
+  SAIDA
+  REATIVACAO
+  IMPORTACAO
+  CORRECAO
+}
+
+/// Quem trava o avanco na TIM.
+enum DepTim {
+  TIM
+  PARCEIRO
+  BRADEL
+}
+
+enum OrigemTim {
+  MANUAL
+  PLANILHA
+}
+
+enum StatusItemTim {
+  PENDENTE
+  CONCLUIDO
+}
+
+enum StatusParceria {
+  ATIVO
+  DESISTENTE
+  DESCREDENCIADO
+}
+
+enum TipoCaptacao {
+  LEAD_INBOUND
+  PROSPECCAO_ATIVA
+}
+
+enum VivensisStatus {
+  PENDENTE
+  APROVADO
+  REPROVADO
+}
+
+enum MotivoPerdaStarlink {
+  NAO_RESPONDEU
+  SEM_CONTATO
+  OUTRO_PARCEIRO
+  SEM_ESTRUTURA
+  SEM_INTERESSE
+  SEM_PERFIL
+  CNPJ_IRREGULAR
+  REPROVADO_VIVENSIS
+  OUTRO
+}
+
+enum StatusVendedor {
+  ATIVO
+  INATIVO
+}
+
+/// Campos exclusivos da TIM, 1:1 com o vinculo. "Pronto" nao e coluna: e calculado.
+model CredenciamentoTim {
+  credenciamentoId        String          @id @map("credenciamento_id")
+  origem                  OrigemTim?
+  flagTrafegoPago         Boolean         @default(false) @map("flag_trafego_pago")
+  statusDescritivo        String?         @map("status_descritivo")
+  dep                     DepTim?
+  dataCredenciamento      DateTime?       @map("data_credenciamento")
+  matriculaSappdv         String?         @map("matricula_sappdv")
+  promoStatus             String?         @map("promo_status")
+  tipoCarteira            String?         @map("tipo_carteira")
+  sistemaTimVendas        Boolean?        @map("sistema_tim_vendas")
+  sistemaGn               Boolean?        @map("sistema_gn")
+  sistemaTimFormaMais     Boolean?        @map("sistema_tim_forma_mais")
+  sistemaPortalFornecedor Boolean?        @map("sistema_portal_fornecedor")
+  sistemaMeuTim           Boolean?        @map("sistema_meu_tim")
+  compraChip              StatusItemTim?  @map("compra_chip")
+  treinamento             StatusItemTim?
+  statusParceria          StatusParceria? @map("status_parceria")
+
+  credenciamento Credenciamento @relation(fields: [credenciamentoId], references: [id], onDelete: Cascade)
+  vendedores     PdvVendedor[]
+
+  @@map("credenciamentos_tim")
+}
+
+/// Vendedores do PDV (vinculo TIM, 1:N).
+model PdvVendedor {
+  id               String         @id @default(uuid())
+  credenciamentoId String         @map("credenciamento_id")
+  nome             String
+  cpf              String?
+  telefone         String?
+  status           StatusVendedor @default(ATIVO)
+  criadoEm         DateTime       @default(now()) @map("criado_em")
+  atualizadoEm     DateTime       @updatedAt @map("atualizado_em")
+
+  tim CredenciamentoTim @relation(fields: [credenciamentoId], references: [credenciamentoId], onDelete: Cascade)
+
+  @@index([credenciamentoId])
+  @@map("pdv_vendedores")
+}
+
+/// Campos exclusivos da Starlink, 1:1 com o vinculo. Boolean? e tri-estado:
+/// NULL = nao respondido e nunca deve ser tratado como NAO.
+model CredenciamentoStarlink {
+  credenciamentoId  String               @id @map("credenciamento_id")
+  tipoCaptacao      TipoCaptacao?        @map("tipo_captacao")
+  primeiroContatoEm DateTime?            @map("primeiro_contato_em")
+  cnpjApto          Boolean?             @map("cnpj_apto")
+  mei               Boolean?
+  altCnae           Boolean?             @map("alt_cnae")
+  vsm               Boolean?
+  treinamento       Boolean?
+  parceiro          Boolean?
+  contrato          Boolean?
+  prontoVenda       Boolean?             @map("pronto_venda")
+  perdido           Boolean?
+  vivensisStatus    VivensisStatus?      @map("vivensis_status")
+  motivoPerda       MotivoPerdaStarlink? @map("motivo_perda")
+
+  credenciamento Credenciamento @relation(fields: [credenciamentoId], references: [id], onDelete: Cascade)
+
+  @@map("credenciamentos_starlink")
+}
+
+/// Nota do vinculo. Por operacao: nota da TIM nao aparece na Starlink.
+model CredenciamentoNota {
+  id               String   @id @default(uuid())
+  credenciamentoId String   @map("credenciamento_id")
+  autorId          String?  @map("autor_id")
+  texto            String
+  criadoEm         DateTime @default(now()) @map("criado_em")
+
+  credenciamento Credenciamento @relation(fields: [credenciamentoId], references: [id], onDelete: Cascade)
+
+  @@index([credenciamentoId, criadoEm])
+  @@map("credenciamento_notas")
+}
+
+/// Trilha de auditoria de edicao de campo operacional, responsavel, situacao e vendedores.
+model CredenciamentoAuditoria {
+  id               String   @id @default(uuid())
+  credenciamentoId String   @map("credenciamento_id")
+  operacao         Operacao
+  campo            String
+  de               Json?
+  para             Json?
+  usuarioId        String?  @map("usuario_id")
+  criadoEm         DateTime @default(now()) @map("criado_em")
+
+  credenciamento Credenciamento @relation(fields: [credenciamentoId], references: [id], onDelete: Cascade)
+
+  @@index([credenciamentoId, criadoEm])
+  @@map("credenciamento_auditoria")
+}
+
+/// Excecoes de acesso por operacao, configuradas pelo ADMIN. Sem linha = EDICAO.
+model UsuarioOperacao {
+  id        String        @id @default(uuid())
+  usuarioId String        @map("usuario_id")
+  operacao  Operacao
+  nivel     NivelOperacao
+
+  usuario User @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, operacao])
+  @@map("usuarios_operacoes")
+}
+
+/// Preferencias de tela do usuario, guardadas no servidor para seguir entre dispositivos.
+model PreferenciaUsuario {
+  id           String   @id @default(uuid())
+  usuarioId    String   @map("usuario_id")
+  chave        String
+  valor        Json
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  usuario User @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, chave])
+  @@map("preferencias_usuario")
 }
