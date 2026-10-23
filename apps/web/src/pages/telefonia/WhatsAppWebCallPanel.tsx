@@ -5,8 +5,9 @@ import { IconeCheck, IconeDesligar, IconeMicrofone, IconeMicrofoneMudo, IconeTel
 type Evento = { type: string; data?: any };
 type ChamadaAtiva = { from: string; fromMe: boolean; conectado?: boolean };
 type ResumoChamada = { from: string; fromMe: boolean; segundos: number; gravacao: string | null };
-type ParteTranscricao = { speaker: string; text: string };
-type AnaliseChamada = { base: string; transcript: string; parts: ParteTranscricao[]; resumo: string; pontosPrincipais: string[]; proximasAcoes: string[]; sentimento: 'POSITIVO' | 'NEUTRO' | 'NEGATIVO'; analyzedAt: string; engine: string };
+type RegistroAtivo = { callId: string; direcao: 'ENTRANTE' | 'SAINTE'; telefone: string; iniciadoEm: string; atendidoEm?: string | null; encerradoEm?: string | null; duracao?: number | null; status?: string };
+type ParteTranscricao = { speaker: string; text: string; file?: string };
+type AnaliseChamada = { base: string; transcript: string; transcriptOriginal?: string; parts: ParteTranscricao[]; resumo: string; pontosPrincipais: string[]; proximasAcoes: string[]; confiancaTranscricao?: 'ALTA' | 'MEDIA' | 'BAIXA'; trechosIncertos?: string[]; correcoesAplicadas?: string[]; sentimento: 'POSITIVO' | 'NEUTRO' | 'NEGATIVO' | null; analyzedAt: string; engine: string };
 
 const SERVICO_LOCAL = 'http://127.0.0.1:4174';
 const ANALISE_LOCAL = 'http://127.0.0.1:4175';
@@ -24,7 +25,7 @@ function nomeCurto(valor: string) {
 
 /** Painel integrado para o conector Web testado localmente. */
 export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste-local', numeroId = null }: { somenteRecebidas?: boolean; sessao?: string; numeroId?: string | null }) {
-  const [status, setStatus] = useState('verificando conexão');
+  const [status, setStatus] = useState('verificando conex?o');
   const [qr, setQr] = useState<string | null>(null);
   const [destino, setDestino] = useState('');
   const [chamada, setChamada] = useState<ChamadaAtiva | null>(null);
@@ -39,6 +40,7 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste
   const [analisando, setAnalisando] = useState(false);
   const [erroAnalise, setErroAnalise] = useState<string | null>(null);
   const [transcricaoAberta, setTranscricaoAberta] = useState(false);
+  const [transcricaoOriginalAberta, setTranscricaoOriginalAberta] = useState(false);
   const [ocupado, setOcupado] = useState(false);
   const [microfoneAtivo, setMicrofoneAtivo] = useState(false);
   const [mudo, setMudo] = useState(false);
@@ -56,11 +58,44 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste
   const gravacaoRef = useRef<string | null>(null);
   const destinoRef = useRef('');
   const baseGravacaoRef = useRef<string | null>(null);
+  const registroRef = useRef<RegistroAtivo | null>(null);
+  const registroQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const plataformaCallIdRef = useRef<string | null>(null);
 
   const querySessao = `?session=${encodeURIComponent(sessao)}`;
 
   function registrar(texto: string) {
     setEventos((anteriores) => [texto, ...anteriores].slice(0, 4));
+  }
+
+  async function persistirHistorico(extra: Record<string, unknown> = {}) {
+    if (!numeroId || !registroRef.current) return;
+    const registro = { ...registroRef.current };
+    const dataIso = (valor?: string | null) => {
+      if (!valor) return null;
+      const data = new Date(valor);
+      return Number.isNaN(data.getTime()) ? null : data.toISOString();
+    };
+    const corpo = {
+        callId: String(registro.callId || `webjs-${Date.now()}`).slice(0, 200),
+        direcao: registro.direcao === 'ENTRANTE' ? 'ENTRANTE' : 'SAINTE',
+        telefone: String(registro.telefone || chamadaRef.current?.from || 'WhatsApp').slice(0, 200),
+        status: ['CHAMANDO', 'EM_ANDAMENTO', 'COMPLETADA', 'NAO_ATENDIDA', 'OCUPADA', 'FALHOU', 'CANCELADA'].includes(registro.status || '') ? registro.status : 'CHAMANDO',
+        ...(dataIso(registro.iniciadoEm) ? { iniciadoEm: dataIso(registro.iniciadoEm)! } : {}),
+        atendidoEm: dataIso(registro.atendidoEm),
+        encerradoEm: dataIso(registro.encerradoEm),
+        duracao: registro.duracao == null ? null : Math.max(0, Math.min(86_400, Math.round(registro.duracao))),
+        ...extra,
+    };
+    const operacao = registroQueueRef.current.then(async () => {
+      const salvo = await api.post<{ chamadaId?: string }>(`/canais/numeros/${encodeURIComponent(numeroId)}/webjs-call/registro`, corpo);
+      if (salvo.chamadaId) plataformaCallIdRef.current = salvo.chamadaId;
+      window.dispatchEvent(new CustomEvent('voice-calls-updated'));
+    }).catch((e) => {
+      setErro(e instanceof Error ? `A chamada aconteceu, mas não foi possível salvar no histórico: ${e.message}` : 'Não foi possível salvar a chamada no histórico.');
+    });
+    registroQueueRef.current = operacao;
+    await operacao;
   }
 
   async function requisitar(caminho: string, corpo?: Record<string, unknown>) {
@@ -140,7 +175,7 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste
           const source = audio.createBufferSource(); source.buffer = buffer; source.connect(audio.destination);
           const now = audio.currentTime; nextPlaybackRef.current = Math.max(nextPlaybackRef.current, now + 0.04);
           source.start(nextPlaybackRef.current); nextPlaybackRef.current += buffer.duration;
-        } catch { setErro('Não foi possível reproduzir o áudio recebido.'); }
+        } catch { setErro('Não foi poss?vel reproduzir o áudio recebido.'); }
         return;
       }
       let msg: Evento;
@@ -148,6 +183,16 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste
       if (msg.type === 'status') setStatus(String(msg.data));
       if (msg.type === 'qr') setQr(String(msg.data));
       if (msg.type === 'call') {
+        if (msg.data?.callId && msg.data?.direcao && msg.data?.iniciadoEm) {
+          registroRef.current = {
+            callId: String(msg.data.callId),
+            direcao: msg.data.direcao === 'ENTRANTE' ? 'ENTRANTE' : 'SAINTE',
+            telefone: String(msg.data.telefone || msg.data.from || ''),
+            iniciadoEm: String(msg.data.iniciadoEm),
+            status: 'CHAMANDO',
+          };
+          void persistirHistorico();
+        }
         const numero = Boolean(msg.data.fromMe) && destinoRef.current ? destinoRef.current : String(msg.data.from ?? 'Contato do WhatsApp');
         const atual = { from: numero, fromMe: Boolean(msg.data.fromMe) };
         chamadaRef.current = atual;
@@ -163,6 +208,10 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste
         registrar(atual.fromMe ? `Chamando ${nomeCurto(numero)}` : `Ligação recebida de ${nomeCurto(numero)}`);
       }
       if (msg.type === 'call-active') {
+        if (registroRef.current) {
+          registroRef.current = { ...registroRef.current, status: 'EM_ANDAMENTO', atendidoEm: String(msg.data?.atendidoEm || new Date().toISOString()) };
+          void persistirHistorico();
+        }
         setChamada((c) => {
           const atual = c ? { ...c, from: String(msg.data?.from || c.from), conectado: true } : null;
           chamadaRef.current = atual;
@@ -176,18 +225,36 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste
         setQr(null);
       }
       if (msg.type === 'call-ended') {
+        if (registroRef.current) {
+          registroRef.current = {
+            ...registroRef.current,
+            status: String(msg.data?.status || 'COMPLETADA'),
+            atendidoEm: msg.data?.atendidoEm ?? registroRef.current.atendidoEm ?? null,
+            encerradoEm: String(msg.data?.encerradoEm || new Date().toISOString()),
+            duracao: Number(msg.data?.duracao ?? 0),
+          };
+          void persistirHistorico();
+        }
         finalizarChamada();
         if (baseGravacaoRef.current) void analisarGravacao(baseGravacaoRef.current);
       }
       if (msg.type === 'recording') {
         const arquivo = String(msg.data?.name ?? 'Gravação WAV');
-        const base = arquivo.match(/^(sessao-[a-zA-Z0-9_-]+-chamada-.+?)-(?:audio-remoto|microfone-atendente)\.wav$/)?.[1];
+        const base = arquivo.match(/^(sessao-[a-zA-Z0-9_-]+-chamada-.+?)-(?:audio-remoto|microfone-atendente|audio-completo)\.wav$/)?.[1];
         if (base) baseGravacaoRef.current = base;
         gravacaoRef.current = arquivo;
         setGravacaoAtual(arquivo);
+        setResumo((atual) => atual ? { ...atual, gravacao: arquivo } : atual);
         registrar(`Gravação salva: ${arquivo}`);
       }
-      if (msg.type === 'recordings-ready' && msg.data?.base) void analisarGravacao(String(msg.data.base));
+      if (msg.type === 'recordings-ready' && msg.data?.base) {
+        const base = String(msg.data.base);
+        const nomeCompleto = `${base}-audio-completo.wav`;
+        if (Array.isArray(msg.data.files) && msg.data.files.includes(nomeCompleto)) {
+          void persistirHistorico({ recordingName: nomeCompleto });
+        }
+        void analisarGravacao(base);
+      }
       if (msg.type === 'error') setErro(String(msg.data));
     };
       ws.onerror = () => { setStatus('conector indisponível'); setErro(numeroId ? 'O serviço de chamadas não respondeu. Tente recarregar a página.' : 'Inicie o serviço local de chamadas na porta 4174.'); };
@@ -246,6 +313,7 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste
   async function ligar(e: React.FormEvent) {
     e.preventDefault(); setOcupado(true); setErro(null);
     destinoRef.current = destino;
+    plataformaCallIdRef.current = null;
     baseGravacaoRef.current = null;
     setResumo(null);
     setAnalise(null);
@@ -270,10 +338,16 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste
     setAnalisando(true);
     setErroAnalise(null);
     setAnalise(null);
+    setTranscricaoAberta(false);
+    setTranscricaoOriginalAberta(false);
     try {
       let resultado: AnaliseChamada;
       if (numeroId) {
-        resultado = await api.post<AnaliseChamada>(`/canais/numeros/${encodeURIComponent(numeroId)}/webjs-call/recordings/${encodeURIComponent(base)}/analyze`, {});
+        await registroQueueRef.current;
+        if (!plataformaCallIdRef.current) throw new Error('O registro da chamada ainda n?o foi salvo na plataforma. Tente novamente em instantes.');
+        resultado = await api.post<AnaliseChamada>(`/canais/numeros/${encodeURIComponent(numeroId)}/webjs-call/recordings/${encodeURIComponent(base)}/analyze`, {
+          ...(plataformaCallIdRef.current ? { plataformaCallId: plataformaCallIdRef.current } : {}),
+        });
       } else {
         const response = await fetch(`${ANALISE_LOCAL}/api/recordings/${encodeURIComponent(base)}/analyze`, { method: 'POST' });
         const body = await response.json().catch(() => ({}));
@@ -364,11 +438,11 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste
           <div className="flex min-w-0 items-center gap-4">
             <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-blue-900 text-2xl font-bold ring-4 ring-slate-800">{inicial}</span>
             <span className="min-w-0">
-              <span className="inline-flex items-center gap-2 rounded-full bg-emerald-950 px-2.5 py-1 text-[11px] font-semibold text-emerald-300"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />Áudio conectado</span>
+              <span className="inline-flex items-center gap-2 rounded-full bg-emerald-950 px-2.5 py-1 text-[11px] font-semibold text-emerald-300"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />áudio conectado</span>
               <span className="mt-2 block truncate text-lg font-bold">{contatoAtual}</span>
-              <span className="mt-0.5 block text-xs text-slate-300">WhatsApp · {nomeCurto(chamada.from)}</span>
+              <span className="mt-0.5 block text-xs text-slate-300">WhatsApp ? {nomeCurto(chamada.from)}</span>
               <span className="mt-1 block text-3xl font-bold tabular-nums tracking-tight">{formatarTempo(segundos)}</span>
-              <span className="mt-0.5 block text-xs text-red-300">● Gravando para o histórico</span>
+              <span className="mt-0.5 block text-xs text-red-300">? Gravando para o hist?rico</span>
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-2 md:justify-end">
@@ -390,7 +464,7 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste
               <span className="mt-1 block truncate text-xs text-slate-500">{resumo.fromMe ? 'Chamada feita' : 'Chamada recebida'} · {nomeCurto(resumo.from)}</span>
               <span className="mt-2 inline-flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
                 <IconeCheck tamanho={14} className={resumo.gravacao ? 'text-emerald-600' : 'text-slate-400'} />
-                {resumo.gravacao ? 'Gravação salva neste computador' : 'Sem gravação nesta ligação'}
+                {resumo.gravacao ? (numeroId ? 'Gravação sendo salva no histórico da plataforma' : 'Gravação salva neste computador') : 'Sem gravação nesta ligação'}
               </span>
             </span>
           </div>
@@ -413,7 +487,7 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste
               <h3 className="text-base font-bold text-slate-900">Transcrição e resumo</h3>
               <p className="mt-1 text-xs text-slate-500">Análise local da conversa, separada por participante.</p>
             </div>
-            {analise ? <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">{analise.sentimento === 'POSITIVO' ? 'Sentimento positivo' : analise.sentimento === 'NEGATIVO' ? 'Sentimento negativo' : 'Sentimento neutro'}</span> : <span className={`rounded-full px-3 py-1 text-xs font-medium ${analisando ? 'bg-blue-50 text-blue-700' : erroAnalise ? 'bg-amber-50 text-amber-800' : resumo ? 'bg-slate-100 text-slate-500' : 'bg-violet-50 text-violet-700'}`}>{analisando ? 'Analisando chamada' : erroAnalise ? 'Análise pendente' : resumo ? 'Preparando análise' : 'Exemplo fictício'}</span>}
+            {analise ? <span className={`rounded-full px-3 py-1 text-xs font-semibold ${analise.sentimento ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800'}`}>{analise.sentimento === 'POSITIVO' ? 'Sentimento positivo' : analise.sentimento === 'NEGATIVO' ? 'Sentimento negativo' : analise.sentimento === 'NEUTRO' ? 'Sentimento neutro' : 'Sentimento não analisado'}</span> : <span className={`rounded-full px-3 py-1 text-xs font-medium ${analisando ? 'bg-blue-50 text-blue-700' : erroAnalise ? 'bg-amber-50 text-amber-800' : resumo ? 'bg-slate-100 text-slate-500' : 'bg-violet-50 text-violet-700'}`}>{analisando ? 'Analisando chamada' : erroAnalise ? 'Análise pendente' : resumo ? 'Preparando análise' : 'Exemplo fictício'}</span>}
           </div>
           <div className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
             <div className="space-y-4">
@@ -421,6 +495,11 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste
                 <div>
                   <h4 className="text-xs font-bold uppercase tracking-wide text-slate-500">Resumo</h4>
                   <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-800">{analise.resumo}</p>
+                </div>
+                <div className="rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-900">
+                  Transcrição revisada com apoio de IA · confiança estimada: {analise.confiancaTranscricao === 'ALTA' ? 'alta' : analise.confiancaTranscricao === 'BAIXA' ? 'baixa' : analise.confiancaTranscricao === 'MEDIA' ? 'média' : 'não informada'}.
+                  {analise.trechosIncertos?.length ? <ul className="mt-1 list-disc pl-4">{analise.trechosIncertos.map((trecho, i) => <li key={`${i}-${trecho}`}>{trecho}</li>)}</ul> : null}
+                  {analise.correcoesAplicadas?.length ? <p className="mt-1">Ajustes: {analise.correcoesAplicadas.join('; ')}</p> : null}
                 </div>
                 {analise.pontosPrincipais?.length > 0 && <div>
                   <h4 className="text-xs font-bold uppercase tracking-wide text-slate-500">Pontos principais</h4>
@@ -432,29 +511,39 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste
                 </div>}
               </> : analisando ? <div className="flex min-h-36 flex-col justify-center rounded-xl bg-blue-50 p-4">
                 <p className="text-sm font-semibold text-blue-900">Preparando a transcrição e o resumo…</p>
-                <p className="mt-1 text-xs leading-relaxed text-blue-700">O áudio está sendo processado localmente neste computador. Chamadas longas podem levar alguns minutos.</p>
+                <p className="mt-1 text-xs leading-relaxed text-blue-700">O áudio está sendo processado neste computador. Chamadas longas podem levar alguns minutos.</p>
               </div> : erroAnalise ? <div className="rounded-xl bg-amber-50 p-4">
-                <p className="text-sm font-semibold text-amber-900">A análise ainda não ficou pronta</p>
+                <p className="text-sm font-semibold text-amber-900">A an?lise ainda não ficou pronta</p>
                 <p className="mt-1 text-xs leading-relaxed text-amber-800">{erroAnalise}</p>
                 {baseAnalise && <button type="button" onClick={() => void analisarGravacao(baseAnalise)} className="mt-3 rounded-lg bg-amber-900 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-800">Tentar novamente</button>}
               </div> : <div className="flex min-h-36 items-center rounded-xl bg-slate-50 p-4">
                 <p className="text-sm text-slate-600">A gravação e a transcrição desta chamada estão sendo preparadas.</p>
               </div>}
-              {analise && <p className="text-[11px] text-slate-400">{analise.engine} · processado neste computador</p>}
+              {analise && <p className="text-[11px] text-slate-400">{analise.engine} ? processado neste computador</p>}
             </div>
             <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h4 className="text-sm font-semibold text-slate-800">Gravações da chamada</h4>
-                {analise && <button type="button" onClick={() => setTranscricaoAberta((aberta) => !aberta)} className="text-xs font-semibold text-blue-700 hover:underline">{transcricaoAberta ? 'Ocultar transcrição' : 'Ver transcrição'}</button>}
+                {analise && <div className="flex flex-wrap gap-3">
+                  <button type="button" onClick={() => setTranscricaoAberta((aberta) => !aberta)} className="text-xs font-semibold text-blue-700 hover:underline">{transcricaoAberta ? 'Ocultar transcrição revisada' : 'Ver transcrição revisada'}</button>
+                  {analise.transcriptOriginal && <button type="button" onClick={() => setTranscricaoOriginalAberta((aberta) => !aberta)} className="text-xs font-medium text-slate-600 hover:underline">{transcricaoOriginalAberta ? 'Ocultar texto original reconhecido' : 'Comparar com o reconhecimento original'}</button>}
+                </div>}
               </div>
-              {analise?.parts?.map((parte) => <div key={parte.speaker} className="mt-3">
+              {analise?.parts?.map((parte) => {
+                const arquivo = parte.file || `${analise.base}${parte.speaker === 'Cliente' ? '-audio-remoto.wav' : '-microfone-atendente.wav'}`;
+                return <div key={parte.speaker} className="mt-3">
                 <p className="mb-1 text-xs font-medium text-slate-500">{parte.speaker}</p>
                 <audio controls preload="none" className="h-9 w-full" src={numeroId
-                  ? `/api/canais/numeros/${encodeURIComponent(numeroId)}/webjs-call/recordings/${encodeURIComponent(analise.base + (parte.speaker === 'Cliente' ? '-audio-remoto.wav' : '-microfone-atendente.wav'))}/audio`
-                  : `${ANALISE_LOCAL}/api/recordings/${encodeURIComponent(analise.base + (parte.speaker === 'Cliente' ? '-audio-remoto.wav' : '-microfone-atendente.wav'))}/audio`} />
-              </div>)}
+                  ? `/api/canais/numeros/${encodeURIComponent(numeroId)}/webjs-call/recordings/${encodeURIComponent(arquivo)}/audio`
+                  : `${ANALISE_LOCAL}/api/recordings/${encodeURIComponent(arquivo)}/audio`} />
+              </div>;
+              })}
               {transcricaoAberta && analise && <div className="mt-4 max-h-80 overflow-y-auto rounded-lg border border-slate-200 bg-white p-3 text-sm leading-relaxed text-slate-700">
-                {analise.parts.map((parte) => <p key={parte.speaker} className="mb-3 last:mb-0"><strong className="text-slate-900">{parte.speaker}: </strong>{parte.text}</p>)}
+                <p className="whitespace-pre-wrap">{analise.transcript}</p>
+              </div>}
+              {transcricaoOriginalAberta && analise?.transcriptOriginal && <div className="mt-3 max-h-56 overflow-y-auto rounded-lg border border-dashed border-slate-300 bg-white p-3 text-xs leading-relaxed text-slate-500">
+                <p className="mb-1 font-semibold">Reconhecimento automático antes da revisão</p>
+                <p className="whitespace-pre-wrap">{analise.transcriptOriginal}</p>
               </div>}
               {!analise && !analisando && !erroAnalise && resumo && <p className="mt-3 text-xs text-slate-500">A gravação e a transcrição desta chamada ainda não estão disponíveis.</p>}
             </div>
@@ -462,7 +551,7 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste
       </section>}
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
-        <p className="text-xs leading-relaxed text-slate-500">Áudio e gravação desta prova de conceito passam pelo conector local e ficam neste computador.</p>
+        <p className="text-xs leading-relaxed text-slate-500">{numeroId ? 'Após a chamada, o áudio e a transcrição são salvos no histórico da Telefonia para consulta.' : 'Áudio e gravação desta prova de conceito ficam neste computador.'}</p>
         {gravacaoAtual && chamada && <span className="text-xs font-medium text-emerald-700">Gravação em andamento</span>}
       </div>
       {erro && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{erro}</p>}

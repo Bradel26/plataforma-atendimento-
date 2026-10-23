@@ -26,6 +26,7 @@ const EXTENSAO: Record<string, string> = {
   'image/webp': 'webp',
   'image/gif': 'gif',
   'audio/mpeg': 'mp3',
+  'audio/wav': 'wav',
   'audio/ogg': 'ogg',
   'audio/opus': 'opus',
   'audio/mp4': 'm4a',
@@ -80,12 +81,13 @@ export type ArquivoSalvo = {
 
 export const urlPublica = (chave: string) => `/api/arquivos/${chave}`;
 
-export async function salvar(entrada: { buffer: Buffer; nome: string; tipo: string }): Promise<ArquivoSalvo> {
+export async function salvar(entrada: { buffer: Buffer; nome: string; tipo: string; limiteBytesMaximo?: number }): Promise<ArquivoSalvo> {
   const tipo = entrada.tipo.split(';')[0]!.trim().toLowerCase();
   if (!tipoAceito(tipo)) throw badRequest(`Tipo de arquivo não aceito: ${tipo}`);
   if (entrada.buffer.length === 0) throw badRequest('Arquivo vazio');
-  if (entrada.buffer.length > limiteBytes) {
-    throw badRequest(`Arquivo acima do limite de ${env.UPLOAD_MAX_MB} MB`);
+  const limiteDoArquivo = Math.max(limiteBytes, Math.min(100 * 1024 * 1024, entrada.limiteBytesMaximo ?? limiteBytes));
+  if (entrada.buffer.length > limiteDoArquivo) {
+    throw badRequest(`Arquivo acima do limite de ${Math.floor(limiteDoArquivo / (1024 * 1024))} MB`);
   }
 
   const agora = new Date();

@@ -138,4 +138,27 @@ describe('normalizarEventoWpp', () => {
     const resultado = normalizarEventoWpp(semSessao);
     expect(resultado?.identificadorDestino).toBeNull();
   });
+
+  /*
+   * O conector whatsapp-web.js resolve o telefone real de um remetente `@lid`
+   * (getContactLidAndPhone) e o manda em `telefoneContato`. Sem isso, um
+   * contato `@lid` chega sem telefone e nao e ligado ao cliente ja cadastrado.
+   */
+  it('J) usa telefoneContato do conector como telefone de um remetente @lid sem sender', () => {
+    const { sender: _sender, ...semSender } = PAYLOAD_REAL_ONMESSAGE;
+    const resultado = normalizarEventoWpp({ ...semSender, telefoneContato: '5562992885001' });
+
+    expect(resultado?.telefone).toBe('5562992885001');
+    expect(resultado?.enderecoExterno).toBe('79233992933473@lid'); // identificador principal segue o LID
+  });
+
+  it('K) telefoneContato tem prioridade sobre formattedName (vem do proprio WhatsApp)', () => {
+    const resultado = normalizarEventoWpp({ ...PAYLOAD_REAL_ONMESSAGE, telefoneContato: '5511987654321' });
+    expect(resultado?.telefone).toBe('5511987654321');
+  });
+
+  it('L) telefoneContato invalido e ignorado e cai para formattedName', () => {
+    const resultado = normalizarEventoWpp({ ...PAYLOAD_REAL_ONMESSAGE, telefoneContato: '79233992933473@lid-invalido-1234567890' });
+    expect(resultado?.telefone).toBe('556292885001');
+  });
 });

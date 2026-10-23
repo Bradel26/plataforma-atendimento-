@@ -138,6 +138,7 @@ export function AssistenteDaLigacao({ chamadaId }: { chamadaId: string }) {
           )}
           {analise.transcricao && (
             <div>
+              {analise.analisadoPor?.includes('revisão') && <p className="mb-1 text-[11px] text-slate-500">Transcrição revisada por IA; trechos incertos são marcados no texto. Confira o áudio antes de usar como registro literal.</p>}
               <button
                 type="button"
                 onClick={() => setVerTranscricao((v) => !v)}

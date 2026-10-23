@@ -202,7 +202,7 @@ conversationsRoutes.post(
   '/:id/mensagens',
   validateBody(enviarMensagemSchema),
   asyncHandler(async (req, res) => {
-    const resultado = await enviarMensagem(quem(req), param(req, 'id'), req.body.conteudo, req.body.interno);
+    const resultado = await enviarMensagem(quem(req), param(req, 'id'), req.body.conteudo, req.body.interno, req.body.chaveIdempotencia);
     res.status(201).json(resultado);
   }),
 );

@@ -360,14 +360,20 @@ export function AtendimentoPage() {
    */
   const conectarWhatsapp = useCallback(async () => {
     setErroConectar(null);
-    if (minhaLinha) {
-      setMostrarConectar(true);
-      return;
-    }
     setConectandoLinha(true);
     try {
-      const { numero } = await api.post<{ numero: MinhaLinhaWhatsapp }>('/canais/whatsapp/pessoal/conectar');
+      // Sempre atualiza a linha antes de buscar o QR. A tela pode ter ficado
+      // aberta durante uma troca de sessão/linha; nesse caso, reutilizar o ID
+      // antigo fazia o conector responder "Número não encontrado" mesmo com a
+      // linha atual cadastrada no servidor.
+      let { numero } = await api.get<{ numero: MinhaLinhaWhatsapp | null }>('/canais/numeros/meu');
+      if (!numero) {
+        ({ numero } = await api.post<{ numero: MinhaLinhaWhatsapp }>('/canais/whatsapp/pessoal/conectar'));
+      }
+      if (!numero) throw new Error('Não foi possível localizar sua linha do WhatsApp. Atualize a página e tente novamente.');
       setMinhaLinha(numero);
+      setMinhaLinhaConectada(false);
+      setNumeroConectado(null);
       setMostrarConectar(true);
     } catch (erro) {
       setErroConectar(
@@ -376,7 +382,7 @@ export function AtendimentoPage() {
     } finally {
       setConectandoLinha(false);
     }
-  }, [minhaLinha]);
+  }, []);
 
   const atualizarMinhaLinha = useCallback(async () => {
     const { numero } = await api.get<{ numero: MinhaLinhaWhatsapp | null }>('/canais/numeros/meu');

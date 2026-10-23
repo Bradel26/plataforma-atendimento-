@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Teste local · WhatsApp</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <main>
+    <header><div><span class="eyebrow">PROVA DE CONCEITO · LOCAL</span><h1>Atendimento WhatsApp</h1><p>Mensagens e chamadas para avaliar em uma linha de teste.</p></div><span id="status" class="badge">Desconectado</span></header>
+    <div class="notice"><b>Teste isolado:</b> sessão e gravações ficam somente neste computador. Não conecte uma linha crítica. Esta integração é experimental, não oficial e não deve ir para produção.</div>
+    <section class="connect"><div><h2>1. Vincule uma linha de teste</h2><p>Abra WhatsApp → Aparelhos conectados no telefone e leia o QR Code.</p></div><button id="connect">Conectar linha de teste</button><div id="qr" aria-live="polite">O QR Code aparecerá aqui.</div></section>
+    <div class="grid">
+      <section><h2>2. Mensagens</h2><form id="send"><label>Telefone destinatário com país<input name="phone" placeholder="5562999999999" required /></label><label>Mensagem<input name="body" placeholder="Mensagem de teste" required /></label><button>Enviar mensagem</button></form><div id="messages" class="feed"></div></section>
+      <section><h2>3. Chamadas</h2><form id="dial"><label>Telefone com país<input name="phone" placeholder="5562999999999" required /></label><button>Ligar pelo WhatsApp</button></form><div id="incoming" class="call-card hidden"><strong id="caller"></strong><p id="call-hint"></p><div id="incoming-actions"><button id="accept">Atender no painel</button><button class="danger" id="reject">Recusar</button></div><button id="end-ringing" class="danger hidden">Encerrar chamada</button></div><div id="active" class="call-card hidden"><strong>Chamada conectada</strong><p>O navegador reproduz o áudio remoto. O microfone é enviado ao outro participante.</p><button id="mic">Habilitar microfone</button><button class="danger" id="hangup">Encerrar e salvar gravação</button></div><p class="hint">O toque simultâneo no celular precisa ser observado durante o teste. O painel não encaminha chamadas da operadora de telefonia.</p><div id="events" class="feed"></div></section>
+    </div>
+    <section><h2>Gravações locais</h2><p>Áudio remoto recebido durante as chamadas, em WAV. A fala enviada pelo microfone não é mixada na gravação.</p><ul id="recordings"></ul></section>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>

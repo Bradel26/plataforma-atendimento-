@@ -53,6 +53,7 @@ export async function enviarParaCanal(
   enderecoExterno: string | null,
   texto: string,
   canalConfigId: string | null = null,
+  chaveIdempotencia?: string,
 ): Promise<Resultado> {
   if (!exigeEnvioExterno(canal)) return { idExterno: null };
   if (!enderecoExterno) throw badRequest('Conversa sem endereço externo — não é possível responder');
@@ -87,7 +88,9 @@ export async function enviarParaCanal(
     console.log(
       `[crm] enviarParaCanal WHATSAPP provider=${whatsAppProvider.constructor.name} canalConfigId=${config!.id} ponteSessao=${config!.ponteSessao ?? 'nenhum'}`,
     );
-    return whatsAppProvider.sendText(config!, enderecoExterno, texto);
+    return chaveIdempotencia
+      ? whatsAppProvider.sendText(config!, enderecoExterno, texto, chaveIdempotencia)
+      : whatsAppProvider.sendText(config!, enderecoExterno, texto);
   }
 
   if (!config?.ativo || !config.accessToken) {

@@ -463,8 +463,34 @@ async function encontrarOuCriarContato(dados: MensagemNormalizada, canalConfigId
     }
   }
 
+  // Um LID pode ganhar o telefone real apenas em mensagens posteriores.
+  // Antes de criar outro cadastro, prioriza o contato canônico do telefone.
+  const normalizado = numeroNormalizado(dados.telefone);
+  const porTelefone = dados.telefone
+    ? await prisma.contact.findFirst({
+        where: normalizado
+          ? { telefoneNormalizado: normalizado, excluidoEm: null }
+          : { telefone: dados.telefone, excluidoEm: null },
+        orderBy: { criadoEm: 'asc' },
+      })
+    : null;
+
   if (porConversa) {
     const contato = await prisma.contact.findUniqueOrThrow({ where: { id: porConversa.contatoId } });
+    if (porTelefone && porTelefone.id !== contato.id) {
+      // Reassocia só as conversas deste endereço e desta linha. Mensagens e
+      // CRM continuam preservados; não junta identidades de linhas distintas.
+      await prisma.conversation.updateMany({
+        where: {
+          canal: dados.canal,
+          canalConfigId,
+          enderecoExterno: dados.enderecoExterno,
+          contatoId: contato.id,
+        },
+        data: { contatoId: porTelefone.id },
+      });
+      return porTelefone;
+    }
     // Contatos criados antes da normalizacao podem ter telefone nulo, embora
     // o JID atual ja traga o numero. Completa o cadastro uma vez para que as
     // proximas mensagens recebidas por outras caixas encontrem este contato.
@@ -477,14 +503,7 @@ async function encontrarOuCriarContato(dados: MensagemNormalizada, canalConfigId
     return contato;
   }
 
-  if (dados.telefone) {
-    const normalizado = numeroNormalizado(dados.telefone);
-    const porTelefone = await prisma.contact.findFirst({
-      where: normalizado ? { telefoneNormalizado: normalizado, excluidoEm: null } : { telefone: dados.telefone, excluidoEm: null },
-      orderBy: { criadoEm: 'asc' },
-    });
-    if (porTelefone) return porTelefone;
-  }
+  if (porTelefone) return porTelefone;
 
   return prisma.contact.create({
     data: {

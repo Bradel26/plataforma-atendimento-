@@ -11,6 +11,8 @@ import { badRequest, forbidden, notFound, serviceUnavailable } from '../../lib/e
 import { prisma } from '../../lib/prisma';
 import { organizacaoAtual } from '../../lib/tenant';
 import { notificarStatusCanal } from '../../realtime/hub';
+import { salvarRegistroChamadaWebJs } from './webjs-call-history.service';
+import { registrarAnalise } from '../voice/analise.service';
 import {
   CANAIS_EXTERNOS,
   atualizarNumero,
@@ -397,6 +399,64 @@ channelsRoutes.post(
   }),
 );
 
+const registroWebJsCallSchema = z.object({
+  callId: z.string().trim().min(1).max(200),
+  direcao: z.enum(['ENTRANTE', 'SAINTE']),
+  telefone: z.string().trim().min(1).max(200),
+  status: z.enum(['CHAMANDO', 'EM_ANDAMENTO', 'COMPLETADA', 'NAO_ATENDIDA', 'OCUPADA', 'FALHOU', 'CANCELADA']),
+  iniciadoEm: z.string().datetime().optional(),
+  atendidoEm: z.string().datetime().nullable().optional(),
+  encerradoEm: z.string().datetime().nullable().optional(),
+  duracao: z.number().int().min(0).max(86_400).nullable().optional(),
+  recordingName: z.string().trim().max(255).optional(),
+  transcricao: z.string().max(100_000).nullable().optional(),
+  resumo: z.string().max(20_000).nullable().optional(),
+  analisadoPor: z.string().trim().max(120).nullable().optional(),
+});
+
+/** Registra o ciclo da chamada WebJS e importa sua gravação do conector para o storage da plataforma. */
+channelsRoutes.post(
+  '/numeros/:id/webjs-call/registro',
+  validateBody(registroWebJsCallSchema),
+  asyncHandler(async (req, res) => {
+    const config = await configDeChamadaWebJs(req);
+    const dados = req.body as z.infer<typeof registroWebJsCallSchema>;
+    let gravacao: { buffer: Buffer; nome: string } | undefined;
+
+    if (dados.recordingName) {
+      const nome = dados.recordingName;
+      if (!nome.startsWith(`sessao-${config.ponteSessao}-chamada-`) || !nome.endsWith('-audio-completo.wav')) {
+        throw badRequest('A gravação não pertence à sessão WhatsApp conectada.');
+      }
+      const { base, token } = webJsBridgeConfig();
+      let resposta: Response;
+      try {
+        resposta = await fetch(`${base}/recordings/${encodeURIComponent(nome)}/audio?session=${encodeURIComponent(config.ponteSessao!)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(30_000),
+        });
+      } catch {
+        throw serviceUnavailable('O conector local não conseguiu entregar a gravação.');
+      }
+      if (!resposta.ok) throw serviceUnavailable('A gravação ainda não está disponível no conector local.');
+      const tamanhoDeclarado = Number(resposta.headers.get('content-length') || 0);
+      if (tamanhoDeclarado > 100 * 1024 * 1024) throw badRequest('A gravação ultrapassa o limite de 100 MB.');
+      const buffer = Buffer.from(await resposta.arrayBuffer());
+      if (buffer.length > 100 * 1024 * 1024) throw badRequest('A gravação ultrapassa o limite de 100 MB.');
+      gravacao = { buffer, nome };
+    }
+
+    const resultado = await salvarRegistroChamadaWebJs({
+      ...dados,
+      sessao: config.ponteSessao!,
+      canalConfig: { id: config.id, donoId: config.donoId, filaId: config.filaId, nome: config.nome },
+      agenteId: req.user!.sub,
+      ...(gravacao ? { gravacao } : {}),
+    });
+    res.json(resultado);
+  }),
+);
+
 channelsRoutes.post(
   '/numeros/:id/webjs-call/audio-ticket',
   asyncHandler(async (req, res) => {
@@ -413,11 +473,40 @@ channelsRoutes.post(
 
 channelsRoutes.post(
   '/numeros/:id/webjs-call/recordings/:base/analyze',
+  validateBody(z.object({ plataformaCallId: z.string().uuid().optional() })),
   asyncHandler(async (req, res) => {
     const config = await configDeChamadaWebJs(req);
     const base = param(req, 'base');
     if (!base.startsWith(`sessao-${config.ponteSessao}-`)) throw notFound('Gravação não encontrada nesta linha.');
-    const resultado = await chamarWebJsBridge(`/recordings/${encodeURIComponent(base)}/analyze?session=${encodeURIComponent(config.ponteSessao!)}`, { method: 'POST' });
+    // A análise pode transcrever as duas faixas e então gerar o resumo local.
+    // O limite padrão de 20 s encerrava a requisição antes de o conector concluir.
+    const resultado = await chamarWebJsBridge(
+      `/recordings/${encodeURIComponent(base)}/analyze?session=${encodeURIComponent(config.ponteSessao!)}`,
+      { method: 'POST' },
+      700_000,
+    );
+    const dados = resultado as {
+      transcript?: string;
+      resumo?: string;
+      sentimento?: 'POSITIVO' | 'NEUTRO' | 'NEGATIVO' | null;
+      proximasAcoes?: string[];
+      engine?: string;
+    };
+    const plataformaCallId = (req.body as { plataformaCallId?: string }).plataformaCallId;
+    if (plataformaCallId) {
+      const chamada = await prisma.call.findFirst({
+        where: { id: plataformaCallId, canalConfigId: config.id },
+        select: { id: true },
+      });
+      if (!chamada) throw notFound('Chamada não encontrada nesta linha.');
+      await registrarAnalise(chamada.id, {
+        transcricao: dados.transcript ?? '',
+        resumo: dados.resumo ?? '',
+        sentimento: dados.sentimento ?? null,
+        proximasAcoes: dados.proximasAcoes ?? [],
+        motor: dados.engine ?? 'Whisper + análise local',
+      });
+    }
     res.json(resultado);
   }),
 );

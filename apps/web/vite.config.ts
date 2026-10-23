@@ -12,6 +12,7 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: 'http://localhost:3333',
+        ws: true,
         changeOrigin: false,
       },
       // WebSocket do Socket.IO (ws: true faz o upgrade de protocolo).

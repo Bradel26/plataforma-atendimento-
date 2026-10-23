@@ -278,18 +278,24 @@ contactsRoutes.get(
     });
     if (!contato) throw notFound('Contato não encontrado');
 
-    const telefone = (contato.telefone ?? '').replace(/\D/g, '');
-    if (telefone.length < 10 || telefone.length > 15) {
+    const conversa = await prisma.conversation.findFirst({
+      where: { contatoId: id, canal: 'WHATSAPP', AND: [await filtroDe(politicaConversas)] },
+      select: { canalConfigId: true, enderecoExterno: true },
+      orderBy: { ultimaMensagemEm: 'desc' },
+    });
+    const telefone = numeroNormalizado(contato.telefone) ?? (contato.telefone ?? '').replace(/\D/g, '');
+    const destino = telefone.length >= 10 && telefone.length <= 15
+      ? telefone
+      : conversa?.enderecoExterno?.toLowerCase().endsWith('@lid')
+        ? conversa.enderecoExterno
+        : conversa?.enderecoExterno?.toLowerCase().endsWith('@c.us')
+          ? conversa.enderecoExterno.slice(0, -'@c.us'.length).replace(/\D/g, '')
+          : null;
+    if (!destino) {
       res.setHeader('Cache-Control', 'no-store');
       res.status(404).end();
       return;
     }
-
-    const conversa = await prisma.conversation.findFirst({
-      where: { contatoId: id, canal: 'WHATSAPP', AND: [await filtroDe(politicaConversas)] },
-      select: { canalConfigId: true },
-      orderBy: { ultimaMensagemEm: 'desc' },
-    });
     const config = conversa?.canalConfigId
       ? await obterConfigPorId(conversa.canalConfigId)
       : await obterConfig('WHATSAPP');
@@ -306,12 +312,12 @@ contactsRoutes.get(
       return;
     }
 
-    const chave = `${config.id ?? config.ponteSessao ?? 'linha'}:${telefone}`;
+    const chave = `${config.id ?? config.ponteSessao ?? 'linha'}:${destino.toLowerCase().endsWith('@lid') ? destino : telefone}`;
     const agora = Date.now();
     let entrada = cacheFotosContato.get(chave);
     if (!entrada || entrada.expiraEm <= agora) {
       entrada = { expiraEm: agora + 15_000, busca: Promise.resolve(null) };
-      entrada.busca = provider.fetchAvatar(config, telefone).catch(() => null).then((foto) => {
+      entrada.busca = provider.fetchAvatar(config, destino).catch(() => null).then((foto) => {
         entrada!.expiraEm = Date.now() + (foto ? 6 * 60 * 60_000 : 30_000);
         return foto;
       });

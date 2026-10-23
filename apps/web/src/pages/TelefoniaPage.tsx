@@ -72,6 +72,11 @@ export function TelefoniaPage() {
 
   useEffect(() => { void carregar(); }, [carregar]);
   useEffect(() => {
+    const atualizar = () => void carregar();
+    window.addEventListener('voice-calls-updated', atualizar);
+    return () => window.removeEventListener('voice-calls-updated', atualizar);
+  }, [carregar]);
+  useEffect(() => {
     void api.get<{ numero: { id?: string; modo?: string | null; ativo?: boolean; ponteSessao?: string | null; phoneNumberId?: string | null; whatsappCallingHabilitado?: boolean; transcricaoAutomaticaAtiva?: boolean } | null }>('/canais/numeros/meu')
       .then(({ numero }) => {
         setLinhaCloudAtiva(Boolean(numero?.ativo && numero.modo === 'OFICIAL' && numero.phoneNumberId && numero.whatsappCallingHabilitado));

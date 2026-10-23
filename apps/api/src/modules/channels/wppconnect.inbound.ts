@@ -68,8 +68,13 @@ export function normalizarEventoWpp(bruto: unknown): MensagemNormalizada | null 
   const telefoneDoJid = enderecoExterno.toLowerCase().endsWith('@c.us')
     ? numeroNormalizado(enderecoExterno.slice(0, -'@c.us'.length))
     : null;
+  // O conector whatsapp-web.js resolve o telefone real de um `@lid` dentro do
+  // proprio WhatsApp (getContactLidAndPhone) e o manda em `telefoneContato`;
+  // e a fonte mais confiavel, entao vem antes do `formattedName`.
   const telefone =
-    (typeof sender.formattedName === 'string' ? numeroNormalizado(sender.formattedName) : null) ?? telefoneDoJid;
+    (typeof evento.telefoneContato === 'string' ? numeroNormalizado(evento.telefoneContato) : null) ??
+    (typeof sender.formattedName === 'string' ? numeroNormalizado(sender.formattedName) : null) ??
+    telefoneDoJid;
 
   const sessao = typeof evento.session === 'string' && evento.session.trim() ? evento.session.trim() : null;
 
