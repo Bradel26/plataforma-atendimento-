@@ -57,7 +57,11 @@ RUN apt-get update \
 # somente em loopback; não cria outra porta pública nem envia áudio a terceiros.
 COPY apps/api/transcriber/requirements.txt /tmp/whisper-requirements.txt
 RUN python3 -m venv /opt/whisper \
- && /opt/whisper/bin/pip install --no-cache-dir -r /tmp/whisper-requirements.txt \
+ && for tentativa in 1 2 3; do \
+      /opt/whisper/bin/pip install --no-cache-dir --retries 5 --timeout 120 -r /tmp/whisper-requirements.txt && break; \
+      if [ "$tentativa" -eq 3 ]; then exit 1; fi; \
+      sleep 10; \
+    done \
  && rm /tmp/whisper-requirements.txt
 
 COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
