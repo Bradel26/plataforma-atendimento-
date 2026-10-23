@@ -37,6 +37,9 @@ const TRANSCRICAO_MODELO = process.env.TRANSCRICAO_LOCAL_MODELO || localEnv.TRAN
 const OLLAMA_URL = process.env.LIGACAO_IA_OLLAMA_URL || localEnv.LIGACAO_IA_OLLAMA_URL || process.env.OPORTUNIDADE_IA_OLLAMA_URL || localEnv.OPORTUNIDADE_IA_OLLAMA_URL || 'http://127.0.0.1:11434';
 const OLLAMA_MODELO = process.env.LIGACAO_IA_OLLAMA_MODELO || localEnv.LIGACAO_IA_OLLAMA_MODELO || process.env.OPORTUNIDADE_IA_OLLAMA_MODELO || localEnv.OPORTUNIDADE_IA_OLLAMA_MODELO || 'qwen3:4b';
 const INICIALIZACAO_TIMEOUT_MS = Number(process.env.WEBJS_INITIALIZATION_TIMEOUT_MS || 120_000);
+// A primeira sincronizacao do historico do WhatsApp Web pode demorar mais que
+// a emissao do QR. Nao encerre a sessao logo depois de o telefone autenticar.
+const AUTENTICACAO_PRONTO_TIMEOUT_MS = Number(process.env.WEBJS_AUTH_READY_TIMEOUT_MS || 300_000);
 const LIMPAR_LOCKS_DE_OUTRA_INSTANCIA = process.env.WEBJS_SINGLE_INSTANCE !== 'false';
 const API_WEBHOOK = process.env.WEBJS_INBOUND_WEBHOOK_URL?.trim() || localEnv.WEBJS_INBOUND_WEBHOOK_URL || `http://127.0.0.1:${API_PORT}/api/webhooks/wppconnect`;
 const app = express();
@@ -110,6 +113,9 @@ function obterSessao(nome = 'teste-local') {
       latestQr: null,
       retryAfter: 0,
       lastError: null,
+      ultimoErroDaPagina: null,
+      progressoDeCarregamento: null,
+      estadoWeb: null,
       peers: new Set(),
     };
     sessoes.set(identificador, sessao);
@@ -302,16 +308,39 @@ async function iniciarCliente(nomeSessao = 'teste-local') {
     });
     const thisClient = client;
     sessao.client = client;
+    let diagnosticosDaPaginaInstalados = false;
+    const instalarDiagnosticosDaPagina = () => {
+      const page = client.pupPage;
+      if (!page || diagnosticosDaPaginaInstalados) return;
+      diagnosticosDaPaginaInstalados = true;
+      page.on('pageerror', (error) => {
+        const detalhe = `${error?.name || 'Erro'}: ${String(error?.message || error).slice(0, 500)}`;
+        sessao.ultimoErroDaPagina = detalhe;
+        console.error(`[whatsapp:${sessao.nome}] erro JavaScript na página: ${detalhe}`);
+      });
+      page.on('requestfailed', (request) => {
+        const url = new URL(request.url());
+        const erro = request.failure()?.errorText || 'falha sem detalhe';
+        const detalhe = `${url.hostname}${url.pathname} (${erro})`.slice(0, 500);
+        sessao.ultimoErroDaPagina = `Requisição falhou: ${detalhe}`;
+        console.warn(`[whatsapp:${sessao.nome}] requisição da página falhou: ${detalhe}`);
+      });
+    };
     let timeoutInicializacao;
     const limparTimeout = () => {
       if (timeoutInicializacao) clearTimeout(timeoutInicializacao);
       timeoutInicializacao = null;
     };
-    const aguardarProximoEstado = (estado) => {
+    const aguardarProximoEstado = (estado, timeoutMs = INICIALIZACAO_TIMEOUT_MS) => {
       limparTimeout();
       timeoutInicializacao = setTimeout(() => {
         if (sessao.client !== thisClient || sessao.status === 'conectado') return;
-        const message = `Tempo limite ao inicializar WhatsApp (${estado}); nenhum novo estado foi recebido.`;
+        const diagnostico = [
+          sessao.estadoWeb ? `estado=${sessao.estadoWeb}` : null,
+          sessao.progressoDeCarregamento != null ? `carregamento=${sessao.progressoDeCarregamento}%` : null,
+          sessao.ultimoErroDaPagina ? `último erro da página=${sessao.ultimoErroDaPagina}` : null,
+        ].filter(Boolean).join('; ');
+        const message = `Tempo limite ao inicializar WhatsApp (${estado}); ${diagnostico || 'a página não informou erro ou estado adicional'}.`;
         console.error(`[whatsapp:${sessao.nome}] ${message}`);
         sessao.status = 'erro';
         sessao.lastError = message;
@@ -320,7 +349,7 @@ async function iniciarCliente(nomeSessao = 'teste-local') {
         broadcast(sessao, { type: 'error', data: message });
         sessao.client = null;
         thisClient.destroy().catch((error) => console.error(`[whatsapp:${sessao.nome}] falha ao encerrar cliente apos timeout:`, error));
-      }, INICIALIZACAO_TIMEOUT_MS);
+      }, timeoutMs);
       timeoutInicializacao.unref?.();
     };
     aguardarProximoEstado('conectando');
@@ -341,8 +370,9 @@ async function iniciarCliente(nomeSessao = 'teste-local') {
     });
     client.on('authenticated', () => {
       if (sessao.client !== thisClient) return;
+      instalarDiagnosticosDaPagina();
       console.info(`[whatsapp:${sessao.nome}] telefone autenticado; aguardando WhatsApp Web pronto`);
-      aguardarProximoEstado('finalizacao da autenticacao');
+      aguardarProximoEstado('finalizacao da autenticacao', AUTENTICACAO_PRONTO_TIMEOUT_MS);
       sessao.status = 'autenticado';
       broadcast(sessao, { type: 'status', data: sessao.status });
     });
@@ -351,10 +381,23 @@ async function iniciarCliente(nomeSessao = 'teste-local') {
       limparTimeout();
       sessao.retryAfter = 0;
       sessao.lastError = null;
+      sessao.ultimoErroDaPagina = null;
+      sessao.progressoDeCarregamento = null;
+      sessao.estadoWeb = null;
       console.info(`[whatsapp:${sessao.nome}] sessao pronta`);
       sessao.status = 'conectado';
       sessao.latestQr = null;
       broadcast(sessao, { type: 'status', data: sessao.status });
+    });
+    client.on('loading_screen', (percent, message) => {
+      if (sessao.client !== thisClient) return;
+      sessao.progressoDeCarregamento = Number.isFinite(percent) ? percent : null;
+      console.info(`[whatsapp:${sessao.nome}] carregamento do WhatsApp Web: ${sessao.progressoDeCarregamento ?? 'desconhecido'}% (${String(message || 'sem descrição').slice(0, 80)})`);
+    });
+    client.on('change_state', (state) => {
+      if (sessao.client !== thisClient) return;
+      sessao.estadoWeb = String(state || 'desconhecido');
+      console.info(`[whatsapp:${sessao.nome}] estado interno do WhatsApp Web: ${sessao.estadoWeb}`);
     });
     client.on('auth_failure', (message) => {
       if (sessao.client !== thisClient) return;
