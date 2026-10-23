@@ -30,7 +30,7 @@ import {
 import { AVISO_NAO_OFICIAL, modoEfetivo } from './whatsapp.modo';
 import { getWhatsAppProvider } from './whatsapp-provider.factory';
 import { estadoDaIa, estadoDaIaDoNumero, salvarIa, salvarIaDoNumero } from '../bots/ia.service';
-import { conectarNumeroMeta, estadoDoEmbeddedSignup } from './meta-embedded-signup.service';
+import { conectarNumeroMeta, estadoDoEmbeddedSignup, habilitarChamadasNumeroMeta } from './meta-embedded-signup.service';
 import { emitirTicketWebJsCall } from './webjs-call-ticket';
 
 export const channelsRoutes = Router();
@@ -552,6 +552,14 @@ channelsRoutes.post(
     }
     const resultado = await conectarNumeroMeta({ ...req.body, donoId: req.user!.sub });
     res.status(201).json(resultado);
+  }),
+);
+
+/** Permite ao dono repetir a habilitação de voz caso a Meta a tenha recusado no cadastro. */
+channelsRoutes.post(
+  '/whatsapp/pessoal/meta/chamadas/habilitar',
+  asyncHandler(async (req, res) => {
+    res.json(await habilitarChamadasNumeroMeta(req.user!.sub));
   }),
 );
 

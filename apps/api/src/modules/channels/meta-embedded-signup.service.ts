@@ -2,6 +2,7 @@ import { env } from '../../env';
 import { badRequest, conflict, serviceUnavailable } from '../../lib/errors';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
+import { decifrar } from '../../lib/crypto-box';
 import { atualizarNumero, criarNumero } from './channels.service';
 
 type MetaPhone = { id: string; display_phone_number?: string; verified_name?: string };
@@ -21,6 +22,47 @@ export function estadoDoEmbeddedSignup() {
       ? env.META_EMBEDDED_SIGNUP_COEX_CONFIG_ID
       : null,
     apiVersion: metaConfigurada() ? env.META_GRAPH_API_VERSION : null,
+  };
+}
+
+/** Ativa o Calling API Graph/WebRTC sem configurar SIP para a linha Cloud. */
+export async function habilitarChamadasNumeroMeta(donoId: string) {
+  const linha = await prisma.channelConfig.findFirst({
+    where: { canal: 'WHATSAPP', donoId, ativo: true, modo: 'OFICIAL' },
+  });
+  if (!linha?.phoneNumberId || !linha.accessToken) {
+    throw serviceUnavailable('Conecte primeiro o número pela API oficial no Atendimento.');
+  }
+  if (linha.espelharCelular) {
+    throw conflict('Chamadas pelo painel exigem o número no modo API exclusivo, sem coexistência com o aplicativo do celular.');
+  }
+
+  await graph(`${encodeURIComponent(linha.phoneNumberId)}/settings`, decifrar(linha.accessToken), {
+    method: 'POST',
+    body: JSON.stringify({
+      calling: {
+        status: 'ENABLED',
+        call_icon_visibility: 'DEFAULT',
+        callback_permission_status: 'ENABLED',
+      },
+    }),
+  });
+
+  const atualizado = await prisma.channelConfig.update({
+    where: { id: linha.id },
+    data: {
+      whatsappCallingHabilitado: true,
+      gravarChamadasWhatsapp: true,
+      transcreverChamadasWhatsapp: true,
+    },
+  });
+  return {
+    numero: {
+      id: atualizado.id,
+      phoneNumberId: atualizado.phoneNumberId,
+      whatsappCallingHabilitado: atualizado.whatsappCallingHabilitado,
+      transcreverChamadasWhatsapp: atualizado.transcreverChamadasWhatsapp,
+    },
   };
 }
 
@@ -116,12 +158,12 @@ export async function conectarNumeroMeta(input: {
     ponteToken: null,
     ponteSegredo: null,
     ponteSessao: null,
-    espelharCelular: false,
-    // Este fluxo configura somente mensagens. Chamadas têm configuração
-    // independente e não devem ser ativadas como efeito colateral do signup.
-    whatsappCallingHabilitado: atual?.whatsappCallingHabilitado ?? false,
-    gravarChamadasWhatsapp: atual?.gravarChamadasWhatsapp ?? false,
-    transcreverChamadasWhatsapp: atual?.transcreverChamadasWhatsapp ?? false,
+    // A API exclusiva desativa o aplicativo no celular; a conexão de
+    // coexistência, mantida apenas para migrações antigas, espelha mensagens.
+    espelharCelular: Boolean(input.coexistencia),
+    whatsappCallingHabilitado: false,
+    gravarChamadasWhatsapp: !input.coexistencia,
+    transcreverChamadasWhatsapp: !input.coexistencia,
   };
 
   let canal: Awaited<ReturnType<typeof criarNumero>>;
@@ -136,5 +178,22 @@ export async function conectarNumeroMeta(input: {
     throw e;
   }
 
-  return { canal, aviso: 'Número conectado para enviar e receber mensagens pela API oficial da Meta.' };
+  if (input.coexistencia) {
+    return { canal, aviso: 'Número conectado para mensagens. A Meta não disponibiliza chamadas de voz no modo de coexistência.' };
+  }
+
+  try {
+    const chamadas = await habilitarChamadasNumeroMeta(input.donoId);
+    return {
+      canal,
+      numero: chamadas.numero,
+      aviso: 'Número conectado para mensagens e chamadas pela API oficial. O aplicativo do celular foi desvinculado; gravações e transcrições serão salvas no histórico da plataforma.',
+    };
+  } catch (erro) {
+    const motivo = erro instanceof Error ? erro.message : 'a Meta ainda não liberou chamadas para esta linha';
+    return {
+      canal,
+      aviso: `Mensagens conectadas. A Meta ainda não habilitou chamadas para esta linha: ${motivo} Você pode tentar habilitar novamente em Telefonia.`,
+    };
+  }
 }
