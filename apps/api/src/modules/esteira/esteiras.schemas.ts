@@ -140,7 +140,32 @@ export const vendedorSchema = z.object({
   status: z.nativeEnum(StatusVendedor).optional(),
 });
 
+// ---------------------------------------------------------------------------
+// Consultas (os filtros vêm de `parseFiltros`, na mesma query string)
+// ---------------------------------------------------------------------------
+
+/** Kanban: tamanho da página de cada coluna. */
+export const kanbanQuerySchema = z.object({
+  porColuna: z.coerce.number().int().min(1).max(100).default(50),
+});
+
+/** "Carregar mais" de uma coluna: cursor opaco devolvido em `proximoCursor`. */
+export const kanbanColunaQuerySchema = kanbanQuerySchema.extend({
+  cursor: z.string().trim().max(300).optional(),
+});
+
+/** Lista: paginação por offset; `ordenarPor` é a chave de uma coluna ordenável da operação. */
+export const listaQuerySchema = z.object({
+  pagina: z.coerce.number().int().min(1).max(100_000).default(1),
+  tamanho: z.coerce.number().int().min(1).max(100).default(50),
+  ordenarPor: z.string().trim().max(60).optional(),
+  direcao: z.enum(['asc', 'desc']).default('asc'),
+});
+
 export type CriarVinculoInput = z.infer<typeof criarVinculoSchema>;
 export type MoverVinculoInput = z.infer<typeof moverVinculoSchema>;
 export type NotaInput = z.infer<typeof notaSchema>;
 export type VendedorInput = z.infer<typeof vendedorSchema>;
+export type KanbanQuery = z.infer<typeof kanbanQuerySchema>;
+export type KanbanColunaQuery = z.infer<typeof kanbanColunaQuerySchema>;
+export type ListaQuery = z.infer<typeof listaQuerySchema>;

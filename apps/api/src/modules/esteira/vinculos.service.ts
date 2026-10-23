@@ -31,6 +31,7 @@ import { estagioIniciaCiclo } from '../crm/cicloParceiro';
 import { iniciarCiclos } from '../crm/cicloParceiro.service';
 import { diasDesde } from '../crm/esteira';
 import { acessoDoUsuarioAtual } from './acesso';
+import { valoresDaLinha, type VinculoLinha } from './colunas';
 import {
   CAMPO_JUSTIFICATIVA,
   diferencas,
@@ -87,7 +88,8 @@ const JA_NA_ESTEIRA = 'Este parceiro já está nesta esteira';
 
 const estagioSelect = { id: true, nome: true, chave: true, tipoEtapa: true, diasParado: true, ativa: true } satisfies Prisma.FunnelStageSelect;
 
-const inclusao = {
+/** O que a leitura do vínculo carrega (card, linha e detalhe montam a partir disto). */
+export const inclusao = {
   contato: { select: { id: true, nome: true, telefone: true, cpf: true, cidade: true, uf: true } },
   conta: { select: { id: true, nome: true, cnpj: true, cidade: true, uf: true } },
   estagio: { select: estagioSelect },
@@ -98,7 +100,7 @@ const inclusao = {
   starlink: true,
 } satisfies Prisma.CredenciamentoInclude;
 
-type VinculoDb = Prisma.CredenciamentoGetPayload<{ include: typeof inclusao }>;
+export type VinculoDb = Prisma.CredenciamentoGetPayload<{ include: typeof inclusao }>;
 type EstagioDb = VinculoDb['estagio'];
 
 export type VinculoResumo = {
@@ -164,6 +166,7 @@ const camposStarlink = (v: VinculoDb): CamposStarlink => {
   const { credenciamentoId: _id, ...campos } = v.starlink;
   return campos;
 };
+const camposDoVinculo = (v: VinculoDb): CamposTim | CamposStarlink => (v.operacao === 'TIM' ? camposTim(v) : camposStarlink(v));
 
 /**
  * Chave da etapa atual. Starlink: derivada dos campos (o `estagioId` é cache).
@@ -191,7 +194,8 @@ function destinosDoVinculo(v: VinculoDb, chave: ChaveEtapa | null, agora: Date):
   return Object.fromEntries(Object.entries(calculados).filter(([c]) => ativas.has(c))) as Destinos;
 }
 
-function montarResumo(v: VinculoDb, agora = new Date()): VinculoResumo {
+/** Card sem os destinos (a Lista não os usa: avaliar cada destino é o custo do card). */
+function montarBase(v: VinculoDb, agora: Date): Omit<VinculoResumo, 'destinos'> {
   const chave = chaveAtual(v);
   const estagio = (chave && estagioDaChave(v, chave)) || v.estagio;
   const diasNaEtapa = diasDesde(v.estagioDesde, agora.getTime());
@@ -213,9 +217,27 @@ function montarResumo(v: VinculoDb, agora = new Date()): VinculoResumo {
     diasNaEtapa,
     parado: estaParado(diasNaEtapa, estagio.diasParado),
     ultimaInteracaoEm: v.ultimaInteracaoEm,
-    etiquetas: etiquetasDoVinculo(v.operacao, v.operacao === 'TIM' ? camposTim(v) : camposStarlink(v)),
-    destinos: destinosDoVinculo(v, chave, agora),
+    etiquetas: etiquetasDoVinculo(v.operacao, camposDoVinculo(v)),
   };
+}
+
+/** Card do vínculo (Kanban, resposta das escritas): o básico mais os destinos permitidos. */
+export function montarResumo(v: VinculoDb, agora = new Date()): VinculoResumo {
+  const base = montarBase(v, agora);
+  return { ...base, destinos: destinosDoVinculo(v, base.etapa.chave, agora) };
+}
+
+/** Linha da Lista: o card sem destinos mais o valor de cada coluna da operação. */
+export function montarLinha(v: VinculoDb, agora = new Date()): VinculoLinha {
+  const base = montarBase(v, agora);
+  const valores = valoresDaLinha({
+    ...base,
+    situacao: situacaoDaEtapa(base.etapa.tipo, base.etapa.chave),
+    criadoEm: v.criadoEm,
+    observacoes: v.observacoes,
+    campos: camposDoVinculo(v),
+  });
+  return { ...base, valores };
 }
 
 async function montarDetalhe(v: VinculoDb): Promise<VinculoDetalhe> {
@@ -238,7 +260,7 @@ async function montarDetalhe(v: VinculoDb): Promise<VinculoDetalhe> {
   ]);
 
   const chave = resumo.etapa.chave;
-  const campos = v.operacao === 'TIM' ? camposTim(v) : camposStarlink(v);
+  const campos = camposDoVinculo(v);
   const avisos: Aviso[] = !chave
     ? []
     : v.operacao === 'TIM'
@@ -312,7 +334,7 @@ export async function obterVinculo(operacao: Operacao, id: string): Promise<Vinc
 // ---------------------------------------------------------------------------
 
 /** Funil ESTEIRA ativo da operação com as etapas (a sincronização de estrutura cria). */
-async function funilDaOperacao(operacao: Operacao) {
+export async function funilDaOperacao(operacao: Operacao) {
   const funil = await prisma.funnel.findFirst({
     where: { tipo: 'ESTEIRA', operacao, ativo: true },
     orderBy: { criadoEm: 'asc' },

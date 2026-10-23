@@ -298,10 +298,11 @@ describe('mudancaDeSituacao', () => {
 });
 
 describe('estaParado', () => {
-  it('parado a partir do limite da etapa; sem limite nunca', () => {
+  it('parado a partir do limite da etapa; sem limite, 7 dias', () => {
     expect(estaParado(5, 5)).toBe(true);
     expect(estaParado(4, 5)).toBe(false);
-    expect(estaParado(100, null)).toBe(false);
+    expect(estaParado(7, null)).toBe(true);
+    expect(estaParado(6, null)).toBe(false);
   });
 });
 

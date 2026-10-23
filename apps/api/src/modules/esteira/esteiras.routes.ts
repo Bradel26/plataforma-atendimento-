@@ -1,23 +1,31 @@
 import type { Operacao } from '@prisma/client';
-import { Router, type RequestHandler } from 'express';
+import { Router, type Request, type RequestHandler } from 'express';
 import { asyncHandler } from '../../http/async-handler';
 import { requireAuth } from '../../http/middleware/auth';
-import { validateBody } from '../../http/middleware/validate';
+import { validateBody, validateQuery } from '../../http/middleware/validate';
 import { param } from '../../http/params';
 import { notFound } from '../../lib/errors';
 import { requireModulo } from '../../lib/modulos';
 import { exigirOperacao } from './acesso';
 import { operacaoDaUrl, type ChaveEtapa } from './catalogo';
+import { estruturaDaEsteira, kanban, kanbanColuna, lista } from './consultas.service';
 import {
   criarVinculoSchema,
   editarVinculoSchemas,
+  kanbanColunaQuerySchema,
+  kanbanQuerySchema,
+  listaQuerySchema,
   moverVinculoSchema,
   notaSchema,
   vendedorSchema,
+  type KanbanColunaQuery,
+  type KanbanQuery,
+  type ListaQuery,
   type MoverVinculoInput,
   type NotaInput,
   type VendedorInput,
 } from './esteiras.schemas';
+import { parseFiltros } from './filtros';
 import {
   adicionarNota,
   criarVinculo,
@@ -50,6 +58,55 @@ const somenteTim: RequestHandler = (req, _res, next) =>
 
 esteirasRoutes.use(requireAuth);
 esteirasRoutes.use(requireModulo('esteira'));
+
+/** Filtros da tela, na mesma query string da paginação (`ZodError` → 400). */
+const filtrosDa = (req: Request) => parseFiltros(req.query as Record<string, unknown>);
+
+// ---------------------------------------------------------------------------
+// Consultas (leitura)
+// ---------------------------------------------------------------------------
+
+esteirasRoutes.get(
+  '/:operacao/estrutura',
+  exigirOperacao('LEITURA'),
+  asyncHandler(async (_req, res) => {
+    res.json(await estruturaDaEsteira(res.locals.operacao, res.locals.nivelOperacao));
+  }),
+);
+
+esteirasRoutes.get(
+  '/:operacao/kanban',
+  exigirOperacao('LEITURA'),
+  validateQuery(kanbanQuerySchema),
+  asyncHandler(async (req, res) => {
+    const { porColuna } = res.locals.query as KanbanQuery;
+    res.json(await kanban(res.locals.operacao, filtrosDa(req), porColuna));
+  }),
+);
+
+esteirasRoutes.get(
+  '/:operacao/kanban/coluna/:chave',
+  exigirOperacao('LEITURA'),
+  validateQuery(kanbanColunaQuerySchema),
+  asyncHandler(async (req, res) => {
+    const { porColuna, cursor } = res.locals.query as KanbanColunaQuery;
+    res.json(await kanbanColuna(res.locals.operacao, param(req, 'chave'), filtrosDa(req), porColuna, cursor || undefined));
+  }),
+);
+
+esteirasRoutes.get(
+  '/:operacao/lista',
+  exigirOperacao('LEITURA'),
+  validateQuery(listaQuerySchema),
+  asyncHandler(async (req, res) => {
+    const { pagina, tamanho, ordenarPor, direcao } = res.locals.query as ListaQuery;
+    res.json(await lista(res.locals.operacao, filtrosDa(req), { pagina, tamanho, ordenarPor: ordenarPor || undefined, direcao }));
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// Vínculo
+// ---------------------------------------------------------------------------
 
 esteirasRoutes.post(
   '/:operacao/vinculos',

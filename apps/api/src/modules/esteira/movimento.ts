@@ -29,7 +29,8 @@ import type { Avaliacao, ContextoRegra } from './tipos';
 export type Situacao = 'EM_ANDAMENTO' | 'DESISTENTE' | 'DESCREDENCIADO' | 'NURTURE' | 'DESCARTADO';
 export type Destinos = Partial<Record<ChaveEtapa, Avaliacao['resultado']>>;
 
-const SITUACAO_DA_SAIDA: Partial<Record<string, Situacao>> = {
+/** Situação de cada saída conhecida (o resto é EM_ANDAMENTO). */
+export const SITUACAO_DA_SAIDA: Partial<Record<ChaveEtapa, Situacao>> = {
   TIM_DESISTENCIA: 'DESISTENTE',
   TIM_DESCREDENCIADO: 'DESCREDENCIADO',
   SL_NURTURE: 'NURTURE',
@@ -39,7 +40,7 @@ const SITUACAO_DA_SAIDA: Partial<Record<string, Situacao>> = {
 /** Situação não é coluna: vem da etapa (spec 4.4). Saída sem chave conhecida conta como em andamento. */
 export function situacaoDaEtapa(tipo: TipoEtapa, chave: string | null): Situacao {
   if (tipo !== 'SAIDA' || !chave) return 'EM_ANDAMENTO';
-  return SITUACAO_DA_SAIDA[chave] ?? 'EM_ANDAMENTO';
+  return SITUACAO_DA_SAIDA[chave as ChaveEtapa] ?? 'EM_ANDAMENTO';
 }
 
 export type ErroDeMovimento = {
@@ -225,9 +226,12 @@ export function mudancaDeSituacao(m: {
   };
 }
 
-/** Parado a partir do limite de dias da etapa; etapa sem limite nunca fica parada. */
+/** Limite de "parado" da etapa que não define `diasParado`. */
+export const DIAS_PARADO_PADRAO = 7;
+
+/** Parado a partir do limite de dias da etapa (sem limite definido, 7 dias). */
 export function estaParado(diasNaEtapa: number, diasParado: number | null): boolean {
-  return diasParado != null && diasNaEtapa >= diasParado;
+  return diasNaEtapa >= (diasParado ?? DIAS_PARADO_PADRAO);
 }
 
 const CAPTACAO: Record<NonNullable<CamposStarlink['tipoCaptacao']>, string> = {
