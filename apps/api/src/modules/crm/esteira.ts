@@ -9,6 +9,8 @@
  * configura pela tela escreve "Pendência".
  */
 
+import { chaveConhecida, papelDaChave } from '../esteira/catalogo';
+
 export type PapelDoEstagio = 'NOVO' | 'ANALISE' | 'PENDENCIA' | 'APROVACAO' | 'CREDENCIADO' | 'ATIVO' | 'OUTRO';
 
 export const normalizar = (texto: string) =>
@@ -18,7 +20,12 @@ export const normalizar = (texto: string) =>
     .toLowerCase()
     .trim();
 
-export function papelDoEstagio(nome: string): PapelDoEstagio {
+/**
+ * Com `chave` conhecida (esteiras TIM/Starlink) o papel vem do catálogo — saídas
+ * viram 'OUTRO'. A heurística por nome fica só como fallback para funis sem chave.
+ */
+export function papelDoEstagio(nome: string, chave?: string | null): PapelDoEstagio {
+  if (chaveConhecida(chave)) return papelDaChave(chave ?? null) ?? 'OUTRO';
   const n = normalizar(nome);
   if (n.startsWith('novo') || n.includes('cadastro') || n.includes('negociacao') || n.includes('preencher o vsm')) return 'NOVO';
   if (n.includes('analise') || n.includes('em andamento') || n.includes('contrato assinado')) return 'ANALISE';

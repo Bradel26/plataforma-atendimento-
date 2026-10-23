@@ -17,6 +17,17 @@ describe('papelDoEstagio', () => {
     expect(papelDoEstagio('Análise')).toBe('ANALISE');
     expect(papelDoEstagio('Qualquer outra')).toBe('OUTRO');
   });
+
+  it('usa a chave do catálogo quando ela vem, ignorando o nome', () => {
+    expect(papelDoEstagio('Nome renomeado', 'TIM_VENDA_LIBERADA')).toBe('ATIVO');
+    expect(papelDoEstagio('Ativo', 'SL_MEI')).toBe('PENDENCIA');
+    expect(papelDoEstagio('Qualquer', 'SL_NURTURE')).toBe('OUTRO');
+  });
+
+  it('chave nula ou desconhecida cai na heurística por nome', () => {
+    expect(papelDoEstagio('Pendência', null)).toBe('PENDENCIA');
+    expect(papelDoEstagio('Pendência', 'XYZ')).toBe('PENDENCIA');
+  });
 });
 
 describe('semaforo', () => {
