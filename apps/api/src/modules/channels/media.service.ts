@@ -1,9 +1,10 @@
 import type { Channel } from '@prisma/client';
 import { limiteBytes, salvar, tipoAceito } from '../../lib/storage';
 import type { MensagemNormalizada } from './meta.types';
-import { obterConfig } from './channels.service';
+import { configDoDestino } from './channels.service';
+import { env } from '../../env';
 
-const GRAPH = 'https://graph.facebook.com/v21.0';
+const GRAPH = `https://graph.facebook.com/${env.META_GRAPH_API_VERSION}`;
 
 /**
  * Traz o binario do anexo para o storage da plataforma.
@@ -19,13 +20,16 @@ const GRAPH = 'https://graph.facebook.com/v21.0';
  */
 export async function baixarAnexo(
   canal: Channel,
-  dados: Pick<MensagemNormalizada, 'tipoAnexo' | 'anexoUrl' | 'anexoIdExterno' | 'anexoNome'>,
+  dados: Pick<MensagemNormalizada, 'tipoAnexo' | 'anexoUrl' | 'anexoIdExterno' | 'anexoNome' | 'identificadorDestino'>,
 ): Promise<{ url: string | null; motivo?: string }> {
   if (dados.tipoAnexo === 'TEXTO') return { url: null };
   if (!dados.anexoIdExterno && !dados.anexoUrl) return { url: null, motivo: 'mensagem sem anexo localizável' };
 
   try {
-    const config = await obterConfig(canal);
+    // Cada linha oficial tem token próprio. Resolver pelo identificador que
+    // recebeu a mídia evita tentar baixar o anexo de um vendedor com o token da
+    // linha compartilhada (ou de outro vendedor).
+    const config = await configDoDestino(canal, dados.identificadorDestino);
     const token = config?.accessToken ?? null;
 
     const origem = dados.anexoIdExterno

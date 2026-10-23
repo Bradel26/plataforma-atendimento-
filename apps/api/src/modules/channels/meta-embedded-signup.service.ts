@@ -55,14 +55,6 @@ export async function conectarNumeroMeta(input: {
   }
 
   const atual = await prisma.channelConfig.findFirst({ where: { canal: 'WHATSAPP', donoId: input.donoId } });
-  if (atual?.phoneNumberId && atual.phoneNumberId !== input.phoneNumberId) {
-    throw conflict('Este usuário já tem outro número oficial conectado. Remova ou migre a linha atual antes de conectar um número diferente.');
-  }
-
-  const existente = await prisma.channelConfig.findFirst({ where: { canal: 'WHATSAPP', phoneNumberId: input.phoneNumberId } });
-  if (existente && existente.donoId !== input.donoId) {
-    throw conflict('Este número já está conectado a outro usuário da plataforma.');
-  }
 
   const codigoUrl = new URL(`https://graph.facebook.com/${env.META_GRAPH_API_VERSION}/oauth/access_token`);
   codigoUrl.searchParams.set('client_id', env.META_APP_ID);
@@ -85,6 +77,19 @@ export async function conectarNumeroMeta(input: {
     ? 'O número escolhido não pertence ao WhatsApp Business Account autorizado.'
     : 'A Meta não identificou qual linha conectar. O WABA tem mais de um número; tente novamente pelo fluxo oficial.');
 
+  // O evento de coexistência pode omitir phone_number_id quando o WABA tem
+  // somente uma linha. Resolva o ID pela API antes de conferir duplicidade;
+  // comparar `atual.phoneNumberId` com `undefined` rejeitaria uma reconexão
+  // válida e a busca com ID ausente poderia selecionar uma linha arbitrária.
+  if (atual?.phoneNumberId && atual.phoneNumberId !== phone.id) {
+    throw conflict('Este usuário já tem outro número oficial conectado. Remova ou migre a linha atual antes de conectar um número diferente.');
+  }
+
+  const existente = await prisma.channelConfig.findFirst({ where: { canal: 'WHATSAPP', phoneNumberId: phone.id } });
+  if (existente && existente.donoId !== input.donoId) {
+    throw conflict('Este número já está conectado a outro usuário da plataforma.');
+  }
+
   // Na coexistência a linha continua registrada no WhatsApp Business App.
   // Registrar novamente pode interromper o uso do app; só o fluxo padrão faz isso.
   if (!input.coexistencia) {
@@ -94,20 +99,8 @@ export async function conectarNumeroMeta(input: {
     });
   }
 
-  // A assinatura do app no WABA habilita entrega de eventos de mensagem e voz.
+  // A assinatura do app no WABA habilita entrega de eventos de mensagem.
   await graph(`${encodeURIComponent(input.wabaId)}/subscribed_apps`, token, { method: 'POST', body: '{}' });
-
-  // Calling é uma capacidade independente da conexão de mensagens. Uma linha
-  // pode ficar conectada para mensagens mesmo se Meta ainda não liberar voz.
-  let callingAtivo = false;
-  try {
-    await graph(`${encodeURIComponent(phone.id)}/settings`, token, {
-      method: 'POST', body: JSON.stringify({ calling: { status: 'ENABLED' } }),
-    });
-    callingAtivo = true;
-  } catch {
-    callingAtivo = false;
-  }
 
   const linha = {
     nome: phone.verified_name || phone.display_phone_number || 'WhatsApp pessoal',
@@ -124,9 +117,11 @@ export async function conectarNumeroMeta(input: {
     ponteSegredo: null,
     ponteSessao: null,
     espelharCelular: false,
-    whatsappCallingHabilitado: callingAtivo,
-    gravarChamadasWhatsapp: true,
-    transcreverChamadasWhatsapp: true,
+    // Este fluxo configura somente mensagens. Chamadas têm configuração
+    // independente e não devem ser ativadas como efeito colateral do signup.
+    whatsappCallingHabilitado: atual?.whatsappCallingHabilitado ?? false,
+    gravarChamadasWhatsapp: atual?.gravarChamadasWhatsapp ?? false,
+    transcreverChamadasWhatsapp: atual?.transcreverChamadasWhatsapp ?? false,
   };
 
   let canal: Awaited<ReturnType<typeof criarNumero>>;
@@ -141,11 +136,5 @@ export async function conectarNumeroMeta(input: {
     throw e;
   }
 
-  return {
-    canal,
-    callingAtivo,
-    aviso: callingAtivo
-      ? 'Número conectado e Calling API habilitada na Meta. O painel já pode receber e iniciar chamadas pelo navegador.'
-      : 'Número conectado para mensagens. A Meta ainda não habilitou Calling API para esta linha.',
-  };
+  return { canal, aviso: 'Número conectado para enviar e receber mensagens pela API oficial da Meta.' };
 }

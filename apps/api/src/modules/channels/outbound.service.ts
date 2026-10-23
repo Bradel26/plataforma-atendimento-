@@ -1,10 +1,11 @@
 import type { Channel } from '@prisma/client';
 import { AppError, badRequest } from '../../lib/errors';
+import { env } from '../../env';
 import { obterConfig, obterConfigPorId } from './channels.service';
 import { impedimentoDeEnvio, modoEfetivo } from './whatsapp.modo';
 import { getWhatsAppProvider } from './whatsapp-provider.factory';
 
-const GRAPH = 'https://graph.facebook.com/v21.0';
+const GRAPH = `https://graph.facebook.com/${env.META_GRAPH_API_VERSION}`;
 
 /**
  * O modo nao oficial passa pelo `WhatsAppProvider` em vez de falar direto com

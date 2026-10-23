@@ -889,26 +889,28 @@ export function AtendimentoPage() {
 
                     {!mostrarConectar ? (
                       <>
-                        <h2 className="text-base font-semibold text-slate-800">Conecte seu WhatsApp ao Atendimento</h2>
+                        <h2 className="text-base font-semibold text-slate-800">Conecte seu WhatsApp Business ao Atendimento</h2>
                         <p className="text-xs text-slate-500">
-                          Receba e responda as mensagens dos seus clientes diretamente por aqui.
+                          Conecte pela Meta para receber e responder mensagens oficiais por aqui.
                         </p>
                         {erroConectar && (
                           <div className="w-full">
                             <Alerta>{erroConectar}</Alerta>
                           </div>
                         )}
-                        <Button
-                          type="button"
-                          onClick={() => void conectarWhatsapp()}
-                          disabled={conectandoLinha}
-                          className="mt-1 w-full"
-                        >
-                          {conectandoLinha ? 'Conectando...' : erroConectar ? 'Tentar novamente' : 'Conectar WhatsApp'}
-                        </Button>
+                        <ConectarWhatsAppCloud onConnected={() => void atualizarMinhaLinha()} />
                         <div className="w-full border-t border-slate-100 pt-3">
-                          <p className="mb-2 text-left text-xs font-medium text-slate-700">Alternativa: API Oficial (sem QR)</p>
-                          <ConectarWhatsAppCloud onConnected={() => void atualizarMinhaLinha()} />
+                          <p className="mb-2 text-left text-xs font-medium text-slate-700">Outra forma de conectar</p>
+                          <p className="mb-2 text-left text-[11px] text-slate-500">O QR usa uma sessão não oficial do WhatsApp Web; escolha somente se não for usar a conexão da Meta.</p>
+                          <Button
+                            type="button"
+                            variante="neutro"
+                            onClick={() => void conectarWhatsapp()}
+                            disabled={conectandoLinha}
+                            className="w-full"
+                          >
+                            {conectandoLinha ? 'Preparando QR...' : 'Conectar por QR (não oficial)'}
+                          </Button>
                         </div>
                       </>
                     ) : (
