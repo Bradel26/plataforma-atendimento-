@@ -54,6 +54,17 @@ export function estagioIniciaCiclo(estagio: { nome: string; chave: string | null
 }
 
 /**
+ * Decide se o card ganha ciclo. Com chave, so a etapa decide: `situacaoExcecao`
+ * e legado (a migracao o deixa preenchido em quem foi para a saida), e um
+ * desistente reativado ou um Nurture reengajado que chega la precisa do ciclo.
+ * Sem chave (funil antigo), card em excecao continua fora, como antes.
+ */
+export function deveIniciarCiclo(c: { situacaoExcecao: string | null; estagio: { nome: string; chave: string | null } }): boolean {
+  if (chaveConhecida(c.estagio.chave)) return estagioIniciaCiclo(c.estagio);
+  return c.situacaoExcecao === null && estagioIniciaCiclo(c.estagio);
+}
+
+/**
  * Etapas de implantacao que a esteira ja comprova quando o ciclo nasce (spec 7):
  * TIM exige treinamento e sistemas liberados para chegar la; a Starlink, treinamento.
  * O operador nao precisa marca-las de novo.

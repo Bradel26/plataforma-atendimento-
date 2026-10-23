@@ -11,7 +11,7 @@ import {
   STATUS_CICLO,
   decidirAutomatico,
   diasEntre,
-  estagioIniciaCiclo,
+  deveIniciarCiclo,
   etapasComprovadasPelaEsteira,
   validarMudancaManual,
   type StatusCiclo,
@@ -99,16 +99,16 @@ export async function ultimasInteracoes(contatoIds: string[]): Promise<Map<strin
 export async function iniciarCiclos(credenciamentoId?: string) {
   const candidatos = await prisma.credenciamento.findMany({
     where: {
-      situacaoExcecao: null,
       cicloParceiro: { is: null },
       ...(credenciamentoId ? { id: credenciamentoId } : {}),
     },
-    select: { id: true, estagioDesde: true, estagio: { select: { nome: true, chave: true } } },
+    select: { id: true, estagioDesde: true, situacaoExcecao: true, estagio: { select: { nome: true, chave: true } } },
   });
 
   let criados = 0;
   for (const c of candidatos) {
-    if (!estagioIniciaCiclo(c.estagio)) continue;
+    // `situacaoExcecao` (legado) so vale no fallback por nome; com chave, a etapa decide.
+    if (!deveIniciarCiclo(c)) continue;
     const comprovadas = etapasComprovadasPelaEsteira(c.estagio.chave);
     try {
       await prisma.cicloParceiro.create({

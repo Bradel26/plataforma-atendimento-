@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   decidirAutomatico,
+  deveIniciarCiclo,
   estagioIniciaCiclo,
   etapasComprovadasPelaEsteira,
   validarMudancaManual,
@@ -150,5 +151,17 @@ describe('etapasComprovadasPelaEsteira', () => {
     expect(etapasComprovadasPelaEsteira('TIM_ACOMPANHAMENTO')).toEqual(['TREINAMENTO', 'LIBERACAO_ACESSO']);
     expect(etapasComprovadasPelaEsteira('SL_PRONTO_VENDA')).toEqual(['TREINAMENTO']);
     expect(etapasComprovadasPelaEsteira(null)).toEqual([]);
+  });
+});
+
+describe('deveIniciarCiclo', () => {
+  it('com chave, a chave decide: situacaoExcecao legada não impede (desistente migrado e reativado)', () => {
+    expect(deveIniciarCiclo({ situacaoExcecao: 'CANCELADO', estagio: { nome: 'Acompanhamento', chave: 'TIM_ACOMPANHAMENTO' } })).toBe(true);
+    expect(deveIniciarCiclo({ situacaoExcecao: 'REPROVADO', estagio: { nome: 'Pronto p/ venda', chave: 'SL_PRONTO_VENDA' } })).toBe(true);
+    expect(deveIniciarCiclo({ situacaoExcecao: null, estagio: { nome: 'Venda liberada', chave: 'TIM_VENDA_LIBERADA' } })).toBe(false);
+  });
+  it('sem chave (fallback pelo nome), card em exceção não inicia ciclo', () => {
+    expect(deveIniciarCiclo({ situacaoExcecao: null, estagio: { nome: 'Apto para venda', chave: null } })).toBe(true);
+    expect(deveIniciarCiclo({ situacaoExcecao: 'INATIVADO', estagio: { nome: 'Apto para venda', chave: null } })).toBe(false);
   });
 });

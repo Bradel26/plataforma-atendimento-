@@ -16,6 +16,7 @@ import { usuarioAtual, usuarioAtualOuNulo } from '../../lib/tenant';
 import { apenasVisivel } from '../../lib/visibilidade';
 import { ufDoTelefone } from '../../lib/ddd';
 import { numeroNormalizado } from '../channels/whatsapp.modo';
+import { estagioIniciaCiclo } from '../crm/cicloParceiro';
 import { iniciarCiclos } from '../crm/cicloParceiro.service';
 import { diasDesde } from '../crm/esteira';
 import { acessoDoUsuarioAtual } from './acesso';
@@ -41,14 +42,11 @@ import {
 import { CAMPOS_STARLINK_VAZIO, aplicarTravas, avaliarMudancaStarlink, derivarEtapaStarlink, type CamposStarlink } from './starlink';
 import { CAMPOS_TIM_VAZIO, avaliarMovimentoTim, deveLiberarVenda, efeitosDeEntradaTim, prontoTim, type CamposTim } from './tim';
 import type { Avaliacao } from './tipos';
-import { whereDoVinculo } from './vinculo';
+import { vinculoAntesDeCriar, whereDoVinculo } from './vinculo';
 
 export type { CriarVinculoInput } from './esteiras.schemas';
 
 const JA_NA_ESTEIRA = 'Este parceiro já está nesta esteira';
-
-/** Etapas em que o ciclo de vida do parceiro começa (spec 5.1 e 5.2). */
-const INICIAM_CICLO: ChaveEtapa[] = ['TIM_ACOMPANHAMENTO', 'SL_PRONTO_VENDA'];
 
 const estagioSelect = { id: true, nome: true, chave: true, tipoEtapa: true, diasParado: true, ativa: true } satisfies Prisma.FunnelStageSelect;
 
@@ -250,10 +248,13 @@ async function montarDetalhe(v: VinculoDb): Promise<VinculoDetalhe> {
   };
 }
 
-/** Vínculo da operação dentro da carteira do usuário; 404 se de outra operação ou fora dela. */
+/**
+ * Vínculo da operação dentro da carteira do usuário; 404 se de outra operação,
+ * fora dela ou arquivado (duplicata da migração — movê-lo criaria um segundo card vivo).
+ */
 async function carregarVisivel(operacao: Operacao, id: string): Promise<VinculoDb> {
   const v = await prisma.credenciamento.findFirst({
-    where: { AND: [apenasVisivel(id, await filtroDe(politicaCredenciamentos)), { operacao }] },
+    where: { AND: [apenasVisivel(id, await filtroDe(politicaCredenciamentos)), { operacao, arquivadoEm: null }] },
     include: inclusao,
   });
   if (!v) throw notFound('Vínculo não encontrado');
@@ -273,18 +274,44 @@ export async function obterVinculo(operacao: Operacao, id: string): Promise<Vinc
 // Criação
 // ---------------------------------------------------------------------------
 
-/** Funil ESTEIRA da operação com as etapas (a sincronização de estrutura cria). */
+/** Funil ESTEIRA ativo da operação com as etapas (a sincronização de estrutura cria). */
 async function funilDaOperacao(operacao: Operacao) {
   const funil = await prisma.funnel.findFirst({
-    where: { tipo: 'ESTEIRA', operacao },
+    where: { tipo: 'ESTEIRA', operacao, ativo: true },
+    orderBy: { criadoEm: 'asc' },
     include: { estagios: { select: estagioSelect, orderBy: { ordem: 'asc' } } },
   });
-  if (!funil || !funil.ativo) throw badRequest('Esta esteira não está configurada nesta organização');
+  if (!funil) throw badRequest('Esta esteira não está configurada nesta organização');
   return funil;
 }
 
-/** Conta visível pelo CNPJ, ou criada; CNPJ de conta fora da carteira é recusado. */
-async function acharOuCriarConta(cnpj: string, nome: string, input: CriarVinculoInput): Promise<string> {
+type ContatoParceiro = { id: string; contaId: string | null; responsavelId: string | null };
+const contatoSelect = { id: true, contaId: true, responsavelId: true } satisfies Prisma.ContactSelect;
+
+/**
+ * Parceiro do vínculo, sem gravar nada: o que já existe e o que falta criar.
+ * A criação fica para a transação do vínculo, depois da checagem de unicidade —
+ * senão um 409 deixaria conta/contato órfãos para trás.
+ */
+type PlanoParceiro = {
+  /** Contato existente; nulo quando será criado (`novoContato`). */
+  contato: ContatoParceiro | null;
+  /** Conta existente que identifica o parceiro; nula sem conta ou quando será criada (`novaConta`). */
+  contaId: string | null;
+  novaConta: { nome: string; cnpj: string; cidade: string | null; uf: string | null } | null;
+  novoContato: {
+    nome: string;
+    telefone: string | null;
+    cpf: string | null;
+    email: string | null;
+    cidade: string | null;
+    uf: string | null;
+    canalOrigem: 'PROSPECCAO_ATIVA';
+  } | null;
+};
+
+/** Conta visível pelo CNPJ; CNPJ de conta fora da carteira é recusado; nula se não existe. */
+async function acharConta(cnpj: string): Promise<string | null> {
   const visivel = await prisma.account.findFirst({
     where: { AND: [await filtroDe(politicaContas), { cnpj }] },
     select: { id: true },
@@ -293,15 +320,8 @@ async function acharOuCriarConta(cnpj: string, nome: string, input: CriarVinculo
   if (await prisma.account.findFirst({ where: { cnpj }, select: { id: true } })) {
     throw badRequest('Já existe uma empresa com este CNPJ fora da sua carteira');
   }
-  const conta = await prisma.account.create({
-    data: { nome, cnpj, cidade: input.cidade ?? null, uf: input.uf ?? null },
-    select: { id: true },
-  });
-  return conta.id;
+  return null;
 }
-
-type ContatoParceiro = { id: string; contaId: string | null; responsavelId: string | null };
-const contatoSelect = { id: true, contaId: true, responsavelId: true } satisfies Prisma.ContactSelect;
 
 /** Contato visível por CPF, senão por telefone, senão (com conta) o primeiro da conta. */
 async function acharContato(input: CriarVinculoInput, contaId: string | null): Promise<ContatoParceiro | null> {
@@ -323,10 +343,10 @@ async function acharContato(input: CriarVinculoInput, contaId: string | null): P
 }
 
 /**
- * Parceiro do vínculo: o contato informado, ou achado/criado pelos dados.
- * A conta (CNPJ) identifica o parceiro quando existe (spec 4.2).
+ * Parceiro do vínculo: o contato informado, ou achado pelos dados; o que não
+ * existe vira plano de criação. A conta (CNPJ) identifica o parceiro (spec 4.2).
  */
-async function resolverParceiro(input: CriarVinculoInput): Promise<{ contato: ContatoParceiro; contaId: string | null }> {
+async function planejarParceiro(input: CriarVinculoInput): Promise<PlanoParceiro> {
   if (input.contaId) {
     const conta = await prisma.account.findFirst({
       where: apenasVisivel(input.contaId, await filtroDe(politicaContas)),
@@ -341,18 +361,28 @@ async function resolverParceiro(input: CriarVinculoInput): Promise<{ contato: Co
       select: contatoSelect,
     });
     if (!contato) throw notFound('Contato não encontrado');
-    return { contato, contaId: input.contaId ?? contato.contaId ?? null };
+    return { contato, contaId: input.contaId ?? contato.contaId ?? null, novaConta: null, novoContato: null };
   }
 
   const nome = (input.nome ?? input.empresa)!;
   let contaId = input.contaId ?? null;
-  if (!contaId && input.cnpj) contaId = await acharOuCriarConta(input.cnpj, input.empresa ?? nome, input);
+  let novaConta: PlanoParceiro['novaConta'] = null;
+  if (!contaId && input.cnpj) {
+    contaId = await acharConta(input.cnpj);
+    if (!contaId) novaConta = { nome: input.empresa ?? nome, cnpj: input.cnpj, cidade: input.cidade ?? null, uf: input.uf ?? null };
+  }
 
   const existente = await acharContato(input, contaId);
-  if (existente) return { contato: existente, contaId: contaId ?? existente.contaId ?? null };
+  if (existente) {
+    // Conta nova (CNPJ inédito) identifica o parceiro; senão a conta achada, ou a do contato.
+    return { contato: existente, contaId: novaConta ? null : (contaId ?? existente.contaId ?? null), novaConta, novoContato: null };
+  }
 
-  const criado = await prisma.contact.create({
-    data: {
+  return {
+    contato: null,
+    contaId,
+    novaConta,
+    novoContato: {
       nome: input.nome ?? nome,
       telefone: input.telefone ?? null,
       cpf: input.cpf ?? null,
@@ -360,11 +390,8 @@ async function resolverParceiro(input: CriarVinculoInput): Promise<{ contato: Co
       cidade: input.cidade ?? null,
       uf: input.uf ?? ufDoTelefone(input.telefone),
       canalOrigem: 'PROSPECCAO_ATIVA',
-      contaId,
     },
-    select: contatoSelect,
-  });
-  return { contato: criado, contaId };
+  };
 }
 
 export async function criarVinculo(operacao: Operacao, input: CriarVinculoInput): Promise<VinculoDetalhe> {
@@ -373,19 +400,31 @@ export async function criarVinculo(operacao: Operacao, input: CriarVinculoInput)
   const primeira = funil.estagios.find((e) => e.chave === ETAPAS[operacao][0]!.chave);
   if (!primeira) throw badRequest('A esteira não tem a etapa inicial configurada');
 
-  const { contato, contaId } = await resolverParceiro(input);
+  const plano = await planejarParceiro(input);
 
-  // Um vínculo não arquivado por parceiro por operação (critério dos índices parciais).
-  const aberto = await prisma.credenciamento.findFirst({
-    where: whereDoVinculo({ operacao, contaId, contatoId: contato.id }),
-    select: { id: true },
+  // Um vínculo não arquivado por parceiro por operação (critério dos índices
+  // parciais), conferido ANTES de criar conta ou contato.
+  const conferir = vinculoAntesDeCriar(operacao, {
+    contaId: plano.contaId,
+    contaNova: plano.novaConta != null,
+    contatoId: plano.contato?.id ?? null,
   });
-  if (aberto) throw conflict(JA_NA_ESTEIRA);
+  if (conferir) {
+    const aberto = await prisma.credenciamento.findFirst({ where: whereDoVinculo(conferir), select: { id: true } });
+    if (aberto) throw conflict(JA_NA_ESTEIRA);
+  }
 
   const agora = new Date();
   // A consulta acima não fecha a corrida; o índice fecha, e a colisão vira a mesma resposta.
+  // Conta e contato novos nascem na mesma transação do vínculo: nada fica órfão.
   const id = await prisma
     .$transaction(async (tx) => {
+      const contaId = plano.novaConta
+        ? (await tx.account.create({ data: plano.novaConta, select: { id: true } })).id
+        : plano.contaId;
+      const contato =
+        plano.contato ?? (await tx.contact.create({ data: { ...plano.novoContato!, contaId }, select: contatoSelect }));
+
       const criado = await tx.credenciamento.create({
         data: {
           contatoId: contato.id,
@@ -622,8 +661,8 @@ export async function moverVinculo(
     }
   }
 
-  const final = chaveAtual(atual);
-  if (final && INICIAM_CICLO.includes(final)) await iniciarCicloSemFalhar(id);
+  // Ciclo do parceiro: a mesma regra de `iniciarCiclos` (TIM em Acompanhamento, Starlink em Pronto p/ venda).
+  if (estagioIniciaCiclo(atual.estagio)) await iniciarCicloSemFalhar(id);
 
   return montarDetalhe(atual);
 }

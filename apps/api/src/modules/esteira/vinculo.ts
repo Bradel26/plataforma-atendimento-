@@ -33,3 +33,19 @@ export function pertenceAoVinculo(
 export function chaveDoVinculo(v: ChaveVinculo): string {
   return v.contaId ? `${v.operacao}:conta:${v.contaId}` : `${v.operacao}:contato:${v.contatoId}`;
 }
+
+/**
+ * Vínculo a conferir antes de criar conta/contato do parceiro (criação manual).
+ * Conta existente identifica o parceiro (o contato é indiferente: `whereDoVinculo`
+ * ignora o contato quando há conta); sem conta, o contato existente. Conta nova
+ * (CNPJ inédito) ou parceiro todo novo não podem ter vínculo: nulo.
+ */
+export function vinculoAntesDeCriar(
+  operacao: Operacao,
+  p: { contaId: string | null; contaNova: boolean; contatoId: string | null },
+): ChaveVinculo | null {
+  if (p.contaNova) return null;
+  if (p.contaId) return { operacao, contaId: p.contaId, contatoId: p.contatoId ?? '' };
+  if (p.contatoId) return { operacao, contaId: null, contatoId: p.contatoId };
+  return null;
+}

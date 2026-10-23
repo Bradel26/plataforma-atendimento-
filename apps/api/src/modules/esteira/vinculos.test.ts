@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chaveDoVinculo } from './vinculo';
+import { chaveDoVinculo, vinculoAntesDeCriar } from './vinculo';
 import {
   avisosDoVinculo,
   destinosStarlink,
@@ -314,5 +314,25 @@ describe('etiquetasDoVinculo', () => {
   it('TIM: tráfego pago e DEP', () => {
     expect(etiquetasDoVinculo('TIM', tim({ flagTrafegoPago: true, dep: 'PARCEIRO' }))).toEqual(['Tráfego pago', 'DEP: Parceiro']);
     expect(etiquetasDoVinculo('TIM', tim())).toEqual([]);
+  });
+});
+
+describe('vinculoAntesDeCriar', () => {
+  it('conta existente: confere pela conta', () => {
+    expect(vinculoAntesDeCriar('TIM', { contaId: 'conta-1', contaNova: false, contatoId: null })).toMatchObject({
+      operacao: 'TIM',
+      contaId: 'conta-1',
+    });
+  });
+  it('sem conta e contato existente: confere pelo contato', () => {
+    expect(vinculoAntesDeCriar('STARLINK', { contaId: null, contaNova: false, contatoId: 'contato-1' })).toEqual({
+      operacao: 'STARLINK',
+      contaId: null,
+      contatoId: 'contato-1',
+    });
+  });
+  it('conta nova (CNPJ inédito) ou parceiro todo novo: nada a conferir', () => {
+    expect(vinculoAntesDeCriar('TIM', { contaId: null, contaNova: true, contatoId: 'contato-1' })).toBeNull();
+    expect(vinculoAntesDeCriar('TIM', { contaId: null, contaNova: false, contatoId: null })).toBeNull();
   });
 });
