@@ -139,7 +139,8 @@ SET "classe_motivo" = 'DEFINITIVO'
 WHERE "operacao" = 'STARLINK' AND "situacao_excecao" IS NOT NULL AND "classe_motivo" IS NULL;
 
 -- 5. Um vinculo ativo por parceiro por operacao (spec 4.2) ----------------------------
--- Duplicatas: o mais recente fica ativo, os demais sao arquivados (nunca apagados).
+-- Duplicatas: fica ativo o processo vivo (sem situacao de excecao) e, entre
+-- iguais, o mais recente; os demais sao arquivados (nunca apagados).
 -- A particao e a mesma dos indices: conta quando houver, senao contato.
 UPDATE "credenciamentos" c
 SET "arquivado_em" = now()
@@ -147,7 +148,7 @@ FROM (
   SELECT "id",
          row_number() OVER (
            PARTITION BY "organizacao_id", "operacao", coalesce("conta_id", "contato_id")
-           ORDER BY "atualizado_em" DESC, "criado_em" DESC, "id" DESC
+           ORDER BY ("situacao_excecao" IS NULL) DESC, "atualizado_em" DESC, "criado_em" DESC, "id" DESC
          ) AS n
   FROM "credenciamentos"
   WHERE "arquivado_em" IS NULL

@@ -102,6 +102,12 @@ describe('migration SQL espelha as tabelas de migracao.ts', () => {
       expect(valores, `${nome} (${Object.values(coluna).join(', ')})`).toEqual(esperado);
     }
   });
+  it('duplicatas: o card sem excecao vence; entre iguais, o mais recente', () => {
+    const sqlSemEspacos = sql.replace(/\s+/g, ' ');
+    expect(sqlSemEspacos).toContain(
+      'PARTITION BY "organizacao_id", "operacao", coalesce("conta_id", "contato_id") ORDER BY ("situacao_excecao" IS NULL) DESC, "atualizado_em" DESC',
+    );
+  });
   it('normaliza como a SQL: sem acento, minusculo, espacos colapsados', () => {
     expect(normalizarNomeDeEtapa('  Em   Negociação ')).toBe('em negociacao');
   });

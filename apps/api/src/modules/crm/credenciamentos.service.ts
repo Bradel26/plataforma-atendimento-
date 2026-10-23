@@ -4,6 +4,8 @@ import { filtroDe, politicaContas, politicaContatos, politicaCredenciamentos } f
 import { usuarioAtualOuNulo } from '../../lib/tenant';
 import { apenasVisivel } from '../../lib/visibilidade';
 import { badRequest, notFound } from '../../lib/errors';
+import { colidiuNoVinculoDeCredenciamento } from '../../lib/erros-prisma';
+import { chaveDoVinculo, pertenceAoVinculo, whereDoVinculo } from '../esteira/vinculo';
 import { SEGMENTOS_PARCEIRO, identificarSegmentoParceiro, type SegmentoParceiro } from './segmentoParceiro';
 import { diasDesde, papelDoEstagio } from './esteira';
 import { iniciarCiclos } from './cicloParceiro.service';
@@ -142,6 +144,8 @@ export async function obterCredenciamento(id: string) {
   return { ...serialize(c), historico };
 }
 
+const JA_NA_ESTEIRA = 'Este parceiro já está nesta esteira';
+
 export async function criarCredenciamento(input: CriarCredenciamentoInput) {
   const contato = await prisma.contact.findFirst({
     where: apenasVisivel(input.contatoId, await filtroDe(politicaContatos)),
@@ -184,19 +188,17 @@ export async function criarCredenciamento(input: CriarCredenciamentoInput) {
   if (!operacao) throw badRequest('A esteira informada não tem operação definida');
   const contaId = input.contaId ?? contato.contaId ?? null;
 
-  // Um vinculo nao arquivado por parceiro por operacao — o mesmo criterio dos
-  // indices unicos parciais (conta quando houver, senao contato). Dois cards do
-  // mesmo parceiro dividiriam o historico e dobrariam as contagens do Dashboard.
+  // Um vinculo nao arquivado por parceiro por operacao (`whereDoVinculo`, o
+  // criterio dos indices unicos parciais). Dois cards do mesmo parceiro
+  // dividiriam o historico e dobrariam as contagens do Dashboard.
   const aberto = await prisma.credenciamento.findFirst({
-    where: {
-      operacao,
-      arquivadoEm: null,
-      ...(contaId ? { contaId } : { contaId: null, contatoId: contato.id }),
-    },
+    where: whereDoVinculo({ operacao, contaId, contatoId: contato.id }),
     select: { id: true },
   });
-  if (aberto) throw badRequest('Este parceiro já está nesta esteira');
+  if (aberto) throw badRequest(JA_NA_ESTEIRA);
 
+  // A consulta acima nao fecha a corrida (dois envios paralelos da mesma
+  // conta); o indice fecha, e a colisao vira a mesma resposta de negocio.
   const criado = await prisma.credenciamento.create({
     data: {
       contatoId: contato.id,
@@ -211,6 +213,9 @@ export async function criarCredenciamento(input: CriarCredenciamentoInput) {
       },
     },
     include: inclusao,
+  }).catch((erro: unknown) => {
+    if (colidiuNoVinculoDeCredenciamento(erro)) throw badRequest(JA_NA_ESTEIRA);
+    throw erro;
   });
   await iniciarCicloSemFalhar(criado.id);
   return serialize(criado);
@@ -219,7 +224,7 @@ export async function criarCredenciamento(input: CriarCredenciamentoInput) {
 /**
  * Classifica contatos pela origem guardada nas observacoes e encaminha em lote
  * para a esteira TIM ou Starlink. A previa e somente leitura; a execucao e
- * idempotente por contato e funil.
+ * idempotente por vinculo (parceiro + operacao, `whereDoVinculo`).
  */
 export async function importarContatosClassificados(previa: boolean) {
   const visibilidade = await filtroDe(politicaContatos);
@@ -237,7 +242,7 @@ export async function importarContatosClassificados(previa: boolean) {
         },
       ],
     },
-    select: { id: true, nome: true, segmentoParceiro: true, observacoes: true },
+    select: { id: true, nome: true, contaId: true, segmentoParceiro: true, observacoes: true },
     orderBy: { nome: 'asc' },
   });
 
@@ -250,17 +255,20 @@ export async function importarContatosClassificados(previa: boolean) {
     ['TIM', funis.find((funil) => funil.nome.toLocaleLowerCase('pt-BR') === 'credenciamento tim')],
     ['STARLINK', funis.find((funil) => funil.nome.toLocaleLowerCase('pt-BR') === 'credenciamento starlink')],
   ]);
+  // Vinculos existentes dos contatos e das contas deles, pelo mesmo criterio de
+  // `criarCredenciamento` (`pertenceAoVinculo` = `whereDoVinculo` em memoria):
+  // card em excecao conta como existente; arquivado nao.
   const ids = classificados.map((contato) => contato.id);
-  const abertosPorContato = new Map<string, string[]>();
-  if (ids.length) {
-    const abertos = await prisma.credenciamento.findMany({
-      where: { contatoId: { in: ids }, situacaoExcecao: null },
-      select: { contatoId: true, funilId: true },
-    });
-    for (const item of abertos) {
-      abertosPorContato.set(item.contatoId, [...(abertosPorContato.get(item.contatoId) ?? []), item.funilId]);
-    }
-  }
+  const contaIds = [...new Set(classificados.flatMap((c) => (c.contaId ? [c.contaId] : [])))];
+  const existentes = ids.length
+    ? await prisma.credenciamento.findMany({
+        where: {
+          arquivadoEm: null,
+          OR: [{ contatoId: { in: ids } }, ...(contaIds.length ? [{ contaId: { in: contaIds } }] : [])],
+        },
+        select: { operacao: true, contaId: true, contatoId: true, arquivadoEm: true },
+      })
+    : [];
 
   // O segmento reconhecido fica gravado no contato mesmo para quem ja esta na
   // esteira ou nao tem esteira configurada: a ficha e o envio manual dependem dele.
@@ -287,6 +295,8 @@ export async function importarContatosClassificados(previa: boolean) {
   });
   const porSegmento = { TIM: novoResumo(), STARLINK: novoResumo() };
   const envios: Array<{ contato: (typeof classificados)[number]; funilId: string }> = [];
+  // Vinculos ja reservados neste lote: dois contatos da mesma conta sao um parceiro so.
+  const reservados = new Set<string>();
 
   for (const contato of classificados) {
     const resumo = porSegmento[contato.segmento];
@@ -296,12 +306,17 @@ export async function importarContatosClassificados(previa: boolean) {
       resumo.semEsteiraConfigurada += 1;
       continue;
     }
-    const existentes = abertosPorContato.get(contato.id) ?? [];
-    if (existentes.includes(funil.id)) {
+    const vinculo = { operacao: funil.operacao ?? contato.segmento, contaId: contato.contaId, contatoId: contato.id };
+    const chave = chaveDoVinculo(vinculo);
+    if (reservados.has(chave) || existentes.some((c) => pertenceAoVinculo(c, vinculo))) {
       resumo.jaNaEsteira += 1;
       continue;
     }
-    if (existentes.length > 0) resumo.emOutraEsteira += 1;
+    const outraOperacao = vinculo.operacao === 'TIM' ? 'STARLINK' : 'TIM';
+    if (existentes.some((c) => pertenceAoVinculo(c, { ...vinculo, operacao: outraOperacao }))) {
+      resumo.emOutraEsteira += 1;
+    }
+    reservados.add(chave);
     resumo.paraEnviar += 1;
     envios.push({ contato, funilId: funil.id });
   }
