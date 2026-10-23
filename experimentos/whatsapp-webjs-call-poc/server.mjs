@@ -36,7 +36,11 @@ const TRANSCRICAO_URL = process.env.TRANSCRICAO_LOCAL_URL || localEnv.TRANSCRICA
 const TRANSCRICAO_MODELO = process.env.TRANSCRICAO_LOCAL_MODELO || localEnv.TRANSCRICAO_LOCAL_MODELO || 'base';
 const OLLAMA_URL = process.env.LIGACAO_IA_OLLAMA_URL || localEnv.LIGACAO_IA_OLLAMA_URL || process.env.OPORTUNIDADE_IA_OLLAMA_URL || localEnv.OPORTUNIDADE_IA_OLLAMA_URL || 'http://127.0.0.1:11434';
 const OLLAMA_MODELO = process.env.LIGACAO_IA_OLLAMA_MODELO || localEnv.LIGACAO_IA_OLLAMA_MODELO || process.env.OPORTUNIDADE_IA_OLLAMA_MODELO || localEnv.OPORTUNIDADE_IA_OLLAMA_MODELO || 'qwen3:4b';
-const INICIALIZACAO_TIMEOUT_MS = Number(process.env.WEBJS_INITIALIZATION_TIMEOUT_MS || 120_000);
+// O WhatsApp Web pode levar mais que 30s para carregar os módulos no servidor.
+// Mantenha este limite acima de authTimeoutMs para não encerrar a sessão antes
+// de a biblioteca concluir a injeção e emitir QR/ready.
+const INICIALIZACAO_TIMEOUT_MS = Number(process.env.WEBJS_INITIALIZATION_TIMEOUT_MS || 180_000);
+const AUTENTICACAO_PAGINA_TIMEOUT_MS = Number(process.env.WEBJS_AUTH_TIMEOUT_MS || 90_000);
 // A primeira sincronizacao do historico do WhatsApp Web pode demorar mais que
 // a emissao do QR. Nao encerre a sessao logo depois de o telefone autenticar.
 const AUTENTICACAO_PRONTO_TIMEOUT_MS = Number(process.env.WEBJS_AUTH_READY_TIMEOUT_MS || 300_000);
@@ -304,6 +308,7 @@ async function iniciarCliente(nomeSessao = 'teste-local') {
     await prepararPerfilChrome(profileDir, sessao.nome);
     const client = new Client({
       authStrategy: new LocalAuth({ clientId, dataPath: AUTH_DIR }),
+      authTimeoutMs: AUTENTICACAO_PAGINA_TIMEOUT_MS,
       puppeteer: { headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--autoplay-policy=no-user-gesture-required'] },
     });
     const thisClient = client;
