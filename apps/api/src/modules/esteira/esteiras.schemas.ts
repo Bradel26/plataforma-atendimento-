@@ -1,4 +1,4 @@
-import { MotivoPerdaStarlink, TipoCaptacao } from '@prisma/client';
+import { DepTim, MotivoPerdaStarlink, StatusItemTim, StatusVendedor, TipoCaptacao, VivensisStatus } from '@prisma/client';
 import { z } from 'zod';
 import { cnpjValido } from '../crm/cnpj';
 import { ETAPAS } from './catalogo';
@@ -52,5 +52,94 @@ export const moverVinculoSchema = z.object({
   motivoPerda: z.nativeEnum(MotivoPerdaStarlink).optional(),
 });
 
+/** Texto opcional: vazio vira nulo (limpa o campo). */
+const textoOpcional = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .transform((v) => v || null)
+    .nullable()
+    .optional();
+
+const triEstado = z.boolean().nullable().optional();
+const dataOpcional = z.coerce.date().nullable().optional();
+
+/**
+ * Campos TIM editáveis. Fora daqui: `origem` (da importação) e `statusParceria`
+ * (o serviço mantém em sincronia com a etapa). Campo desconhecido é recusado.
+ */
+const camposTimSchema = z
+  .object({
+    flagTrafegoPago: z.boolean().optional(),
+    statusDescritivo: textoOpcional(1000),
+    dep: z.nativeEnum(DepTim).nullable().optional(),
+    dataCredenciamento: dataOpcional,
+    matriculaSappdv: textoOpcional(60),
+    promoStatus: textoOpcional(60),
+    tipoCarteira: textoOpcional(60),
+    sistemaTimVendas: triEstado,
+    sistemaGn: triEstado,
+    sistemaTimFormaMais: triEstado,
+    sistemaPortalFornecedor: triEstado,
+    sistemaMeuTim: triEstado,
+    compraChip: z.nativeEnum(StatusItemTim).nullable().optional(),
+    treinamento: z.nativeEnum(StatusItemTim).nullable().optional(),
+  })
+  .strict();
+
+/** Campos Starlink editáveis (tri-estado: `null` = não respondido, nunca NÃO). */
+const camposStarlinkSchema = z
+  .object({
+    tipoCaptacao: z.nativeEnum(TipoCaptacao).nullable().optional(),
+    primeiroContatoEm: dataOpcional,
+    cnpjApto: triEstado,
+    mei: triEstado,
+    altCnae: triEstado,
+    vsm: triEstado,
+    treinamento: triEstado,
+    parceiro: triEstado,
+    contrato: triEstado,
+    prontoVenda: triEstado,
+    perdido: triEstado,
+    vivensisStatus: z.nativeEnum(VivensisStatus).nullable().optional(),
+    motivoPerda: z.nativeEnum(MotivoPerdaStarlink).nullable().optional(),
+  })
+  .strict();
+
+const edicaoComum = {
+  responsavelId: z.string().uuid().nullable().optional(),
+  observacoes: textoOpcional(2000),
+  justificativa: z.string().trim().max(1000).optional(),
+};
+
+/** Edição do vínculo, um schema por operação (a rota escolhe pela URL). */
+export const editarVinculoSchemas = {
+  TIM: z.object({ campos: camposTimSchema.default({}), ...edicaoComum }),
+  STARLINK: z.object({ campos: camposStarlinkSchema.default({}), ...edicaoComum }),
+};
+
+export const notaSchema = z.object({
+  texto: z.string().trim().min(1, 'Escreva a nota').max(5000),
+});
+
+export const vendedorSchema = z.object({
+  /** Sem `id`, cria; com `id`, atualiza o vendedor do vínculo. */
+  id: z.string().uuid().optional(),
+  nome: z.string().trim().min(2, 'Nome muito curto').max(160),
+  cpf: z
+    .string()
+    .trim()
+    .transform(digitos)
+    .refine((v) => v === '' || v.length === 11, 'Informe um CPF válido')
+    .transform((v) => v || null)
+    .nullable()
+    .optional(),
+  telefone: textoOpcional(30),
+  status: z.nativeEnum(StatusVendedor).default('ATIVO'),
+});
+
 export type CriarVinculoInput = z.infer<typeof criarVinculoSchema>;
 export type MoverVinculoInput = z.infer<typeof moverVinculoSchema>;
+export type NotaInput = z.infer<typeof notaSchema>;
+export type VendedorInput = z.infer<typeof vendedorSchema>;

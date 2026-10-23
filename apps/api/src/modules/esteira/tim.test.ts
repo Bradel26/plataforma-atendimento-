@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   avaliarMovimentoTim,
+  camposBloqueadosTim,
   deveLiberarVenda,
   efeitosDeEntradaTim,
   pendenciasDeCamposTim,
+  prontoDesfeito,
   prontoTim,
   type CamposTim,
 } from './tim';
@@ -183,5 +185,39 @@ describe('pendenciasDeCamposTim', () => {
   it('sem mudança para Sim não pende', () => {
     expect(pendenciasDeCamposTim({ ...vazio, sistemaGn: true }, { ...vazio, sistemaGn: true }, 0)).toEqual([]);
     expect(pendenciasDeCamposTim({ ...vazio, sistemaGn: true }, { ...vazio, sistemaGn: false }, 0)).toEqual([]);
+  });
+});
+
+describe('camposBloqueadosTim', () => {
+  it('matriculaSappdv só é editável a partir de Credenciamento OK', () => {
+    expect(camposBloqueadosTim('TIM_CRED_ANDAMENTO', vazio, { matriculaSappdv: '123' })).toEqual(['matriculaSappdv']);
+    expect(camposBloqueadosTim('TIM_NEGOCIACAO', comMatricula, { matriculaSappdv: null })).toEqual(['matriculaSappdv']);
+    expect(camposBloqueadosTim('TIM_CRED_OK', vazio, { matriculaSappdv: '123' })).toEqual([]);
+    expect(camposBloqueadosTim('TIM_ACOMPANHAMENTO', comMatricula, { matriculaSappdv: '456' })).toEqual([]);
+  });
+  it('saída ou etapa sem chave bloqueiam a matrícula', () => {
+    expect(camposBloqueadosTim('TIM_DESCREDENCIADO', vazio, { matriculaSappdv: '123' })).toEqual(['matriculaSappdv']);
+    expect(camposBloqueadosTim(null, vazio, { matriculaSappdv: '123' })).toEqual(['matriculaSappdv']);
+  });
+  it('matrícula ausente ou igual à gravada não bloqueia', () => {
+    expect(camposBloqueadosTim('TIM_NEGOCIACAO', vazio, { dep: 'TIM' })).toEqual([]);
+    expect(camposBloqueadosTim('TIM_NEGOCIACAO', comMatricula, { matriculaSappdv: '123' })).toEqual([]);
+    expect(camposBloqueadosTim('TIM_NEGOCIACAO', vazio, { matriculaSappdv: null })).toEqual([]);
+  });
+});
+
+describe('prontoDesfeito', () => {
+  it('pronto deixando de ser verdadeiro da Venda liberada em diante', () => {
+    const desfeito = { ...pronto, sistemaTimVendas: false };
+    expect(prontoDesfeito('TIM_VENDA_LIBERADA', pronto, desfeito)).toBe(true);
+    expect(prontoDesfeito('TIM_ACOMPANHAMENTO', pronto, desfeito)).toBe(true);
+  });
+  it('antes da Venda liberada, sem mudança ou já não pronto: sem aviso', () => {
+    const desfeito = { ...pronto, compraChip: 'PENDENTE' as const };
+    expect(prontoDesfeito('TIM_POS_CRED', pronto, desfeito)).toBe(false);
+    expect(prontoDesfeito('TIM_VENDA_LIBERADA', pronto, pronto)).toBe(false);
+    expect(prontoDesfeito('TIM_VENDA_LIBERADA', vazio, vazio)).toBe(false);
+    expect(prontoDesfeito('TIM_DESCREDENCIADO', pronto, desfeito)).toBe(false);
+    expect(prontoDesfeito(null, pronto, desfeito)).toBe(false);
   });
 });

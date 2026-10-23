@@ -1,13 +1,24 @@
 /**
- * Vínculo operacional (parceiro × operação): criar, obter e mover entre etapas.
+ * Vínculo operacional (parceiro × operação): criar, obter, mover entre etapas,
+ * editar campos, notas e vendedores do PDV.
  *
- * As regras são puras (`tim.ts`, `starlink.ts`, `movimento.ts`); aqui só a
- * leitura, a gravação numa transação e os efeitos depois dela (liberação
- * automática da venda TIM, início do ciclo do parceiro).
+ * As regras são puras (`tim.ts`, `starlink.ts`, `movimento.ts`, `auditoria.ts`);
+ * aqui só a leitura, a gravação numa transação (com a auditoria campo a campo)
+ * e os efeitos depois dela (liberação automática da venda TIM, início do ciclo).
  *
  * Vínculo de outra operação ou fora da carteira responde 404 — não revela que existe.
  */
-import type { ClasseMotivo, MotivoPerdaStarlink, Operacao, Prisma, Role, TipoHistoricoEsteira } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
+import {
+  Prisma,
+  type ClasseMotivo,
+  type MotivoPerdaStarlink,
+  type NivelOperacao,
+  type Operacao,
+  type Role,
+  type StatusVendedor,
+  type TipoHistoricoEsteira,
+} from '@prisma/client';
 import { prisma, type ClienteDeEscrita } from '../../lib/prisma';
 import { AppError, badRequest, conflict, notFound } from '../../lib/errors';
 import { colidiuNoVinculoDeCredenciamento } from '../../lib/erros-prisma';
@@ -20,6 +31,7 @@ import { estagioIniciaCiclo } from '../crm/cicloParceiro';
 import { iniciarCiclos } from '../crm/cicloParceiro.service';
 import { diasDesde } from '../crm/esteira';
 import { acessoDoUsuarioAtual } from './acesso';
+import { diferencas, diferencasDoVendedor, valorAuditavel, type DadosVendedor, type Diferenca } from './auditoria';
 import { ETAPAS, MOTIVOS_PERDA, chaveConhecida, etapa, type ChaveEtapa, type ChaveStarlink, type ChaveTim } from './catalogo';
 import type { CriarVinculoInput } from './esteiras.schemas';
 import {
@@ -40,8 +52,17 @@ import {
   type Situacao,
 } from './movimento';
 import { CAMPOS_STARLINK_VAZIO, aplicarTravas, avaliarMudancaStarlink, derivarEtapaStarlink, type CamposStarlink } from './starlink';
-import { CAMPOS_TIM_VAZIO, avaliarMovimentoTim, deveLiberarVenda, efeitosDeEntradaTim, prontoTim, type CamposTim } from './tim';
-import type { Avaliacao } from './tipos';
+import {
+  CAMPOS_TIM_VAZIO,
+  avaliarMovimentoTim,
+  camposBloqueadosTim,
+  deveLiberarVenda,
+  efeitosDeEntradaTim,
+  pendenciasDeCamposTim,
+  prontoDesfeito,
+  prontoTim,
+  type CamposTim,
+} from './tim';
 import { vinculoAntesDeCriar, whereDoVinculo } from './vinculo';
 
 export type { CriarVinculoInput } from './esteiras.schemas';
@@ -469,39 +490,92 @@ export async function criarVinculo(operacao: Operacao, input: CriarVinculoInput)
 }
 
 // ---------------------------------------------------------------------------
-// Movimento
+// Gravação (movimento, edição, nota, vendedor) — um caminho só
 // ---------------------------------------------------------------------------
 
 const erroHttp = (e: ErroDeMovimento) => new AppError(e.status, e.code, e.mensagem, e.details);
 const proibido = (mensagem: string) => new AppError(400, 'TRANSICAO_PROIBIDA', mensagem);
 
-type Gravacao = {
+/** Mudança de etapa: grava etapa, situação e uma linha de histórico. */
+type Movimento = {
   para: EstagioDb;
   tipo: TipoHistoricoEsteira;
   motivo: string | null;
   observacao: string | null;
   motivoSituacao: string | null;
   classeMotivo: ClasseMotivo | null;
-  usuarioId: string | null;
-  tim?: Partial<CamposTim>;
-  starlink?: CamposStarlink;
 };
 
-/** Grava um movimento: etapa, situação, campos da operação e histórico. */
-async function gravarMovimento(tx: ClienteDeEscrita, v: VinculoDb, g: Gravacao, agora: Date) {
+/** Colunas comuns do vínculo editáveis (auditadas como os campos da operação). */
+type ColunasDoVinculo = {
+  responsavelId?: string | null;
+  observacoes?: string | null;
+  motivoSituacao?: string | null;
+  classeMotivo?: ClasseMotivo | null;
+};
+
+type Gravacao = {
+  usuarioId: string | null;
+  /** Nulo numa alteração que não muda a etapa (sem histórico). */
+  movimento: Movimento | null;
+  tim?: Partial<CamposTim>;
+  starlink?: Partial<CamposStarlink>;
+  vinculo?: ColunasDoVinculo;
+  /** Linhas de auditoria além das dos campos (vendedores do PDV). */
+  auditoriaExtra?: Diferenca[];
+  /** Justificativa de alteração fora da regra sem mudar a etapa: vai para a auditoria. */
+  justificativa?: string | null;
+};
+
+/** Uma linha de auditoria por campo que muda (operação, vínculo e extras). */
+function auditoriaDaGravacao(v: VinculoDb, g: Gravacao): Diferenca[] {
+  const linhas = [
+    ...(g.vinculo
+      ? diferencas(
+          { responsavelId: v.responsavelId, observacoes: v.observacoes, motivoSituacao: v.motivoSituacao, classeMotivo: v.classeMotivo },
+          g.vinculo,
+        )
+      : []),
+    ...(g.tim ? diferencas(camposTim(v), g.tim) : []),
+    ...(g.starlink ? diferencas(camposStarlink(v), g.starlink) : []),
+    ...(g.auditoriaExtra ?? []),
+  ];
+  // Com movimento, a justificativa fica no histórico.
+  if (!g.movimento && g.justificativa && linhas.length > 0) linhas.push({ campo: 'justificativa', de: null, para: g.justificativa });
+  return linhas;
+}
+
+const json = (v: unknown) => {
+  const valor = valorAuditavel(v);
+  return valor === null ? Prisma.DbNull : (valor as Prisma.InputJsonValue);
+};
+
+/**
+ * Grava uma alteração do vínculo numa transação: colunas comuns, campos da
+ * operação, etapa/situação/histórico (se houver movimento) e a auditoria campo
+ * a campo. Toda gravação conta como interação (`ultimaInteracaoEm`).
+ */
+async function gravar(tx: ClienteDeEscrita, v: VinculoDb, g: Gravacao, agora: Date) {
+  const auditoria = auditoriaDaGravacao(v, g);
+  const m = g.movimento;
   await tx.credenciamento.update({
     where: { id: v.id },
     data: {
-      estagioId: g.para.id,
-      estagioDesde: agora,
       ultimaInteracaoEm: agora,
-      ...mudancaDeSituacao({
-        de: { id: v.estagioId, tipo: v.estagio.tipoEtapa, chave: v.estagio.chave },
-        para: { tipo: g.para.tipoEtapa, chave: g.para.chave },
-        motivo: g.motivoSituacao,
-        classe: g.classeMotivo,
-        agora,
-      }),
+      ...g.vinculo,
+      ...(m
+        ? {
+            estagioId: m.para.id,
+            estagioDesde: agora,
+            ...mudancaDeSituacao({
+              de: { id: v.estagioId, tipo: v.estagio.tipoEtapa, chave: v.estagio.chave },
+              para: { tipo: m.para.tipoEtapa, chave: m.para.chave },
+              motivo: m.motivoSituacao,
+              classe: m.classeMotivo,
+              agora,
+            }),
+          }
+        : {}),
     },
   });
   if (g.tim && (Object.keys(g.tim).length > 0 || !v.tim)) {
@@ -511,28 +585,40 @@ async function gravarMovimento(tx: ClienteDeEscrita, v: VinculoDb, g: Gravacao, 
       update: g.tim,
     });
   }
-  if (g.starlink) {
+  if (g.starlink && (Object.keys(g.starlink).length > 0 || !v.starlink)) {
     await tx.credenciamentoStarlink.upsert({
       where: { credenciamentoId: v.id },
       create: { credenciamentoId: v.id, ...g.starlink },
       update: g.starlink,
     });
   }
-  await tx.credenciamentoHistorico.create({
-    data: {
-      credenciamentoId: v.id,
-      deEstagioId: v.estagioId,
-      paraEstagioId: g.para.id,
-      operacao: v.operacao,
-      tipo: g.tipo,
-      motivo: g.motivo,
-      observacao: g.observacao,
-      usuarioId: g.usuarioId,
-      segundosNoEstagio: Math.max(0, Math.round((agora.getTime() - v.estagioDesde.getTime()) / 1000)),
-    },
-  });
-  // Ponto da auditoria dos campos alterados (Task 8 fornece `diferencas(antes, depois)`
-  // e grava em `credenciamentoAuditoria` aqui, na mesma transação).
+  if (m) {
+    await tx.credenciamentoHistorico.create({
+      data: {
+        credenciamentoId: v.id,
+        deEstagioId: v.estagioId,
+        paraEstagioId: m.para.id,
+        operacao: v.operacao,
+        tipo: m.tipo,
+        motivo: m.motivo,
+        observacao: m.observacao,
+        usuarioId: g.usuarioId,
+        segundosNoEstagio: Math.max(0, Math.round((agora.getTime() - v.estagioDesde.getTime()) / 1000)),
+      },
+    });
+  }
+  if (auditoria.length > 0) {
+    await tx.credenciamentoAuditoria.createMany({
+      data: auditoria.map((d) => ({
+        credenciamentoId: v.id,
+        operacao: v.operacao,
+        campo: d.campo,
+        de: json(d.de),
+        para: json(d.para),
+        usuarioId: g.usuarioId,
+      })),
+    });
+  }
 }
 
 /** Falha no ciclo não desfaz o movimento: a listagem e o agendador criam o ciclo depois. */
@@ -544,7 +630,81 @@ async function iniciarCicloSemFalhar(id: string) {
   }
 }
 
+/**
+ * TIM em Pós-cred que ficou "pronto": a venda é liberada sozinha (5 → 6), como
+ * movimento AUTOMATICO em transação própria. Devolve o vínculo relido.
+ */
+async function liberarVendaSePronta(atual: VinculoDb, agora: Date): Promise<VinculoDb> {
+  if (atual.operacao !== 'TIM') return atual;
+  const chave = chaveAtual(atual);
+  const campos = camposTim(atual);
+  if (!chave || !deveLiberarVenda(chave as ChaveTim, campos)) return atual;
+  const liberada = estagioDaChave(atual, 'TIM_VENDA_LIBERADA');
+  if (!liberada?.ativa) return atual;
+  await prisma.$transaction((tx) =>
+    gravar(
+      tx,
+      atual,
+      {
+        usuarioId: null,
+        movimento: {
+          para: liberada,
+          tipo: 'AUTOMATICO',
+          motivo: 'Venda liberada automaticamente: parceiro pronto',
+          observacao: null,
+          motivoSituacao: null,
+          classeMotivo: null,
+        },
+        tim: efeitosDeEntradaTim('TIM_VENDA_LIBERADA', campos, agora),
+      },
+      agora,
+    ),
+  );
+  return recarregar(atual.id);
+}
+
+/** Depois de gravar: liberação automática da venda, ciclo do parceiro e o detalhe. */
+async function concluir(id: string, agora: Date): Promise<VinculoDetalhe> {
+  const atual = await liberarVendaSePronta(await recarregar(id), agora);
+  // Ciclo do parceiro: a mesma regra de `iniciarCiclos` (TIM em Acompanhamento, Starlink em Pronto p/ venda).
+  if (estagioIniciaCiclo(atual.estagio)) await iniciarCicloSemFalhar(id);
+  return montarDetalhe(atual);
+}
+
 const texto = (v: string | null | undefined): string | null => v?.trim() || null;
+
+/** Justificativa quando houver; senão o motivo da saída. Os dois juntos: o motivo vai para a observação. */
+const textosDoHistorico = (justificativa: string | null, motivoSaida: string | null) => ({
+  motivo: justificativa ?? motivoSaida,
+  observacao: justificativa && motivoSaida ? motivoSaida : null,
+});
+
+/**
+ * Avalia uma mudança de campos Starlink (travas já aplicadas em `depois`) e
+ * lança o erro HTTP se não pode gravar. Perda: `motivoSituacao` e `classeMotivo`
+ * acompanham o motivo da perda (Nurture/Descartado).
+ */
+function avaliarGravacaoStarlink(
+  antes: CamposStarlink,
+  depois: CamposStarlink,
+  ctx: { justificativa: string | null; perfil: Role; nivel: NivelOperacao | undefined; motivo: string | null },
+) {
+  const avaliacao = avaliarMudancaStarlink(antes, depois);
+  const rotuloPerda = depois.motivoPerda ? MOTIVOS_PERDA[depois.motivoPerda].rotulo : null;
+  const erro = errosDeMovimento(avaliacao, { ...ctx, motivo: ctx.motivo ?? rotuloPerda });
+  if (erro) throw erroHttp(erro);
+  if (avaliacao.resultado === 'PROIBIDO') throw proibido(avaliacao.motivo); // já tratado; estreita o tipo
+  const perdido = depois.perdido === true && depois.motivoPerda != null;
+  return {
+    avaliacao,
+    motivoSituacao: perdido ? (ctx.motivo ?? rotuloPerda) : null,
+    classeMotivo: perdido ? MOTIVOS_PERDA[depois.motivoPerda!].classe : null,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Movimento
+// ---------------------------------------------------------------------------
 
 export async function moverVinculo(
   operacao: Operacao,
@@ -566,25 +726,32 @@ export async function moverVinculo(
   const justificativa = texto(input.justificativa);
   const motivo = texto(input.motivo);
 
-  let avaliacao: Avaliacao;
-  let gravacao: Omit<Gravacao, 'tipo' | 'motivo' | 'observacao'>;
-  let camposTimDepois: CamposTim | null = null;
+  let gravacao: Gravacao;
 
   if (operacao === 'TIM') {
     const de = chaveAtual(v);
     if (!de) throw proibido('A etapa atual não tem chave; sincronize a estrutura da esteira');
     const campos = camposTim(v);
-    avaliacao = avaliarMovimentoTim(de as ChaveTim, input.paraChave as ChaveTim, campos, {
+    const avaliacao = avaliarMovimentoTim(de as ChaveTim, input.paraChave as ChaveTim, campos, {
       perfil,
       agora,
       antesDaSaida: chaveConhecida(v.estagioAntesDaSaida?.chave) ? (v.estagioAntesDaSaida!.chave as ChaveTim) : null,
     });
     const erro = errosDeMovimento(avaliacao, { justificativa, perfil, nivel, motivo });
     if (erro) throw erroHttp(erro);
-    // Efeitos calculados sobre os campos de ANTES da gravação.
-    const efeitos = efeitosDeEntradaTim(input.paraChave as ChaveTim, campos, agora);
-    camposTimDepois = { ...campos, ...efeitos };
-    gravacao = { para, motivoSituacao: motivo, classeMotivo: null, usuarioId: usuario.id, tim: efeitos };
+    if (avaliacao.resultado === 'PROIBIDO') throw proibido(avaliacao.motivo); // já tratado; estreita o tipo
+    gravacao = {
+      usuarioId: usuario.id,
+      movimento: {
+        para,
+        tipo: tipoDoHistorico(avaliacao),
+        ...textosDoHistorico(justificativa, motivo),
+        motivoSituacao: motivo,
+        classeMotivo: null,
+      },
+      // Efeitos calculados sobre os campos de ANTES da gravação.
+      tim: efeitosDeEntradaTim(input.paraChave as ChaveTim, campos, agora),
+    };
   } else {
     const antes = camposStarlink(v);
     const destino = input.paraChave as ChaveStarlink;
@@ -599,71 +766,202 @@ export async function moverVinculo(
     }
     const depois = aplicarTravas(antes, patch);
     if (derivarEtapaStarlink(depois) !== destino) throw proibido(`O parceiro não pode ir para ${para.nome}`);
-    avaliacao = avaliarMudancaStarlink(antes, depois);
-    const rotuloPerda = depois.motivoPerda ? MOTIVOS_PERDA[depois.motivoPerda].rotulo : null;
-    const erro = errosDeMovimento(avaliacao, { justificativa, perfil, nivel, motivo: motivo ?? rotuloPerda });
-    if (erro) throw erroHttp(erro);
-    const perdido = depois.perdido === true && depois.motivoPerda != null;
+    const { avaliacao, motivoSituacao, classeMotivo } = avaliarGravacaoStarlink(antes, depois, { justificativa, perfil, nivel, motivo });
     gravacao = {
-      para,
-      // `classeMotivo` acompanha a classe do motivo da perda (Nurture/Descartado).
-      motivoSituacao: perdido ? (motivo ?? rotuloPerda) : null,
-      classeMotivo: perdido ? MOTIVOS_PERDA[depois.motivoPerda!].classe : null,
       usuarioId: usuario.id,
+      movimento: {
+        para,
+        tipo: tipoDoHistorico(avaliacao),
+        ...textosDoHistorico(justificativa, motivoSituacao),
+        motivoSituacao,
+        classeMotivo,
+      },
       starlink: depois,
     };
   }
 
-  if (avaliacao.resultado === 'PROIBIDO') throw proibido(avaliacao.motivo); // já tratado; estreita o tipo
-  const tipo = tipoDoHistorico(avaliacao);
-  const motivoSaida = gravacao.motivoSituacao;
-  await prisma.$transaction((tx) =>
-    gravarMovimento(
-      tx,
-      v,
-      {
+  await prisma.$transaction((tx) => gravar(tx, v, gravacao, agora));
+  return concluir(id, agora);
+}
+
+// ---------------------------------------------------------------------------
+// Edição de campos
+// ---------------------------------------------------------------------------
+
+/** Responsável informado tem de ser usuário desta organização (a extensão do Prisma isola). */
+async function exigirResponsavel(responsavelId: string | null | undefined) {
+  if (!responsavelId) return;
+  const existe = await prisma.user.findFirst({ where: { id: responsavelId }, select: { id: true } });
+  if (!existe) throw badRequest('O responsável precisa ser um usuário desta organização');
+}
+
+export type EditarCamposInput = {
+  campos: Partial<CamposTim> | Partial<CamposStarlink>;
+  responsavelId?: string | null;
+  observacoes?: string | null;
+  justificativa?: string;
+};
+
+/**
+ * Edita campos da operação, responsável e observações. TIM: matrícula só a partir
+ * de Credenciamento OK; sistema indo a Sim sem vendedor ativo é exceção autorizada;
+ * a etapa não muda (salvo a liberação automática da venda). Starlink: a etapa é
+ * derivada dos campos — se muda, grava histórico igual a mover.
+ */
+export async function editarCampos(operacao: Operacao, id: string, input: EditarCamposInput): Promise<VinculoDetalhe> {
+  const v = await carregarVisivel(operacao, id);
+  await exigirResponsavel(input.responsavelId);
+
+  const usuario = usuarioAtual();
+  const perfil = usuario.perfil as Role;
+  const nivel = (await acessoDoUsuarioAtual())[operacao];
+  const agora = new Date();
+  const justificativa = texto(input.justificativa);
+  const vinculo: ColunasDoVinculo = semIndefinidos({
+    responsavelId: input.responsavelId,
+    observacoes: input.observacoes === undefined ? undefined : texto(input.observacoes),
+  });
+  const avisosExtras: Aviso[] = [];
+  let gravacao: Gravacao;
+
+  if (operacao === 'TIM') {
+    const chave = chaveAtual(v) as ChaveTim | null;
+    const antes = camposTim(v);
+    const patch = semIndefinidos(input.campos as Partial<CamposTim>);
+    const bloqueados = camposBloqueadosTim(chave, antes, patch);
+    if (bloqueados.length > 0) {
+      throw new AppError(400, 'CAMPO_BLOQUEADO', 'A matrícula SAPPDV só pode ser preenchida a partir de Credenciamento OK', {
+        campos: bloqueados,
+      });
+    }
+    const depois: CamposTim = { ...antes, ...patch };
+    const vendedoresAtivos = await prisma.pdvVendedor.count({ where: { credenciamentoId: v.id, status: 'ATIVO' } });
+    const pendencias = pendenciasDeCamposTim(antes, depois, vendedoresAtivos);
+    if (pendencias.length > 0) {
+      const erro = errosDeMovimento({ resultado: 'EXCECAO', pendencias }, { justificativa, perfil, nivel });
+      if (erro) throw erroHttp(erro);
+    }
+    if (prontoDesfeito(chave, antes, depois)) avisosExtras.push('PRONTO_DESFEITO');
+    gravacao = { usuarioId: usuario.id, movimento: null, tim: patch, vinculo, justificativa: pendencias.length > 0 ? justificativa : null };
+  } else {
+    const antes = camposStarlink(v);
+    const depois = aplicarTravas(antes, semIndefinidos(input.campos as Partial<CamposStarlink>));
+    const { avaliacao, motivoSituacao, classeMotivo } = avaliarGravacaoStarlink(antes, depois, { justificativa, perfil, nivel, motivo: null });
+    const destino = derivarEtapaStarlink(depois);
+    const para = estagioDaChave(v, destino);
+    if (!para) throw proibido(`A etapa ${etapa(destino).nome} não está configurada nesta esteira`);
+    // Compara com o cache gravado: também corrige um `estagioId` desatualizado.
+    const muda = para.id !== v.estagioId;
+    // Perdido continua perdido na mesma coluna, com outro motivo: a situação acompanha o motivo.
+    const trocouMotivo = !muda && motivoSituacao != null && depois.motivoPerda !== antes.motivoPerda;
+    gravacao = {
+      usuarioId: usuario.id,
+      movimento: muda
+        ? { para, tipo: tipoDoHistorico(avaliacao), ...textosDoHistorico(justificativa, motivoSituacao), motivoSituacao, classeMotivo }
+        : null,
+      starlink: depois,
+      vinculo: trocouMotivo ? { ...vinculo, motivoSituacao, classeMotivo } : vinculo,
+      justificativa: avaliacao.resultado === 'LIVRE' ? null : justificativa,
+    };
+  }
+
+  // Nada mudou: não grava (nem conta como interação).
+  if (!gravacao.movimento && auditoriaDaGravacao(v, gravacao).length === 0) return montarDetalhe(v);
+
+  await prisma.$transaction((tx) => gravar(tx, v, gravacao, agora));
+  const detalhe = await concluir(id, agora);
+  return avisosExtras.length > 0 ? { ...detalhe, avisos: [...detalhe.avisos, ...avisosExtras] } : detalhe;
+}
+
+// ---------------------------------------------------------------------------
+// Notas
+// ---------------------------------------------------------------------------
+
+/**
+ * Nota do vínculo (por operação). Conta como interação; na Starlink, a primeira
+ * nota carimba `primeiroContatoEm` — o card sai de Aguardando para Em atendimento,
+ * gravado como MOVIMENTO pelo mesmo caminho de mover.
+ */
+export async function adicionarNota(operacao: Operacao, id: string, textoNota: string): Promise<VinculoDetalhe> {
+  const v = await carregarVisivel(operacao, id);
+  const usuario = usuarioAtual();
+  const agora = new Date();
+  let gravacao: Gravacao = { usuarioId: usuario.id, movimento: null };
+
+  if (operacao === 'STARLINK') {
+    const antes = camposStarlink(v);
+    if (antes.primeiroContatoEm == null) {
+      const depois = aplicarTravas(antes, { primeiroContatoEm: agora });
+      const para = estagioDaChave(v, derivarEtapaStarlink(depois));
+      gravacao = {
         ...gravacao,
-        tipo,
-        // Justificativa quando houver; senão o motivo da saída. Os dois juntos: motivo vai para a observação.
-        motivo: justificativa ?? motivoSaida,
-        observacao: justificativa && motivoSaida ? motivoSaida : null,
-      },
-      agora,
-    ),
-  );
-
-  let atual = await recarregar(id);
-
-  // TIM: entrar em Pós-cred já "pronto" libera a venda sozinho (5 → 6).
-  if (camposTimDepois && deveLiberarVenda(input.paraChave as ChaveTim, camposTimDepois)) {
-    const liberada = estagioDaChave(atual, 'TIM_VENDA_LIBERADA');
-    if (liberada?.ativa) {
-      const efeitos = efeitosDeEntradaTim('TIM_VENDA_LIBERADA', camposTimDepois, agora);
-      const v2 = atual;
-      await prisma.$transaction((tx) =>
-        gravarMovimento(
-          tx,
-          v2,
-          {
-            para: liberada,
-            tipo: 'AUTOMATICO',
-            motivo: 'Venda liberada automaticamente: parceiro pronto',
-            observacao: null,
-            motivoSituacao: null,
-            classeMotivo: null,
-            usuarioId: null,
-            tim: efeitos,
-          },
-          agora,
-        ),
-      );
-      atual = await recarregar(id);
+        starlink: depois,
+        movimento:
+          para && para.id !== v.estagioId
+            ? {
+                para,
+                tipo: 'MOVIMENTO',
+                motivo: 'Primeiro contato registrado por nota',
+                observacao: null,
+                motivoSituacao: null,
+                classeMotivo: null,
+              }
+            : null,
+      };
     }
   }
 
-  // Ciclo do parceiro: a mesma regra de `iniciarCiclos` (TIM em Acompanhamento, Starlink em Pronto p/ venda).
-  if (estagioIniciaCiclo(atual.estagio)) await iniciarCicloSemFalhar(id);
-
-  return montarDetalhe(atual);
+  await prisma.$transaction(async (tx) => {
+    await tx.credenciamentoNota.create({ data: { credenciamentoId: v.id, autorId: usuario.id, texto: textoNota } });
+    await gravar(tx, v, gravacao, agora);
+  });
+  return concluir(id, agora);
 }
 
+// ---------------------------------------------------------------------------
+// Vendedores do PDV (só TIM)
+// ---------------------------------------------------------------------------
+
+export type SalvarVendedorInput = { id?: string; nome: string; cpf?: string | null; telefone?: string | null; status: StatusVendedor };
+
+const dadosDoVendedor = (p: DadosVendedor): DadosVendedor => ({ nome: p.nome, cpf: p.cpf, telefone: p.telefone, status: p.status });
+
+/** Grava o vendedor (novo se `antes` é nulo) com a auditoria, na mesma transação. */
+async function gravarVendedor(v: VinculoDb, vendedorId: string, antes: DadosVendedor | null, depois: DadosVendedor) {
+  const auditoriaExtra = diferencasDoVendedor(vendedorId, antes, depois);
+  if (auditoriaExtra.length === 0) return;
+  const agora = new Date();
+  await prisma.$transaction(async (tx) => {
+    // `tim: {}` cria a linha 1:1 se faltar (o vendedor referencia `credenciamentos_tim`).
+    await gravar(tx, v, { usuarioId: usuarioAtual().id, movimento: null, tim: {}, auditoriaExtra }, agora);
+    if (antes) await tx.pdvVendedor.update({ where: { id: vendedorId }, data: depois });
+    else await tx.pdvVendedor.create({ data: { id: vendedorId, credenciamentoId: v.id, ...depois } });
+  });
+}
+
+async function vendedorDoVinculo(v: VinculoDb, vendedorId: string) {
+  const vendedor = await prisma.pdvVendedor.findFirst({ where: { id: vendedorId, credenciamentoId: v.id } });
+  if (!vendedor) throw notFound('Vendedor não encontrado');
+  return vendedor;
+}
+
+/** Cria (sem `id`) ou atualiza um vendedor do PDV. */
+export async function salvarVendedor(operacao: 'TIM', id: string, dados: SalvarVendedorInput): Promise<VinculoDetalhe> {
+  const v = await carregarVisivel(operacao, id);
+  const depois: DadosVendedor = { nome: dados.nome, cpf: dados.cpf ?? null, telefone: dados.telefone ?? null, status: dados.status };
+  if (dados.id) {
+    const atual = await vendedorDoVinculo(v, dados.id);
+    await gravarVendedor(v, atual.id, dadosDoVendedor(atual), depois);
+  } else {
+    await gravarVendedor(v, randomUUID(), null, depois);
+  }
+  return montarDetalhe(await recarregar(id));
+}
+
+/** "Remover" vendedor: marca INATIVO, preservando o histórico. */
+export async function inativarVendedor(operacao: 'TIM', id: string, vendedorId: string): Promise<VinculoDetalhe> {
+  const v = await carregarVisivel(operacao, id);
+  const atual = await vendedorDoVinculo(v, vendedorId);
+  await gravarVendedor(v, atual.id, dadosDoVendedor(atual), { ...dadosDoVendedor(atual), status: 'INATIVO' });
+  return montarDetalhe(await recarregar(id));
+}

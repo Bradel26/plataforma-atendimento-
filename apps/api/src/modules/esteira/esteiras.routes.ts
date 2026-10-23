@@ -1,13 +1,32 @@
-import { Router } from 'express';
+import type { Operacao } from '@prisma/client';
+import { Router, type RequestHandler } from 'express';
 import { asyncHandler } from '../../http/async-handler';
 import { requireAuth } from '../../http/middleware/auth';
 import { validateBody } from '../../http/middleware/validate';
 import { param } from '../../http/params';
+import { notFound } from '../../lib/errors';
 import { requireModulo } from '../../lib/modulos';
 import { exigirOperacao } from './acesso';
 import type { ChaveEtapa } from './catalogo';
-import { criarVinculoSchema, moverVinculoSchema, type MoverVinculoInput } from './esteiras.schemas';
-import { criarVinculo, moverVinculo, obterVinculo } from './vinculos.service';
+import {
+  criarVinculoSchema,
+  editarVinculoSchemas,
+  moverVinculoSchema,
+  notaSchema,
+  vendedorSchema,
+  type MoverVinculoInput,
+  type NotaInput,
+  type VendedorInput,
+} from './esteiras.schemas';
+import {
+  adicionarNota,
+  criarVinculo,
+  editarCampos,
+  inativarVendedor,
+  moverVinculo,
+  obterVinculo,
+  salvarVendedor,
+} from './vinculos.service';
 
 /**
  * Esteiras TIM e Starlink: `/api/esteiras/:operacao/...`. `exigirOperacao`
@@ -15,6 +34,16 @@ import { criarVinculo, moverVinculo, obterVinculo } from './vinculos.service';
  * tenta escrever; grava `res.locals.operacao`.
  */
 export const esteirasRoutes = Router();
+
+/** Valida o corpo com o schema da operação da URL (depois de `exigirOperacao`). */
+const validarPorOperacao =
+  (schemas: Record<Operacao, Parameters<typeof validateBody>[0]>): RequestHandler =>
+  (req, res, next) =>
+    validateBody(schemas[res.locals.operacao as Operacao])(req, res, next);
+
+/** Vendedores do PDV só existem na TIM: na Starlink a rota "não existe". */
+const somenteTim: RequestHandler = (_req, res, next) =>
+  next(res.locals.operacao === 'TIM' ? undefined : notFound('Recurso não encontrado'));
 
 esteirasRoutes.use(requireAuth);
 esteirasRoutes.use(requireModulo('esteira'));
@@ -49,5 +78,43 @@ esteirasRoutes.post(
         paraChave: corpo.paraChave as ChaveEtapa,
       }),
     });
+  }),
+);
+
+esteirasRoutes.patch(
+  '/:operacao/vinculos/:id',
+  exigirOperacao('EDICAO'),
+  validarPorOperacao(editarVinculoSchemas),
+  asyncHandler(async (req, res) => {
+    res.json({ vinculo: await editarCampos(res.locals.operacao, param(req, 'id'), req.body) });
+  }),
+);
+
+esteirasRoutes.post(
+  '/:operacao/vinculos/:id/notas',
+  exigirOperacao('EDICAO'),
+  validateBody(notaSchema),
+  asyncHandler(async (req, res) => {
+    const { texto } = req.body as NotaInput;
+    res.status(201).json({ vinculo: await adicionarNota(res.locals.operacao, param(req, 'id'), texto) });
+  }),
+);
+
+esteirasRoutes.put(
+  '/:operacao/vinculos/:id/vendedores',
+  exigirOperacao('EDICAO'),
+  somenteTim,
+  validateBody(vendedorSchema),
+  asyncHandler(async (req, res) => {
+    res.json({ vinculo: await salvarVendedor('TIM', param(req, 'id'), req.body as VendedorInput) });
+  }),
+);
+
+esteirasRoutes.delete(
+  '/:operacao/vinculos/:id/vendedores/:vendedorId',
+  exigirOperacao('EDICAO'),
+  somenteTim,
+  asyncHandler(async (req, res) => {
+    res.json({ vinculo: await inativarVendedor('TIM', param(req, 'id'), param(req, 'vendedorId')) });
   }),
 );

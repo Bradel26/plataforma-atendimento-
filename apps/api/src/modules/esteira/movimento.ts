@@ -176,7 +176,8 @@ export function destinosStarlink(campos: CamposStarlink, agora: Date): Destinos 
   return destinos;
 }
 
-export type Aviso = 'DADOS_PENDENTES' | 'SUGERE_DESCARTE';
+/** `PRONTO_DESFEITO` só vem na resposta da edição que desfez o "pronto" com a venda já liberada. */
+export type Aviso = 'DADOS_PENDENTES' | 'SUGERE_DESCARTE' | 'PRONTO_DESFEITO';
 
 /** Avisos do card: gate da etapa atual com dados vazios; Starlink que pede descarte. */
 export function avisosDoVinculo(

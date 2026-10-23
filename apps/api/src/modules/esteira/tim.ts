@@ -144,6 +144,29 @@ export function pendenciasDeCamposTim(antes: CamposTim, depois: CamposTim, vende
 }
 
 /**
+ * Campos da edição que a etapa atual não permite mudar. `matriculaSappdv` gera o
+ * PDV: só é editável no trilho a partir de Credenciamento OK (4); saída ou etapa
+ * sem chave também bloqueiam. Valor igual ao gravado não é mudança.
+ */
+export function camposBloqueadosTim(atual: ChaveTim | null, antes: CamposTim, patch: Partial<CamposTim>): string[] {
+  if (!('matriculaSappdv' in patch)) return [];
+  const de = vazio(antes.matriculaSappdv) ? null : antes.matriculaSappdv;
+  const para = vazio(patch.matriculaSappdv) ? null : patch.matriculaSappdv;
+  if (de === para) return [];
+  const posicao = atual ? trilho(atual) : null;
+  return posicao != null && posicao >= 4 ? [] : ['matriculaSappdv'];
+}
+
+/**
+ * "Pronto" deixou de ser verdadeiro com a venda já liberada (trilho 6+). A etapa
+ * não volta sozinha (spec 5.1): vira aviso.
+ */
+export function prontoDesfeito(atual: ChaveTim | null, antes: CamposPronto, depois: CamposPronto): boolean {
+  const posicao = atual ? trilho(atual) : null;
+  return posicao != null && posicao >= 6 && prontoTim(antes) && !prontoTim(depois);
+}
+
+/**
  * Gates da etapa atual com campos vazios (registros migrados — spec 7: gates não
  * são retroativos). Vazio fora do trilho ou antes do primeiro gate.
  */
