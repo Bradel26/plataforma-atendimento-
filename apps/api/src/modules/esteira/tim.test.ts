@@ -86,7 +86,10 @@ describe('avaliarMovimentoTim', () => {
   });
   it('voltar etapa é correção com justificativa', () => {
     expect(av('TIM_CRED_ANDAMENTO', 'TIM_DOCUMENTACAO')).toEqual({ resultado: 'JUSTIFICATIVA', tipo: 'CORRECAO' });
-    expect(av('TIM_ACOMPANHAMENTO', 'TIM_NEGOCIACAO')).toEqual({ resultado: 'JUSTIFICATIVA', tipo: 'CORRECAO' });
+    expect(av('TIM_ACOMPANHAMENTO', 'TIM_VENDA_LIBERADA')).toEqual({ resultado: 'JUSTIFICATIVA', tipo: 'CORRECAO' });
+  });
+  it('voltar mais de uma etapa é exceção', () => {
+    expect(av('TIM_ACOMPANHAMENTO', 'TIM_NEGOCIACAO')).toEqual({ resultado: 'EXCECAO', pendencias: [] });
   });
   it('mesma etapa é proibido', () => {
     expect(av('TIM_POS_CRED', 'TIM_POS_CRED')).toEqual({ resultado: 'PROIBIDO', motivo: 'O parceiro já está nesta etapa' });
@@ -129,17 +132,38 @@ describe('efeitosDeEntradaTim', () => {
     expect(efeitosDeEntradaTim('TIM_CRED_OK', { ...vazio, dataCredenciamento: antiga }, agora)).toEqual({});
   });
   it('POS_CRED define promoStatus e tipoCarteira só se vazios', () => {
-    expect(efeitosDeEntradaTim('TIM_POS_CRED', vazio, agora)).toEqual({ promoStatus: 'promovido', tipoCarteira: 'recem-entrada' });
-    expect(efeitosDeEntradaTim('TIM_POS_CRED', { ...vazio, promoStatus: 'x', tipoCarteira: 'y' }, agora)).toEqual({});
+    expect(efeitosDeEntradaTim('TIM_POS_CRED', vazio, agora)).toEqual({
+      dataCredenciamento: agora,
+      promoStatus: 'promovido',
+      tipoCarteira: 'recem-entrada',
+    });
+    expect(efeitosDeEntradaTim('TIM_POS_CRED', { ...vazio, dataCredenciamento: agora, promoStatus: 'x', tipoCarteira: 'y' }, agora)).toEqual({});
   });
   it('define statusParceria nas etapas finais', () => {
-    expect(efeitosDeEntradaTim('TIM_ACOMPANHAMENTO', vazio, agora)).toEqual({ statusParceria: 'ATIVO' });
+    const feito: CamposTim = { ...vazio, dataCredenciamento: agora, promoStatus: 'p', tipoCarteira: 't' };
+    expect(efeitosDeEntradaTim('TIM_ACOMPANHAMENTO', feito, agora)).toEqual({ statusParceria: 'ATIVO' });
     expect(efeitosDeEntradaTim('TIM_DESISTENCIA', vazio, agora)).toEqual({ statusParceria: 'DESISTENTE' });
     expect(efeitosDeEntradaTim('TIM_DESCREDENCIADO', vazio, agora)).toEqual({ statusParceria: 'DESCREDENCIADO' });
   });
   it('reativação para etapa anterior à 7 limpa statusParceria', () => {
     expect(efeitosDeEntradaTim('TIM_DOCUMENTACAO', { ...vazio, statusParceria: 'DESISTENTE' }, agora)).toEqual({ statusParceria: null });
     expect(efeitosDeEntradaTim('TIM_DOCUMENTACAO', vazio, agora)).toEqual({});
+  });
+});
+
+describe('efeitosDeEntradaTim (correção 1)', () => {
+  it('7→6 com ATIVO limpa statusParceria', () => {
+    expect(efeitosDeEntradaTim('TIM_VENDA_LIBERADA', { ...pronto, statusParceria: 'ATIVO', dataCredenciamento: agora, promoStatus: 'p', tipoCarteira: 't' }, agora)).toEqual({ statusParceria: null });
+  });
+  it('descredenciado corrigido para etapa < 7 limpa statusParceria', () => {
+    expect(efeitosDeEntradaTim('TIM_NEGOCIACAO', { ...vazio, statusParceria: 'DESCREDENCIADO' }, agora)).toEqual({ statusParceria: null });
+  });
+  it('pulo 3→6 carimba data e preenche promoção e carteira', () => {
+    expect(efeitosDeEntradaTim('TIM_VENDA_LIBERADA', vazio, agora)).toEqual({
+      dataCredenciamento: agora,
+      promoStatus: 'promovido',
+      tipoCarteira: 'recem-entrada',
+    });
   });
 });
 

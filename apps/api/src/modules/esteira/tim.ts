@@ -76,7 +76,9 @@ export function avaliarMovimentoTim(
   if (origem == null || destino == null) return { resultado: 'PROIBIDO', motivo: 'Movimento não previsto' };
   const passo = destino - origem;
 
-  if (passo < 0) return { resultado: 'JUSTIFICATIVA', tipo: 'CORRECAO' };
+  // Só voltar uma etapa é correção; voltar mais que isso é exceção.
+  if (passo === -1) return { resultado: 'JUSTIFICATIVA', tipo: 'CORRECAO' };
+  if (passo < -1) return { resultado: 'EXCECAO', pendencias: [] };
 
   if (passo === 1) {
     // Só o gate da própria transição: 4→5 matrícula, 5→6 pronto; as demais são livres.
@@ -93,20 +95,19 @@ export function avaliarMovimentoTim(
 export function efeitosDeEntradaTim(para: ChaveTim, c: CamposTim, agora: Date): Partial<CamposTim> {
   const efeitos: Partial<CamposTim> = {};
 
-  if (para === 'TIM_CRED_OK' && c.dataCredenciamento == null) efeitos.dataCredenciamento = agora;
-
-  if (para === 'TIM_POS_CRED') {
+  // Efeitos por posição do destino no trilho (cobre também pulos forçados).
+  const posicao = trilho(para);
+  if (posicao != null && posicao >= 4 && c.dataCredenciamento == null) efeitos.dataCredenciamento = agora;
+  if (posicao != null && posicao >= 5) {
     if (vazio(c.promoStatus)) efeitos.promoStatus = 'promovido';
     if (vazio(c.tipoCarteira)) efeitos.tipoCarteira = 'recem-entrada';
   }
 
+  // statusParceria acompanha a etapa: fora de Acompanhamento/Desistência/Descredenciado não há status.
   if (para === 'TIM_ACOMPANHAMENTO') efeitos.statusParceria = 'ATIVO';
   else if (para === 'TIM_DESISTENCIA') efeitos.statusParceria = 'DESISTENTE';
   else if (para === 'TIM_DESCREDENCIADO') efeitos.statusParceria = 'DESCREDENCIADO';
-  else if (c.statusParceria === 'DESISTENTE' || c.statusParceria === 'DESCREDENCIADO') {
-    // Reativação (ou correção de descredenciado) para uma etapa anterior à 7.
-    efeitos.statusParceria = null;
-  }
+  else if (c.statusParceria != null) efeitos.statusParceria = null;
 
   return efeitos;
 }
