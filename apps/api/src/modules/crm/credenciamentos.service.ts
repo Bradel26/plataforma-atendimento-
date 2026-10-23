@@ -178,12 +178,21 @@ export async function criarCredenciamento(input: CriarCredenciamentoInput) {
   }
 
   const { funil, estagio } = await resolverFunilEsteira(destino, estagioDestino);
+  // A operacao do vinculo e copiada do funil; funil ESTEIRA sem operacao e
+  // configuracao incompleta (a sincronizacao de estrutura preenche).
+  const operacao = funil.operacao;
+  if (!operacao) throw badRequest('A esteira informada não tem operação definida');
+  const contaId = input.contaId ?? contato.contaId ?? null;
 
-  // O mesmo parceiro nao entra duas vezes na mesma operacao enquanto o
-  // processo anterior esta aberto: dois cards do mesmo parceiro dividiriam o
-  // historico e dobrariam as contagens do Dashboard.
+  // Um vinculo nao arquivado por parceiro por operacao — o mesmo criterio dos
+  // indices unicos parciais (conta quando houver, senao contato). Dois cards do
+  // mesmo parceiro dividiriam o historico e dobrariam as contagens do Dashboard.
   const aberto = await prisma.credenciamento.findFirst({
-    where: { contatoId: contato.id, funilId: funil.id, situacaoExcecao: null },
+    where: {
+      operacao,
+      arquivadoEm: null,
+      ...(contaId ? { contaId } : { contaId: null, contatoId: contato.id }),
+    },
     select: { id: true },
   });
   if (aberto) throw badRequest('Este parceiro já está nesta esteira');
@@ -191,13 +200,14 @@ export async function criarCredenciamento(input: CriarCredenciamentoInput) {
   const criado = await prisma.credenciamento.create({
     data: {
       contatoId: contato.id,
-      contaId: input.contaId ?? contato.contaId ?? null,
+      contaId,
       funilId: funil.id,
       estagioId: estagio.id,
+      operacao,
       responsavelId: input.responsavelId ?? contato.responsavelId ?? null,
       observacoes: input.observacoes ?? null,
       historico: {
-        create: { paraEstagioId: estagio.id, usuarioId: usuarioAtualOuNulo()?.id ?? null },
+        create: { paraEstagioId: estagio.id, operacao, usuarioId: usuarioAtualOuNulo()?.id ?? null },
       },
     },
     include: inclusao,
@@ -349,6 +359,7 @@ export async function atualizarCredenciamento(id: string, input: AtualizarCreden
           credenciamentoId: id,
           deEstagioId: atual.estagioId,
           paraEstagioId: input.estagioId!,
+          operacao: atual.operacao,
           usuarioId: usuarioAtualOuNulo()?.id ?? null,
           segundosNoEstagio: Math.max(0, Math.round((agora.getTime() - atual.estagioDesde.getTime()) / 1000)),
         },

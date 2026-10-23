@@ -1867,9 +1867,11 @@ model Credenciamento {
   estagioId     String  @map("estagio_id")
   responsavelId String? @map("responsavel_id")
 
-  /// Esteira a que o vinculo pertence. Um parceiro tem no maximo um vinculo ativo por operacao.
-  /// Transitorio: nullable ate a migration de dados (Task 3) preencher e exigir NOT NULL.
-  operacao Operacao?
+  /// Esteira a que o vinculo pertence (copia de `funil.operacao`). Um parceiro tem no
+  /// maximo um vinculo nao arquivado por operacao: indices parciais
+  /// `credenciamentos_vinculo_conta_key` (conta) e `credenciamentos_vinculo_contato_key`
+  /// (sem conta), so na migration `esteiras_dados` — o Prisma nao representa indice parcial.
+  operacao Operacao
 
   situacaoExcecao SituacaoCredenciamento? @map("situacao_excecao")
   motivoExcecao   String?                 @map("motivo_excecao")
@@ -1923,8 +1925,7 @@ model CredenciamentoHistorico {
   /// Quanto tempo ficou no estagio de origem. Nulo no registro de entrada.
   segundosNoEstagio Int?                 @map("segundos_no_estagio")
   criadoEm          DateTime             @default(now()) @map("criado_em")
-  /// Transitorio: nullable ate a migration de dados (Task 3) preencher e exigir NOT NULL.
-  operacao          Operacao?
+  operacao          Operacao
   tipo              TipoHistoricoEsteira @default(MOVIMENTO)
   motivo            String?
   observacao        String?
