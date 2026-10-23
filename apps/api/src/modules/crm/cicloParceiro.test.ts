@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { decidirAutomatico, validarMudancaManual, type FatosDoCiclo } from './cicloParceiro';
+import {
+  decidirAutomatico,
+  estagioIniciaCiclo,
+  etapasComprovadasPelaEsteira,
+  validarMudancaManual,
+  type FatosDoCiclo,
+} from './cicloParceiro';
 
 const AGORA = new Date('2026-09-30T12:00:00Z');
 const diasAtras = (n: number) => new Date(AGORA.getTime() - n * 86_400_000);
@@ -121,5 +127,28 @@ describe('validarMudancaManual', () => {
   it('inativo nao vira em risco; mesmo status e recusado', () => {
     expect(validarMudancaManual('INATIVO', 'EM_RISCO', 'x')).not.toBeNull();
     expect(validarMudancaManual('EM_RISCO', 'EM_RISCO', 'x')).not.toBeNull();
+  });
+});
+
+describe('estagioIniciaCiclo', () => {
+  it('com chave: só Acompanhamento (TIM) e Pronto p/ venda (Starlink)', () => {
+    expect(estagioIniciaCiclo({ nome: 'Acompanhamento', chave: 'TIM_ACOMPANHAMENTO' })).toBe(true);
+    expect(estagioIniciaCiclo({ nome: 'Pronto p/ venda', chave: 'SL_PRONTO_VENDA' })).toBe(true);
+    // Venda liberada tem papel ATIVO, mas o ciclo TIM só começa no Acompanhamento.
+    expect(estagioIniciaCiclo({ nome: 'Venda liberada', chave: 'TIM_VENDA_LIBERADA' })).toBe(false);
+    // O nome não manda quando há chave (o ADMIN pode renomear a coluna).
+    expect(estagioIniciaCiclo({ nome: 'Ativo', chave: 'TIM_NEGOCIACAO' })).toBe(false);
+  });
+  it('sem chave: fallback pelo nome (papel ATIVO)', () => {
+    expect(estagioIniciaCiclo({ nome: 'Apto para venda', chave: null })).toBe(true);
+    expect(estagioIniciaCiclo({ nome: 'Em análise', chave: null })).toBe(false);
+  });
+});
+
+describe('etapasComprovadasPelaEsteira', () => {
+  it('TIM comprova treinamento e liberação de acesso; Starlink só treinamento; sem chave nada', () => {
+    expect(etapasComprovadasPelaEsteira('TIM_ACOMPANHAMENTO')).toEqual(['TREINAMENTO', 'LIBERACAO_ACESSO']);
+    expect(etapasComprovadasPelaEsteira('SL_PRONTO_VENDA')).toEqual(['TREINAMENTO']);
+    expect(etapasComprovadasPelaEsteira(null)).toEqual([]);
   });
 });

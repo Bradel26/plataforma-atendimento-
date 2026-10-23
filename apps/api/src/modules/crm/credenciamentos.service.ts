@@ -1,11 +1,11 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
-import { filtroDe, politicaContas, politicaContatos, politicaCredenciamentos } from '../../lib/politicas';
+import { filtroDe, politicaContatos, politicaCredenciamentos } from '../../lib/politicas';
 import { usuarioAtualOuNulo } from '../../lib/tenant';
 import { apenasVisivel } from '../../lib/visibilidade';
 import { badRequest, notFound } from '../../lib/errors';
-import { colidiuNoVinculoDeCredenciamento } from '../../lib/erros-prisma';
-import { chaveDoVinculo, pertenceAoVinculo, whereDoVinculo } from '../esteira/vinculo';
+import { chaveDoVinculo, pertenceAoVinculo } from '../esteira/vinculo';
+import { criarVinculo } from '../esteira/vinculos.service';
 import { SEGMENTOS_PARCEIRO, identificarSegmentoParceiro, type SegmentoParceiro } from './segmentoParceiro';
 import { diasDesde, papelDoEstagio } from './esteira';
 import { iniciarCiclos } from './cicloParceiro.service';
@@ -144,80 +144,22 @@ export async function obterCredenciamento(id: string) {
   return { ...serialize(c), historico };
 }
 
-const JA_NA_ESTEIRA = 'Este parceiro já está nesta esteira';
-
+/**
+ * Rota antiga (`POST /api/credenciamentos`, sai na Task 21): delega para
+ * `criarVinculo`. A operação vem do funil informado (ou do primeiro funil
+ * ESTEIRA); `segmentoParceiro` deixou de restringir (spec 4.2) e o vínculo
+ * sempre nasce na primeira etapa do trilho — `estagioId` é ignorado.
+ */
 export async function criarCredenciamento(input: CriarCredenciamentoInput) {
-  const contato = await prisma.contact.findFirst({
-    where: apenasVisivel(input.contatoId, await filtroDe(politicaContatos)),
+  const { funil } = await resolverFunilEsteira(input.funilId);
+  if (!funil.operacao) throw badRequest('A esteira informada não tem operação definida');
+  const vinculo = await criarVinculo(funil.operacao, {
+    contatoId: input.contatoId,
+    contaId: input.contaId,
+    responsavelId: input.responsavelId,
+    observacoes: input.observacoes,
   });
-  if (!contato) throw notFound('Contato não encontrado');
-
-  if (input.contaId) {
-    const conta = await prisma.account.findFirst({
-      where: apenasVisivel(input.contaId, await filtroDe(politicaContas)),
-    });
-    if (!conta) throw notFound('Conta não encontrada');
-  }
-
-  let destino = input.funilId;
-  let estagioDestino = input.estagioId;
-  if (contato.segmentoParceiro) {
-    const palavra = contato.segmentoParceiro === 'TIM' ? 'TIM' : 'Starlink';
-    const funilDoSegmento = await prisma.funnel.findFirst({
-      where: {
-        tipo: 'ESTEIRA',
-        ativo: true,
-        nome: { equals: `Credenciamento ${palavra}`, mode: 'insensitive' },
-      },
-      orderBy: { criadoEm: 'asc' },
-      select: { id: true },
-    });
-    if (!funilDoSegmento) throw badRequest(`Não existe uma esteira ativa de credenciamento para ${palavra}`);
-    if (input.funilId && input.funilId !== funilDoSegmento.id) {
-      throw badRequest(`Este contato está identificado como ${palavra}; o destino correto é a esteira Credenciamento ${palavra}`);
-    }
-    destino = funilDoSegmento.id;
-    // A entrada sempre começa no primeiro estágio da operação correspondente.
-    estagioDestino = undefined;
-  }
-
-  const { funil, estagio } = await resolverFunilEsteira(destino, estagioDestino);
-  // A operacao do vinculo e copiada do funil; funil ESTEIRA sem operacao e
-  // configuracao incompleta (a sincronizacao de estrutura preenche).
-  const operacao = funil.operacao;
-  if (!operacao) throw badRequest('A esteira informada não tem operação definida');
-  const contaId = input.contaId ?? contato.contaId ?? null;
-
-  // Um vinculo nao arquivado por parceiro por operacao (`whereDoVinculo`, o
-  // criterio dos indices unicos parciais). Dois cards do mesmo parceiro
-  // dividiriam o historico e dobrariam as contagens do Dashboard.
-  const aberto = await prisma.credenciamento.findFirst({
-    where: whereDoVinculo({ operacao, contaId, contatoId: contato.id }),
-    select: { id: true },
-  });
-  if (aberto) throw badRequest(JA_NA_ESTEIRA);
-
-  // A consulta acima nao fecha a corrida (dois envios paralelos da mesma
-  // conta); o indice fecha, e a colisao vira a mesma resposta de negocio.
-  const criado = await prisma.credenciamento.create({
-    data: {
-      contatoId: contato.id,
-      contaId,
-      funilId: funil.id,
-      estagioId: estagio.id,
-      operacao,
-      responsavelId: input.responsavelId ?? contato.responsavelId ?? null,
-      observacoes: input.observacoes ?? null,
-      historico: {
-        create: { paraEstagioId: estagio.id, operacao, usuarioId: usuarioAtualOuNulo()?.id ?? null },
-      },
-    },
-    include: inclusao,
-  }).catch((erro: unknown) => {
-    if (colidiuNoVinculoDeCredenciamento(erro)) throw badRequest(JA_NA_ESTEIRA);
-    throw erro;
-  });
-  await iniciarCicloSemFalhar(criado.id);
+  const criado = await prisma.credenciamento.findUniqueOrThrow({ where: { id: vinculo.id }, include: inclusao });
   return serialize(criado);
 }
 
@@ -256,7 +198,7 @@ export async function importarContatosClassificados(previa: boolean) {
     ['STARLINK', funis.find((funil) => funil.nome.toLocaleLowerCase('pt-BR') === 'credenciamento starlink')],
   ]);
   // Vinculos existentes dos contatos e das contas deles, pelo mesmo criterio de
-  // `criarCredenciamento` (`pertenceAoVinculo` = `whereDoVinculo` em memoria):
+  // `criarVinculo` (`pertenceAoVinculo` = `whereDoVinculo` em memoria):
   // card em excecao conta como existente; arquivado nao.
   const ids = classificados.map((contato) => contato.id);
   const contaIds = [...new Set(classificados.flatMap((c) => (c.contaId ? [c.contaId] : [])))];

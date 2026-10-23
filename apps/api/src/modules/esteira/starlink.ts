@@ -253,3 +253,20 @@ function conferirDestino(destino: ChaveStarlink, atual: CamposStarlink, patch: P
 export function sugereDescarte(c: CamposStarlink): boolean {
   return c.cnpjApto === false && c.mei !== true && c.altCnae !== true;
 }
+
+/**
+ * Pré-requisitos das etapas até a atual que estão vazios — registros migrados
+ * em etapa avançada sem os campos do gate (spec 7). Vazio fora do trilho.
+ */
+export function pendenciasDeDadosStarlink(atual: ChaveStarlink, c: CamposStarlink): string[] {
+  const posicao = etapa(atual).trilho;
+  if (posicao == null) return [];
+  const pendencias: string[] = [];
+  for (const p of POSICOES) {
+    if (p > posicao) break;
+    for (const req of PRE_REQUISITOS[CAMPO_DA_POSICAO[p]!]) {
+      if (!req.ok(c) && !pendencias.includes(req.campo)) pendencias.push(req.campo);
+    }
+  }
+  return pendencias;
+}

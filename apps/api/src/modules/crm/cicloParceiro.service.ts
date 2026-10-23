@@ -4,7 +4,6 @@ import { filtroDe, politicaCredenciamentos } from '../../lib/politicas';
 import { usuarioAtualOuNulo } from '../../lib/tenant';
 import { apenasVisivel } from '../../lib/visibilidade';
 import { badRequest, notFound } from '../../lib/errors';
-import { papelDoEstagio } from './esteira';
 import {
   CHAVES_ETAPAS,
   ETAPAS_IMPLANTACAO,
@@ -12,6 +11,8 @@ import {
   STATUS_CICLO,
   decidirAutomatico,
   diasEntre,
+  estagioIniciaCiclo,
+  etapasComprovadasPelaEsteira,
   validarMudancaManual,
   type StatusCiclo,
 } from './cicloParceiro';
@@ -87,9 +88,11 @@ export async function ultimasInteracoes(contatoIds: string[]): Promise<Map<strin
 }
 
 /**
- * Cria o ciclo de quem chegou ao estagio Ativo da esteira e ainda nao tem um.
+ * Cria o ciclo de quem chegou a etapa que inicia o ciclo e ainda nao tem um.
  *
- * O estagio e reconhecido pelo NOME (`papelDoEstagio`), como no resto da esteira.
+ * A etapa e reconhecida pela CHAVE (`estagioIniciaCiclo`: TIM em Acompanhamento,
+ * Starlink em Pronto p/ venda); o nome so vale para funil sem chave. As etapas
+ * de implantacao que a esteira ja comprova nascem concluidas.
  * A data do credenciamento e a entrada no estagio atual — para quem ja estava la
  * antes desta funcionalidade existir, e a melhor data que o historico tem.
  */
@@ -100,12 +103,13 @@ export async function iniciarCiclos(credenciamentoId?: string) {
       cicloParceiro: { is: null },
       ...(credenciamentoId ? { id: credenciamentoId } : {}),
     },
-    select: { id: true, estagioDesde: true, estagio: { select: { nome: true } } },
+    select: { id: true, estagioDesde: true, estagio: { select: { nome: true, chave: true } } },
   });
 
   let criados = 0;
   for (const c of candidatos) {
-    if (papelDoEstagio(c.estagio.nome) !== 'ATIVO') continue;
+    if (!estagioIniciaCiclo(c.estagio)) continue;
+    const comprovadas = etapasComprovadasPelaEsteira(c.estagio.chave);
     try {
       await prisma.cicloParceiro.create({
         data: {
@@ -113,6 +117,9 @@ export async function iniciarCiclos(credenciamentoId?: string) {
           credenciadoEm: c.estagioDesde,
           statusDesde: c.estagioDesde,
           status: 'NOVO_PARCEIRO',
+          ...(comprovadas.length
+            ? { etapas: { create: comprovadas.map((chave) => ({ chave, concluidaEm: c.estagioDesde })) } }
+            : {}),
           historico: {
             create: {
               paraStatus: 'NOVO_PARCEIRO',

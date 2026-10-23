@@ -9,6 +9,26 @@ import type { Avaliacao, ContextoRegra } from './tipos';
 /** Campos exclusivos da TIM (espelho de CredenciamentoTim, sem o id do vínculo). */
 export type CamposTim = Omit<CredenciamentoTim, 'credenciamentoId'>;
 
+/** Vínculo TIM sem a linha 1:1 gravada ainda (ex.: registro antigo). */
+export const CAMPOS_TIM_VAZIO: CamposTim = {
+  origem: null,
+  flagTrafegoPago: false,
+  statusDescritivo: null,
+  dep: null,
+  dataCredenciamento: null,
+  matriculaSappdv: null,
+  promoStatus: null,
+  tipoCarteira: null,
+  sistemaTimVendas: null,
+  sistemaGn: null,
+  sistemaTimFormaMais: null,
+  sistemaPortalFornecedor: null,
+  sistemaMeuTim: null,
+  compraChip: null,
+  treinamento: null,
+  statusParceria: null,
+};
+
 type CamposPronto = Pick<CamposTim, 'sistemaTimVendas' | 'compraChip' | 'treinamento'>;
 
 const SISTEMAS = ['sistemaTimVendas', 'sistemaGn', 'sistemaTimFormaMais', 'sistemaPortalFornecedor', 'sistemaMeuTim'] as const;
@@ -121,4 +141,13 @@ export function deveLiberarVenda(etapaAtual: ChaveTim, c: CamposTim): boolean {
 export function pendenciasDeCamposTim(antes: CamposTim, depois: CamposTim, vendedoresAtivos: number): string[] {
   const virouSim = SISTEMAS.some((s) => antes[s] !== true && depois[s] === true);
   return virouSim && vendedoresAtivos <= 0 ? ['vendedorAtivo'] : [];
+}
+
+/**
+ * Gates da etapa atual com campos vazios (registros migrados — spec 7: gates não
+ * são retroativos). Vazio fora do trilho ou antes do primeiro gate.
+ */
+export function pendenciasDeDadosTim(atual: ChaveTim, c: CamposTim): string[] {
+  const posicao = trilho(atual);
+  return posicao == null ? [] : pendenciasDoDestino(posicao, c);
 }
