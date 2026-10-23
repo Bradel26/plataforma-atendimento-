@@ -17,7 +17,22 @@ function rejeitar(socket: Duplex, codigo = 401, texto = 'Unauthorized') {
 function origemPermitida(req: IncomingMessage) {
   const origem = req.headers.origin;
   if (!origem) return env.NODE_ENV !== 'production';
-  return origem === env.WEB_ORIGIN;
+  if (origem === env.WEB_ORIGIN) return true;
+
+  // Em desenvolvimento, localhost e 127.0.0.1 são usados alternadamente
+  // para abrir o Vite. Aceite ambos somente na porta local do frontend.
+  if (env.NODE_ENV !== 'production') {
+    try {
+      const url = new URL(origem);
+      return url.protocol === 'http:' &&
+        ['localhost', '127.0.0.1'].includes(url.hostname) &&
+        url.port === '5173';
+    } catch {
+      return false;
+    }
+  }
+
+  return false;
 }
 
 /**
@@ -38,8 +53,8 @@ export function registrarGatewayDeAudioWebJs(server: HttpServer) {
       const dados = await consumirTicketWebJsCall(ticket);
       if (!dados) return rejeitar(socket);
 
-      const config = await comOrganizacao(dados.organizacaoId, () =>
-        prisma.channelConfig.findFirst({
+      const config = await comOrganizacao(dados.organizacaoId, async () =>
+        await prisma.channelConfig.findFirst({
           where: { id: dados.canalConfigId, canal: 'WHATSAPP', ponteSessao: dados.sessao, ativo: true, modo: 'NAO_OFICIAL' },
           select: { id: true, donoId: true },
         }),

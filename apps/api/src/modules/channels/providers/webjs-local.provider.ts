@@ -2,10 +2,14 @@ import { AppError } from '../../../lib/errors';
 import type { ConfigDaPonte, QrDaPonte } from '../whatsapp.ponte';
 import type { EstadoDaPonte } from '../whatsapp.modo';
 import type { WhatsAppProvider } from '../whatsapp.provider';
+import { baixarFotoDePerfil } from '../avatar';
 
 const BASE = () => (process.env.WEBJS_LOCAL_URL?.trim() || `http://127.0.0.1:${process.env.WEBJS_LOCAL_PORT?.trim() || '4174'}/api/platform`).replace(/\/+$/, '');
 const TOKEN = () => process.env.WEBJS_LOCAL_TOKEN?.trim() || process.env.WPP_CONNECT_WEBHOOK_SECRET?.trim() || '';
-const TEMPO_LIMITE = 20_000;
+// A consulta de disponibilidade do destinatario acontece dentro do WhatsApp
+// Web e pode demorar mais do que os endpoints locais de status/QR. Evita
+// abortar um envio ainda em processamento apos apenas 20 segundos.
+const TEMPO_LIMITE = 60_000;
 
 async function request(caminho: string, init: RequestInit = {}) {
   const token = TOKEN();
@@ -58,14 +62,26 @@ export class WebJsLocalProvider implements WhatsAppProvider {
     }
   }
 
-  async sendText(config: ConfigDaPonte, destino: string, texto: string) {
-    const d = await request('/mensagens', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session: sessao(config), numero: destino, texto }) });
+  async sendText(config: ConfigDaPonte, destino: string, texto: string, chaveIdempotencia?: string) {
+    const d = await request('/mensagens', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session: sessao(config), numero: destino, texto, chaveIdempotencia }) });
     return { idExterno: typeof d.idExterno === 'string' ? d.idExterno : null };
   }
 
   async sendMedia(config: ConfigDaPonte, destino: string, arquivo: { buffer: Buffer; nome: string; tipo: string; legenda?: string }) {
     const d = await request('/arquivos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session: sessao(config), numero: destino, nome: arquivo.nome, tipo: arquivo.tipo, legenda: arquivo.legenda, base64: arquivo.buffer.toString('base64') }) });
     return { idExterno: typeof d.idExterno === 'string' ? d.idExterno : null };
+  }
+
+  async fetchAvatar(config: ConfigDaPonte, telefoneOuLid: string) {
+    const destino = telefoneOuLid.trim();
+    if (!destino || (!destino.toLowerCase().endsWith('@lid') && !/^\+?[\d\s().-]{10,20}$/.test(destino))) return null;
+    try {
+      const consulta = new URLSearchParams({ numero: destino, session: sessao(config) });
+      const d = await request(`/avatar?${consulta}`);
+      return typeof d.url === 'string' ? baixarFotoDePerfil(d.url) : null;
+    } catch {
+      return null;
+    }
   }
 
   async disconnect(config: ConfigDaPonte) {

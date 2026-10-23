@@ -14,7 +14,7 @@ import type { FotoPerfil } from './avatar';
  * esta interface (ver FASE 1 do plano de migracao).
  */
 export interface WhatsAppProvider {
-  sendText(config: ConfigDaPonte, destino: string, texto: string): Promise<{ idExterno: string | null }>;
+  sendText(config: ConfigDaPonte, destino: string, texto: string, chaveIdempotencia?: string): Promise<{ idExterno: string | null }>;
 
   sendMedia(
     config: ConfigDaPonte,

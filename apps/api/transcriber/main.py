@@ -6,6 +6,7 @@ import os
 import tempfile
 from pathlib import Path
 from threading import Lock
+from typing import Any
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from faster_whisper import WhisperModel
@@ -38,7 +39,7 @@ def _get_model() -> WhisperModel:
 
 
 @app.post("/v1/audio/transcriptions")
-def transcribe(model: str = Form(...), file: UploadFile = File(...)) -> dict[str, str]:
+def transcribe(model: str = Form(...), language: str | None = Form(None), file: UploadFile = File(...)) -> dict[str, Any]:
     del model  # The deployment chooses its model; clients cannot change resource use.
     suffix = Path(file.filename or "audio.webm").suffix.lower()
     if suffix not in {".webm", ".m4a", ".mp4", ".mp3", ".wav", ".mpeg", ".mpga"}:
@@ -57,11 +58,44 @@ def transcribe(model: str = Form(...), file: UploadFile = File(...)) -> dict[str
             temporary_path = temporary.name
 
         recognizer = _get_model()
-        segments, _info = recognizer.transcribe(temporary_path, beam_size=5, vad_filter=True)
+        segments, info = recognizer.transcribe(
+            temporary_path,
+            language=language or None,
+            beam_size=5,
+            vad_filter=True,
+        )
+        segments = list(segments)
         text = " ".join(segment.text.strip() for segment in segments).strip()
         if not text:
             raise HTTPException(status_code=422, detail="No speech detected")
-        return {"text": text}
+        avg_logprob = sum(segment.avg_logprob for segment in segments) / len(segments)
+        no_speech_prob = max(segment.no_speech_prob for segment in segments)
+        alternatives: list[str] = []
+        if avg_logprob < -0.45 or no_speech_prob > 0.25:
+            try:
+                retry_segments, _retry_info = recognizer.transcribe(
+                    temporary_path,
+                    language=language or None,
+                    beam_size=3,
+                    temperature=0.2,
+                    condition_on_previous_text=False,
+                    vad_filter=True,
+                )
+                retry_segments = list(retry_segments)
+                alternative = " ".join(segment.text.strip() for segment in retry_segments).strip()
+                if alternative and alternative.casefold() != text.casefold():
+                    alternatives.append(alternative)
+            except Exception:
+                # A segunda hipótese ajuda a corrigir trechos duvidosos, mas não
+                # deve descartar a transcrição principal se essa tentativa falhar.
+                pass
+        return {
+            "text": text,
+            "language": info.language,
+            "avgLogprob": round(avg_logprob, 4),
+            "noSpeechProb": round(no_speech_prob, 4),
+            "alternatives": alternatives,
+        }
     except HTTPException:
         raise
     except Exception as error:

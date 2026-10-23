@@ -254,6 +254,7 @@ export function PainelChat({
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const enviandoMensagem = useRef(false);
+  const chavesEnvioPendente = useRef(new Map<string, { conteudo: string; chave: string }>());
   const [respostasRapidas, setRespostasRapidas] = useState<RespostaRapida[]>([]);
   const [janelaFechada, setJanelaFechada] = useState(false);
   const [seletorRapido, setSeletorRapido] = useState<{ inicio: number; fim: number; busca: string } | null>(null);
@@ -346,6 +347,7 @@ export function PainelChat({
     const proximo = `${antes}${conteudo}${depois}`;
     const cursor = antes.length + conteudo.length;
     setTexto(proximo);
+    if (chavesEnvioPendente.current.get(conversa.id)?.conteudo !== proximo.trim()) chavesEnvioPendente.current.delete(conversa.id);
     setSeletorRapido(null);
     requestAnimationFrame(() => {
       textareaResposta.current?.focus();
@@ -389,14 +391,20 @@ export function PainelChat({
     }
     const conteudo = texto.trim();
     if (!conteudo) return;
+    let envioPendente = chavesEnvioPendente.current.get(conversa.id);
+    if (!envioPendente || envioPendente.conteudo !== conteudo) {
+      envioPendente = { conteudo, chave: crypto.randomUUID() };
+      chavesEnvioPendente.current.set(conversa.id, envioPendente);
+    }
     enviandoMensagem.current = true;
     setErro(null);
     setOcupado(true);
     try {
       const resp = await api.post<{ mensagem: Mensagem; conversa: ConversaDetalhe }>(
         `/conversas/${conversa.id}/mensagens`,
-        { conteudo },
+        { conteudo, chaveIdempotencia: envioPendente.chave },
       );
+      chavesEnvioPendente.current.delete(conversa.id);
       setTexto('');
       onMudou(resp.conversa);
     } catch (err) {
@@ -490,7 +498,7 @@ export function PainelChat({
               <IconeVoltar tamanho={18} />
             </button>
           )}
-          <AvatarConversa conversaId={conversa.id} nome={conversa.contato.nome} className="h-10 w-10 text-sm" />
+          <AvatarConversa conversaId={conversa.id} nome={conversa.contato.nome} className="h-10 w-10 text-sm" avatarPath={`/contatos/${conversa.contato.id}/avatar`} />
           <div className="min-w-[14rem] flex-1">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <h2 className="truncate text-[15px] font-semibold text-slate-800">{conversa.contato.nome}</h2>
@@ -717,6 +725,7 @@ export function PainelChat({
                     onChange={(e) => {
                       const valor = e.target.value;
                       const caret = e.target.selectionStart;
+                      if (chavesEnvioPendente.current.get(conversa.id)?.conteudo !== valor.trim()) chavesEnvioPendente.current.delete(conversa.id);
                       setTexto(valor);
                       const trecho = valor.slice(0, caret);
                       const gatilho = /(?:^|\s)\/([^\s]*)$/.exec(trecho);

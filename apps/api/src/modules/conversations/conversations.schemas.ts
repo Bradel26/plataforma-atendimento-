@@ -55,6 +55,7 @@ export const anterioresSchema = z.object({ cursor: z.string().optional() });
 export const enviarMensagemSchema = z.object({
   conteudo: z.string().trim().min(1, 'Escreva uma mensagem').max(4000),
   interno: z.boolean().optional().default(false),
+  chaveIdempotencia: z.string().uuid().optional(),
 });
 
 /** Iniciar conversa a partir de um Contato do CRM (botao "Iniciar conversa" na ficha). */

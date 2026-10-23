@@ -100,14 +100,15 @@ registrarHandler<{ chamadaId: string; url: string }>(TIPO_TRANSCRICAO_CHAMADA_WH
   if (!chamada.resumo && transcricao && ollamaConfigurado) {
     const analise = await analisarTranscricaoLocal(transcricao);
     await registrarAnalise(chamada.id, {
+      transcricao: analise.transcricaoCorrigida,
       resumo: analise.resumo,
       sentimento: analise.sentimento,
       proximasAcoes: analise.proximasAcoes,
-      motor: analise.motor,
+      motor: `${analise.motor} · revisão ${analise.confiancaTranscricao.toLocaleLowerCase('pt-BR')}`,
       consumo: { unidades: analise.unidades, custo: null },
     });
     await notificarChamada(
-      { id: chamada.id, contatoId: chamada.contatoId, resumo: analise.resumo, sentimento: analise.sentimento },
+      { id: chamada.id, contatoId: chamada.contatoId, transcricao: analise.transcricaoCorrigida, resumo: analise.resumo, sentimento: analise.sentimento },
       { agenteId: chamada.agenteId, filaId: chamada.filaId },
     );
   }

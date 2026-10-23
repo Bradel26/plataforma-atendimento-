@@ -71,8 +71,15 @@ export async function buscarFotoDaConversa(id: string): Promise<FotoPerfil | nul
   if (!conversa) throw notFound('Conversa não encontrada');
   if (conversa.canal !== 'WHATSAPP') return null;
 
-  const telefone = (conversa.contato.telefone ?? conversa.enderecoExterno ?? '').replace(/\D/g, '');
-  if (telefone.length < 10 || telefone.length > 15) return null;
+  const telefone = numeroNormalizado(conversa.contato.telefone) ?? (conversa.contato.telefone ?? '').replace(/\D/g, '');
+  const destino = telefone.length >= 10 && telefone.length <= 15
+    ? telefone
+    : conversa.enderecoExterno?.toLowerCase().endsWith('@lid')
+      ? conversa.enderecoExterno
+      : conversa.enderecoExterno?.toLowerCase().endsWith('@c.us')
+        ? conversa.enderecoExterno.slice(0, -'@c.us'.length).replace(/\D/g, '')
+        : null;
+  if (!destino) return null;
 
   const config = conversa.canalConfigId
     ? await obterConfigPorId(conversa.canalConfigId)
@@ -81,14 +88,14 @@ export async function buscarFotoDaConversa(id: string): Promise<FotoPerfil | nul
 
   const provider = getWhatsAppProvider();
   if (!provider.fetchAvatar) return null;
-  const chave = `${provider.constructor.name}:${config.id ?? config.ponteSessao ?? 'linha'}:${telefone}`;
+  const chave = `${provider.constructor.name}:${config.id ?? config.ponteSessao ?? 'linha'}:${destino.toLowerCase().endsWith('@lid') ? destino : telefone}`;
   const agora = Date.now();
   const existente = cacheFotosPerfil.get(chave);
   if (existente && existente.expiraEm > agora) return existente.busca;
   if (existente) cacheFotosPerfil.delete(chave);
 
   const entrada = { expiraEm: agora + 15_000, busca: Promise.resolve(null) as Promise<FotoPerfil | null> };
-  entrada.busca = provider.fetchAvatar(config, telefone).catch(() => null).then((foto) => {
+  entrada.busca = provider.fetchAvatar(config, destino).catch(() => null).then((foto) => {
     entrada.expiraEm = Date.now() + (foto ? 6 * 60 * 60_000 : 30_000);
     return foto;
   });
@@ -738,6 +745,7 @@ export async function enviarMensagem(
   id: string,
   conteudo: string,
   interno = false,
+  chaveIdempotencia?: string,
 ) {
   const conversa = await carregarOuFalhar(id);
   if (conversa.status === 'FINALIZADO') throw badRequest('Conversa finalizada — não aceita novas mensagens');
@@ -750,7 +758,7 @@ export async function enviarMensagem(
   // e uma anotacao entre a equipe, nao parte da conversa com o cliente.
   const envio =
     !interno && exigeEnvioExterno(conversa.canal)
-      ? await enviarParaCanal(conversa.canal, conversa.enderecoExterno, conteudo, conversa.canalConfigId)
+      ? await enviarParaCanal(conversa.canal, conversa.enderecoExterno, conteudo, conversa.canalConfigId, chaveIdempotencia)
       : { idExterno: null };
 
   const { mensagem, ecoReconciliado } = await criarMensagemDoAgente(solicitante, envio.idExterno, interno, {

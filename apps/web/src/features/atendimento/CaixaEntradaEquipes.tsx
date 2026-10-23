@@ -60,7 +60,7 @@ export function CaixaEntradaEquipes({ grupos, carregando, erro, aceitandoId, onA
                       title="Aceitar esta conversa"
                       className="flex w-full items-center gap-2 rounded-md bg-white px-2 py-2 text-left shadow-sm transition hover:ring-1 hover:ring-[var(--brand-primary)] disabled:opacity-60"
                     >
-                      <AvatarConversa conversaId={conversa.id} nome={conversa.contato.nome} className="h-8 w-8" />
+                      <AvatarConversa conversaId={conversa.id} nome={conversa.contato.nome} className="h-8 w-8" avatarPath={`/contatos/${conversa.contato.id}/avatar`} />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-baseline justify-between gap-2">
                           <span className="truncate text-xs font-medium text-slate-800">{conversa.contato.nome}</span>

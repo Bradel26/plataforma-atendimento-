@@ -94,6 +94,10 @@ wppconnectWebhookRoutes.post(
 
     const organizacaoId = await organizacaoDaSessao(sessaoBruta);
     if (!organizacaoId) {
+      log.warn('webhook', 'sessão WhatsApp recebida sem canal cadastrado', {
+        provider: 'webjs',
+        sessaoExterna: sessaoBruta,
+      });
       res.status(404).json({
         error: {
           code: 'SESSAO_DESCONHECIDA',
@@ -126,11 +130,38 @@ wppconnectWebhookRoutes.post(
       if (!normalizada) {
         // Evento que nao interessa (onack, presence, eco, grupo, payload
         // incompleto) — 200 para o WPPConnect nao insistir achando que falhou.
+        log.info('webhook', 'evento WhatsApp ignorado pelo normalizador', {
+          provider: 'webjs',
+          sessaoExterna: sessaoBruta,
+          evento: eventoBruto ?? 'ausente',
+          fromMe: Boolean(corpo && typeof corpo === 'object' && (corpo as { fromMe?: unknown }).fromMe === true),
+          grupo: Boolean(corpo && typeof corpo === 'object' && (corpo as { isGroupMsg?: unknown }).isGroupMsg === true),
+          temTexto: Boolean(corpo && typeof corpo === 'object' &&
+            ((typeof (corpo as { body?: unknown }).body === 'string' && (corpo as { body: string }).body.trim()) ||
+             (typeof (corpo as { content?: unknown }).content === 'string' && (corpo as { content: string }).content.trim()))),
+        });
         res.json({ ok: true, ignorada: true });
         return;
       }
 
-      const resultado = await registrarMensagemEntrante(normalizada);
+      let resultado: Awaited<ReturnType<typeof registrarMensagemEntrante>>;
+      try {
+        resultado = await registrarMensagemEntrante(normalizada);
+      } catch (erro) {
+        log.error('webhook', 'falha ao gravar mensagem recebida do WhatsApp', {
+          provider: 'webjs',
+          sessaoExterna: sessaoBruta,
+          canal: 'WHATSAPP',
+          motivo: erro instanceof Error ? erro.message.slice(0, 300) : 'erro desconhecido',
+        });
+        throw erro;
+      }
+      log.info('webhook', 'mensagem recebida do WhatsApp gravada', {
+        provider: 'webjs',
+        sessaoExterna: sessaoBruta,
+        canal: 'WHATSAPP',
+        duplicada: 'duplicada' in resultado ? resultado.duplicada : false,
+      });
       res.json({ ok: true, duplicada: 'duplicada' in resultado ? resultado.duplicada : false });
     });
   }),

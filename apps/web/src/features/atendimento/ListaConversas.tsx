@@ -162,6 +162,7 @@ export function ListaConversas({
               <AvatarConversa
                 conversaId={c.id}
                 nome={c.contato.nome}
+                avatarPath={`/contatos/${c.contato.id}/avatar`}
                 // O avatar sem foto usa o mesmo tom suave do cartao selecionado; o anel o separa do fundo.
                 className={`h-10 w-10 text-sm ${ativa ? 'ring-2 ring-white' : ''}`}
               />
