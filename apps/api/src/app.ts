@@ -71,7 +71,17 @@ export function createApp() {
   app.use(
     helmet({
       strictTransportSecurity: env.HSTS_ATIVO ? undefined : false,
-      contentSecurityPolicy: { directives: { imgSrc: ["'self'", 'data:', 'blob:'], upgradeInsecureRequests: env.HSTS_ATIVO ? [] : null } },
+      contentSecurityPolicy: {
+        directives: {
+          imgSrc: ["'self'", 'data:', 'blob:'],
+          // O cadastro incorporado usa o SDK do Facebook no Atendimento.
+          // Sem estas origens, o CSP impede o SDK e o botão fica carregando.
+          scriptSrc: ["'self'", 'https://connect.facebook.net'],
+          frameSrc: ["'self'", 'https://www.facebook.com', 'https://web.facebook.com'],
+          connectSrc: ["'self'", 'https://connect.facebook.net', 'https://www.facebook.com', 'https://web.facebook.com', 'https://graph.facebook.com'],
+          upgradeInsecureRequests: env.HSTS_ATIVO ? [] : null,
+        },
+      },
     }),
   );
   app.use(cors({ origin: env.WEB_ORIGIN, credentials: true }));
