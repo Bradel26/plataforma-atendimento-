@@ -328,15 +328,17 @@ export function validarLinha(
  * ordem: `lerCsv` pula linhas em branco, e o erro tem de apontar a linha real.
  */
 export function numerosDasLinhasCsv(texto: string): number[] {
-  const fisicas = texto.replace(/^﻿/, '').replace(/\r\n/g, '\n').split('\n');
+  const fisicas = texto.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').split('\n');
   const numeros = fisicas.flatMap((l, i) => (l.trim().length > 0 ? [i + 1] : []));
   return numeros.slice(1); // a primeira não vazia é o cabeçalho
 }
 
 /**
  * Soma dos tamanhos descompactados declarados no diretório central do ZIP (o
- * XLSX é um ZIP). Nulo se o arquivo não é um ZIP legível ou usa ZIP64 (tamanhos
- * acima de 4 GB): quem chama recusa. Defesa contra "zip bomb" antes de abrir.
+ * XLSX é um ZIP). Nulo se o arquivo não é um ZIP legível, usa ZIP64 (tamanhos
+ * acima de 4 GB) ou tem entrada guardada com descritor de dados: quem chama
+ * recusa. Primeira barreira contra "zip bomb"; a medição real é
+ * `medirDescompactado` (`leituraPlanilha.ts`).
  */
 export function tamanhoDescompactadoDoZip(zip: Buffer): number | null {
   const FIM_DO_DIRETORIO = 0x06054b50;
@@ -359,6 +361,8 @@ export function tamanhoDescompactadoDoZip(zip: Buffer): number | null {
     if (posicao + 46 > zip.length || zip.readUInt32LE(posicao) !== ENTRADA_DO_DIRETORIO) return null;
     const tamanho = zip.readUInt32LE(posicao + 24);
     if (tamanho === 0xffffffff) return null;
+    // Guardado sem compressão com descritor de dados: tamanho só depois dos dados; recusado.
+    if ((zip.readUInt16LE(posicao + 8) & 0x08) !== 0 && zip.readUInt16LE(posicao + 10) === 0) return null;
     total += tamanho;
     posicao += 46 + zip.readUInt16LE(posicao + 28) + zip.readUInt16LE(posicao + 30) + zip.readUInt16LE(posicao + 32);
   }

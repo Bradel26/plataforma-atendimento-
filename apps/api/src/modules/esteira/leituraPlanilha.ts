@@ -2,13 +2,12 @@
  * Leitura do arquivo da importação (CSV e XLSX) — sem banco, testável em memória.
  *
  * O XLSX é um ZIP vindo do usuário: antes de entregá-lo ao exceljs, o conteúdo
- * é descompactado de verdade (zlib, com teto de saída) entrada por entrada,
- * seguindo os cabeçalhos locais — o tamanho declarado no diretório central
- * pode ser forjado. Na leitura, limites
- * de linhas lidas (inclusive vazias), de colunas e de tamanho de célula.
+ * é descompactado de verdade, com teto, pelo MESMO caminho que o exceljs usa
+ * (JSZip, pelo diretório central) — o tamanho declarado no ZIP pode ser forjado.
+ * Na leitura, limites de linhas lidas, de colunas e de tamanho de célula.
  */
-import { inflateRawSync } from 'node:zlib';
 import ExcelJS from 'exceljs';
+import JSZip from 'jszip';
 import { badRequest } from '../../lib/errors';
 import { lerCsv } from '../dados/csv';
 import { celulaDaPlanilha, numerosDasLinhasCsv, tamanhoDescompactadoDoZip } from './planilhas';
@@ -33,63 +32,69 @@ const linhasDemais = () =>
 const xlsxIlegivel = () => badRequest('Não foi possível ler o arquivo XLSX');
 
 // ---------------------------------------------------------------------------
-// ZIP: bytes realmente descompactados
+// ZIP: bytes realmente descompactados, pelo mesmo caminho do exceljs
 // ---------------------------------------------------------------------------
 
+export type MedicaoDoZip = {
+  resultado: 'OK' | 'GRANDE' | 'INVALIDO';
+  /** Bytes descompactados efetivamente lidos até a decisão (para provar que o teto aborta cedo). */
+  bytes: number;
+};
+
+/** Tamanho descompactado que o diretório central declara para a entrada (campo interno do JSZip). */
+const declaradoDaEntrada = (entrada: JSZip.JSZipObject): number | null => {
+  const tamanho = (entrada as unknown as { _data?: { uncompressedSize?: unknown } })._data?.uncompressedSize;
+  return typeof tamanho === 'number' ? tamanho : null;
+};
+
 /**
- * Descompacta cada entrada do ZIP seguindo os cabeçalhos locais (como o
- * `unzipper` do exceljs faz), somando a saída real. Para assim que a soma passa
- * do limite (o zlib corta a saída em `maxOutputLength`).
- * 'GRANDE': passou do limite; 'INVALIDO': ZIP que não dá para percorrer.
+ * Descompacta o XLSX **como o exceljs vai descompactar**: `xlsx.load` do exceljs
+ * 4.4.0 usa `JSZip.loadAsync` (exceljs/lib/xlsx/xlsx.js), que lê pelo diretório
+ * CENTRAL — então a medição também usa o JSZip (a mesma 3.10.2, dependência fixa
+ * da API) e percorre `zip.files`. Cada entrada é lida em stream (blocos de ~16 KB)
+ * contando os bytes reais; aborta quando:
+ * - a soma passa do `limite` ('GRANDE'), ou
+ * - a entrada produz mais (ou, no fim, outra quantidade) do que o diretório
+ *   central declara ('INVALIDO': tamanho forjado — o JSZip só confere no fim,
+ *   depois de descompactar tudo).
+ * ZIP que o JSZip não abre: 'INVALIDO'.
  */
-export function conferirDescompactado(zip: Buffer, limite: number): 'OK' | 'GRANDE' | 'INVALIDO' {
-  const CABECALHO_LOCAL = 0x04034b50;
-  const DESCRITOR = 0x08074b50;
-  let posicao = 0;
-  let total = 0;
-  let entradas = 0;
-  while (posicao + 4 <= zip.length && zip.readUInt32LE(posicao) === CABECALHO_LOCAL) {
-    if (posicao + 30 > zip.length) return 'INVALIDO';
-    const flags = zip.readUInt16LE(posicao + 6);
-    const metodo = zip.readUInt16LE(posicao + 8);
-    const compactado = zip.readUInt32LE(posicao + 18);
-    const inicio = posicao + 30 + zip.readUInt16LE(posicao + 26) + zip.readUInt16LE(posicao + 28);
-    const comDescritor = (flags & 0x08) !== 0;
-    if (inicio > zip.length || compactado === 0xffffffff) return 'INVALIDO';
-
-    let consumidos: number;
-    if (metodo === 0) {
-      // Guardado sem compressão: o tamanho tem de vir no cabeçalho local.
-      if (comDescritor) return 'INVALIDO';
-      consumidos = compactado;
-      total += compactado;
-    } else if (metodo === 8) {
-      const restante = limite - total;
-      try {
-        const { buffer, engine } = inflateRawSync(zip.subarray(inicio), { info: true, maxOutputLength: restante + 1 }) as unknown as {
-          buffer: Buffer;
-          engine: { bytesWritten: number };
-        };
-        total += buffer.length;
-        consumidos = engine.bytesWritten;
-      } catch (erro) {
-        // Saída acima de `maxOutputLength`: passou do limite.
-        if (erro instanceof RangeError || (erro as { code?: string }).code === 'ERR_BUFFER_TOO_LARGE') return 'GRANDE';
-        return 'INVALIDO';
-      }
-    } else {
-      return 'INVALIDO';
-    }
-    if (total > limite) return 'GRANDE';
-
-    posicao = inicio + consumidos;
-    if (comDescritor) {
-      if (posicao + 4 <= zip.length && zip.readUInt32LE(posicao) === DESCRITOR) posicao += 4;
-      posicao += 12; // crc + tamanhos (32 bits; ZIP64 não é aceito)
-    }
-    entradas += 1;
+export async function medirDescompactado(zip: Buffer, limite: number): Promise<MedicaoDoZip> {
+  let arquivo: JSZip;
+  try {
+    arquivo = await JSZip.loadAsync(zip);
+  } catch {
+    return { resultado: 'INVALIDO', bytes: 0 };
   }
-  return entradas > 0 ? 'OK' : 'INVALIDO';
+  let total = 0;
+  for (const entrada of Object.values(arquivo.files)) {
+    if (entrada.dir) continue;
+    const declarado = declaradoDaEntrada(entrada);
+    if (declarado == null) return { resultado: 'INVALIDO', bytes: total };
+    const resultado = await new Promise<MedicaoDoZip['resultado']>((resolver) => {
+      const fluxo = entrada.nodeStream('nodebuffer');
+      let daEntrada = 0;
+      let decidido = false;
+      const decidir = (r: MedicaoDoZip['resultado']) => {
+        if (decidido) return;
+        decidido = true;
+        // Para de consumir: o JSZip pausa o worker quando o buffer do stream enche.
+        fluxo.removeAllListeners('data');
+        fluxo.pause();
+        resolver(r);
+      };
+      fluxo.on('data', (bloco: Buffer) => {
+        daEntrada += bloco.length;
+        total += bloco.length;
+        if (daEntrada > declarado) decidir('INVALIDO');
+        else if (total > limite) decidir('GRANDE');
+      });
+      fluxo.on('error', () => decidir('INVALIDO'));
+      fluxo.on('end', () => decidir(daEntrada === declarado ? 'OK' : 'INVALIDO'));
+    });
+    if (resultado !== 'OK') return { resultado, bytes: total };
+  }
+  return { resultado: 'OK', bytes: total };
 }
 
 // ---------------------------------------------------------------------------
@@ -143,9 +148,10 @@ function lerCsvNumerado(buffer: Buffer): Planilha {
 
 /**
  * Primeira aba do XLSX; a primeira linha com valor é o cabeçalho; linhas vazias
- * são puladas (e contadas). Antes de abrir: tamanho declarado no diretório
- * central e bytes realmente descompactados (até 50 MB) — é esse teto que limita
- * a memória do `load`.
+ * são puladas. Antes de abrir: tamanho declarado no diretório central (sem
+ * ZIP64) e bytes realmente descompactados pelo JSZip, o mesmo leitor do `load`
+ * (até 50 MB) — é esse teto que limita a memória do `load`. O arquivo é
+ * descompactado duas vezes (medição e `load`); a CPU fica limitada pelo teto.
  *
  * Por que não o leitor em streaming do exceljs (`stream.xlsx.WorkbookReader`):
  * na 4.4.0 ele é não determinístico — conforme a ordem em que o unzipper entrega
@@ -159,9 +165,9 @@ async function lerXlsx(buffer: Buffer): Promise<Planilha> {
   const declarado = tamanhoDescompactadoDoZip(buffer);
   if (declarado == null) throw xlsxIlegivel();
   if (declarado > LIMITE_XLSX_DESCOMPACTADO) throw grandeDemais();
-  const real = conferirDescompactado(buffer, LIMITE_XLSX_DESCOMPACTADO);
-  if (real === 'GRANDE') throw grandeDemais();
-  if (real === 'INVALIDO') throw xlsxIlegivel();
+  const { resultado } = await medirDescompactado(buffer, LIMITE_XLSX_DESCOMPACTADO);
+  if (resultado === 'GRANDE') throw grandeDemais();
+  if (resultado === 'INVALIDO') throw xlsxIlegivel();
 
   const livro = new ExcelJS.Workbook();
   try {
@@ -176,9 +182,11 @@ async function lerXlsx(buffer: Buffer): Promise<Planilha> {
   const colunas: Array<{ indice: number; cabecalho: string }> = [];
   const linhas: LinhaBruta[] = [];
   let cabecalhoLido = false;
-  planilha.eachRow({ includeEmpty: false }, (row) => {
-    contador.linha(row.cellCount);
+  // `includeEmpty`: linhas vazias também passam pelo contador (teto de linhas lidas).
+  planilha.eachRow({ includeEmpty: true }, (row) => {
+    contador.linha(row.cellCount); // `cellCount` = índice da última coluna da linha
     if (!cabecalhoLido) {
+      if (!row.hasValues) return; // o cabeçalho é a primeira linha com valor
       cabecalhoLido = true;
       row.eachCell({ includeEmpty: false }, (celula, indice) => {
         const cabecalho = contador.celula(celulaDaPlanilha(celula.value));

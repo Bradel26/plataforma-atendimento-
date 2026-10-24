@@ -5,9 +5,9 @@ import { AppError } from '../../lib/errors';
 import {
   LIMITE_IMPORTACAO_LINHAS,
   LIMITE_LINHAS_LIDAS_XLSX,
-  conferirDescompactado,
   contadorDeLeitura,
   lerArquivo,
+  medirDescompactado,
 } from './leituraPlanilha';
 
 /** XLSX em memória escrito pelo próprio exceljs (planilha antes do workbook.xml no ZIP). */
@@ -28,9 +28,13 @@ async function erroDaLeitura(buffer: Buffer, nome = 'planilha.xlsx'): Promise<Ap
   throw new Error('não lançou');
 }
 
-type Entrada = { nome: string; dados: Buffer; metodo?: 0 | 8; descritor?: boolean; declarado?: number };
+type Entrada = { nome: string; dados: Buffer; metodo?: 0 | 8; descritor?: boolean; declarado?: number; lixoAntes?: number };
 
-/** ZIP montado à mão: cabeçalhos locais + diretório central (que pode declarar um tamanho falso). */
+/**
+ * ZIP montado à mão: cabeçalhos locais + diretório central (que pode declarar um tamanho falso).
+ * `lixoAntes`: bytes de lixo antes da entrada — quebra quem percorre os cabeçalhos locais,
+ * mas o diretório central (o que o JSZip lê) aponta direto para ela.
+ */
 function zip(entradas: Entrada[]): Buffer {
   const locais: Buffer[] = [];
   const centrais: Buffer[] = [];
@@ -52,9 +56,13 @@ function zip(entradas: Entrada[]): Buffer {
       descritor.writeUInt32LE(corpo.length, 8);
       descritor.writeUInt32LE(e.dados.length, 12);
     }
+    const lixo = Buffer.alloc(e.lixoAntes ?? 0, 0x41);
+    deslocamento += lixo.length;
+    locais.push(lixo);
     const bloco = Buffer.concat([local, nome, corpo, descritor]);
     const central = Buffer.alloc(46);
     central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(e.descritor ? 0x08 : 0, 8);
     central.writeUInt16LE(metodo, 10);
     central.writeUInt32LE(corpo.length, 20);
     central.writeUInt32LE(e.declarado ?? e.dados.length, 24);
@@ -151,9 +159,14 @@ describe('lerArquivo — XLSX (caminho real, em memória)', () => {
   });
 
   it('zip bomb com diretório central forjado (declara pouco): recusa pelos bytes reais', async () => {
+    // Cabeçalhos honestos, diretório central declarando pouco.
     const bomba = zip([{ nome: 'xl/worksheets/sheet1.xml', dados: Buffer.alloc(60 * 1024 * 1024), declarado: 1000 }]);
     expect(bomba.length).toBeLessThan(200_000);
-    expect((await erroDaLeitura(bomba)).message).toContain('grande demais');
+    // Saída maior que o declarado = tamanho forjado: arquivo inválido (aborta no 1º bloco).
+    expect((await erroDaLeitura(bomba)).message).toBe('Não foi possível ler o arquivo XLSX');
+    // Declarando o tamanho verdadeiro, a barreira do diretório central recusa antes de abrir.
+    const honesta = zip([{ nome: 'xl/worksheets/sheet1.xml', dados: Buffer.alloc(60 * 1024 * 1024) }]);
+    expect((await erroDaLeitura(honesta)).message).toContain('grande demais');
   });
 });
 
@@ -165,32 +178,65 @@ describe('lerArquivo — CSV', () => {
   });
 });
 
-describe('conferirDescompactado', () => {
-  it('XLSX do exceljs dentro do limite: OK; com limite menor que o conteúdo: GRANDE', async () => {
+describe('medirDescompactado (mesmo caminho do exceljs: JSZip pelo diretório central)', () => {
+  const MB = 1024 * 1024;
+  const mb = (n: number) => Buffer.alloc(n * MB);
+
+  it('XLSX do exceljs dentro do limite: OK com os bytes reais; com limite menor: GRANDE', async () => {
     const buffer = await xlsx((livro) => livro.addWorksheet('TIM').addRow(['Parceiro']));
-    expect(conferirDescompactado(buffer, 50 * 1024 * 1024)).toBe('OK');
-    expect(conferirDescompactado(buffer, 100)).toBe('GRANDE');
+    const ok = await medirDescompactado(buffer, 50 * MB);
+    expect(ok.resultado).toBe('OK');
+    expect(ok.bytes).toBeGreaterThan(0);
+    expect((await medirDescompactado(buffer, 100)).resultado).toBe('GRANDE');
   });
 
-  it('conta os bytes reais, não os declarados (deflate, guardado e com descritor de dados)', () => {
-    const mb = (n: number) => Buffer.alloc(n * 1024 * 1024);
-    expect(conferirDescompactado(zip([{ nome: 'a', dados: mb(2), declarado: 10 }]), 1024 * 1024)).toBe('GRANDE');
-    expect(conferirDescompactado(zip([{ nome: 'a', dados: mb(1) }, { nome: 'b', dados: mb(1) }]), 1.5 * 1024 * 1024)).toBe(
-      'GRANDE',
-    );
-    expect(conferirDescompactado(zip([{ nome: 'a', dados: Buffer.from('abc'), metodo: 0 }]), 2)).toBe('GRANDE');
-    expect(conferirDescompactado(zip([{ nome: 'a', dados: Buffer.from('abc'), metodo: 0 }]), 3)).toBe('OK');
-    expect(
-      conferirDescompactado(zip([{ nome: 'a', dados: mb(1), descritor: true }, { nome: 'b', dados: mb(1), descritor: true }]), 3 * 1024 * 1024),
-    ).toBe('OK');
-    expect(
-      conferirDescompactado(zip([{ nome: 'a', dados: mb(1), descritor: true }, { nome: 'b', dados: mb(1), descritor: true }]), 1.5 * 1024 * 1024),
-    ).toBe('GRANDE');
+  it('bomba escondida dos cabeçalhos locais (lixo antes dela), só no diretório central, declarando pouco: aborta no 1º bloco', async () => {
+    const bomba = zip([
+      { nome: '[Content_Types].xml', dados: Buffer.from('<a/>') },
+      { nome: 'xl/worksheets/sheet1.xml', dados: mb(40), declarado: 1000, lixoAntes: 8 },
+    ]);
+    const medicao = await medirDescompactado(bomba, 50 * MB);
+    expect(medicao.resultado).toBe('INVALIDO');
+    // Contador: parou num bloco (~16 KB), longe dos 40 MB reais.
+    expect(medicao.bytes).toBeLessThanOrEqual(64 * 1024);
   });
 
-  it('o que não é ZIP percorrível: INVALIDO', () => {
-    expect(conferirDescompactado(Buffer.from('nada a ver'), 1000)).toBe('INVALIDO');
-    expect(conferirDescompactado(zip([{ nome: 'a', dados: Buffer.from('abc'), metodo: 0, descritor: true }]), 1000)).toBe('INVALIDO');
+  it('bomba escondida que declara o tamanho verdadeiro: GRANDE ao passar do teto, antes de 2× o limite', async () => {
+    const bomba = zip([
+      { nome: '[Content_Types].xml', dados: Buffer.from('<a/>') },
+      { nome: 'xl/worksheets/sheet1.xml', dados: mb(16), lixoAntes: 8 },
+    ]);
+    const medicao = await medirDescompactado(bomba, 2 * MB);
+    expect(medicao.resultado).toBe('GRANDE');
+    expect(medicao.bytes).toBeGreaterThan(2 * MB);
+    expect(medicao.bytes).toBeLessThan(4 * MB);
+  });
+
+  it('soma entre entradas, guardado (método 0) e descritor de dados', async () => {
+    expect((await medirDescompactado(zip([{ nome: 'a', dados: mb(1) }, { nome: 'b', dados: mb(1) }]), 1.5 * MB)).resultado).toBe('GRANDE');
+    expect((await medirDescompactado(zip([{ nome: 'a', dados: Buffer.from('abc'), metodo: 0 }]), 3)).resultado).toBe('OK');
+    expect((await medirDescompactado(zip([{ nome: 'a', dados: Buffer.from('abc'), metodo: 0 }]), 2)).resultado).toBe('GRANDE');
+    const comDescritor = zip([
+      { nome: 'a', dados: mb(1), descritor: true },
+      { nome: 'b', dados: mb(1), descritor: true },
+    ]);
+    expect((await medirDescompactado(comDescritor, 3 * MB)).resultado).toBe('OK');
+    expect((await medirDescompactado(comDescritor, 1.5 * MB)).resultado).toBe('GRANDE');
+  });
+
+  it('declarado maior que o real (incoerente) ou arquivo que não é ZIP: INVALIDO', async () => {
+    expect((await medirDescompactado(zip([{ nome: 'a', dados: Buffer.from('abc'), declarado: 10 }]), MB)).resultado).toBe('INVALIDO');
+    expect((await medirDescompactado(Buffer.from('nada a ver'), MB)).resultado).toBe('INVALIDO');
+  });
+
+  it('lerArquivo: bomba escondida dos cabeçalhos locais é recusada; guardado com descritor também', async () => {
+    const bomba = zip([
+      { nome: '[Content_Types].xml', dados: Buffer.from('<a/>') },
+      { nome: 'xl/worksheets/sheet1.xml', dados: mb(60), declarado: 1000, lixoAntes: 8 },
+    ]);
+    expect((await erroDaLeitura(bomba)).status).toBe(400);
+    const guardado = zip([{ nome: 'a', dados: Buffer.from('abc'), metodo: 0, descritor: true }]);
+    expect((await erroDaLeitura(guardado)).message).toBe('Não foi possível ler o arquivo XLSX');
   });
 });
 

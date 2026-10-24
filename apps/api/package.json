@@ -36,6 +36,7 @@
     "helmet": "^8.0.0",
     "ioredis": "^5.4.2",
     "jsonwebtoken": "^9.0.2",
+    "jszip": "3.10.2",
     "morgan": "^1.10.0",
     "multer": "^2.2.0",
     "pdfkit": "^0.20.1",
