@@ -8,7 +8,7 @@
  */
 import type { Operacao } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
-import { ETAPAS, etapa, type ChaveEtapa } from './catalogo';
+import { ETAPAS, etapa, type ChaveEtapa, type EtapaCatalogo } from './catalogo';
 import { whereDaConsulta } from './consultas.service';
 import type { FiltrosEsteira } from './filtros';
 import { funilDaOperacao as funilDeEstagios } from './vinculos.service';
@@ -93,7 +93,53 @@ export function periodoDosFiltros(f: FiltrosEsteira, agora: Date): PeriodoFunil 
   return { desde: f.desde ?? new Date(ate.getTime() - DIAS_PADRAO * DIA_MS), ate, ateExclusivo: f.ate ? !!f.ateExclusivo : false };
 }
 
+/**
+ * Filtros da coorte: etapa, situação e "parado há" dependem da etapa ATUAL e
+ * enviesariam a coorte (quem já avançou sumiria), então são ignorados; o período
+ * é sempre por data de criação.
+ */
+export function filtrosDaCoorte(filtros: FiltrosEsteira, periodo: PeriodoFunil): FiltrosEsteira {
+  const { etapas: _e, situacoes: _s, paradoHaMaisDe: _p, ...demais } = filtros;
+  return { ...demais, periodoCampo: 'criadoEm', desde: periodo.desde, ate: periodo.ate, ateExclusivo: periodo.ateExclusivo };
+}
+
 type Passagem = { credenciamentoId: string; deEstagioId: string | null; paraEstagioId: string; segundosNoEstagio: number | null };
+
+/** Passagens do vínculo na ordem do histórico e como o funil as lê. */
+export function entradaDoVinculo(
+  estagioAtualId: string,
+  passagens: Passagem[],
+  doEstagio: Map<string, Pick<EtapaCatalogo, 'trilho' | 'tipo'>>,
+): EntradaFunil {
+  const atual = doEstagio.get(estagioAtualId);
+  let trilhoMaximo = atual?.trilho ?? 0;
+  let ultimoTrilho: number | null = null;
+  let saiuNoTrilho: number | null = null;
+  let saiu = false;
+  const diasPorTrilho: Record<number, number> = {};
+  for (const h of passagens) {
+    const para = doEstagio.get(h.paraEstagioId);
+    const de = h.deEstagioId ? doEstagio.get(h.deEstagioId) : undefined;
+    if (para?.trilho != null) {
+      trilhoMaximo = Math.max(trilhoMaximo, para.trilho);
+      ultimoTrilho = para.trilho;
+    }
+    if (de?.trilho != null && h.segundosNoEstagio != null) {
+      diasPorTrilho[de.trilho] = (diasPorTrilho[de.trilho] ?? 0) + h.segundosNoEstagio / 86_400;
+    }
+    if (para?.tipo === 'SAIDA') {
+      // Saída de desvio: vale o último trilho em que esteve.
+      saiuNoTrilho = de?.trilho ?? ultimoTrilho ?? (trilhoMaximo || null);
+      saiu = true;
+    } else if (para) {
+      saiuNoTrilho = null; // voltou ao fluxo (reativação)
+      saiu = false;
+    }
+  }
+  // Migrado direto em saída, sem passagem de saída no histórico.
+  if (!saiu && atual?.tipo === 'SAIDA') saiuNoTrilho = trilhoMaximo || null;
+  return { trilhoMaximo, saiuNoTrilho, diasPorTrilho };
+}
 
 /**
  * Funil da operação. O filtro por etapa/situação é ignorado (filtrar pela etapa
@@ -104,14 +150,9 @@ export async function funilDaOperacao(
   operacao: Operacao,
   filtros: FiltrosEsteira,
   periodo: PeriodoFunil,
-): Promise<{ periodo: { desde: Date; ate: Date }; total: number; etapas: EtapaFunil[] }> {
+): Promise<{ periodo: { desde: Date; ate: Date; ateExclusivo: boolean }; total: number; etapas: EtapaFunil[] }> {
   const agora = new Date();
-  const { etapas: _e, situacoes: _s, ...demais } = filtros;
-  const where = await whereDaConsulta(
-    operacao,
-    { ...demais, periodoCampo: 'criadoEm', desde: periodo.desde, ate: periodo.ate, ateExclusivo: periodo.ateExclusivo },
-    agora,
-  );
+  const where = await whereDaConsulta(operacao, filtrosDaCoorte(filtros, periodo), agora);
   const [funil, vinculos] = await Promise.all([
     funilDeEstagios(operacao),
     prisma.credenciamento.findMany({ where, select: { id: true, estagioId: true } }),
@@ -138,29 +179,14 @@ export async function funilDaOperacao(
     }
   }
 
-  const entradas = vinculos.map((v): EntradaFunil => {
-    let trilhoMaximo = doEstagio.get(v.estagioId)?.trilho ?? 0;
-    let saiuNoTrilho: number | null = null;
-    const diasPorTrilho: Record<number, number> = {};
-    for (const h of passagens.get(v.id) ?? []) {
-      const para = doEstagio.get(h.paraEstagioId);
-      const de = h.deEstagioId ? doEstagio.get(h.deEstagioId) : undefined;
-      if (para?.trilho != null) trilhoMaximo = Math.max(trilhoMaximo, para.trilho);
-      if (de?.trilho != null && h.segundosNoEstagio != null) {
-        diasPorTrilho[de.trilho] = (diasPorTrilho[de.trilho] ?? 0) + h.segundosNoEstagio / 86_400;
-      }
-      if (para?.tipo === 'SAIDA') saiuNoTrilho = de?.trilho ?? null;
-      else if (para) saiuNoTrilho = null; // voltou ao fluxo (reativação)
-    }
-    return { trilhoMaximo, saiuNoTrilho, diasPorTrilho };
-  });
+  const entradas = vinculos.map((v) => entradaDoVinculo(v.estagioId, passagens.get(v.id) ?? [], doEstagio));
 
   const nomes = new Map(funil.estagios.map((s) => [s.chave, s.nome]));
   const etapasTrilho = ETAPAS[operacao].flatMap((e) =>
     e.trilho != null ? [{ trilho: e.trilho, chave: e.chave, nome: nomes.get(e.chave) ?? e.nome }] : [],
   );
   return {
-    periodo: { desde: periodo.desde, ate: periodo.ate },
+    periodo: { desde: periodo.desde, ate: periodo.ate, ateExclusivo: !!periodo.ateExclusivo },
     total: vinculos.length,
     etapas: calcularFunil(entradas, etapasTrilho),
   };

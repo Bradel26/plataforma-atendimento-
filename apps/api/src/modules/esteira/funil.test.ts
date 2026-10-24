@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calcularFunil, mediana, periodoDosFiltros, type EntradaFunil } from './funil';
+import { calcularFunil, entradaDoVinculo, filtrosDaCoorte, mediana, periodoDosFiltros, type EntradaFunil } from './funil';
 
 const ETAPAS_TRILHO = [
   { trilho: 1, chave: 'TIM_NEGOCIACAO' as const, nome: 'Em negociação' },
@@ -93,5 +93,66 @@ describe('periodoDosFiltros', () => {
     const desde = new Date('2026-10-01T03:00:00Z');
     const ate = new Date('2026-11-01T03:00:00Z');
     expect(periodoDosFiltros({ desde, ate, ateExclusivo: true }, agora)).toEqual({ desde, ate, ateExclusivo: true });
+  });
+});
+
+describe('entradaDoVinculo', () => {
+  const T = (trilho: number) => ({ trilho, tipo: 'NORMAL' as const });
+  const mapa = new Map<string, { trilho: number | null; tipo: 'NORMAL' | 'DESVIO' | 'SAIDA' }>([
+    ['t1', T(1)],
+    ['t2', T(2)],
+    ['t3', T(3)],
+    ['mei', { trilho: null, tipo: 'DESVIO' }],
+    ['out', { trilho: null, tipo: 'SAIDA' }],
+  ]);
+  const p = (de: string | null, para: string, seg: number | null = null) => ({
+    credenciamentoId: 'v',
+    deEstagioId: de,
+    paraEstagioId: para,
+    segundosNoEstagio: seg,
+  });
+
+  it('sem histórico: usa a etapa atual', () => {
+    expect(entradaDoVinculo('t2', [], mapa)).toEqual({ trilhoMaximo: 2, saiuNoTrilho: null, diasPorTrilho: {} });
+  });
+
+  it('soma os dias por trilho', () => {
+    const e = entradaDoVinculo('t3', [p(null, 't1'), p('t1', 't2', 86_400), p('t2', 't1', 43_200), p('t1', 't2', 86_400), p('t2', 't3', 86_400)], mapa);
+    expect(e.diasPorTrilho).toEqual({ 1: 2, 2: 1.5 });
+    expect(e.trilhoMaximo).toBe(3);
+  });
+
+  it('saída direta de uma etapa do trilho', () => {
+    const e = entradaDoVinculo('out', [p(null, 't1'), p('t1', 't2', 10), p('t2', 'out', 10)], mapa);
+    expect(e.saiuNoTrilho).toBe(2);
+  });
+
+  it('saída vinda de desvio conta no último trilho', () => {
+    const e = entradaDoVinculo('out', [p(null, 't1'), p('t1', 't2', 10), p('t2', 'mei', 10), p('mei', 'out', 10)], mapa);
+    expect(e.saiuNoTrilho).toBe(2);
+    expect(e.trilhoMaximo).toBe(2);
+  });
+
+  it('reativação zera a saída', () => {
+    const e = entradaDoVinculo('t1', [p(null, 't2'), p('t2', 'out', 10), p('out', 't1', 10)], mapa);
+    expect(e.saiuNoTrilho).toBeNull();
+  });
+
+  it('migrado em saída sem histórico: usa o trilho máximo', () => {
+    expect(entradaDoVinculo('out', [], mapa).saiuNoTrilho).toBeNull();
+    const e = entradaDoVinculo('out', [p(null, 't3'), p('t3', 'mei', 5)], mapa);
+    expect(e.saiuNoTrilho).toBe(3);
+  });
+});
+
+describe('filtrosDaCoorte', () => {
+  it('ignora etapas, situações e parado há; força criadoEm no período', () => {
+    const desde = new Date('2026-01-01T03:00:00Z');
+    const ate = new Date('2026-02-01T03:00:00Z');
+    const f = filtrosDaCoorte(
+      { ufs: ['GO'], etapas: ['TIM_CRED_OK'], situacoes: ['NURTURE'], paradoHaMaisDe: 7, periodoCampo: 'estagioDesde' },
+      { desde, ate, ateExclusivo: true },
+    );
+    expect(f).toEqual({ ufs: ['GO'], periodoCampo: 'criadoEm', desde, ate, ateExclusivo: true });
   });
 });
