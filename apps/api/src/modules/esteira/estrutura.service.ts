@@ -6,12 +6,13 @@
  * Nunca apaga etapa; nunca grava `nome` de etapa existente (renomeação do ADMIN
  * é preservada). O plano é puro e testado em `estrutura.ts`.
  */
-import type { Operacao } from '@prisma/client';
+import { Prisma, type Operacao } from '@prisma/client';
 import { prisma, type ClienteDeEscrita } from '../../lib/prisma';
-import { badRequest } from '../../lib/errors';
-import { comOrganizacao } from '../../lib/tenant';
+import { badRequest, conflict, notFound } from '../../lib/errors';
+import { comOrganizacao, usuarioAtual } from '../../lib/tenant';
 import { ETAPAS } from './catalogo';
-import { ordensFinais, planoDeSincronizacao } from './estrutura';
+import { ordensFinais, planoDeSincronizacao, validarConfigEtapa, type ConfigEtapa } from './estrutura';
+import { diasParadoEfetivo } from './movimento';
 
 export const NOME_DO_FUNIL: Record<Operacao, string> = {
   TIM: 'Credenciamento TIM',
@@ -115,4 +116,74 @@ export async function sincronizarEstrutura(
       { timeout: 60_000, maxWait: 15_000 },
     ),
   );
+}
+
+/**
+ * Renomeia a etapa e/ou muda o limite de "parado" (ADMIN). Ordem, tipo e chave
+ * não mudam e nada é apagado. Nome único no funil (sem diferenciar caixa).
+ * A auditoria de configuração fica no log da aplicação (o enum de
+ * `RegistroEsteira` só cobre exportação/importação).
+ */
+export async function configurarEtapa(operacao: Operacao, chave: string, corpo: ConfigEtapa) {
+  const erro = validarConfigEtapa(ETAPAS[operacao], chave, corpo);
+  if (erro === 'NAO_ENCONTRADA') throw notFound('Etapa não encontrada');
+  if (erro) throw badRequest(erro);
+
+  const funil = await prisma.funnel.findFirst({
+    where: { tipo: 'ESTEIRA', operacao, ativo: true },
+    orderBy: { criadoEm: 'asc' },
+    select: { id: true },
+  });
+  if (!funil) throw badRequest('Esta esteira não está configurada nesta organização');
+  const atual = await prisma.funnelStage.findFirst({
+    where: { funilId: funil.id, chave },
+    select: { id: true, nome: true, diasParado: true },
+  });
+  if (!atual) throw notFound('Etapa não encontrada');
+
+  if (corpo.nome !== undefined) {
+    const repetida = await prisma.funnelStage.findFirst({
+      where: { funilId: funil.id, id: { not: atual.id }, nome: { equals: corpo.nome, mode: 'insensitive' } },
+      select: { id: true },
+    });
+    if (repetida) throw conflict('Já existe uma etapa com este nome nesta esteira');
+  }
+
+  const atualizada = await prisma.funnelStage
+    .update({
+      where: { id: atual.id },
+      data: {
+        ...(corpo.nome !== undefined ? { nome: corpo.nome } : {}),
+        ...(corpo.diasParado !== undefined ? { diasParado: corpo.diasParado } : {}),
+      },
+      select: { id: true, chave: true, nome: true, tipoEtapa: true, ordem: true, diasParado: true, ativa: true },
+    })
+    .catch((e: unknown) => {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        throw conflict('Já existe uma etapa com este nome nesta esteira');
+      }
+      throw e;
+    });
+
+  console.info(
+    JSON.stringify({
+      evento: 'esteira.etapa.configurada',
+      operacao,
+      chave,
+      usuarioId: usuarioAtual().id,
+      de: { nome: atual.nome, diasParado: atual.diasParado },
+      para: { nome: atualizada.nome, diasParado: atualizada.diasParado },
+    }),
+  );
+
+  return {
+    id: atualizada.id,
+    chave: atualizada.chave,
+    nome: atualizada.nome,
+    tipo: atualizada.tipoEtapa,
+    ordem: atualizada.ordem,
+    diasParado: atualizada.diasParado,
+    diasParadoEfetivo: diasParadoEfetivo(atualizada.diasParado, atualizada.tipoEtapa),
+    ativa: atualizada.ativa,
+  };
 }

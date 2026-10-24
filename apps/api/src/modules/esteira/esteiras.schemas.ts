@@ -199,3 +199,13 @@ export type VendedorInput = z.infer<typeof vendedorSchema>;
 export type KanbanQuery = z.infer<typeof kanbanQuerySchema>;
 export type KanbanColunaQuery = z.infer<typeof kanbanColunaQuerySchema>;
 export type ListaQuery = z.infer<typeof listaQuerySchema>;
+
+/** Configuração de etapa pelo ADMIN: só nome e limite de dias parado (nunca ordem, tipo ou chave). */
+export const configEtapaSchema = z
+  .object({
+    nome: z.string().trim().min(1, 'Informe o nome da etapa').max(60, 'Nome com no máximo 60 caracteres').optional(),
+    diasParado: z.number().int('Use dias inteiros').min(1, 'Mínimo 1 dia').max(365, 'Máximo 365 dias').nullable().optional(),
+  })
+  .strict()
+  .refine((d) => d.nome !== undefined || d.diasParado !== undefined, { message: 'Informe o nome ou os dias parado' });
+export type ConfigEtapaInput = z.infer<typeof configEtapaSchema>;

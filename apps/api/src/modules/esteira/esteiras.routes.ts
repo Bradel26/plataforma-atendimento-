@@ -9,8 +9,10 @@ import { badRequest, notFound } from '../../lib/errors';
 import { requireModulo } from '../../lib/modulos';
 import { exigirOperacao } from './acesso';
 import { operacaoDaUrl, type ChaveEtapa } from './catalogo';
+import { configurarEtapa } from './estrutura.service';
 import { estruturaDaEsteira, kanban, kanbanColuna, lista } from './consultas.service';
 import {
+  configEtapaSchema,
   criarVinculoSchema,
   editarVinculoSchemas,
   exportarQuerySchema,
@@ -21,6 +23,7 @@ import {
   moverVinculoSchema,
   notaSchema,
   vendedorSchema,
+  type ConfigEtapaInput,
   type ExportarQuery,
   type KanbanColunaQuery,
   type KanbanQuery,
@@ -67,6 +70,25 @@ esteirasRoutes.use(requireModulo('esteira'));
 
 /** Filtros da tela, na mesma query string da paginação (`ZodError` → 400). */
 const filtrosDa = (req: Request) => parseFiltros(req.query as Record<string, unknown>);
+
+// ---------------------------------------------------------------------------
+// Configuração das etapas (ADMIN)
+// ---------------------------------------------------------------------------
+
+/**
+ * Renomeia a etapa e/ou muda o limite de dias parado. Operação pela URL (404 se
+ * inválida), sem exigir nível na operação: a trava é o perfil ADMIN.
+ */
+esteirasRoutes.patch(
+  '/:operacao/etapas/:chave',
+  requireRole('ADMIN'),
+  validateBody(configEtapaSchema),
+  asyncHandler(async (req, res) => {
+    const operacao = operacaoDaUrl(param(req, 'operacao'));
+    if (!operacao) throw notFound('Recurso não encontrado');
+    res.json(await configurarEtapa(operacao, param(req, 'chave'), req.body as ConfigEtapaInput));
+  }),
+);
 
 // ---------------------------------------------------------------------------
 // Consultas (leitura)

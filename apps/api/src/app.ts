@@ -42,6 +42,7 @@ import { consumoIaRoutes } from './modules/ia/consumo.routes';
 import { funnelsRoutes, opportunitiesRoutes } from './modules/crm/opportunities.routes';
 import { credenciamentosRoutes } from './modules/crm/credenciamentos.routes';
 import { esteirasRoutes } from './modules/esteira/esteiras.routes';
+import { preferenciasRoutes } from './modules/esteira/preferencias.routes';
 import { cicloParceiroRoutes } from './modules/crm/cicloParceiro.routes';
 import { produtosInstaladosRoutes } from './modules/crm/produtos-instalados.routes';
 import { atividadesRoutes, fichaRoutes } from './modules/crm/ficha.routes';
@@ -158,6 +159,7 @@ export function createApp() {
   app.use('/api/oportunidades', opportunitiesRoutes);
   app.use('/api/credenciamentos', credenciamentosRoutes);
   app.use('/api/esteiras', esteirasRoutes);
+  app.use('/api/preferencias', preferenciasRoutes);
   // Ciclo de vida do parceiro apos o credenciamento.
   app.use('/api/ciclo-parceiro', cicloParceiroRoutes);
   app.use('/api/comercial', comercialRoutes);

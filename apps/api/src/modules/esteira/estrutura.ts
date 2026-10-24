@@ -92,3 +92,23 @@ export function ordensFinais(existentes: EtapaExistente[], catalogo: EtapaCatalo
   sobras.forEach((e, i) => ordens.set(e.id, ultima + i + 1));
   return ordens;
 }
+
+/** Corpo do PATCH de etapa já validado pelo schema (≥ 1 campo). */
+export type ConfigEtapa = { nome?: string; diasParado?: number | null };
+
+/**
+ * Regras do catálogo para configurar uma etapa: a chave tem de ser da operação
+ * (`'NAO_ENCONTRADA'`) e saída não aceita `diasParado` (mensagem). `null` = ok.
+ */
+export function validarConfigEtapa(
+  catalogo: ReadonlyArray<{ chave: string; tipo: string }>,
+  chave: string,
+  corpo: ConfigEtapa,
+): 'NAO_ENCONTRADA' | string | null {
+  const alvo = catalogo.find((e) => e.chave === chave);
+  if (!alvo) return 'NAO_ENCONTRADA';
+  if (alvo.tipo === 'SAIDA' && corpo.diasParado !== undefined) {
+    return 'Etapa de saída não tem limite de dias parado';
+  }
+  return null;
+}
