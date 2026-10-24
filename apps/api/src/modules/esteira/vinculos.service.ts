@@ -199,6 +199,7 @@ function montarBase(v: VinculoDb, agora: Date): Omit<VinculoResumo, 'destinos'> 
   const chave = chaveAtual(v);
   const estagio = (chave && estagioDaChave(v, chave)) || v.estagio;
   const diasNaEtapa = diasDesde(v.estagioDesde, agora.getTime());
+  const tipo = chave ? etapa(chave).tipo : estagio.tipoEtapa;
   return {
     id: v.id,
     operacao: v.operacao,
@@ -213,9 +214,9 @@ function montarBase(v: VinculoDb, agora: Date): Omit<VinculoResumo, 'destinos'> 
       uf: v.contato.uf ?? v.conta?.uf ?? null,
     },
     responsavel: v.responsavel,
-    etapa: { chave, nome: estagio.nome, tipo: chave ? etapa(chave).tipo : estagio.tipoEtapa, diasParado: estagio.diasParado },
+    etapa: { chave, nome: estagio.nome, tipo, diasParado: estagio.diasParado },
     diasNaEtapa,
-    parado: estaParado(diasNaEtapa, estagio.diasParado),
+    parado: estaParado(diasNaEtapa, estagio.diasParado, tipo),
     ultimaInteracaoEm: v.ultimaInteracaoEm,
     etiquetas: etiquetasDoVinculo(v.operacao, camposDoVinculo(v)),
   };

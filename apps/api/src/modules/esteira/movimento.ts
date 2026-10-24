@@ -229,9 +229,15 @@ export function mudancaDeSituacao(m: {
 /** Limite de "parado" da etapa que não define `diasParado`. */
 export const DIAS_PARADO_PADRAO = 7;
 
-/** Parado a partir do limite de dias da etapa (sem limite definido, 7 dias). */
-export function estaParado(diasNaEtapa: number, diasParado: number | null): boolean {
-  return diasNaEtapa >= (diasParado ?? DIAS_PARADO_PADRAO);
+/** Limite de "parado" em vigor: o da etapa, senão 7 dias; saída não tem limite (nulo). */
+export function diasParadoEfetivo(diasParado: number | null, tipo: TipoEtapa): number | null {
+  return tipo === 'SAIDA' ? null : (diasParado ?? DIAS_PARADO_PADRAO);
+}
+
+/** Parado a partir do limite efetivo da etapa; quem está numa saída nunca fica parado. */
+export function estaParado(diasNaEtapa: number, diasParado: number | null, tipo: TipoEtapa): boolean {
+  const limite = diasParadoEfetivo(diasParado, tipo);
+  return limite != null && diasNaEtapa >= limite;
 }
 
 const CAPTACAO: Record<NonNullable<CamposStarlink['tipoCaptacao']>, string> = {

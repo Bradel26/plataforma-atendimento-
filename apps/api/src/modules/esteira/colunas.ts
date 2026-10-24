@@ -15,7 +15,8 @@ import type { VinculoDetalhe, VinculoResumo } from './vinculos.service';
 export type ColunaEsteira = {
   chave: string;
   rotulo: string;
-  tipo: 'texto' | 'data' | 'booleano3' | 'enum' | 'numero';
+  /** `booleano`: Sim/Não (coluna não nula); `booleano3`: Sim/Não/— (nulo = não respondido). */
+  tipo: 'texto' | 'data' | 'booleano' | 'booleano3' | 'enum' | 'numero';
   opcoes?: Array<{ valor: string; rotulo: string }>;
   editavel: boolean;
   /** Onde a coluna se edita no PATCH do vínculo (`responsavelId`, `observacoes`, `campos.<campo>`). */
@@ -209,7 +210,7 @@ const tri = (chave: string, rotulo: string, extra: Partial<ColunaDeCampo> = {}):
 const especificasTim: Definicao[] = [
   ...[
     { chave: 'origem', rotulo: 'Origem', tipo: 'enum', opcoes: { MANUAL: 'Manual', PLANILHA: 'Planilha' }, editavel: false },
-    { chave: 'flagTrafegoPago', rotulo: 'Tráfego pago', tipo: 'booleano3' },
+    { chave: 'flagTrafegoPago', rotulo: 'Tráfego pago', tipo: 'booleano' },
     { chave: 'statusDescritivo', rotulo: 'Status (aceite comercial)', tipo: 'texto' },
     { chave: 'dep', rotulo: 'DEP', tipo: 'enum', opcoes: { TIM: 'TIM', PARCEIRO: 'Parceiro', BRADEL: 'Bradel' }, padrao: true },
     { chave: 'dataCredenciamento', rotulo: 'Data do credenciamento', tipo: 'data' },

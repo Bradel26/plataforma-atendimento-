@@ -5,6 +5,7 @@ import {
   destinosStarlink,
   destinosTim,
   errosDeMovimento,
+  diasParadoEfetivo,
   estaParado,
   etiquetasDoVinculo,
   mudancaDeSituacao,
@@ -299,10 +300,23 @@ describe('mudancaDeSituacao', () => {
 
 describe('estaParado', () => {
   it('parado a partir do limite da etapa; sem limite, 7 dias', () => {
-    expect(estaParado(5, 5)).toBe(true);
-    expect(estaParado(4, 5)).toBe(false);
-    expect(estaParado(7, null)).toBe(true);
-    expect(estaParado(6, null)).toBe(false);
+    expect(estaParado(5, 5, 'NORMAL')).toBe(true);
+    expect(estaParado(4, 5, 'NORMAL')).toBe(false);
+    expect(estaParado(7, null, 'DESVIO')).toBe(true);
+    expect(estaParado(6, null, 'NORMAL')).toBe(false);
+  });
+
+  it('etapa de saída nunca fica parada', () => {
+    expect(estaParado(100, null, 'SAIDA')).toBe(false);
+    expect(estaParado(100, 3, 'SAIDA')).toBe(false);
+  });
+});
+
+describe('diasParadoEfetivo', () => {
+  it('o configurado, senão 7; saída não tem limite', () => {
+    expect(diasParadoEfetivo(10, 'NORMAL')).toBe(10);
+    expect(diasParadoEfetivo(null, 'NORMAL')).toBe(7);
+    expect(diasParadoEfetivo(5, 'SAIDA')).toBeNull();
   });
 });
 

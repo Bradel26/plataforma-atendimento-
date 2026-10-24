@@ -32,9 +32,12 @@ describe('whereDosFiltros', () => {
     expect(whereDosFiltros('TIM', { busca: '   ' }, agora)).toEqual({ operacao: 'TIM', arquivadoEm: null });
   });
 
-  it('parado há mais de N dias: estagioDesde anterior a agora − N dias', () => {
+  it('parado há mais de N dias: estagioDesde anterior a agora − N dias, fora das saídas', () => {
     const w = whereDosFiltros('TIM', { paradoHaMaisDe: 5 }, agora);
-    expect(w.AND).toContainEqual({ estagioDesde: { lt: new Date(agora.getTime() - 5 * DIA) } });
+    expect(w.AND).toContainEqual({
+      estagioDesde: { lt: new Date(agora.getTime() - 5 * DIA) },
+      estagio: { tipoEtapa: { not: 'SAIDA' } },
+    });
   });
 
   it('VSM vazio é nulo (ou sem linha Starlink), nunca NÃO', () => {
@@ -77,6 +80,11 @@ describe('whereDosFiltros', () => {
 
   it('situação de outra operação não casa nada', () => {
     expect(whereDosFiltros('STARLINK', { situacoes: ['DESISTENTE'] }, agora).AND).toContainEqual({ id: { in: [] } });
+  });
+
+  it('período com fim exclusivo (dia inteiro)', () => {
+    const ate = new Date('2026-11-01T03:00:00Z');
+    expect(whereDosFiltros('TIM', { ate, ateExclusivo: true }, agora).AND).toContainEqual({ criadoEm: { lt: ate } });
   });
 
   it('período pelo campo escolhido (padrão: entrada)', () => {
@@ -129,6 +137,30 @@ describe('parseFiltros', () => {
       paradoHaMaisDe: 10,
       tim: { dep: ['TIM', 'BRADEL'], vendaLiberada: true, trafegoPago: false },
       starlink: { vsm: 'VAZIO', vivensis: ['APROVADO'] },
+    });
+  });
+
+  it('data sem hora: desde no início do dia e ate até o fim do dia (fuso -03:00)', () => {
+    const f = parseFiltros({ desde: '2026-10-01', ate: '2026-10-31' });
+    expect(f).toEqual({
+      desde: new Date('2026-10-01T03:00:00Z'),
+      ate: new Date('2026-11-01T03:00:00Z'),
+      ateExclusivo: true,
+    });
+    const w = whereDosFiltros('TIM', f, agora).AND as Array<{ criadoEm?: { gte: Date; lt: Date } }>;
+    const periodo = w.find((c) => c.criadoEm)!.criadoEm!;
+    // O próprio dia 31 (fim da tarde em Brasília) entra; 1º de novembro não.
+    const dia31 = new Date('2026-10-31T23:30:00-03:00');
+    expect(dia31 >= periodo.gte && dia31 < periodo.lt).toBe(true);
+    expect(new Date('2026-11-01T00:00:00-03:00') < periodo.lt).toBe(false);
+    // Início do dia 1º entra.
+    expect(new Date('2026-10-01T00:00:00-03:00') >= periodo.gte).toBe(true);
+  });
+
+  it('data com hora mantém o instante (fim inclusivo)', () => {
+    expect(parseFiltros({ desde: '2026-10-01T10:00:00Z', ate: '2026-10-31T12:00:00-03:00' })).toEqual({
+      desde: new Date('2026-10-01T10:00:00Z'),
+      ate: new Date('2026-10-31T15:00:00Z'),
     });
   });
 

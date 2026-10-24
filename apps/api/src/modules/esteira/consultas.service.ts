@@ -27,6 +27,7 @@ import {
   type FiltrosEsteira,
   type PosicaoNaColuna,
 } from './filtros';
+import { diasParadoEfetivo } from './movimento';
 import { funilDaOperacao, inclusao, montarLinha, montarResumo, type VinculoResumo } from './vinculos.service';
 
 type Where = Prisma.CredenciamentoWhereInput;
@@ -43,7 +44,8 @@ async function whereDaConsulta(operacao: Operacao, filtros: FiltrosEsteira, agor
 
 export type EstruturaEsteira = {
   operacao: Operacao;
-  etapas: Array<EtapaCatalogo & { id: string; nome: string; diasParado: number | null; ativa: boolean }>;
+  /** `diasParado` é o configurado; `diasParadoEfetivo`, o limite em vigor (padrão 7; saída: nulo). */
+  etapas: Array<EtapaCatalogo & { id: string; nome: string; diasParado: number | null; diasParadoEfetivo: number | null; ativa: boolean }>;
   colunas: ColunaEsteira[];
   motivosPerda: Array<{ valor: string; rotulo: string; classe: 'RECUPERAVEL' | 'DEFINITIVO' }>;
   filtrosEspecificos: FiltroEspecifico[];
@@ -58,7 +60,9 @@ export async function estruturaDaEsteira(operacao: Operacao, nivel: NivelOperaca
   const funil = await funilDaOperacao(operacao);
   const etapas = ETAPAS[operacao].flatMap((c) => {
     const e = funil.estagios.find((s) => s.chave === c.chave);
-    return e ? [{ ...c, id: e.id, nome: e.nome, diasParado: e.diasParado, ativa: e.ativa }] : [];
+    return e
+      ? [{ ...c, id: e.id, nome: e.nome, diasParado: e.diasParado, diasParadoEfetivo: diasParadoEfetivo(e.diasParado, c.tipo), ativa: e.ativa }]
+      : [];
   });
   return {
     operacao,

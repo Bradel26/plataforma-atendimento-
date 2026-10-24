@@ -58,6 +58,8 @@ describe('COLUNAS', () => {
     expect(tim.dep).toMatchObject({ editavel: true, campo: 'campos.dep' });
     const sl = Object.fromEntries(COLUNAS.STARLINK.map((c) => [c.chave, c]));
     expect(sl.vsm).toMatchObject({ editavel: true, tipo: 'booleano3', campo: 'campos.vsm' });
+    // Boolean não nulo: dois estados.
+    expect(tim.flagTrafegoPago).toMatchObject({ editavel: true, tipo: 'booleano', campo: 'campos.flagTrafegoPago' });
   });
 
   it('ordenável só onde há ordenação no banco', () => {

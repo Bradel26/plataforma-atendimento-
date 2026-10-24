@@ -19,7 +19,9 @@ export type FiltrosEsteira = {
   situacoes?: Situacao[];
   periodoCampo?: 'criadoEm' | 'estagioDesde';
   desde?: Date;
+  /** Fim do período: inclusivo, ou exclusivo com `ateExclusivo` (data sem hora → início do dia seguinte). */
   ate?: Date;
+  ateExclusivo?: boolean;
   paradoHaMaisDe?: number;
   origem?: string[];
   tim?: { dep?: DepTim[]; trafegoPago?: boolean; vendaLiberada?: boolean };
@@ -138,9 +140,16 @@ export function whereDosFiltros(operacao: Operacao, f: FiltrosEsteira, agora: Da
   }
   if (f.situacoes?.length) c.push(condicaoDeSituacao(operacao, f.situacoes));
   if (f.desde || f.ate) {
-    c.push({ [f.periodoCampo ?? 'criadoEm']: { ...(f.desde ? { gte: f.desde } : {}), ...(f.ate ? { lte: f.ate } : {}) } });
+    const fim = f.ate ? (f.ateExclusivo ? { lt: f.ate } : { lte: f.ate }) : {};
+    c.push({ [f.periodoCampo ?? 'criadoEm']: { ...(f.desde ? { gte: f.desde } : {}), ...fim } });
   }
-  if (f.paradoHaMaisDe != null) c.push({ estagioDesde: { lt: new Date(agora.getTime() - f.paradoHaMaisDe * DIA_MS) } });
+  if (f.paradoHaMaisDe != null) {
+    // Saída nunca está "parada" (mesma regra do selo do card).
+    c.push({
+      estagioDesde: { lt: new Date(agora.getTime() - f.paradoHaMaisDe * DIA_MS) },
+      estagio: { tipoEtapa: { not: 'SAIDA' } },
+    });
+  }
   if (f.origem?.length) c.push(condicaoDeOrigem(operacao, f.origem));
   if (operacao === 'TIM' && f.tim) c.push(...condicoesTim(f.tim));
   if (operacao === 'STARLINK' && f.starlink) c.push(...condicoesStarlink(f.starlink));
@@ -153,6 +162,17 @@ export function whereDosFiltros(operacao: Operacao, f: FiltrosEsteira, agora: Da
 
 const CHAVES = [...ETAPAS.TIM, ...ETAPAS.STARLINK].map((e) => e.chave) as [ChaveEtapa, ...ChaveEtapa[]];
 const SITUACOES = ['EM_ANDAMENTO', 'DESISTENTE', 'DESCREDENCIADO', 'NURTURE', 'DESCARTADO'] as const satisfies readonly Situacao[];
+
+/** Datas sem hora são dias de Brasília (sem horário de verão desde 2019: fuso fixo). */
+const FUSO = '-03:00';
+const SO_DATA = /^\d{4}-\d{2}-\d{2}$/;
+const inicioDoDia = (dia: string) => new Date(`${dia}T00:00:00${FUSO}`);
+
+/** Data da query: só data → início do dia em Brasília; com hora → o instante informado. */
+const dataDaQuery = z.preprocess(
+  (v) => (typeof v === 'string' && SO_DATA.test(v.trim()) ? inicioDoDia(v.trim()) : v),
+  z.coerce.date().optional(),
+);
 
 /** Lista na query: CSV (`?ufs=GO,TO`) ou parâmetro repetido; itens vazios somem. */
 const lista = <T extends z.ZodTypeAny>(item: T) =>
@@ -182,8 +202,8 @@ const filtrosSchema = z.object({
   etapas: lista(z.enum(CHAVES)),
   situacoes: lista(z.enum(SITUACOES)),
   periodoCampo: z.enum(['criadoEm', 'estagioDesde']).optional(),
-  desde: z.coerce.date().optional(),
-  ate: z.coerce.date().optional(),
+  desde: dataDaQuery,
+  ate: dataDaQuery,
   paradoHaMaisDe: z.coerce.number().int().min(0).max(3650).optional(),
   origem: lista(z.string().max(40)),
   // TIM
@@ -207,12 +227,15 @@ const definidos = <T extends object>(o: T): T =>
  */
 export function parseFiltros(query: Record<string, unknown>): FiltrosEsteira {
   const preenchidos = Object.fromEntries(Object.entries(query).filter(([, v]) => v !== '' && v != null));
-  const { dep, trafegoPago, vendaLiberada, tipoCaptacao, vivensis, vsm, busca, ...comuns } = filtrosSchema.parse(preenchidos);
+  const { dep, trafegoPago, vendaLiberada, tipoCaptacao, vivensis, vsm, busca, ate, ...comuns } = filtrosSchema.parse(preenchidos);
+  // `ate` só com data inclui o dia inteiro: vai até o início do dia seguinte, exclusivo.
+  const ateSoData = typeof preenchidos.ate === 'string' && SO_DATA.test(preenchidos.ate.trim());
   const tim = definidos({ dep, trafegoPago, vendaLiberada });
   const starlink = definidos({ tipoCaptacao, vivensis, vsm });
   return definidos({
     ...comuns,
     busca: busca || undefined,
+    ...(ate ? (ateSoData ? { ate: new Date(ate.getTime() + DIA_MS), ateExclusivo: true } : { ate }) : {}),
     ...(Object.keys(tim).length ? { tim } : {}),
     ...(Object.keys(starlink).length ? { starlink } : {}),
   });
