@@ -2,6 +2,7 @@
  * Preferências do usuário (chave/valor): regras puras de validação.
  * A preferência é do usuário — não exige acesso à operação citada na chave.
  */
+import { Prisma } from '@prisma/client';
 import { operacaoDaUrl } from './catalogo';
 
 export const PADRAO_CHAVE = /^[a-z0-9:_-]{1,80}$/i;
@@ -33,4 +34,14 @@ export function validarPreferencia(chave: string, valor: unknown): ResultadoPref
     return { status: 413, mensagem: 'Valor grande demais (máximo 32 KB)' };
   }
   return null;
+}
+
+/** Coluna Json obrigatória: `null` do cliente grava-se como `Prisma.JsonNull`. */
+export function valorParaGravar(valor: unknown): Prisma.InputJsonValue | typeof Prisma.JsonNull {
+  return valor === null ? Prisma.JsonNull : (valor as Prisma.InputJsonValue);
+}
+
+/** Valor devolvido ao cliente: o sentinela (ou `null` do banco) volta como `null`. */
+export function valorLido(valor: unknown): unknown {
+  return valor === Prisma.JsonNull || valor === Prisma.DbNull ? null : valor;
 }

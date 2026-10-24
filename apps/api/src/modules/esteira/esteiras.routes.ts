@@ -82,10 +82,10 @@ const filtrosDa = (req: Request) => parseFiltros(req.query as Record<string, unk
 esteirasRoutes.patch(
   '/:operacao/etapas/:chave',
   requireRole('ADMIN'),
+  (req, _res, next) => next(operacaoDaUrl(param(req, 'operacao')) ? undefined : notFound('Recurso não encontrado')),
   validateBody(configEtapaSchema),
   asyncHandler(async (req, res) => {
-    const operacao = operacaoDaUrl(param(req, 'operacao'));
-    if (!operacao) throw notFound('Recurso não encontrado');
+    const operacao = operacaoDaUrl(param(req, 'operacao'))!;
     res.json(await configurarEtapa(operacao, param(req, 'chave'), req.body as ConfigEtapaInput));
   }),
 );

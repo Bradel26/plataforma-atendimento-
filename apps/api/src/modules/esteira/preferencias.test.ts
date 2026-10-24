@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { validarPreferencia } from './preferencias';
+import { Prisma } from '@prisma/client';
+import { validarPreferencia, valorLido, valorParaGravar } from './preferencias';
 
 describe('validarPreferencia', () => {
   it('aceita chave de esteira com operação válida', () => {
@@ -30,5 +31,19 @@ describe('validarPreferencia', () => {
   it('limita o valor serializado a 32 KB (413)', () => {
     expect(validarPreferencia('x', 'a'.repeat(32 * 1024 - 2))).toBeNull();
     expect(validarPreferencia('x', 'a'.repeat(32 * 1024))?.status).toBe(413);
+  });
+});
+
+describe('valorParaGravar / valorLido', () => {
+  it('null vira Prisma.JsonNull e volta como null', () => {
+    expect(valorParaGravar(null)).toBe(Prisma.JsonNull);
+    expect(valorLido(valorParaGravar(null))).toBeNull();
+    expect(valorLido(null)).toBeNull();
+  });
+  it('objeto, array, número, string e booleano passam intactos', () => {
+    for (const v of [{ a: 1 }, [1, 'b'], 0, 42, '', 'txt', false]) {
+      expect(valorParaGravar(v)).toBe(v);
+      expect(valorLido(valorParaGravar(v))).toBe(v);
+    }
   });
 });

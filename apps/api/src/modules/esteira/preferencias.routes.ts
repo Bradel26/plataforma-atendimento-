@@ -7,7 +7,7 @@ import { param } from '../../http/params';
 import { AppError, badRequest } from '../../lib/errors';
 import { prisma } from '../../lib/prisma';
 import { usuarioAtual } from '../../lib/tenant';
-import { LIMITE_CHAVES_POR_USUARIO, validarPreferencia } from './preferencias';
+import { LIMITE_CHAVES_POR_USUARIO, validarPreferencia, valorLido, valorParaGravar } from './preferencias';
 
 /**
  * Preferências do usuário autenticado: `/api/preferencias`. Qualquer usuário
@@ -29,7 +29,7 @@ preferenciasRoutes.get(
       orderBy: { chave: 'asc' },
       take: LIMITE_CHAVES_POR_USUARIO,
     });
-    res.json({ preferencias: Object.fromEntries(linhas.map((l) => [l.chave, l.valor])) });
+    res.json({ preferencias: Object.fromEntries(linhas.map((l) => [l.chave, valorLido(l.valor)])) });
   }),
 );
 
@@ -54,8 +54,8 @@ preferenciasRoutes.put(
     }
     await prisma.preferenciaUsuario.upsert({
       where: { usuarioId_chave: { usuarioId, chave } },
-      create: { usuarioId, chave, valor: valor as never },
-      update: { valor: valor as never },
+      create: { usuarioId, chave, valor: valorParaGravar(valor) },
+      update: { valor: valorParaGravar(valor) },
     });
     res.status(204).end();
   }),
