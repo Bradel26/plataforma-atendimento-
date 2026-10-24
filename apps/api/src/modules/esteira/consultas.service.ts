@@ -33,7 +33,7 @@ import { funilDaOperacao, inclusao, montarLinha, montarResumo, type VinculoResum
 type Where = Prisma.CredenciamentoWhereInput;
 
 /** Filtros da tela + carteira + operações permitidas, sempre com AND. */
-async function whereDaConsulta(operacao: Operacao, filtros: FiltrosEsteira, agora: Date): Promise<Where> {
+export async function whereDaConsulta(operacao: Operacao, filtros: FiltrosEsteira, agora: Date): Promise<Where> {
   const [carteira, permitidas] = await Promise.all([filtroDe(politicaCredenciamentos), filtroOperacoesPermitidas()]);
   return { AND: [carteira, permitidas, whereDosFiltros(operacao, filtros, agora)] };
 }

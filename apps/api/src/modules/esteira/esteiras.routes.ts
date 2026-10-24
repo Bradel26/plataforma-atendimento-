@@ -4,7 +4,7 @@ import { asyncHandler } from '../../http/async-handler';
 import { requireAuth } from '../../http/middleware/auth';
 import { validateBody, validateQuery } from '../../http/middleware/validate';
 import { param } from '../../http/params';
-import { notFound } from '../../lib/errors';
+import { badRequest, notFound } from '../../lib/errors';
 import { requireModulo } from '../../lib/modulos';
 import { exigirOperacao } from './acesso';
 import { operacaoDaUrl, type ChaveEtapa } from './catalogo';
@@ -26,6 +26,7 @@ import {
   type VendedorInput,
 } from './esteiras.schemas';
 import { parseFiltros } from './filtros';
+import { funilDaOperacao, periodoDosFiltros } from './funil';
 import {
   adicionarNota,
   criarVinculo,
@@ -101,6 +102,25 @@ esteirasRoutes.get(
   asyncHandler(async (req, res) => {
     const { pagina, tamanho, ordenarPor, direcao } = res.locals.query as ListaQuery;
     res.json(await lista(res.locals.operacao, filtrosDa(req), { pagina, tamanho, ordenarPor: ordenarPor || undefined, direcao }));
+  }),
+);
+
+/** Funil do período (padrão: últimos 90 dias); `compararDesde`/`compararAte` (ambos) trazem o período de comparação. */
+esteirasRoutes.get(
+  '/:operacao/funil',
+  exigirOperacao('LEITURA'),
+  asyncHandler(async (req, res) => {
+    const operacao = res.locals.operacao as Operacao;
+    const filtros = filtrosDa(req);
+    const { compararDesde, compararAte } = req.query as Record<string, unknown>;
+    const temDesde = typeof compararDesde === 'string' && compararDesde !== '';
+    const temAte = typeof compararAte === 'string' && compararAte !== '';
+    if (temDesde !== temAte) throw badRequest('Informe compararDesde e compararAte juntos');
+    const agora = new Date();
+    const atual = await funilDaOperacao(operacao, filtros, periodoDosFiltros(filtros, agora));
+    if (!temDesde) return void res.json({ atual });
+    const outro = parseFiltros({ desde: compararDesde, ate: compararAte });
+    res.json({ atual, comparado: await funilDaOperacao(operacao, filtros, periodoDosFiltros(outro, agora)) });
   }),
 );
 
