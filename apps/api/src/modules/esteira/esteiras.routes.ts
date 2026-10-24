@@ -1,7 +1,8 @@
 import type { Operacao } from '@prisma/client';
 import { Router, type Request, type RequestHandler } from 'express';
+import multer, { MulterError } from 'multer';
 import { asyncHandler } from '../../http/async-handler';
-import { requireAuth } from '../../http/middleware/auth';
+import { requireAuth, requireRole } from '../../http/middleware/auth';
 import { validateBody, validateQuery } from '../../http/middleware/validate';
 import { param } from '../../http/params';
 import { badRequest, notFound } from '../../lib/errors';
@@ -12,12 +13,15 @@ import { estruturaDaEsteira, kanban, kanbanColuna, lista } from './consultas.ser
 import {
   criarVinculoSchema,
   editarVinculoSchemas,
+  exportarQuerySchema,
+  importarCorpoSchema,
   kanbanColunaQuerySchema,
   kanbanQuerySchema,
   listaQuerySchema,
   moverVinculoSchema,
   notaSchema,
   vendedorSchema,
+  type ExportarQuery,
   type KanbanColunaQuery,
   type KanbanQuery,
   type ListaQuery,
@@ -27,6 +31,7 @@ import {
 } from './esteiras.schemas';
 import { parseFiltros } from './filtros';
 import { funilDaOperacao, periodoDosFiltros } from './funil';
+import { LIMITE_IMPORTACAO_BYTES, exportar, importar } from './planilhas.service';
 import {
   adicionarNota,
   criarVinculo,
@@ -121,6 +126,80 @@ esteirasRoutes.get(
     if (!temDesde) return void res.json({ atual });
     const outro = parseFiltros({ desde: compararDesde, ate: compararAte });
     res.json({ atual, comparado: await funilDaOperacao(operacao, filtros, periodoDosFiltros(outro, agora)) });
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// Planilhas (exportação e importação)
+// ---------------------------------------------------------------------------
+
+/**
+ * Exportação: só os perfis que já exportam em `modules/dados` (ADMIN e
+ * SUPERVISOR — nunca SUPORTE nem AGENTE), com LEITURA na operação. Mesma
+ * consulta da Lista (filtros na query string), sem paginação.
+ */
+esteirasRoutes.get(
+  '/:operacao/exportar',
+  requireRole('ADMIN', 'SUPERVISOR'),
+  exigirOperacao('LEITURA'),
+  validateQuery(exportarQuerySchema),
+  asyncHandler(async (req, res) => {
+    const { formato, colunas, ordenarPor, direcao } = res.locals.query as ExportarQuery;
+    const chaves = (colunas ?? '')
+      .split(',')
+      .map((c) => c.trim())
+      .filter(Boolean);
+    const { arquivo, nome, tipo } = await exportar(res.locals.operacao, filtrosDa(req), chaves, formato, {
+      ordenarPor: ordenarPor || undefined,
+      direcao,
+    });
+    res.setHeader('Content-Type', tipo);
+    res.setHeader('Content-Disposition', `attachment; filename="${nome}"`);
+    res.send(arquivo);
+  }),
+);
+
+const EXTENSOES_PLANILHA = /\.(csv|xlsx)$/i;
+/** Tipos com que navegadores e sistemas enviam CSV/XLSX (o Windows manda CSV como `vnd.ms-excel`). */
+const TIPOS_PLANILHA = new Set([
+  'text/csv',
+  'text/plain',
+  'application/csv',
+  'application/vnd.ms-excel',
+  'application/octet-stream',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+]);
+
+const uploadPlanilha = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: LIMITE_IMPORTACAO_BYTES, files: 1 },
+  fileFilter: (_req, arquivo, aceitar) => {
+    if (EXTENSOES_PLANILHA.test(arquivo.originalname) && TIPOS_PLANILHA.has(arquivo.mimetype)) return aceitar(null, true);
+    aceitar(badRequest('Envie um arquivo .csv ou .xlsx'));
+  },
+});
+
+/** Recebe o campo `arquivo`; o limite de tamanho vira 400 com o limite desta rota (não o dos anexos). */
+const receberPlanilha: RequestHandler = (req, res, next) =>
+  uploadPlanilha.single('arquivo')(req, res, (erro: unknown) => {
+    if (erro instanceof MulterError && erro.code === 'LIMIT_FILE_SIZE') {
+      return next(badRequest(`Arquivo acima do limite de ${LIMITE_IMPORTACAO_BYTES / 1024 / 1024} MB`));
+    }
+    next(erro);
+  });
+
+/** Importação (multipart: `arquivo`, `mapa` JSON opcional, `previa`): EDICAO na operação e ADMIN/SUPERVISOR. */
+esteirasRoutes.post(
+  '/:operacao/importar',
+  requireRole('ADMIN', 'SUPERVISOR'),
+  exigirOperacao('EDICAO'),
+  receberPlanilha,
+  asyncHandler(async (req, res) => {
+    if (!req.file) throw badRequest('Envie a planilha no campo "arquivo"');
+    const { mapa, previa } = importarCorpoSchema.parse(req.body ?? {});
+    res.json(
+      await importar(res.locals.operacao, { buffer: req.file.buffer, nome: req.file.originalname }, mapa ?? null, previa),
+    );
   }),
 );
 

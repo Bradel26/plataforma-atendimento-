@@ -180,7 +180,7 @@ export async function kanbanColuna(
 export type OpcoesDaLista = { pagina: number; tamanho: number; ordenarPor?: string; direcao: 'asc' | 'desc' };
 
 /** Sem ordenação escolhida: interação mais recente primeiro. */
-const ORDEM_PADRAO = [{ ultimaInteracaoEm: 'desc' }, { id: 'desc' }] satisfies Prisma.CredenciamentoOrderByWithRelationInput[];
+export const ORDEM_PADRAO = [{ ultimaInteracaoEm: 'desc' }, { id: 'desc' }] satisfies Prisma.CredenciamentoOrderByWithRelationInput[];
 
 /** Lista paginada por offset, ordenável pelas colunas `ordenavel` da operação. */
 export async function lista(

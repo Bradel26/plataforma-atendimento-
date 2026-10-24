@@ -454,16 +454,20 @@ async function planejarParceiro(input: CriarVinculoInput): Promise<PlanoParceiro
   };
 }
 
-export async function criarVinculo(operacao: Operacao, input: CriarVinculoInput): Promise<VinculoDetalhe> {
-  await exigirUsuarioDaOrganizacao(input.responsavelId);
-  const funil = await funilDaOperacao(operacao);
+type FunilDaOperacao = Awaited<ReturnType<typeof funilDaOperacao>>;
+
+/** Etapa inicial da operação no funil da organização. */
+function etapaInicial(operacao: Operacao, funil: FunilDaOperacao) {
   const primeira = funil.estagios.find((e) => e.chave === ETAPAS[operacao][0]!.chave);
   if (!primeira) throw badRequest('A esteira não tem a etapa inicial configurada');
+  return primeira;
+}
 
-  const plano = await planejarParceiro(input);
-
-  // Um vínculo não arquivado por parceiro por operação (critério dos índices
-  // parciais), conferido ANTES de criar conta ou contato.
+/**
+ * Um vínculo não arquivado por parceiro por operação (critério dos índices
+ * parciais), conferido ANTES de criar conta ou contato.
+ */
+async function conferirSemVinculo(operacao: Operacao, plano: PlanoParceiro) {
   const conferir = vinculoAntesDeCriar(operacao, {
     contaId: plano.contaId,
     contaNova: plano.novaConta != null,
@@ -473,11 +477,34 @@ export async function criarVinculo(operacao: Operacao, input: CriarVinculoInput)
     const aberto = await prisma.credenciamento.findFirst({ where: whereDoVinculo(conferir), select: { id: true } });
     if (aberto) throw conflict(JA_NA_ESTEIRA);
   }
+}
 
+/** Como o vínculo nasce: manual (Novo parceiro) ou pela importação da planilha. */
+type OpcoesDeCriacao = { tipoHistorico: TipoHistoricoEsteira; origemTim: 'MANUAL' | 'PLANILHA' };
+
+export async function criarVinculo(operacao: Operacao, input: CriarVinculoInput): Promise<VinculoDetalhe> {
+  await exigirUsuarioDaOrganizacao(input.responsavelId);
+  const funil = await funilDaOperacao(operacao);
+  const primeira = etapaInicial(operacao, funil);
+  const plano = await planejarParceiro(input);
+  await conferirSemVinculo(operacao, plano);
+  const id = await criarComPlano(operacao, funil.id, primeira.id, plano, input, { tipoHistorico: 'MOVIMENTO', origemTim: 'MANUAL' });
+  return montarDetalhe(await recarregar(id));
+}
+
+/** Cria conta/contato que faltam e o vínculo na etapa inicial, numa transação. Devolve o id. */
+async function criarComPlano(
+  operacao: Operacao,
+  funilId: string,
+  primeiraId: string,
+  plano: PlanoParceiro,
+  input: CriarVinculoInput,
+  opcoes: OpcoesDeCriacao,
+): Promise<string> {
   const agora = new Date();
   // A consulta acima não fecha a corrida; o índice fecha, e a colisão vira a mesma resposta.
   // Conta e contato novos nascem na mesma transação do vínculo: nada fica órfão.
-  const id = await prisma
+  return prisma
     .$transaction(async (tx) => {
       const contaId = plano.novaConta
         ? (await tx.account.create({ data: plano.novaConta, select: { id: true } })).id
@@ -489,18 +516,18 @@ export async function criarVinculo(operacao: Operacao, input: CriarVinculoInput)
         data: {
           contatoId: contato.id,
           contaId,
-          funilId: funil.id,
-          estagioId: primeira.id,
+          funilId,
+          estagioId: primeiraId,
           operacao,
           responsavelId: input.responsavelId !== undefined ? input.responsavelId : contato.responsavelId,
           observacoes: input.observacoes ?? null,
           estagioDesde: agora,
           ultimaInteracaoEm: agora,
           ...(operacao === 'TIM'
-            ? { tim: { create: { origem: 'MANUAL' } } }
+            ? { tim: { create: { origem: opcoes.origemTim } } }
             : { starlink: { create: { tipoCaptacao: input.tipoCaptacao ?? null } } }),
           historico: {
-            create: { paraEstagioId: primeira.id, operacao, tipo: 'MOVIMENTO', usuarioId: usuarioAtualOuNulo()?.id ?? null },
+            create: { paraEstagioId: primeiraId, operacao, tipo: opcoes.tipoHistorico, usuarioId: usuarioAtualOuNulo()?.id ?? null },
           },
         },
         select: { id: true },
@@ -524,8 +551,6 @@ export async function criarVinculo(operacao: Operacao, input: CriarVinculoInput)
       if (colidiuNoVinculoDeCredenciamento(erro)) throw conflict(JA_NA_ESTEIRA);
       throw erro;
     });
-
-  return montarDetalhe(await recarregar(id));
 }
 
 // ---------------------------------------------------------------------------
@@ -1014,4 +1039,193 @@ export async function inativarVendedor(operacao: 'TIM', id: string, vendedorId: 
   const atual = await vendedorDoVinculo(v, vendedorId);
   await gravarVendedor(v, atual.id, dadosDoVendedor(atual), { ...dadosDoVendedor(atual), status: 'INATIVO' });
   return montarDetalhe(await recarregar(id));
+}
+
+// ---------------------------------------------------------------------------
+// Importação por planilha (spec 6.4)
+// ---------------------------------------------------------------------------
+
+/** Uma linha já validada da planilha (ver `validarLinha`), com o responsável resolvido. */
+export type EntradaDeImportacao = {
+  parceiro: { cnpj?: string; cpf?: string; telefone?: string; nome?: string; cidade?: string; uf?: string };
+  etapa?: ChaveEtapa;
+  /** Omitido: não informado (mantém o atual). */
+  responsavelId?: string;
+  observacoes?: string;
+  campos: Partial<CamposTim> | Partial<CamposStarlink>;
+};
+
+export type ResultadoDaImportacao = 'CRIADO' | 'ATUALIZADO';
+
+/** Estado do vínculo de que a importação parte (existente, ou o recém-nascido na etapa inicial). */
+type PontoDePartida = {
+  operacao: Operacao;
+  chave: ChaveEtapa | null;
+  estagioId: string;
+  estagios: EstagioDb[];
+  tim: CamposTim;
+  starlink: CamposStarlink;
+};
+
+const MOTIVO_IMPORTACAO = 'Importação por planilha';
+
+/**
+ * O que a linha grava: campos, responsável, observações e — se a etapa muda —
+ * um movimento IMPORTACAO. **Sem gates** (posicionar por importação não passa
+ * por eles, spec 6.4), mas com as mesmas regras puras: efeitos de entrada da
+ * TIM, travas e etapa derivada da Starlink. Lança o erro da linha.
+ */
+function planejarImportacao(p: PontoDePartida, entrada: EntradaDeImportacao, usuarioId: string | null, agora: Date): Gravacao {
+  const vinculo: ColunasDoVinculo = semIndefinidos({ responsavelId: entrada.responsavelId, observacoes: entrada.observacoes });
+  const movimentoPara = (para: EstagioDb, motivoSituacao: string | null, classeMotivo: ClasseMotivo | null): Movimento => ({
+    para,
+    tipo: 'IMPORTACAO',
+    motivo: MOTIVO_IMPORTACAO,
+    observacao: motivoSituacao,
+    motivoSituacao,
+    classeMotivo,
+  });
+
+  if (p.operacao === 'TIM') {
+    const patch = semIndefinidos(entrada.campos as Partial<CamposTim>);
+    if (!entrada.etapa || entrada.etapa === p.chave) return { usuarioId, movimento: null, tim: patch, vinculo };
+    const para = p.estagios.find((e) => e.chave === entrada.etapa);
+    if (!para?.ativa) throw proibido(`A etapa ${etapa(entrada.etapa).nome} não está ativa nesta esteira`);
+    return {
+      usuarioId,
+      movimento: movimentoPara(para, null, null),
+      // Efeitos calculados sobre os campos já com a planilha: o que veio nela prevalece.
+      tim: { ...patch, ...efeitosDeEntradaTim(entrada.etapa as ChaveTim, { ...p.tim, ...patch }, agora) },
+      vinculo,
+    };
+  }
+
+  // Starlink: a etapa é derivada dos campos; a coluna "Etapa" vira o patch da coluna.
+  const antes = p.starlink;
+  let depois = aplicarTravas(antes, semIndefinidos(entrada.campos as Partial<CamposStarlink>));
+  if (entrada.etapa && derivarEtapaStarlink(depois) !== entrada.etapa) {
+    const pedida = entrada.etapa as ChaveStarlink;
+    try {
+      depois = aplicarTravas(depois, patchStarlinkParaMovimento(pedida, depois, agora, depois.motivoPerda ?? undefined));
+    } catch (erro) {
+      throw proibido(erro instanceof Error ? erro.message : 'Etapa impossível com estes campos');
+    }
+    if (derivarEtapaStarlink(depois) !== pedida) throw proibido(`O parceiro não pode ir para ${etapa(pedida).nome}`);
+  }
+  if (perdaSemMotivo(depois)) throw erroHttp({ status: 400, code: 'EXIGE_MOTIVO', mensagem: 'Informe o motivo da perda' });
+  const destino = derivarEtapaStarlink(depois);
+  const para = p.estagios.find((e) => e.chave === destino);
+  if (!para) throw proibido(`A etapa ${etapa(destino).nome} não está configurada nesta esteira`);
+  const perdido = depois.perdido === true && depois.motivoPerda != null;
+  const motivoSituacao = perdido ? MOTIVOS_PERDA[depois.motivoPerda!].rotulo : null;
+  const classeMotivo = perdido ? MOTIVOS_PERDA[depois.motivoPerda!].classe : null;
+  const muda = para.id !== p.estagioId;
+  // Perdido continua na mesma coluna com outro motivo: a situação acompanha (como na edição).
+  const trocouMotivo = !muda && motivoSituacao != null && depois.motivoPerda !== antes.motivoPerda;
+  return {
+    usuarioId,
+    movimento: muda ? movimentoPara(para, motivoSituacao, classeMotivo) : null,
+    starlink: depois,
+    vinculo: trocouMotivo ? { ...vinculo, motivoSituacao, classeMotivo } : vinculo,
+  };
+}
+
+const pontoDoVinculo = (v: VinculoDb): PontoDePartida => ({
+  operacao: v.operacao,
+  chave: chaveAtual(v),
+  estagioId: v.estagioId,
+  estagios: v.funil.estagios,
+  tim: camposTim(v),
+  starlink: camposStarlink(v),
+});
+
+/**
+ * Vínculo DESTA operação do parceiro, na carteira do usuário: pelo CNPJ; sem
+ * CNPJ, pelo CPF e depois pelo telefone normalizado (spec 6.4). O vínculo da
+ * outra operação nunca é tocado.
+ */
+async function acharVinculoDoParceiro(operacao: Operacao, p: EntradaDeImportacao['parceiro']): Promise<VinculoDb | null> {
+  const carteira = await filtroDe(politicaCredenciamentos);
+  const buscar = (where: Prisma.CredenciamentoWhereInput) =>
+    prisma.credenciamento.findFirst({
+      where: { AND: [carteira, { operacao, arquivadoEm: null }, where] },
+      include: inclusao,
+      orderBy: { criadoEm: 'asc' },
+    });
+  if (p.cnpj) return buscar({ conta: { is: { cnpj: p.cnpj } } });
+  if (p.cpf) {
+    const porCpf = await buscar({ contato: { cpf: p.cpf } });
+    if (porCpf) return porCpf;
+  }
+  if (p.telefone) {
+    const normalizado = numeroNormalizado(p.telefone);
+    return buscar({ contato: normalizado ? { telefoneNormalizado: normalizado } : { telefone: p.telefone } });
+  }
+  return null;
+}
+
+/** Grava (se algo muda) e inicia o ciclo do parceiro quando a etapa nova pede. */
+async function gravarImportacao(v: VinculoDb, g: Gravacao, agora: Date) {
+  if (!g.movimento && auditoriaDaGravacao(v, g).length === 0) return;
+  await prisma.$transaction((tx) => gravar(tx, v, g, agora));
+  if (g.movimento && estagioIniciaCiclo(g.movimento.para)) await iniciarCicloSemFalhar(v.id);
+}
+
+/**
+ * Importa uma linha: cria ou atualiza o vínculo desta operação (idempotente).
+ * Com `previa`, faz as mesmas leituras e validações e não grava nada. Erro de
+ * regra (etapa impossível, CNPJ fora da carteira…) é lançado: é o erro da linha.
+ * O cadastro central de um parceiro existente não é alterado.
+ */
+export async function importarVinculo(
+  operacao: Operacao,
+  entrada: EntradaDeImportacao,
+  opcoes: { previa: boolean; funil: FunilDaOperacao },
+): Promise<ResultadoDaImportacao> {
+  const usuarioId = usuarioAtualOuNulo()?.id ?? null;
+  const agora = new Date();
+
+  const existente = await acharVinculoDoParceiro(operacao, entrada.parceiro);
+  if (existente) {
+    const gravacao = planejarImportacao(pontoDoVinculo(existente), entrada, usuarioId, agora);
+    if (!opcoes.previa) await gravarImportacao(existente, gravacao, agora);
+    return 'ATUALIZADO';
+  }
+
+  const { nome, cnpj, cpf, telefone, cidade, uf } = entrada.parceiro;
+  if (!nome) throw badRequest('Informe o nome do parceiro para cadastrá-lo');
+  const primeira = etapaInicial(operacao, opcoes.funil);
+  // Planeja sobre o vínculo como ele nasce, antes de criar: erro da linha não deixa card pela metade.
+  const inicio: PontoDePartida = {
+    operacao,
+    chave: ETAPAS[operacao][0]!.chave,
+    estagioId: primeira.id,
+    estagios: opcoes.funil.estagios,
+    tim: { ...CAMPOS_TIM_VAZIO, origem: 'PLANILHA' },
+    starlink: CAMPOS_STARLINK_VAZIO,
+  };
+  planejarImportacao(inicio, entrada, usuarioId, agora);
+
+  const input: CriarVinculoInput = {
+    nome,
+    empresa: cnpj ? nome : undefined,
+    cnpj,
+    cpf,
+    telefone,
+    cidade,
+    uf,
+    responsavelId: entrada.responsavelId,
+  };
+  const plano = await planejarParceiro(input);
+  await conferirSemVinculo(operacao, plano);
+  if (opcoes.previa) return 'CRIADO';
+
+  const id = await criarComPlano(operacao, opcoes.funil.id, primeira.id, plano, input, {
+    tipoHistorico: 'IMPORTACAO',
+    origemTim: 'PLANILHA',
+  });
+  const criado = await recarregar(id);
+  // Replaneja sobre o vínculo gravado (mesmo resultado, com os campos reais para a auditoria).
+  await gravarImportacao(criado, planejarImportacao(pontoDoVinculo(criado), entrada, usuarioId, agora), agora);
+  return 'CRIADO';
 }

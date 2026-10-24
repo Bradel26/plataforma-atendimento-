@@ -162,7 +162,37 @@ export const listaQuerySchema = z.object({
   direcao: z.enum(['asc', 'desc']).default('asc'),
 });
 
+/** Exportação: formato, colunas (chaves separadas por vírgula; vazio = as padrão) e a ordenação da Lista. */
+export const exportarQuerySchema = z.object({
+  formato: z.enum(['csv', 'xlsx']).default('csv'),
+  colunas: z.string().trim().max(2000).optional(),
+  ordenarPor: z.string().trim().max(60).optional(),
+  direcao: z.enum(['asc', 'desc']).default('asc'),
+});
+
+/** Campos de texto do multipart da importação: `mapa` (JSON cabeçalho → chave ou nulo) e `previa`. */
+export const importarCorpoSchema = z.object({
+  mapa: z
+    .string()
+    .trim()
+    .optional()
+    .transform((texto, ctx) => {
+      if (!texto) return undefined;
+      try {
+        return JSON.parse(texto) as unknown;
+      } catch {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'O mapa de colunas não é um JSON válido' });
+        return z.NEVER;
+      }
+    })
+    .pipe(z.record(z.string(), z.string().max(60).nullable()).optional()),
+  previa: z
+    .preprocess((v) => v === true || v === 'true' || v === '1', z.boolean())
+    .default(false),
+});
+
 export type CriarVinculoInput = z.infer<typeof criarVinculoSchema>;
+export type ExportarQuery = z.infer<typeof exportarQuerySchema>;
 export type MoverVinculoInput = z.infer<typeof moverVinculoSchema>;
 export type NotaInput = z.infer<typeof notaSchema>;
 export type VendedorInput = z.infer<typeof vendedorSchema>;
