@@ -7,6 +7,7 @@
  * serviço do vínculo (`importarVinculo`) — idempotente, sem gates, histórico
  * IMPORTACAO. Linha com erro não impede as demais; a prévia não grava nada.
  */
+import { Readable } from 'node:stream';
 import ExcelJS from 'exceljs';
 import type { Operacao, Prisma } from '@prisma/client';
 import { AppError, badRequest } from '../../lib/errors';
@@ -24,16 +25,18 @@ import {
   linhasDeExportacao,
   mapearCabecalhos,
   neutralizarFormula,
+  numerosDasLinhasCsv,
+  tamanhoDescompactadoDoZip,
   validarLinha,
   type LinhaImportada,
 } from './planilhas';
-import { funilDaOperacao, importarVinculo, inclusao, montarLinha, type EntradaDeImportacao } from './vinculos.service';
+import { contextoDeImportacao, importarVinculo, inclusao, montarLinha, type EntradaDeImportacao } from './vinculos.service';
 
 export * from './planilhas';
 
 /** Acima disso a exportação pede filtro (413): a consulta monta todas as linhas em memória. */
 export const LIMITE_EXPORTACAO = 50_000;
-export const LIMITE_IMPORTACAO_LINHAS = 10_000;
+export const LIMITE_IMPORTACAO_LINHAS = 2_000;
 export const LIMITE_IMPORTACAO_BYTES = 5 * 1024 * 1024;
 
 const TIPO_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -128,48 +131,89 @@ export async function exportar(
 // Importação
 // ---------------------------------------------------------------------------
 
-type Planilha = { cabecalhos: string[]; linhas: Array<Record<string, string>> };
+/** Linha de dados com o número dela na planilha (contando cabeçalho e linhas em branco puladas). */
+type LinhaBruta = { numero: number; valores: Record<string, string> };
+type Planilha = { cabecalhos: string[]; linhas: LinhaBruta[] };
+
+/** Teto do conteúdo descompactado declarado no XLSX (defesa contra "zip bomb"). */
+export const LIMITE_XLSX_DESCOMPACTADO = 50 * 1024 * 1024;
+
+const linhasDemais = () =>
+  badRequest(`A planilha passa de ${LIMITE_IMPORTACAO_LINHAS.toLocaleString('pt-BR')} linhas; divida em arquivos menores`);
 
 /** Texto do CSV: UTF-8; se não for (Excel salvando em Windows-1252), Latin-1. */
 function textoDoCsv(buffer: Buffer): string {
   const utf8 = buffer.toString('utf8');
-  return utf8.includes('�') ? buffer.toString('latin1') : utf8;
+  return utf8.includes('\uFFFD') ? buffer.toString('latin1') : utf8;
 }
 
-/** Primeira planilha do XLSX; a primeira linha é o cabeçalho. Linhas totalmente vazias são puladas. */
+function lerCsvNumerado(buffer: Buffer): Planilha {
+  const texto = textoDoCsv(buffer);
+  const { colunas, linhas } = lerCsv(texto);
+  if (linhas.length > LIMITE_IMPORTACAO_LINHAS) throw linhasDemais();
+  const numeros = numerosDasLinhasCsv(texto);
+  return { cabecalhos: colunas, linhas: linhas.map((valores, i) => ({ numero: numeros[i] ?? i + 2, valores })) };
+}
+
+/**
+ * Primeira planilha do XLSX, lida em streaming (sem materializar o arquivo
+ * todo); a primeira linha é o cabeçalho; linhas vazias são puladas. Aborta ao
+ * passar do limite de linhas. Antes de abrir, confere o tamanho descompactado.
+ */
 async function lerXlsx(buffer: Buffer): Promise<Planilha> {
-  const livro = new ExcelJS.Workbook();
-  try {
-    await livro.xlsx.load(buffer as unknown as ExcelJS.Buffer);
-  } catch {
-    throw badRequest('Não foi possível ler o arquivo XLSX');
-  }
-  const planilha = livro.worksheets[0];
-  if (!planilha) return { cabecalhos: [], linhas: [] };
+  const descompactado = tamanhoDescompactadoDoZip(buffer);
+  if (descompactado == null) throw badRequest('Não foi possível ler o arquivo XLSX');
+  if (descompactado > LIMITE_XLSX_DESCOMPACTADO) throw badRequest('Planilha grande demais; divida em arquivos menores');
 
-  const colunas: Array<{ indice: number; cabecalho: string }> = [];
-  planilha.getRow(1).eachCell({ includeEmpty: false }, (celula, indice) => {
-    const cabecalho = celulaDaPlanilha(celula.value);
-    if (cabecalho && !colunas.some((c) => c.cabecalho === cabecalho)) colunas.push({ indice, cabecalho });
+  const fluxo = Readable.from(buffer);
+  const leitor = new ExcelJS.stream.xlsx.WorkbookReader(fluxo, {
+    worksheets: 'emit',
+    sharedStrings: 'cache',
+    styles: 'cache', // datas dependem do formato da célula
+    hyperlinks: 'ignore',
   });
-
-  const linhas: Array<Record<string, string>> = [];
-  for (let n = 2; n <= planilha.rowCount; n += 1) {
-    const row = planilha.getRow(n);
-    const linha = Object.fromEntries(colunas.map((c) => [c.cabecalho, celulaDaPlanilha(row.getCell(c.indice).value)]));
-    if (Object.values(linha).some((v) => v !== '')) linhas.push(linha);
-    if (linhas.length > LIMITE_IMPORTACAO_LINHAS) break;
+  // exceljs 4.4: se a planilha vem no ZIP antes de `xl/workbook.xml` (é o que o próprio
+  // exceljs escreve), a leitura usa `model.sheets` e `properties.model` ainda indefinidos e
+  // quebra. Valores vazios evitam isso: a planilha sai sem nome (aqui só importa a primeira)
+  // e as datas no sistema 1900 (o de 1904, de Excel antigo de Mac, só é respeitado quando o
+  // workbook.xml vem antes — quando vem, ele sobrescreve estes valores).
+  const leitorInterno = leitor as unknown as { model?: { sheets?: unknown[] }; properties?: { model?: unknown } };
+  leitorInterno.model ??= { sheets: [] };
+  leitorInterno.properties ??= {};
+  const colunas: Array<{ indice: number; cabecalho: string }> = [];
+  const linhas: LinhaBruta[] = [];
+  try {
+    for await (const planilha of leitor) {
+      let cabecalhoLido = false;
+      for await (const row of planilha) {
+        if (!cabecalhoLido) {
+          cabecalhoLido = true;
+          row.eachCell({ includeEmpty: false }, (celula, indice) => {
+            const cabecalho = celulaDaPlanilha(celula.value);
+            if (cabecalho && !colunas.some((c) => c.cabecalho === cabecalho)) colunas.push({ indice, cabecalho });
+          });
+          continue;
+        }
+        const valores = Object.fromEntries(colunas.map((c) => [c.cabecalho, celulaDaPlanilha(row.getCell(c.indice).value)]));
+        if (!Object.values(valores).some((v) => v !== '')) continue;
+        linhas.push({ numero: row.number, valores });
+        if (linhas.length > LIMITE_IMPORTACAO_LINHAS) throw linhasDemais();
+      }
+      break; // só a primeira planilha
+    }
+  } catch (erro) {
+    if (erro instanceof AppError) throw erro;
+    throw badRequest('Não foi possível ler o arquivo XLSX');
+  } finally {
+    fluxo.destroy();
   }
   return { cabecalhos: colunas.map((c) => c.cabecalho), linhas };
 }
 
-async function lerArquivo(arquivo: { buffer: Buffer; nome: string }): Promise<Planilha> {
+export async function lerArquivo(arquivo: { buffer: Buffer; nome: string }): Promise<Planilha> {
   const extensao = arquivo.nome.toLowerCase().split('.').pop();
   if (extensao === 'xlsx') return lerXlsx(arquivo.buffer);
-  if (extensao === 'csv') {
-    const { colunas, linhas } = lerCsv(textoDoCsv(arquivo.buffer));
-    return { cabecalhos: colunas, linhas };
-  }
+  if (extensao === 'csv') return lerCsvNumerado(arquivo.buffer);
   throw badRequest('Envie um arquivo .csv ou .xlsx');
 }
 
@@ -235,22 +279,21 @@ export async function importar(
 ): Promise<ResultadoImportacao> {
   const { cabecalhos, linhas } = await lerArquivo(arquivo);
   if (cabecalhos.length === 0) throw badRequest('A planilha está vazia ou sem cabeçalho');
-  if (linhas.length > LIMITE_IMPORTACAO_LINHAS) {
-    throw badRequest(`A planilha passa de ${LIMITE_IMPORTACAO_LINHAS.toLocaleString('pt-BR')} linhas; divida em arquivos menores`);
-  }
 
   if (mapaInformado) conferirMapa(mapaInformado);
   const automatico = mapearCabecalhos(cabecalhos, COLUNAS[operacao]);
   // Só cabeçalhos que existem no arquivo; o que o mapa informado não cita fica com o automático.
   const mapa = Object.fromEntries(
-    cabecalhos.map((h) => [h, mapaInformado && h in mapaInformado ? (mapaInformado[h] ?? null) : automatico[h]!]),
+    cabecalhos.map((h) => [h, mapaInformado && Object.hasOwn(mapaInformado, h) ? (mapaInformado[h] ?? null) : automatico[h]!]),
   ) as Record<string, string | null>;
 
-  const funil = await funilDaOperacao(operacao);
+  // Funil, carteira e usuário: uma vez por lote, não por linha.
+  const ctx = await contextoDeImportacao(operacao, previa);
   const etapasPorNome = Object.fromEntries(
-    funil.estagios.filter((e) => chaveConhecida(e.chave)).map((e) => [e.nome, e.chave as ChaveEtapa]),
+    ctx.funil.estagios.filter((e) => chaveConhecida(e.chave)).map((e) => [e.nome, e.chave as ChaveEtapa]),
   );
-  const validadas = linhas.map((bruta, i) => validarLinha(operacao, bruta, mapa, { etapasPorNome, linha: i + 2 }));
+  const validadas = linhas.map((l) => validarLinha(operacao, l.valores, mapa, { etapasPorNome, linha: l.numero }));
+  // Consulta sob o contexto de tenant da requisição: só usuários desta organização.
   const usuarios = await usuariosCitados(validadas);
 
   const resultado: ResultadoImportacao = { cabecalhos, mapa, total: linhas.length, validas: 0, criadas: 0, atualizadas: 0, erros: [], avisos: [] };
@@ -271,7 +314,7 @@ export async function importar(
         observacoes: l.observacoes,
         campos: l.campos,
       };
-      let feito = await importarVinculo(operacao, entrada, { previa, funil });
+      let feito = await importarVinculo(ctx, entrada);
       if (previa) {
         const chave = identidade(l.parceiro);
         if (feito === 'CRIADO' && criadasNaPrevia.has(chave)) feito = 'ATUALIZADO';

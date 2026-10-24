@@ -245,7 +245,7 @@ export function validarLinha(
   for (const [cabecalho, bruto] of Object.entries(bruta)) {
     const texto = desneutralizar(String(bruto ?? '').trim());
     if (!texto) continue;
-    const chave = cabecalho in mapa ? mapa[cabecalho] : null;
+    const chave = Object.hasOwn(mapa, cabecalho) ? mapa[cabecalho] : null;
     const coluna = chave ? minhas.find((c) => c.chave === chave) : undefined;
 
     if (!coluna) {
@@ -320,8 +320,50 @@ export function validarLinha(
 }
 
 // ---------------------------------------------------------------------------
-// Leitura de XLSX
+// Leitura de CSV e XLSX
 // ---------------------------------------------------------------------------
+
+/**
+ * Número na planilha de cada linha de dados que `lerCsv` devolve, na mesma
+ * ordem: `lerCsv` pula linhas em branco, e o erro tem de apontar a linha real.
+ */
+export function numerosDasLinhasCsv(texto: string): number[] {
+  const fisicas = texto.replace(/^﻿/, '').replace(/\r\n/g, '\n').split('\n');
+  const numeros = fisicas.flatMap((l, i) => (l.trim().length > 0 ? [i + 1] : []));
+  return numeros.slice(1); // a primeira não vazia é o cabeçalho
+}
+
+/**
+ * Soma dos tamanhos descompactados declarados no diretório central do ZIP (o
+ * XLSX é um ZIP). Nulo se o arquivo não é um ZIP legível ou usa ZIP64 (tamanhos
+ * acima de 4 GB): quem chama recusa. Defesa contra "zip bomb" antes de abrir.
+ */
+export function tamanhoDescompactadoDoZip(zip: Buffer): number | null {
+  const FIM_DO_DIRETORIO = 0x06054b50;
+  const ENTRADA_DO_DIRETORIO = 0x02014b50;
+  // O registro final tem 22 bytes mais um comentário de até 65535.
+  const inicioDaBusca = Math.max(0, zip.length - 22 - 0xffff);
+  let fim = -1;
+  for (let i = zip.length - 22; i >= inicioDaBusca; i -= 1) {
+    if (zip.readUInt32LE(i) === FIM_DO_DIRETORIO) {
+      fim = i;
+      break;
+    }
+  }
+  if (fim < 0) return null;
+  const entradas = zip.readUInt16LE(fim + 10);
+  let posicao = zip.readUInt32LE(fim + 16);
+  if (entradas === 0xffff || posicao === 0xffffffff) return null;
+  let total = 0;
+  for (let n = 0; n < entradas; n += 1) {
+    if (posicao + 46 > zip.length || zip.readUInt32LE(posicao) !== ENTRADA_DO_DIRETORIO) return null;
+    const tamanho = zip.readUInt32LE(posicao + 24);
+    if (tamanho === 0xffffffff) return null;
+    total += tamanho;
+    posicao += 46 + zip.readUInt16LE(posicao + 28) + zip.readUInt16LE(posicao + 30) + zip.readUInt16LE(posicao + 32);
+  }
+  return total;
+}
 
 /** Valor de uma célula do exceljs como texto (datas do Excel já vêm em UTC "de parede"). */
 export function celulaDaPlanilha(valor: unknown): string {

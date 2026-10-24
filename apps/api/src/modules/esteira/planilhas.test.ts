@@ -6,6 +6,8 @@ import {
   linhasDeExportacao,
   mapearCabecalhos,
   neutralizarFormula,
+  numerosDasLinhasCsv,
+  tamanhoDescompactadoDoZip,
   validarLinha,
 } from './planilhas';
 
@@ -191,5 +193,50 @@ describe('celulaDaPlanilha', () => {
     expect(celulaDaPlanilha({ richText: [{ text: 'Lo' }, { text: 'ja' }] })).toBe('Loja');
     expect(celulaDaPlanilha({ formula: 'A1', result: 'ok' })).toBe('ok');
     expect(celulaDaPlanilha({ text: 'site', hyperlink: 'http://x' })).toBe('site');
+  });
+});
+
+describe('numerosDasLinhasCsv', () => {
+  it('número real de cada linha de dados, contando linhas em branco puladas', () => {
+    expect(numerosDasLinhasCsv('\uFEFFNome;CNPJ\r\n\r\nA;1\r\n  \r\nB;2\r\n')).toEqual([3, 5]);
+    expect(numerosDasLinhasCsv('\n\nNome\nA\nB')).toEqual([4, 5]);
+    expect(numerosDasLinhasCsv('')).toEqual([]);
+  });
+});
+
+/** ZIP mínimo: só o diretório central (o que a checagem lê) com os tamanhos declarados. */
+function zipDeclarando(tamanhos: number[], comentario = ''): Buffer {
+  const entradas = tamanhos.map((tamanho, i) => {
+    const nome = Buffer.from(`arquivo${i}.xml`);
+    const e = Buffer.alloc(46);
+    e.writeUInt32LE(0x02014b50, 0);
+    e.writeUInt32LE(tamanho, 24);
+    e.writeUInt16LE(nome.length, 28);
+    return Buffer.concat([e, nome]);
+  });
+  const diretorio = Buffer.concat(entradas);
+  const fim = Buffer.alloc(22);
+  fim.writeUInt32LE(0x06054b50, 0);
+  fim.writeUInt16LE(tamanhos.length, 8);
+  fim.writeUInt16LE(tamanhos.length, 10);
+  fim.writeUInt32LE(diretorio.length, 12);
+  fim.writeUInt32LE(0, 16);
+  fim.writeUInt16LE(Buffer.byteLength(comentario), 20);
+  return Buffer.concat([diretorio, fim, Buffer.from(comentario)]);
+}
+
+describe('tamanhoDescompactadoDoZip', () => {
+  it('soma os tamanhos declarados no diretório central (com comentário no fim)', () => {
+    expect(tamanhoDescompactadoDoZip(zipDeclarando([1000, 2500]))).toBe(3500);
+    expect(tamanhoDescompactadoDoZip(zipDeclarando([10, 20], 'comentário do zip'))).toBe(30);
+    expect(tamanhoDescompactadoDoZip(zipDeclarando([4_000_000_000, 1]))).toBe(4_000_000_001);
+  });
+  it('nulo para o que não é ZIP legível ou é ZIP64', () => {
+    expect(tamanhoDescompactadoDoZip(Buffer.from('isto não é um zip, nem de longe'))).toBeNull();
+    expect(tamanhoDescompactadoDoZip(Buffer.alloc(0))).toBeNull();
+    expect(tamanhoDescompactadoDoZip(zipDeclarando([0xffffffff]))).toBeNull();
+    const truncado = zipDeclarando([5, 5]);
+    truncado.writeUInt16LE(3, truncado.length - 22 + 10); // diz 3 entradas, tem 2
+    expect(tamanhoDescompactadoDoZip(truncado)).toBeNull();
   });
 });
