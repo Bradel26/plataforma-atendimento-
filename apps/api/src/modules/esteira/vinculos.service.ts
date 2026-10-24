@@ -1054,7 +1054,6 @@ export async function inativarVendedor(operacao: 'TIM', id: string, vendedorId: 
   return montarDetalhe(await recarregar(id));
 }
 
-
 // ---------------------------------------------------------------------------
 // Importação por planilha (spec 6.4)
 // ---------------------------------------------------------------------------
