@@ -56,7 +56,7 @@ export function ConectarWhatsAppCloud({ onConnected, className = '' }: { onConne
     if (!codeRef.current || !sessaoRef.current || finalizandoRef.current) return;
     finalizandoRef.current = true; setOcupado(true); setErro(null); setAviso(null);
     try {
-      const resposta = await api.post<{ callingAtivo: boolean; aviso: string | null }>('/canais/whatsapp/pessoal/meta/conectar-coexistencia', {
+      const resposta = await api.post<{ aviso: string | null }>('/canais/whatsapp/pessoal/meta/conectar-coexistencia', {
         codigo: codeRef.current, ...sessaoRef.current,
       });
       setAviso(resposta.aviso ?? 'Número oficial conectado.');
@@ -106,18 +106,21 @@ export function ConectarWhatsAppCloud({ onConnected, className = '' }: { onConne
       config_id: config.coexistenciaConfigId,
       response_type: 'code',
       override_default_response_type: true,
-      extras: { setup: {}, featureType: 'whatsapp_business_app_onboarding' },
+      extras: {
+        setup: {},
+        featureType: 'whatsapp_business_app_onboarding',
+        sessionInfoVersion: '3',
+      },
     });
   };
 
   if (config && (!config.disponivel || !config.coexistenciaConfigId)) return <p className="text-xs text-slate-500">A conexão mantendo o WhatsApp Business no celular ainda aguarda a configuração de coexistência no app Meta.</p>;
   return <div className={className}>
-    <Button type="button" variante="neutro" onClick={conectar} disabled={!sdkPronto || ocupado} className="mt-2 w-full">
+    <Button type="button" onClick={conectar} disabled={!sdkPronto || ocupado} className="mt-2 w-full">
       {ocupado ? 'Conectando com a Meta…' : sdkPronto ? 'Conectar WhatsApp Business mantendo o app' : 'Carregando conexão Meta…'}
     </Button>
     {erro && <div className="mt-2"><Alerta>{erro}</Alerta></div>}
     {aviso && <div className="mt-2"><Alerta tipo="sucesso">{aviso}</Alerta></div>}
-    <p className="mt-2 text-[10px] leading-relaxed text-slate-500">A Meta precisa mostrar a opção de conectar a conta WhatsApp Business existente. O token é armazenado cifrado no servidor.</p>
-    <p className="mt-1 text-[10px] leading-relaxed text-slate-500">Para receber chamadas, o administrador da plataforma precisa habilitar o campo <code>calls</code> no webhook do app Meta e a Calling API para cada número.</p>
+    <p className="mt-2 text-[10px] leading-relaxed text-slate-500">Manter o aplicativo no celular depende da elegibilidade do número, definida pela Meta (precisa ser uma conta do WhatsApp Business App ativa, em país e versão compatíveis). Se a janela da Meta não oferecer essa opção, o número não é elegível e não será conectado por aqui. O token é armazenado cifrado no servidor.</p>
   </div>;
 }

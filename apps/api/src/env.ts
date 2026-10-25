@@ -35,7 +35,7 @@ const schema = z.object({
   META_EMBEDDED_SIGNUP_CONFIG_ID: z.string().default(''),
   META_EMBEDDED_SIGNUP_COEX_CONFIG_ID: z.string().default(''),
   META_WEBHOOK_VERIFY_TOKEN: z.string().default(''),
-  META_GRAPH_API_VERSION: z.string().regex(/^v\d+\.0$/).default('v25.0'),
+  META_GRAPH_API_VERSION: z.string().regex(/^v\d+\.0$/).default('v26.0'),
   /** Chave do serviço de transcrição automática das gravações de voz. */
   TRANSCRICAO_PROVEDOR: z.enum(['local', 'openai', 'desativada']).default('desativada'),
   TRANSCRICAO_LOCAL_URL: z.string().url().default('http://127.0.0.1:3334/v1/audio/transcriptions'),

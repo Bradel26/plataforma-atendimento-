@@ -2,7 +2,7 @@ import { Router, raw, type Response } from 'express';
 import { asyncHandler } from '../../http/async-handler';
 import { param } from '../../http/params';
 import { notFound } from '../../lib/errors';
-import { comOrganizacao } from '../../lib/tenant';
+import { comOrganizacao, organizacaoAtual } from '../../lib/tenant';
 import { env } from '../../env';
 import {
   CANAIS_EXTERNOS,
@@ -12,8 +12,9 @@ import {
   organizacaoDoWebhook,
   type CanalExterno,
 } from './channels.service';
-import { registrarMensagemEntrante } from './inbound.service';
-import { normalizarWebhook } from './meta.parser';
+import { registrarMensagemEntrante, registrarMensagemPropria } from './inbound.service';
+import { normalizarEcosMeta, normalizarStatusMeta, normalizarWebhook } from './meta.parser';
+import { registrarStatusDeEntrega } from './webhooks/eventos-de-canal';
 import type { MetaWebhook } from './meta.types';
 import { registrarChamadasMeta } from './meta-calling.service';
 
@@ -133,14 +134,20 @@ async function processarEntrada(
     // assinatura legitima.
     const config = await configDoDestino(canal, identificador);
 
-    if (!config?.ativo || !config.appSecret) {
+    // O app Meta e unico: seu App Secret assina todos os numeros e e a fonte
+    // de verdade (girar o segredo no Coolify nao pode invalidar linhas ja
+    // conectadas). O segredo gravado na linha continua valendo para canais
+    // configurados a mao e para o simulador de webhook.
+    const segredos = [env.META_APP_SECRET, config?.appSecret].filter((v): v is string => Boolean(v));
+
+    if (!config?.ativo || segredos.length === 0) {
       res.status(503).json({ error: { code: 'CANAL_INDISPONIVEL', message: `Canal ${canal} inativo` } });
       return;
     }
 
     const assinatura = req.header('x-hub-signature-256');
 
-    if (!assinaturaValida(corpoBruto, assinatura, config.appSecret)) {
+    if (!segredos.some((segredo) => assinaturaValida(corpoBruto, assinatura, segredo))) {
       res.status(401).json({ error: { code: 'ASSINATURA_INVALIDA', message: 'X-Hub-Signature-256 inválida' } });
       return;
     }
@@ -163,7 +170,23 @@ async function processarEntrada(
       else processadas += 1;
     }
 
+    // Status de entrega/leitura das mensagens que a plataforma enviou.
+    let statusAtualizados = 0;
+    for (const evento of normalizarStatusMeta(payload)) {
+      const resultado = await registrarStatusDeEntrega(evento.idExterno, evento.status, {
+        provider: 'meta-cloud', organizacaoId: organizacaoAtual(),
+      });
+      if (resultado === 'processado') statusAtualizados += 1;
+    }
+
+    // Coexistence: o que o dono digitou no app do celular entra no historico.
+    let ecos = 0;
+    for (const eco of normalizarEcosMeta(payload)) {
+      const resultado = await registrarMensagemPropria(eco);
+      if (!('duplicada' in resultado) && !('ignorada' in resultado)) ecos += 1;
+    }
+
     const chamadas = await registrarChamadasMeta(payload);
 
-    res.json({ recebidas: mensagens.length, processadas, duplicadas, chamadas });
+    res.json({ recebidas: mensagens.length, processadas, duplicadas, statusAtualizados, ecos, chamadas });
 }

@@ -1,10 +1,12 @@
 import type { Channel } from '@prisma/client';
 import { AppError, badRequest } from '../../lib/errors';
+import { env } from '../../env';
 import { obterConfig, obterConfigPorId } from './channels.service';
+import { mensagemDeErroMeta } from './meta-erros';
 import { impedimentoDeEnvio, modoEfetivo } from './whatsapp.modo';
 import { getWhatsAppProvider } from './whatsapp-provider.factory';
 
-const GRAPH = 'https://graph.facebook.com/v21.0';
+const GRAPH = `https://graph.facebook.com/${env.META_GRAPH_API_VERSION}`;
 
 /**
  * O modo nao oficial passa pelo `WhatsAppProvider` em vez de falar direto com
@@ -147,7 +149,7 @@ export async function enviarParaCanal(
     throw new AppError(
       502,
       'ENVIO_RECUSADO',
-      `A Meta recusou o envio (${resposta.status}): ${dados.error?.message ?? 'sem detalhe'}`,
+      mensagemDeErroMeta(dados.error, resposta.status),
     );
   }
 
@@ -296,13 +298,13 @@ async function enviarMultipartMessenger(
 
   const dados = (await resposta.json().catch(() => ({}))) as {
     message_id?: string;
-    error?: { message?: string };
+    error?: { message?: string; code?: number };
   };
   if (!resposta.ok) {
     throw new AppError(
       502,
       'ENVIO_RECUSADO',
-      `A Meta recusou o envio (${resposta.status}): ${dados.error?.message ?? 'sem detalhe'}`,
+      mensagemDeErroMeta(dados.error, resposta.status),
     );
   }
   return dados.message_id ?? null;
@@ -317,13 +319,13 @@ async function postarMensagem(url: string, token: string, corpo: Record<string, 
   const dados = (await resposta.json().catch(() => ({}))) as {
     messages?: Array<{ id: string }>;
     message_id?: string;
-    error?: { message?: string };
+    error?: { message?: string; code?: number };
   };
   if (!resposta.ok) {
     throw new AppError(
       502,
       'ENVIO_RECUSADO',
-      `A Meta recusou o envio (${resposta.status}): ${dados.error?.message ?? 'sem detalhe'}`,
+      mensagemDeErroMeta(dados.error, resposta.status),
     );
   }
   return dados.messages?.[0]?.id ?? dados.message_id ?? null;

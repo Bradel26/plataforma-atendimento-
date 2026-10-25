@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizarWebhook } from './meta.parser';
+import { normalizarEcosMeta, normalizarStatusMeta, normalizarWebhook } from './meta.parser';
 
 const whatsapp = (mensagem: Record<string, unknown>) => ({
   object: 'whatsapp_business_account',
@@ -110,5 +110,45 @@ describe('payload inesperado', () => {
     expect(normalizarWebhook({} as never)).toEqual([]);
     expect(normalizarWebhook({ object: 'page', entry: [] } as never)).toEqual([]);
     expect(normalizarWebhook({ object: 'page', entry: [{ id: '1', messaging: [{ sender: { id: 'x' }, recipient: { id: 'y' }, timestamp: 1 }] }] } as never)).toEqual([]);
+  });
+});
+
+describe('status e ecos do WhatsApp Cloud', () => {
+  const envelope = (field: string, value: Record<string, unknown>) => ({
+    object: 'whatsapp_business_account',
+    entry: [{ id: 'WABA-1', changes: [{ field, value: { metadata: { phone_number_id: '111' }, ...value } }] }],
+  });
+
+  it('traduz os status da Meta para o vocabulário da plataforma', () => {
+    const status = normalizarStatusMeta(envelope('messages', {
+      statuses: [
+        { id: 'wamid.a', status: 'sent' },
+        { id: 'wamid.b', status: 'delivered' },
+        { id: 'wamid.c', status: 'read' },
+        { id: 'wamid.d', status: 'failed' },
+        { id: 'wamid.e', status: 'deleted' },
+      ],
+    }) as never);
+    expect(status).toEqual([
+      { idExterno: 'wamid.a', status: 'ENVIADA' },
+      { idExterno: 'wamid.b', status: 'ENTREGUE' },
+      { idExterno: 'wamid.c', status: 'LIDA' },
+      { idExterno: 'wamid.d', status: 'FALHOU' },
+    ]);
+  });
+
+  it('normaliza eco de mensagem enviada pelo app do celular (coexistência)', () => {
+    const [eco] = normalizarEcosMeta(envelope('smb_message_echoes', {
+      message_echoes: [{ id: 'wamid.echo', from: '5511900000000', to: '5511977776666', timestamp: '1', type: 'text', text: { body: 'Oi' } }],
+    }) as never);
+    expect(eco).toMatchObject({
+      canal: 'WHATSAPP', idExterno: 'wamid.echo', enderecoExterno: '5511977776666',
+      conteudo: 'Oi', identificadorDestino: '111',
+    });
+  });
+
+  it('ignora payload sem status nem eco', () => {
+    expect(normalizarStatusMeta({ object: 'x' } as never)).toEqual([]);
+    expect(normalizarEcosMeta({ object: 'x' } as never)).toEqual([]);
   });
 });
