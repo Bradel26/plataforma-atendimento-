@@ -29,6 +29,8 @@ export type MetaWebhook = {
         contacts?: Array<{ wa_id: string; profile?: { name?: string } }>;
         messages?: MetaTextoWhatsApp[];
         statuses?: Array<{ id: string; status: string }>;
+        /** Coexistence: mensagens enviadas pelo WhatsApp Business App do celular. */
+        message_echoes?: Array<MetaTextoWhatsApp & { to: string }>;
         /** WhatsApp Business Calling API events (connect, accepted, terminate, etc.). */
         calls?: Array<{
           id?: string;

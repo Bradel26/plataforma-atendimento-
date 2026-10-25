@@ -3,7 +3,7 @@ import { badRequest, conflict, serviceUnavailable } from '../../lib/errors';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { decifrar } from '../../lib/crypto-box';
-import { atualizarNumero, criarNumero } from './channels.service';
+import { atualizarNumero, criarNumero, obterConfigPorId } from './channels.service';
 
 type MetaPhone = { id: string; display_phone_number?: string; verified_name?: string };
 type MetaError = { error?: { message?: string; code?: number; error_subcode?: number } };
@@ -196,4 +196,36 @@ export async function conectarNumeroMeta(input: {
       aviso: `Mensagens conectadas. A Meta ainda não habilitou chamadas para esta linha: ${motivo} Você pode tentar habilitar novamente em Telefonia.`,
     };
   }
+}
+
+/**
+ * Desconecta a linha oficial do proprio usuario. O token e descartado e a linha
+ * fica inativa (a linha e o historico de conversas permanecem, e uma reconexao
+ * reaproveita o mesmo registro). A assinatura de webhooks no WABA so e removida
+ * se nenhuma outra linha da plataforma usa o mesmo WABA.
+ */
+export async function desconectarNumeroMeta(donoId: string) {
+  const linha = await prisma.channelConfig.findFirst({ where: { canal: 'WHATSAPP', donoId, modo: 'OFICIAL' } });
+  if (!linha || !linha.phoneNumberId) throw badRequest('Você não tem um número oficial da Meta conectado.');
+
+  let assinaturaRemovida = false;
+  if (linha.wabaId && linha.accessToken) {
+    const outras = await prisma.channelConfig.count({
+      where: { canal: 'WHATSAPP', wabaId: linha.wabaId, id: { not: linha.id }, ativo: true },
+    });
+    if (outras === 0) {
+      try {
+        const token = (await obterConfigPorId(linha.id))?.accessToken;
+        if (token) {
+          await graph(`${encodeURIComponent(linha.wabaId)}/subscribed_apps`, token, { method: 'DELETE' });
+          assinaturaRemovida = true;
+        }
+      } catch {
+        // Token ja revogado ou WABA removida: o descarte local abaixo continua valendo.
+      }
+    }
+  }
+
+  const canal = await atualizarNumero(linha.id, { ativo: false, accessToken: null });
+  return { canal, assinaturaRemovida };
 }

@@ -1,4 +1,5 @@
-import type { MensagemNormalizada, MetaWebhook } from './meta.types';
+import type { MensagemNormalizada, MetaTextoWhatsApp, MetaWebhook } from './meta.types';
+import type { StatusDeEntrega } from './providers/channel-provider';
 
 const TIPO_ANEXO: Record<string, MensagemNormalizada['tipoAnexo']> = {
   image: 'IMAGEM',
@@ -16,6 +17,68 @@ const RESUMO_ANEXO: Record<string, string> = {
   ARQUIVO: '[arquivo recebido]',
 };
 
+function mensagemWhatsApp(
+  mensagem: MetaTextoWhatsApp,
+  enderecoExterno: string,
+  nomeExibicao: string | null,
+  identificadorDestino: string | null,
+): MensagemNormalizada {
+  const tipoAnexo = TIPO_ANEXO[mensagem.type] ?? 'TEXTO';
+  const legenda = mensagem.text?.body ?? mensagem.image?.caption ?? mensagem.video?.caption ?? null;
+  const midia = mensagem.image ?? mensagem.audio ?? mensagem.video ?? mensagem.document ?? mensagem.sticker;
+  return {
+    canal: 'WHATSAPP',
+    enderecoExterno,
+    nomeExibicao,
+    telefone: enderecoExterno,
+    idExterno: mensagem.id,
+    conteudo: legenda ?? RESUMO_ANEXO[tipoAnexo] ?? '[mensagem sem texto]',
+    tipoAnexo,
+    // A Cloud API entrega apenas o media id; quem troca o id pelo binario
+    // e o media.service, no inbound.
+    anexoUrl: null,
+    anexoIdExterno: midia?.id ?? null,
+    anexoNome: mensagem.document?.filename ?? null,
+    identificadorDestino,
+  };
+}
+
+const STATUS_META: Record<string, StatusDeEntrega> = {
+  sent: 'ENVIADA',
+  delivered: 'ENTREGUE',
+  read: 'LIDA',
+  failed: 'FALHOU',
+};
+
+/** Status de entrega (sent/delivered/read/failed) das mensagens enviadas pela plataforma. */
+export function normalizarStatusMeta(corpo: MetaWebhook): Array<{ idExterno: string; status: StatusDeEntrega }> {
+  const eventos: Array<{ idExterno: string; status: StatusDeEntrega }> = [];
+  for (const entry of corpo.entry ?? []) {
+    for (const change of entry.changes ?? []) {
+      for (const item of change.value?.statuses ?? []) {
+        const status = STATUS_META[item.status];
+        if (status && item.id) eventos.push({ idExterno: item.id, status });
+      }
+    }
+  }
+  return eventos;
+}
+
+/** Coexistence: mensagens que o dono digitou no app WhatsApp Business do celular. */
+export function normalizarEcosMeta(corpo: MetaWebhook): MensagemNormalizada[] {
+  const ecos: MensagemNormalizada[] = [];
+  for (const entry of corpo.entry ?? []) {
+    for (const change of entry.changes ?? []) {
+      const valor = change.value;
+      for (const eco of valor?.message_echoes ?? []) {
+        if (!eco.to) continue;
+        ecos.push(mensagemWhatsApp(eco, eco.to, null, valor.metadata?.phone_number_id ?? null));
+      }
+    }
+  }
+  return ecos;
+}
+
 /**
  * Converte o webhook da Meta em mensagens normalizadas.
  * Nunca lanca: payload desconhecido resulta em lista vazia — a Meta reentrega
@@ -31,27 +94,7 @@ export function normalizarWebhook(corpo: MetaWebhook): MensagemNormalizada[] {
       const perfil = valor.contacts?.[0];
 
       for (const mensagem of valor.messages ?? []) {
-        const tipoAnexo = TIPO_ANEXO[mensagem.type] ?? 'TEXTO';
-        const legenda =
-          mensagem.text?.body ?? mensagem.image?.caption ?? mensagem.video?.caption ?? null;
-        const midia =
-          mensagem.image ?? mensagem.audio ?? mensagem.video ?? mensagem.document ?? mensagem.sticker;
-
-        mensagens.push({
-          canal: 'WHATSAPP',
-          enderecoExterno: mensagem.from,
-          nomeExibicao: perfil?.profile?.name ?? null,
-          telefone: mensagem.from,
-          idExterno: mensagem.id,
-          conteudo: legenda ?? RESUMO_ANEXO[tipoAnexo] ?? '[mensagem sem texto]',
-          tipoAnexo,
-          // A Cloud API entrega apenas o media id; quem troca o id pelo binario
-          // e o media.service, no inbound.
-          anexoUrl: null,
-          anexoIdExterno: midia?.id ?? null,
-          anexoNome: mensagem.document?.filename ?? null,
-          identificadorDestino: valor.metadata?.phone_number_id ?? null,
-        });
+        mensagens.push(mensagemWhatsApp(mensagem, mensagem.from, perfil?.profile?.name ?? null, valor.metadata?.phone_number_id ?? null));
       }
     }
 

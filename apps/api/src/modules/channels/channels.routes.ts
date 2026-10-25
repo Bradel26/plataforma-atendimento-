@@ -30,7 +30,7 @@ import {
 import { AVISO_NAO_OFICIAL, modoEfetivo } from './whatsapp.modo';
 import { getWhatsAppProvider } from './whatsapp-provider.factory';
 import { estadoDaIa, estadoDaIaDoNumero, salvarIa, salvarIaDoNumero } from '../bots/ia.service';
-import { conectarNumeroMeta, estadoDoEmbeddedSignup, habilitarChamadasNumeroMeta } from './meta-embedded-signup.service';
+import { conectarNumeroMeta, desconectarNumeroMeta, estadoDoEmbeddedSignup, habilitarChamadasNumeroMeta } from './meta-embedded-signup.service';
 import { emitirTicketWebJsCall } from './webjs-call-ticket';
 
 export const channelsRoutes = Router();
@@ -577,6 +577,14 @@ channelsRoutes.post(
     }
     const resultado = await conectarNumeroMeta({ ...req.body, coexistencia: true, donoId: req.user!.sub });
     res.status(201).json(resultado);
+  }),
+);
+
+/** O vendedor desconecta a propria linha oficial; nunca a de outra pessoa. */
+channelsRoutes.post(
+  '/whatsapp/pessoal/meta/desconectar',
+  asyncHandler(async (req, res) => {
+    res.json(await desconectarNumeroMeta(req.user!.sub));
   }),
 );
 
