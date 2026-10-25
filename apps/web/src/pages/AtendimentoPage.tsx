@@ -251,7 +251,10 @@ export function AtendimentoPage() {
       .get<{ numero: MinhaLinhaWhatsapp | null }>('/canais/numeros/meu')
       .then(({ numero }) => {
         setMinhaLinha(numero);
-        if (numero?.modo === 'OFICIAL' && numero.phoneNumberId) setMinhaLinhaConectada(true);
+        if (numero?.modo === 'OFICIAL') {
+          setMinhaLinhaConectada(Boolean(numero.ativo && numero.phoneNumberId));
+          setNumeroConectado(numero.ativo && numero.phoneNumberId ? numero.nome ?? null : null);
+        }
       })
       .catch(() => undefined)
       .finally(() => setCarregandoMinhaLinha(false));
@@ -351,7 +354,7 @@ export function AtendimentoPage() {
 
   const semLinhaPessoal = !carregandoMinhaLinha && !minhaLinha;
   const precisaConectarWhatsapp =
-    semLinhaPessoal || Boolean(minhaLinha && minhaLinha.modo === 'NAO_OFICIAL' && !minhaLinhaConectada);
+    semLinhaPessoal || Boolean(minhaLinha && !minhaLinhaConectada);
 
   /**
    * "Conectar WhatsApp" de um clique: se a linha pessoal ainda nao existe, cria
@@ -387,9 +390,11 @@ export function AtendimentoPage() {
   const atualizarMinhaLinha = useCallback(async () => {
     const { numero } = await api.get<{ numero: MinhaLinhaWhatsapp | null }>('/canais/numeros/meu');
     setMinhaLinha(numero);
-    if (numero?.modo === 'OFICIAL' && numero.phoneNumberId) {
-      setMinhaLinhaConectada(true);
-      setMostrarConectar(false);
+    if (numero?.modo === 'OFICIAL') {
+      const conectada = Boolean(numero.ativo && numero.phoneNumberId);
+      setMinhaLinhaConectada(conectada);
+      setNumeroConectado(conectada ? numero.nome ?? null : null);
+      setMostrarConectar(!conectada);
       setQrConectar(null);
     }
   }, []);
@@ -400,10 +405,16 @@ export function AtendimentoPage() {
     setErroConectar(null);
     setDesconectandoLinha(true);
     try {
-      await api.post(`/canais/numeros/${minhaLinha.id}/ponte/desconectar`);
+      if (minhaLinha.modo === 'OFICIAL') {
+        await api.post('/canais/whatsapp/pessoal/meta/desconectar');
+      } else {
+        await api.post(`/canais/numeros/${minhaLinha.id}/ponte/desconectar`);
+      }
       setMinhaLinhaConectada(false);
       setMostrarConectar(false);
       setQrConectar(null);
+      setNumeroConectado(null);
+      await atualizarMinhaLinha();
     } catch (erro) {
       setErroConectar(
         erro instanceof ApiError ? erro.message : 'Não foi possível desconectar agora. Tente novamente.',
@@ -411,7 +422,7 @@ export function AtendimentoPage() {
     } finally {
       setDesconectandoLinha(false);
     }
-  }, [minhaLinha]);
+  }, [minhaLinha, atualizarMinhaLinha]);
 
   const {
     conversas,
