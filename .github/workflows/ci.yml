@@ -137,6 +137,10 @@ jobs:
         if: env.COOLIFY_TOKEN != ''
         run: |
           set -euo pipefail
-          saude=$(curl -sS --retry 6 --retry-delay 10 --retry-all-errors "${PRODUCAO}/api/health")
-          echo "${saude}"
-          echo "${saude}" | jq -e '.status == "ok" and .dependencias.postgres == "ok" and .dependencias.redis == "ok"'
+          # O proxy pode responder 502 durante a troca de containers. --fail
+          # faz o curl tentar novamente; -o evita concatenar um corpo 502 com
+          # o JSON da tentativa seguinte, que causaria erro falso no jq.
+          curl -fsS --retry 6 --retry-delay 10 --retry-all-errors --max-time 20 \
+            -o saude.json "${PRODUCAO}/api/health"
+          cat saude.json
+          jq -e '.status == "ok" and .dependencias.postgres == "ok" and .dependencias.redis == "ok"' saude.json
