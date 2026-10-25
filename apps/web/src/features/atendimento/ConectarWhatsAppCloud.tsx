@@ -121,6 +121,6 @@ export function ConectarWhatsAppCloud({ onConnected, className = '' }: { onConne
     </Button>
     {erro && <div className="mt-2"><Alerta>{erro}</Alerta></div>}
     {aviso && <div className="mt-2"><Alerta tipo="sucesso">{aviso}</Alerta></div>}
-    <p className="mt-2 text-[10px] leading-relaxed text-slate-500">A Meta precisa mostrar a opção de conectar a conta WhatsApp Business existente. O token é armazenado cifrado no servidor.</p>
+    <p className="mt-2 text-[10px] leading-relaxed text-slate-500">Manter o aplicativo no celular depende da elegibilidade do número, definida pela Meta (precisa ser uma conta do WhatsApp Business App ativa, em país e versão compatíveis). Se a janela da Meta não oferecer essa opção, o número não é elegível e não será conectado por aqui. O token é armazenado cifrado no servidor.</p>
   </div>;
 }
