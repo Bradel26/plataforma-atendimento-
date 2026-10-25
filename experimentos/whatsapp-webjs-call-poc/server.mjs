@@ -1,6 +1,6 @@
 import express from 'express';
 import { createServer } from 'node:http';
-import { mkdir, writeFile, readdir, stat, readFile, lstat, readlink, unlink } from 'node:fs/promises';
+import { mkdir, writeFile, readdir, stat, readFile, lstat, readlink, unlink, rm } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { hostname } from 'node:os';
@@ -96,6 +96,28 @@ async function prepararPerfilChrome(profileDir, nomeSessao) {
     } catch (error) {
       if (error?.code !== 'ENOENT') throw error;
     }
+  }
+}
+
+const MARCADOR_CONECTADO = '.plataforma-conectado';
+const marcarPerfilConectado = (profileDir) => writeFile(path.join(profileDir, MARCADOR_CONECTADO), new Date().toISOString(), 'utf8').catch(() => {});
+
+/**
+ * Perfil que nunca chegou a conectar (sem o marcador gravado no `ready`) e travou
+ * ao carregar o WhatsApp Web esta corrompido ou meio autenticado: sem apagar, toda
+ * nova tentativa trava do mesmo jeito. Perfil que ja conectou alguma vez nunca e
+ * apagado aqui — uma falha de rede nao pode deslogar um vendedor ativo.
+ */
+async function descartarPerfilNuncaConectado(profileDir, nomeSessao) {
+  try {
+    await stat(path.join(profileDir, MARCADOR_CONECTADO));
+    return;
+  } catch { /* sem marcador: nunca conectou */ }
+  try {
+    await rm(profileDir, { recursive: true, force: true });
+    console.warn(`[whatsapp:${nomeSessao}] perfil que nunca conectou foi descartado para a proxima tentativa gerar QR limpo`);
+  } catch (error) {
+    console.error(`[whatsapp:${nomeSessao}] nao foi possivel descartar o perfil:`, error);
   }
 }
 
@@ -353,7 +375,8 @@ async function iniciarCliente(nomeSessao = 'teste-local') {
         sessao.latestQr = null;
         broadcast(sessao, { type: 'error', data: message });
         sessao.client = null;
-        thisClient.destroy().catch((error) => console.error(`[whatsapp:${sessao.nome}] falha ao encerrar cliente apos timeout:`, error));
+        thisClient.destroy().catch((error) => console.error(`[whatsapp:${sessao.nome}] falha ao encerrar cliente apos timeout:`, error))
+          .finally(() => descartarPerfilNuncaConectado(profileDir, sessao.nome));
       }, timeoutMs);
       timeoutInicializacao.unref?.();
     };
@@ -392,6 +415,7 @@ async function iniciarCliente(nomeSessao = 'teste-local') {
       console.info(`[whatsapp:${sessao.nome}] sessao pronta`);
       sessao.status = 'conectado';
       sessao.latestQr = null;
+      void marcarPerfilConectado(profileDir);
       broadcast(sessao, { type: 'status', data: sessao.status });
     });
     client.on('loading_screen', (percent, message) => {
@@ -460,7 +484,8 @@ async function iniciarCliente(nomeSessao = 'teste-local') {
       sessao.latestQr = null;
       broadcast(sessao, { type: 'error', data: sessao.lastError });
       sessao.client = null;
-      thisClient.destroy().catch((destroyError) => console.error(`[whatsapp:${sessao.nome}] falha ao encerrar inicializacao:`, destroyError));
+      thisClient.destroy().catch((destroyError) => console.error(`[whatsapp:${sessao.nome}] falha ao encerrar inicializacao:`, destroyError))
+        .finally(() => descartarPerfilNuncaConectado(profileDir, sessao.nome));
     });
     return { ok: true, status: sessao.status };
   })();
