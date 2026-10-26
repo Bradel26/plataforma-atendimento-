@@ -218,9 +218,14 @@ export async function importarContatosClassificados(previa: boolean) {
     orderBy: { nome: 'asc' },
   });
 
+  // Na execucao so se escreve nas operacoes com EDICAO (a previa le todas as
+  // permitidas): quem tem so LEITURA nao grava `segmentoParceiro` nem cria vinculo.
+  const acesso = await acessoDoUsuarioAtual();
   const classificados = contatos.flatMap((contato) => {
     const segmento = identificarSegmentoParceiro(contato.segmentoParceiro, contato.observacoes);
-    return segmento ? [{ ...contato, segmento }] : [];
+    if (!segmento) return [];
+    if (!previa && resolverAcesso(acesso, segmento, 'EDICAO') !== 'OK') return [];
+    return [{ ...contato, segmento }];
   });
   // Destino pela OPERACAO do funil, nunca pelo nome (o ADMIN pode renomear),
   // e so operacoes que o usuario enxerga.
