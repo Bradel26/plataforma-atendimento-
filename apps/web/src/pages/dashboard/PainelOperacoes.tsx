@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../../lib/api';
 import { ESTADO } from '../../lib/viz';
 import type { PainelOperacao } from '../../lib/types';
+import { partesDoPainel, rotuloDaOperacao } from '../esteira/indicadoresOperacao';
 import { BarraEmpilhada, Barras, TituloSecao } from './blocos';
 
 /**
@@ -30,12 +31,13 @@ export function PainelOperacoes({ desde }: { desde: string }) {
       <TituloSecao id="sec-parceiros">Parceiros por operação</TituloSecao>
       <div className={`grid gap-4 ${operacoes.length > 1 ? 'lg:grid-cols-2' : ''}`}>
         {operacoes.map((o) => {
-          const encerrados = o.reprovados + o.cancelados;
+          const nome = rotuloDaOperacao(o.operacao, o.funil.nome);
+          const p = partesDoPainel(o);
           return (
             <article key={o.funil.id} className="flex min-w-0 flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <h3 className="text-[15px] font-semibold text-slate-800">{o.funil.nome}</h3>
+                  <h3 className="text-[15px] font-semibold text-slate-800">{nome}</h3>
                   <p className="mt-0.5 text-[12.5px] text-slate-500">{o.novosNoPeriodo} novo(s) no período</p>
                 </div>
                 <div className="text-right">
@@ -45,12 +47,12 @@ export function PainelOperacoes({ desde }: { desde: string }) {
               </div>
 
               <BarraEmpilhada
-                rotuloAcessivel={`${o.funil.nome}: ${o.ativos} ativos, ${o.pendentes} com cadastro pendente, ${o.inativos} inativos, ${o.reprovados} reprovados e ${o.cancelados} cancelados`}
+                rotuloAcessivel={`${nome}: ${p.ativos} ativos, ${p.pendentes} com cadastro pendente, ${p.emAndamento} em andamento e ${p.saidas} fora da esteira`}
                 partes={[
-                  { rotulo: 'Ativos', valor: o.ativos, cor: ESTADO.bom },
-                  { rotulo: 'Cadastro pendente', valor: o.pendentes, cor: ESTADO.atencao },
-                  { rotulo: 'Inativos', valor: o.inativos, cor: ESTADO.neutro },
-                  { rotulo: `Reprovados / cancelados (${o.reprovados}/${o.cancelados})`, valor: encerrados, cor: ESTADO.grave },
+                  { rotulo: 'Ativos', valor: p.ativos, cor: ESTADO.bom },
+                  { rotulo: 'Cadastro pendente', valor: p.pendentes, cor: ESTADO.atencao },
+                  { rotulo: 'Em andamento', valor: p.emAndamento, cor: ESTADO.info },
+                  { rotulo: 'Saíram da esteira', valor: p.saidas, cor: ESTADO.neutro },
                 ]}
               />
 

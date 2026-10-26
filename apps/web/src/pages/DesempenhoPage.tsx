@@ -5,6 +5,7 @@ import { ApiError, api } from '../lib/api';
 import { ESTADO, SERIES, duracao } from '../lib/viz';
 import type { AgenteMonitorado, DesempenhoOperacional, OperacaoEsteira } from '../lib/types';
 import { Barras, Indicador, Painel, Selo, type Tom } from './dashboard/blocos';
+import { opcoesDeOperacao, rotuloDaEtapa, rotuloDaOperacao } from './esteira/indicadoresOperacao';
 import { UFS_ATENDIDAS } from './esteira/ufs';
 import { RelatoriosPage } from './RelatoriosPage';
 
@@ -80,7 +81,14 @@ export function DesempenhoPage() {
     void carregar();
   }, [carregar]);
 
-  const estagios = (operacoes.find((o) => o.id === f.funilId) ?? operacoes[0])?.estagios ?? [];
+  // So as operacoes permitidas (a API ja filtra); "TIM + Starlink" e o consolidado.
+  const opcoes = opcoesDeOperacao(operacoes);
+  const rotuloSelecionado = opcoes.find((o) => o.valor === f.funilId)?.rotulo ?? opcoes[0]?.rotulo ?? '';
+  const consolidado = !f.funilId && opcoes.length > 1;
+  // Etapas da operacao escolhida; no consolidado, agrupadas por operacao (os nomes se repetem).
+  const gruposDeEtapas = operacoes
+    .filter((o) => o.operacao && (!f.funilId || o.id === f.funilId))
+    .map((o) => ({ id: o.id, rotulo: rotuloDaOperacao(o.operacao, o.nome), estagios: o.estagios }));
   const i = dados?.indicadores;
   const tomSla = tomDoSla(i?.slaCumpridoPct ?? null);
 
@@ -116,25 +124,33 @@ export function DesempenhoPage() {
         </Filtro>
         <Filtro rotulo="Operação">
           <Select value={f.funilId} onChange={(e) => setF({ ...f, funilId: e.target.value, estagioId: '' })} className="w-44">
-            <option value="">Todas</option>
-            {operacoes.map((o) => (
-              <option key={o.id} value={o.id}>{o.nome}</option>
+            {opcoes.map((o) => (
+              <option key={o.valor} value={o.valor}>{o.rotulo}</option>
             ))}
           </Select>
         </Filtro>
         <Filtro rotulo="Etapa">
           <Select value={f.estagioId} onChange={(e) => setF({ ...f, estagioId: e.target.value })} className="w-44">
             <option value="">Todas</option>
-            {estagios.map((e) => (
-              <option key={e.id} value={e.id}>{e.nome}</option>
-            ))}
+            {consolidado
+              ? gruposDeEtapas.map((g) => (
+                  <optgroup key={g.id} label={g.rotulo}>
+                    {g.estagios.map((e) => (
+                      <option key={e.id} value={e.id}>{e.nome}</option>
+                    ))}
+                  </optgroup>
+                ))
+              : gruposDeEtapas.flatMap((g) => g.estagios).map((e) => (
+                  <option key={e.id} value={e.id}>{e.nome}</option>
+                ))}
           </Select>
         </Filtro>
       </div>
 
       {erro && <Alerta>{erro}</Alerta>}
 
-      <section aria-label="Indicadores" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <p className="-mb-2 text-xs font-semibold text-slate-500">Indicadores · {rotuloSelecionado}</p>
+      <section aria-label={`Indicadores · ${rotuloSelecionado}`} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Indicador rotulo="1ª resposta" valor={duracao(i?.primeiraRespostaSegundos ?? null)} detalhe="média até o 1º retorno" />
         <Indicador rotulo="Tempo de atendimento" valor={duracao(i?.tempoMedioAtendimentoSegundos ?? null)} detalhe="da atribuição ao fim" />
         <Indicador rotulo="Tempo de análise" valor={dias(i?.tempoMedioAnaliseDias ?? null)} detalhe="etapas de análise/aprovação" />
@@ -203,10 +219,10 @@ export function DesempenhoPage() {
       </section>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Painel titulo="Tempo médio por etapa" descricao="Cadastro → Análise → Pendência → Aprovação → Credenciado → Ativo">
+        <Painel titulo="Tempo médio por etapa" descricao="Média das saídas de cada etapa no período, na ordem da esteira">
           <Barras
-            itens={(dados?.tempoMedioPorEtapa ?? []).map((e) => ({ rotulo: e.etapa, valor: e.mediaDias ?? 0 }))}
-            larguraRotulo={130}
+            itens={(dados?.tempoMedioPorEtapa ?? []).map((e) => ({ rotulo: rotuloDaEtapa(e.etapa, e.operacao, consolidado), valor: e.mediaDias ?? 0 }))}
+            larguraRotulo={consolidado ? 190 : 130}
             unidade="d"
             cor={SERIES[0]}
             formatar={(v) => v.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}

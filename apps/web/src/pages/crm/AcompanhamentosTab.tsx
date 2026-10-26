@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Alerta, Badge, Card, Field, Input } from '../../components/ui';
 import { ApiError, api } from '../../lib/api';
-import { LABEL_TIPO_ATIVIDADE, type TipoAtividade } from '../../lib/types';
+import { LABEL_TIPO_ATIVIDADE, type ChaveEtapa, type OperacaoDoItem, type TipoAtividade } from '../../lib/types';
+import { rotuloDaOperacao } from '../esteira/indicadoresOperacao';
 
 type Ref = { id: string; nome: string };
 
@@ -11,7 +12,10 @@ type ItemParceiro = {
   parceiro: string;
   contato: Ref & { telefone: string | null };
   responsavel: Ref | null;
-  operacao: Ref;
+  /** `id`/`nome` do funil + `codigo` (TIM/STARLINK), que dá o rótulo. */
+  operacao: OperacaoDoItem;
+  chave: ChaveEtapa | null;
+  /** Nome atual da etapa, como a API devolve. */
   etapa: string;
   diasNaEtapa: number;
   ultimaInteracaoEm: string | null;
@@ -58,7 +62,7 @@ function ListaDeParceiros({ itens, vazio }: { itens: ItemParceiro[]; vazio: stri
             <Link to={`/contatos/${p.contato.id}`} className="truncate text-sm font-medium text-slate-800 hover:underline">
               {p.parceiro}
             </Link>
-            <span className="shrink-0 text-xs text-slate-500">{p.operacao.nome}</span>
+            <span className="shrink-0 text-xs text-slate-500">{rotuloDaOperacao(p.operacao.codigo, p.operacao.nome)}</span>
           </div>
           <p className="text-xs text-slate-500">
             {p.etapa} há {p.diasNaEtapa}d · última interação {data(p.ultimaInteracaoEm)} ·{' '}
@@ -161,9 +165,12 @@ export function AcompanhamentosTab() {
           <ListaDeParceiros itens={dados.semInteracao} vazio="Nenhum parceiro esquecido." />
         </Card>
 
-        <Card titulo="Precisam de reativação" descricao="Parceiros inativados">
-          <Regra>Parceiros marcados como inativos na esteira, com o motivo. Use para tentar retomar o contato.</Regra>
-          <ListaDeParceiros itens={dados.reativacao} vazio="Nenhum parceiro inativado." />
+        <Card titulo="Precisam de reativação" descricao="TIM descredenciados e Starlink em Nurture">
+          <Regra>
+            Parceiros que saíram da esteira mas ainda podem voltar: na TIM, os descredenciados; na Starlink, os que
+            foram para Nurture. O motivo registrado na saída aparece ao lado. Use para tentar retomar o contato.
+          </Regra>
+          <ListaDeParceiros itens={dados.reativacao} vazio="Nenhum parceiro para reativar." />
         </Card>
       </div>
     </div>

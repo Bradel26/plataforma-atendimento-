@@ -10,6 +10,7 @@ import {
   type OperacaoEsteira,
   type PapelNaConta,
 } from '../../lib/types';
+import { rotuloDaEtapa, rotuloDaOperacao } from '../esteira/indicadoresOperacao';
 import { UFS } from '../esteira/ufs';
 
 type Situacao = 'TODOS' | 'ATIVOS' | 'EM_CREDENCIAMENTO' | 'PENDENTES';
@@ -110,7 +111,7 @@ export function MontarPublico({
   /** Etapas das operacoes escolhidas (ou de todas, se nenhuma foi escolhida). */
   const etapas = operacoes
     .filter((o) => filtro.funilIds.length === 0 || filtro.funilIds.includes(o.id))
-    .flatMap((o) => o.estagios.map((e) => ({ ...e, rotulo: operacoes.length > 1 ? `${o.nome}: ${e.nome}` : e.nome })));
+    .flatMap((o) => o.estagios.map((e) => ({ ...e, rotulo: rotuloDaEtapa(e.nome, o.operacao, operacoes.length > 1) })));
 
   /** Qualquer mudanca invalida a previa: numero velho ao lado de filtro novo mente. */
   const mudar = (novo: Filtro) => {
@@ -186,7 +187,7 @@ export function MontarPublico({
                       ativo={filtro.funilIds.includes(o.id)}
                       onClick={() => mudar({ ...filtro, funilIds: alternar(filtro.funilIds, o.id), estagioIds: [] })}
                     >
-                      {o.nome}
+                      {rotuloDaOperacao(o.operacao, o.nome)}
                     </Chip>
                   ))}
                 </div>

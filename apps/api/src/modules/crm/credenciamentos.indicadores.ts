@@ -60,8 +60,6 @@ export async function painelOperacoes(periodo: Periodo) {
     const operacao = funil.operacao!;
     const daOperacao = registros.filter((r) => r.operacao === operacao);
     const contagem = contarPorPapel(daOperacao);
-    // Situacao legada so vale em etapa sem chave (funil anterior a migracao).
-    const legado = daOperacao.filter((r) => !r.estagio.chave);
 
     const porUf = new Map<string, number>();
     for (const r of daOperacao) {
@@ -82,9 +80,8 @@ export async function painelOperacoes(periodo: Periodo) {
       total: daOperacao.length,
       ativos: contagem.ativos,
       pendentes: contagem.pendentes,
-      inativos: legado.filter((r) => r.situacaoExcecao === 'INATIVADO').length,
-      reprovados: legado.filter((r) => r.situacaoExcecao === 'REPROVADO').length,
-      cancelados: legado.filter((r) => r.situacaoExcecao === 'CANCELADO').length,
+      // Quem saiu (desistência, descredenciado, nurture, descartado) está nas
+      // etapas de saída de `porEstagio`; a situação legada de exceção não conta mais.
       novosNoPeriodo: daOperacao.filter((r) => r.criadoEm >= periodo.desde && r.criadoEm <= periodo.ate).length,
       porEstagio: funil.estagios.map((e) => ({
         id: e.id,

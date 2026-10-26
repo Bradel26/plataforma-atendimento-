@@ -1,4 +1,4 @@
-import type { AcessoOperacoes } from './esteiraTypes';
+import type { AcessoOperacoes, ChaveEtapa, Operacao, TipoEtapa } from './esteiraTypes';
 
 /** Tipos das esteiras TIM/Starlink (API nova `/esteiras/:operacao`). */
 export * from './esteiraTypes';
@@ -543,75 +543,51 @@ export type ColunaFunil = {
   valorPonderado: number;
 };
 
-export type SituacaoExcecao = 'REPROVADO' | 'CANCELADO' | 'INATIVADO';
-
-export const LABEL_SITUACAO_EXCECAO: Record<SituacaoExcecao, string> = {
-  REPROVADO: 'Reprovado',
-  CANCELADO: 'Cancelado',
-  INATIVADO: 'Inativado',
-};
-
 export type PapelEstagio = 'NOVO' | 'ANALISE' | 'PENDENCIA' | 'APROVACAO' | 'CREDENCIADO' | 'ATIVO' | 'OUTRO';
 
-export type EstagioEsteira = { id: string; nome: string; ordem: number; papel?: PapelEstagio };
+/** Etapa como `GET /credenciamentos/funis` devolve (nome atual, renomeável pelo ADMIN). */
+export type EstagioEsteira = { id: string; nome: string; ordem: number; chave?: ChaveEtapa | null; tipo?: TipoEtapa };
 
-/** Operacao (funil ESTEIRA): TIM, Starlink... */
+/** Operacao (funil ESTEIRA) que o usuario enxerga: TIM, Starlink. */
 export type OperacaoEsteira = {
   id: string;
   nome: string;
-  /** Código da operação do funil (`GET /credenciamentos/funis`). */
-  operacao?: 'TIM' | 'STARLINK' | null;
+  /** Código da operação do funil — use-o para rótulos, nunca `nome`. */
+  operacao?: Operacao | null;
   estagios: EstagioEsteira[];
 };
 
 export type Semaforo = 'NORMAL' | 'ATENCAO' | 'CRITICO';
 
-export type Credenciamento = {
-  id: string;
-  contato: Referencia & { telefone?: string | null; email?: string | null; uf?: string | null; cidade?: string | null };
-  conta: (Referencia & { cnpj?: string | null }) | null;
-  funil: Referencia;
-  estagio: EstagioEsteira;
-  responsavel: Referencia | null;
-  situacaoExcecao: SituacaoExcecao | null;
-  motivoExcecao: string | null;
-  observacoes: string | null;
-  criadoEm: string;
-  atualizadoEm: string;
-  fechadoEm: string | null;
-  estagioDesde?: string;
-  diasNoEstagio: number;
-  historico?: Array<{
-    id: string;
-    criadoEm: string;
-    segundosNoEstagio: number | null;
-    deEstagio: Referencia | null;
-    paraEstagio: Referencia;
-    usuario: Referencia | null;
-  }>;
-};
+/** Operação de um item de Gestão/Acompanhamentos: `id`/`nome` do funil + `codigo`. */
+export type OperacaoDoItem = Referencia & { codigo: Operacao };
 
 export type PainelOperacao = {
+  operacao: Operacao;
   funil: Referencia;
   total: number;
   ativos: number;
   pendentes: number;
-  inativos: number;
-  reprovados: number;
-  cancelados: number;
   novosNoPeriodo: number;
-  porEstagio: Array<{ id: string; nome: string; total: number }>;
+  porEstagio: Array<{ id: string; nome: string; chave: ChaveEtapa | null; tipo: TipoEtapa; total: number }>;
   porUf: Array<{ rotulo: string; total: number }>;
   porRegiao: Array<{ rotulo: string; total: number }>;
 };
 
-export type TempoEtapa = { etapa: string; papel: PapelEstagio; passagens: number; mediaDias: number | null };
+export type TempoEtapa = {
+  operacao: Operacao;
+  chave: ChaveEtapa | null;
+  etapa: string;
+  papel: PapelEstagio;
+  passagens: number;
+  mediaDias: number | null;
+};
 
 export type GestaoOperacao = {
   tempoMedioCredenciamentoDias: number | null;
   credenciadosNoPeriodo: number;
   parceirosParados: number;
-  maiorTempoParado: { parceiro: string; dias: number; etapa: string } | null;
+  maiorTempoParado: { parceiro: string; dias: number; etapa: string; operacao: Operacao } | null;
   tempoMedioPorEtapa: TempoEtapa[];
   atendimentosSemInteracao: {
     total: number;
@@ -626,13 +602,19 @@ export type GestaoOperacao = {
       semaforo: Semaforo;
     }>;
   };
-  volumePorEtapa: Array<{ funil: Referencia; etapas: Array<{ id: string; nome: string; total: number; parados: number }> }>;
+  volumePorEtapa: Array<{
+    operacao: Operacao;
+    funil: Referencia;
+    etapas: Array<{ id: string; nome: string; chave: ChaveEtapa | null; tipo: TipoEtapa; total: number; parados: number }>;
+  }>;
   semMovimentacao: Array<{
     id: string;
     parceiro: string;
     contato: Referencia;
     responsavel: Referencia | null;
-    operacao: Referencia;
+    operacao: OperacaoDoItem;
+    estagioId: string;
+    chave: ChaveEtapa | null;
     etapa: string;
     ultimaMovimentacao: string;
     diasParado: number;
@@ -664,12 +646,6 @@ export type DesempenhoOperacional = {
   }>;
   tempoMedioPorEtapa: TempoEtapa[];
   evolucao: Array<{ desde: string; ate: string; tempoMedioCredenciamentoDias: number | null; credenciados: number }>;
-};
-
-export type ColunaCredenciamento = {
-  estagio: EstagioEsteira;
-  credenciamentos: Credenciamento[];
-  total: number;
 };
 
 export type Produto = {
