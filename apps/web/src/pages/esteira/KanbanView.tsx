@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alerta, Button } from '../../components/ui';
-import { Gaveta } from '../../components/ui/Gaveta';
 import { Segmentado } from '../../components/ui/Pagina';
 import { SkeletonBloco } from '../../components/ui/Skeleton';
 import { useToast } from '../../components/ui/Toast';
@@ -14,8 +13,8 @@ import type {
 } from '../../lib/esteiraTypes';
 import { Popover } from './BarraDeFiltros';
 import { CartaoVinculo } from './CartaoVinculo';
+import { DetalheVinculo } from './DetalheVinculo';
 import { useRegrasDaEsteira } from './DialogoMovimento';
-import { EmConstrucao } from './EmConstrucao';
 import { parametroDaOperacao, queryDosFiltros, type CampoOcultavel, type PropsDaVisao } from './estadoEsteira';
 import { colunasDoKanban, decidirMovimento, podeSoltar, type ColunaDoQuadro } from './regrasMovimento';
 
@@ -167,6 +166,9 @@ export function KanbanView({ operacao, estrutura, filtros, pref, atualizarPref }
     });
   };
 
+  // Estável: a gaveta registra o Esc com ele.
+  const fecharGaveta = useCallback(() => setAberto(null), []);
+
   const terminarArraste = () => {
     setArrastando(null);
     setAlvo(null);
@@ -273,9 +275,13 @@ export function KanbanView({ operacao, estrutura, filtros, pref, atualizarPref }
         </div>
       )}
 
-      <Gaveta aberta={aberto !== null} titulo={aberto?.parceiro.nome ?? 'Parceiro'} aoFechar={() => setAberto(null)} largura="max-w-xl">
-        <EmConstrucao titulo="Detalhes do parceiro" descricao="A gaveta com os campos da operação chega na próxima entrega." />
-      </Gaveta>
+      <DetalheVinculo
+        vinculo={aberto}
+        operacao={operacao}
+        estrutura={estrutura}
+        aoFechar={fecharGaveta}
+        aoMudar={aposGravar}
+      />
 
       {regras.dialogo}
     </div>

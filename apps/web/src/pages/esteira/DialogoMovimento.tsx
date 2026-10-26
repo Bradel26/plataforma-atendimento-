@@ -204,5 +204,5 @@ export function useRegrasDaEsteira() {
     />
   );
 
-  return { executar, dialogo, ocupado };
+  return { executar, dialogo, ocupado, dialogoAberto: pedido !== null };
 }

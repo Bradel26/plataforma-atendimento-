@@ -255,7 +255,7 @@ function Favoritos({
 type Usuarios = Array<{ id: string; nome: string }> | null;
 
 /** Responsáveis que o perfil pode listar (`GET /usuarios` é só ADMIN/SUPERVISOR); nulo = esconder a lista. */
-function useResponsaveis(): Usuarios {
+export function useResponsaveis(): Usuarios {
   const { temPerfil } = useAuth();
   const podeListar = temPerfil('ADMIN', 'SUPERVISOR');
   const [usuarios, setUsuarios] = useState<Usuarios>(null);
