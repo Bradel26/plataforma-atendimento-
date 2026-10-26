@@ -26,6 +26,8 @@ export type FiltrosEsteira = {
   origem?: string[];
   tim?: { dep?: DepTim[]; trafegoPago?: boolean; vendaLiberada?: boolean };
   starlink?: { tipoCaptacao?: TipoCaptacao[]; vivensis?: VivensisStatus[]; vsm?: 'SIM' | 'NAO' | 'VAZIO' };
+  /** Vínculos de uma empresa (ficha da empresa): da conta ou de um contato dela. */
+  contaId?: string;
 };
 
 type Where = Prisma.CredenciamentoWhereInput;
@@ -151,6 +153,7 @@ export function whereDosFiltros(operacao: Operacao, f: FiltrosEsteira, agora: Da
     });
   }
   if (f.origem?.length) c.push(condicaoDeOrigem(operacao, f.origem));
+  if (f.contaId) c.push({ OR: [{ contaId: f.contaId }, { contato: { contaId: f.contaId } }] });
   if (operacao === 'TIM' && f.tim) c.push(...condicoesTim(f.tim));
   if (operacao === 'STARLINK' && f.starlink) c.push(...condicoesStarlink(f.starlink));
   return { operacao, arquivadoEm: null, ...(c.length ? { AND: c } : {}) };
@@ -214,6 +217,7 @@ const filtrosSchema = z.object({
   tipoCaptacao: lista(z.nativeEnum(TipoCaptacao)),
   vivensis: lista(z.nativeEnum(VivensisStatus)),
   vsm: z.enum(['SIM', 'NAO', 'VAZIO']).optional(),
+  contaId: z.string().uuid().optional(),
 });
 
 /** Só as chaves definidas (objeto sem `undefined`, para comparar e serializar limpo). */

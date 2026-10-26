@@ -106,6 +106,13 @@ describe('whereDosFiltros', () => {
     });
     expect(whereDosFiltros('STARLINK', { origem: ['PLANILHA'] }, agora).AND).toContainEqual({ id: { in: [] } });
   });
+
+  it('empresa (ficha): vínculo da conta ou de um contato dela', () => {
+    const id = '7b0f9a52-3f7e-4a43-9a51-6c1f4f0d2c11';
+    expect(whereDosFiltros('TIM', { contaId: id }, agora).AND).toContainEqual({
+      OR: [{ contaId: id }, { contato: { contaId: id } }],
+    });
+  });
 });
 
 describe('parseFiltros', () => {
@@ -162,6 +169,12 @@ describe('parseFiltros', () => {
       desde: new Date('2026-10-01T10:00:00Z'),
       ate: new Date('2026-10-31T15:00:00Z'),
     });
+  });
+
+  it('contaId (ficha da empresa) é um uuid', () => {
+    const id = '7b0f9a52-3f7e-4a43-9a51-6c1f4f0d2c11';
+    expect(parseFiltros({ contaId: id })).toEqual({ contaId: id });
+    expect(() => parseFiltros({ contaId: 'abc' })).toThrow();
   });
 
   it('recusa valor inválido', () => {
