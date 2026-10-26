@@ -4,8 +4,8 @@ import { filtroDe, politicaContatos } from '../../lib/politicas';
 import { prisma } from '../../lib/prisma';
 import { normalizarTags } from '../../lib/tags';
 import { ciclosDosContatos } from '../crm/cicloDeVida.service';
-import { papelDoEstagio } from '../crm/esteira';
-import { descreverFiltro, filtroVazio, montarPublico, type FiltroDePublico } from './publico';
+import { filtroOperacoesPermitidas } from '../esteira/acesso';
+import { descreverFiltro, estagiosDaSituacao, filtroVazio, montarPublico, type FiltroDePublico } from './publico';
 
 /**
  * Publico de campanha montado pelos filtros do CRM (item E.3).
@@ -50,16 +50,22 @@ async function filtrosDoBanco(f: FiltroDePublico): Promise<Prisma.ContactWhereIn
 /**
  * Filtro sobre os credenciamentos do contato: operacao, etapa e situacao.
  *
- * Situacao nao e coluna — e o PAPEL do estagio, reconhecido pelo nome (ver
- * `crm/esteira.ts`). Por isso ela vira uma lista de ids de estagio antes de ir
- * ao banco. Todas as condicoes valem para o MESMO credenciamento: "pendente na
- * TIM" nao pode casar com quem e pendente na Starlink e so cadastrado na TIM.
+ * Situacao nao e coluna — e o PAPEL da etapa, pela CHAVE (spec 4.7; o nome so
+ * vale para funil sem chave). Por isso ela vira uma lista de ids de estagio antes
+ * de ir ao banco. Todas as condicoes valem para o MESMO credenciamento:
+ * "pendente na TIM" nao pode casar com quem e pendente na Starlink e so
+ * cadastrado na TIM. Vinculo arquivado nao conta, e operacao que o usuario nao
+ * enxerga nao entra no publico (spec 4.9).
  */
 async function filtroDaEsteira(f: FiltroDePublico): Promise<Prisma.CredenciamentoWhereInput | null> {
   const temAlgo = f.funilIds?.length || f.estagioIds?.length || f.situacao?.length;
   if (!temAlgo) return null;
 
-  const e: Prisma.CredenciamentoWhereInput[] = [{ funil: { tipo: 'ESTEIRA' } }];
+  const e: Prisma.CredenciamentoWhereInput[] = [
+    { funil: { tipo: 'ESTEIRA' } },
+    { arquivadoEm: null },
+    await filtroOperacoesPermitidas(),
+  ];
   if (f.funilIds?.length) e.push({ funilId: { in: f.funilIds } });
   if (f.estagioIds?.length) e.push({ estagioId: { in: f.estagioIds } });
 
@@ -67,17 +73,11 @@ async function filtroDaEsteira(f: FiltroDePublico): Promise<Prisma.Credenciament
   if (situacoes.length) {
     const estagios = await prisma.funnelStage.findMany({
       where: { funil: { tipo: 'ESTEIRA' } },
-      select: { id: true, nome: true },
+      select: { id: true, nome: true, chave: true },
     });
-    const ids = (quer: (p: ReturnType<typeof papelDoEstagio>) => boolean) =>
-      estagios.filter((s) => quer(papelDoEstagio(s.nome))).map((s) => s.id);
-    const alvo = new Set<string>();
-    for (const s of situacoes) {
-      const lista =
-        s === 'ATIVOS' ? ids((p) => p === 'ATIVO') : s === 'PENDENTES' ? ids((p) => p === 'PENDENCIA') : ids((p) => p !== 'ATIVO');
-      for (const id of lista) alvo.add(id);
-    }
-    e.push({ situacaoExcecao: null, estagioId: { in: [...alvo] } });
+    const { comChave, semChave } = estagiosDaSituacao(estagios, situacoes);
+    // `situacaoExcecao` e legado: so decide em etapa sem chave.
+    e.push({ OR: [{ estagioId: { in: comChave } }, { situacaoExcecao: null, estagioId: { in: semChave } }] });
   }
   return { AND: e };
 }

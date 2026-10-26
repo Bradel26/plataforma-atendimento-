@@ -65,7 +65,7 @@ async function realizadoDoMes(mes: Date, hoje: Date): Promise<Map<string, Bruto>
   const historico = creds.length
     ? await prisma.credenciamentoHistorico.findMany({
         where: { criadoEm: noMes, credenciamentoId: { in: creds.map((c) => c.id) } },
-        select: { credenciamentoId: true, paraEstagio: { select: { nome: true } } },
+        select: { credenciamentoId: true, paraEstagio: { select: { nome: true, chave: true } } },
       })
     : [];
 
@@ -86,7 +86,7 @@ async function realizadoDoMes(mes: Date, hoje: Date): Promise<Map<string, Bruto>
   for (const h of historico) {
     const dono = donoDe.get(h.credenciamentoId);
     marcar(trabalhados, dono, h.credenciamentoId);
-    if (papelDoEstagio(h.paraEstagio.nome) === 'ATIVO') marcar(concluidos, dono, h.credenciamentoId);
+    if (papelDoEstagio(h.paraEstagio.nome, h.paraEstagio.chave) === 'ATIVO') marcar(concluidos, dono, h.credenciamentoId);
   }
   for (const [dono, ids] of concluidos) {
     somar(dono, 'CREDENCIAMENTOS_CONCLUIDOS', ids.size);

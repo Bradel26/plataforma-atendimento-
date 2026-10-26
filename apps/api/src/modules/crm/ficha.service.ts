@@ -1,10 +1,11 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, type Operacao } from '@prisma/client';
 import { notFound } from '../../lib/errors';
 import { prisma } from '../../lib/prisma';
 import { urlAssinada } from '../../lib/storage';
-import { filtroDe, politicaContas, politicaContatos } from '../../lib/politicas';
+import { filtroDe, politicaContas, politicaContatos, politicaCredenciamentos } from '../../lib/politicas';
 import { apenasVisivel } from '../../lib/visibilidade';
 import { codificarCursor, decodificarCursor } from '../../lib/paginacao';
+import { filtroOperacoesPermitidas } from '../esteira/acesso';
 
 /**
  * Ficha 360 do cliente.
@@ -60,6 +61,8 @@ type LinhaEvento = {
   escopo: 'CONTATO' | 'CONTA';
   usuario_nome: string | null;
   gravacao_url: string | null;
+  /** So nos eventos da esteira: TIM ou STARLINK. */
+  operacao: Operacao | null;
 };
 
 export type Evento = {
@@ -75,6 +78,8 @@ export type Evento = {
   escopo: 'CONTATO' | 'CONTA';
   usuario: string | null;
   gravacaoUrl: string | null;
+  /** Operacao da esteira (eventos CREDENCIAMENTO); nulo nos demais. */
+  operacao: Operacao | null;
 };
 
 const paraEvento = (l: LinhaEvento): Evento => ({
@@ -90,6 +95,7 @@ const paraEvento = (l: LinhaEvento): Evento => ({
   escopo: l.escopo,
   usuario: l.usuario_nome,
   gravacaoUrl: l.gravacao_url ? urlAssinada(l.gravacao_url) : null,
+  operacao: l.operacao,
 });
 
 type Raiz = { contatoId: string | null; contaId: string | null };
@@ -103,10 +109,35 @@ export type FiltroTimeline = Raiz & {
 };
 
 /**
+ * Vinculos da esteira que entram na linha do tempo: do contato ou da empresa,
+ * nao arquivados, na carteira e nas operacoes que o usuario enxerga (spec 4.9).
+ * O SQL cru nao passa pelos filtros do Prisma, entao a lista de ids vai pronta.
+ */
+async function credenciamentosVisiveis(raiz: Raiz): Promise<string[]> {
+  const doVinculo: Prisma.CredenciamentoWhereInput[] = [
+    ...(raiz.contatoId ? [{ contatoId: raiz.contatoId }] : []),
+    ...(raiz.contaId ? [{ contaId: raiz.contaId }] : []),
+  ];
+  if (doVinculo.length === 0) return [];
+  const linhas = await prisma.credenciamento.findMany({
+    where: {
+      AND: [
+        await filtroDe(politicaCredenciamentos),
+        await filtroOperacoesPermitidas(),
+        { arquivadoEm: null },
+        { OR: doVinculo },
+      ],
+    },
+    select: { id: true },
+  });
+  return linhas.map((l) => l.id);
+}
+
+/**
  * Cada fonte projeta a mesma forma de linha. `sql` recebe os predicados de raiz
  * ja montados para nao repetir a regra de escopo oito vezes.
  */
-function fontes(raiz: Raiz) {
+function fontes(raiz: Raiz, credenciamentos: string[]) {
   const { contatoId, contaId } = raiz;
   // Uuid inexistente: mantem o SQL valido quando so uma das raizes foi pedida,
   // sem precisar montar a lista de UNION condicionalmente.
@@ -129,7 +160,7 @@ function fontes(raiz: Raiz) {
                  ORDER BY m.criado_em DESC LIMIT 1) AS detalhe,
                cv.canal::text AS canal, cv.status::text AS situacao,
                NULL::numeric AS valor, cv.id AS referencia,
-               'CONTATO' AS escopo, u.nome AS usuario_nome, NULL::text AS gravacao_url
+               'CONTATO' AS escopo, u.nome AS usuario_nome, NULL::text AS gravacao_url, NULL::text AS operacao
           FROM conversas cv
           LEFT JOIN usuarios u ON u.id = cv.agente_id
          WHERE cv.contato_id = ${c}`,
@@ -148,7 +179,7 @@ function fontes(raiz: Raiz) {
                       THEN 'Transcrição: ' || ch.transcricao END) AS detalhe,
                'VOZ' AS canal, ch.status::text AS situacao,
                NULL::numeric AS valor, ch.id AS referencia,
-               'CONTATO' AS escopo, u.nome AS usuario_nome, ch.gravacao_url
+               'CONTATO' AS escopo, u.nome AS usuario_nome, ch.gravacao_url, NULL::text AS operacao
           FROM chamadas ch
           LEFT JOIN usuarios u ON u.id = ch.agente_id
          WHERE ch.contato_id = ${c}`,
@@ -178,7 +209,7 @@ function fontes(raiz: Raiz) {
                     WHEN at.prazo < now() THEN 'ATRASADA'
                     ELSE 'PENDENTE' END AS situacao,
                NULL::numeric AS valor, at.id AS referencia,
-               ${escopo('at.contato_id')} AS escopo, COALESCE(uc.nome, u.nome) AS usuario_nome, NULL::text AS gravacao_url
+               ${escopo('at.contato_id')} AS escopo, COALESCE(uc.nome, u.nome) AS usuario_nome, NULL::text AS gravacao_url, NULL::text AS operacao
           FROM atividades at
           LEFT JOIN usuarios u ON u.id = at.responsavel_id
           LEFT JOIN usuarios uc ON uc.id = at.concluido_por_id
@@ -193,7 +224,7 @@ function fontes(raiz: Raiz) {
                pr.descricao AS detalhe,
                pr.prioridade::text AS canal, pr.status::text AS situacao,
                NULL::numeric AS valor, pr.id AS referencia,
-               ${escopo('pr.contato_id')} AS escopo, u.nome AS usuario_nome, NULL::text AS gravacao_url
+               ${escopo('pr.contato_id')} AS escopo, u.nome AS usuario_nome, NULL::text AS gravacao_url, NULL::text AS operacao
           FROM protocolos pr
           LEFT JOIN usuarios u ON u.id = pr.responsavel_id
          WHERE pr.contato_id = ${c} OR pr.conta_id = ${a}`,
@@ -205,7 +236,7 @@ function fontes(raiz: Raiz) {
                op.titulo, f.nome AS detalhe,
                NULL AS canal, op.status::text AS situacao,
                op.valor, op.id AS referencia,
-               'CONTA' AS escopo, u.nome AS usuario_nome, NULL::text AS gravacao_url
+               'CONTA' AS escopo, u.nome AS usuario_nome, NULL::text AS gravacao_url, NULL::text AS operacao
           FROM oportunidades op
           JOIN funis f ON f.id = op.funil_id
           LEFT JOIN usuarios u ON u.id = op.responsavel_id
@@ -220,7 +251,7 @@ function fontes(raiz: Raiz) {
                CASE WHEN h.segundos_no_estagio IS NULL THEN NULL
                     ELSE (h.segundos_no_estagio / 86400)::text || 'd' END AS situacao,
                NULL::numeric AS valor, op.id AS referencia,
-               'CONTA' AS escopo, u.nome AS usuario_nome, NULL::text AS gravacao_url
+               'CONTA' AS escopo, u.nome AS usuario_nome, NULL::text AS gravacao_url, NULL::text AS operacao
           FROM oportunidade_historico_estagio h
           JOIN oportunidades op ON op.id = h.oportunidade_id
           JOIN funil_estagios pa ON pa.id = h.para_estagio_id
@@ -235,7 +266,7 @@ function fontes(raiz: Raiz) {
                'Lead ' || ld.tipo::text AS titulo, ld.observacoes AS detalhe,
                ld.canal_origem::text AS canal, ld.fase::text AS situacao,
                ld.valor_estimado AS valor, ld.id AS referencia,
-               ${escopo('ld.contato_id')} AS escopo, u.nome AS usuario_nome, NULL::text AS gravacao_url
+               ${escopo('ld.contato_id')} AS escopo, u.nome AS usuario_nome, NULL::text AS gravacao_url, NULL::text AS operacao
           FROM leads ld
           LEFT JOIN usuarios u ON u.id = ld.responsavel_id
          WHERE ld.contato_id = ${c} OR ld.conta_id = ${a}`,
@@ -247,13 +278,15 @@ function fontes(raiz: Raiz) {
                pe.tipo::text AS titulo, pe.comentario AS detalhe,
                cv.canal::text AS canal, pe.nota::text AS situacao,
                NULL::numeric AS valor, pe.conversa_id AS referencia,
-               'CONTATO' AS escopo, NULL AS usuario_nome, NULL::text AS gravacao_url
+               'CONTATO' AS escopo, NULL AS usuario_nome, NULL::text AS gravacao_url, NULL::text AS operacao
           FROM pesquisas pe
           JOIN conversas cv ON cv.id = pe.conversa_id
          WHERE cv.contato_id = ${c} AND pe.respondido_em IS NOT NULL`,
     ],
     [
-      // Ciclo do parceiro: cada passagem de etapa da Esteira de Credenciamento.
+      // Ciclo do parceiro: cada passagem de etapa da Esteira de Credenciamento,
+      // rotulada pela operacao (spec 4.8: nunca misturada sem rotulo). So os
+      // vinculos que o usuario enxerga (`credenciamentosVisiveis`).
       'CREDENCIAMENTO',
       Prisma.sql`
         SELECT 'CREDENCIAMENTO' AS tipo, h.id, h.criado_em AS ocorrido_em,
@@ -264,14 +297,15 @@ function fontes(raiz: Raiz) {
                CASE WHEN h.segundos_no_estagio IS NULL THEN NULL
                     ELSE (h.segundos_no_estagio / 86400)::text || 'd' END AS situacao,
                NULL::numeric AS valor, cr.id AS referencia,
-               'CONTATO' AS escopo, u.nome AS usuario_nome, NULL::text AS gravacao_url
+               ${escopo('cr.contato_id')} AS escopo, u.nome AS usuario_nome, NULL::text AS gravacao_url,
+               h.operacao::text AS operacao
           FROM credenciamento_historico h
           JOIN credenciamentos cr ON cr.id = h.credenciamento_id
           JOIN funis f ON f.id = cr.funil_id
           JOIN funil_estagios pa ON pa.id = h.para_estagio_id
           LEFT JOIN funil_estagios de ON de.id = h.de_estagio_id
           LEFT JOIN usuarios u ON u.id = h.usuario_id
-         WHERE cr.contato_id = ${c}`,
+         WHERE ${credenciamentos.length ? Prisma.sql`cr.id IN (${Prisma.join(credenciamentos)})` : Prisma.sql`FALSE`}`,
     ],
   ]);
 }
@@ -280,8 +314,10 @@ export async function timeline(filtro: FiltroTimeline) {
   const { tipos, desde, ate, limite } = filtro;
   const cursor = decodificarCursor(filtro.cursor);
 
-  const mapa = fontes(filtro);
-  const escolhidos = tipos?.length ? tipos.filter((t) => mapa.has(t)) : TIPOS_EVENTO;
+  const pedidos = tipos?.length ? tipos : TIPOS_EVENTO;
+  const credenciamentos = pedidos.includes('CREDENCIAMENTO') ? await credenciamentosVisiveis(filtro) : [];
+  const mapa = fontes(filtro, credenciamentos);
+  const escolhidos = pedidos.filter((t) => mapa.has(t));
   if (escolhidos.length === 0) return { eventos: [] as Evento[], proximoCursor: null };
 
   const uniao = Prisma.join(

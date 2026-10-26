@@ -50,7 +50,7 @@ type ChaveImplantacao = (typeof ETAPAS_IMPLANTACAO)[number]['chave'];
  */
 export function estagioIniciaCiclo(estagio: { nome: string; chave: string | null }): boolean {
   if (chaveConhecida(estagio.chave)) return estagio.chave === 'TIM_ACOMPANHAMENTO' || estagio.chave === 'SL_PRONTO_VENDA';
-  return papelDoEstagio(estagio.nome) === 'ATIVO';
+  return papelDoEstagio(estagio.nome, estagio.chave) === 'ATIVO';
 }
 
 /**
