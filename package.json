@@ -51,6 +51,7 @@
     "smoke:tenant": "node scripts/smoke-tenant.mjs",
     "smoke:tags": "node scripts/smoke-tags.mjs",
     "smoke:visibilidade": "node scripts/smoke-visibilidade.mjs",
+    "smoke:esteiras": "node scripts/smoke-esteiras.mjs",
     "censo:tenant": "node scripts/censo-tenant.mjs",
     "backup:banco": "node scripts/backup-producao.mjs",
     "validar:producao": "node scripts/validar-producao.mjs",
