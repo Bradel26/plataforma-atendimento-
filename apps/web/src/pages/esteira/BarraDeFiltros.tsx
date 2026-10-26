@@ -29,8 +29,8 @@ const SITUACOES_PADRAO: Record<EstruturaEsteira['operacao'], Opcao[]> = {
   ],
 };
 
-/** Popover simples: fecha no Esc e no clique fora. */
-function Popover({
+/** Popover simples: fecha no Esc e no clique fora (também usado no menu do Kanban). */
+export function Popover({
   rotulo,
   ativo,
   largura = 'w-64',
