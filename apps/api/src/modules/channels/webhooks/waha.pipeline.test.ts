@@ -16,6 +16,7 @@ const db = vi.hoisted(() => ({
   contactFindFirst: vi.fn(),
   contactCreate: vi.fn(),
   conversationFindFirst: vi.fn(),
+  conversationFindMany: vi.fn().mockResolvedValue([]),
   conversationCreate: vi.fn(),
   conversationUpdate: vi.fn(),
   queueFindFirst: vi.fn(),
@@ -27,7 +28,7 @@ vi.mock('../../../lib/prisma', () => ({
   prisma: {
     message: { findUnique: db.messageFindUnique, create: db.messageCreate },
     contact: { findFirst: db.contactFindFirst, create: db.contactCreate, findUniqueOrThrow: vi.fn() },
-    conversation: { findFirst: db.conversationFindFirst, create: db.conversationCreate, update: db.conversationUpdate, updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    conversation: { findFirst: db.conversationFindFirst, findMany: db.conversationFindMany, create: db.conversationCreate, update: db.conversationUpdate, updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     queue: { findFirst: db.queueFindFirst },
     user: { findUnique: vi.fn().mockResolvedValue({ nome: 'Dono' }) },
     channelConfig: { findFirst: db.channelConfigFindFirst, update: db.channelConfigUpdate },

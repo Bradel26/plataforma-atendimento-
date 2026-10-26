@@ -15,7 +15,9 @@ import type { MensagemNormalizada } from './meta.types';
 const {
   messageFindUnique,
   contactFindFirst,
+  contactFindUniqueOrThrow,
   conversationFindFirst,
+  conversationFindMany,
   conversationCreate,
   conversationUpdate,
   conversationUpdateMany,
@@ -24,7 +26,9 @@ const {
 } = vi.hoisted(() => ({
   messageFindUnique: vi.fn(),
   contactFindFirst: vi.fn(),
+  contactFindUniqueOrThrow: vi.fn(),
   conversationFindFirst: vi.fn(),
+  conversationFindMany: vi.fn().mockResolvedValue([]),
   conversationCreate: vi.fn(),
   conversationUpdate: vi.fn(),
   conversationUpdateMany: vi.fn().mockResolvedValue({ count: 0 }),
@@ -35,10 +39,10 @@ const {
 vi.mock('../../lib/prisma', () => ({
   prisma: {
     message: { findUnique: messageFindUnique, create: messageCreate },
-    contact: { findFirst: contactFindFirst, findUniqueOrThrow: vi.fn(), create: vi.fn() },
+    contact: { findFirst: contactFindFirst, findUniqueOrThrow: contactFindUniqueOrThrow, create: vi.fn() },
     conversation: {
       findFirst: conversationFindFirst,
-      findMany: vi.fn().mockResolvedValue([]),
+      findMany: conversationFindMany,
       create: conversationCreate,
       update: conversationUpdate,
       updateMany: conversationUpdateMany,
@@ -92,6 +96,8 @@ describe('registrarMensagemEntrante — conversa nao atravessa linha (achado cri
     vi.clearAllMocks();
     messageFindUnique.mockResolvedValue(null);
     contactFindFirst.mockResolvedValue({ id: 'contato-1', telefone: '5511999999999' });
+    contactFindUniqueOrThrow.mockResolvedValue({ id: 'contato-canônico', telefone: '5562992885001' });
+    conversationFindMany.mockResolvedValue([]);
     messageCreate.mockResolvedValue({ id: 'msg-1', criadoEm: new Date('2026-09-24T10:00:00.000Z') });
     // Retorno generico do update mandatorio de fim de fluxo (ultimaMensagemEm,
     // naoLidas, enderecoExterno, arquivada) -- roda em toda chamada, nova ou
@@ -161,6 +167,41 @@ describe('registrarMensagemEntrante — conversa nao atravessa linha (achado cri
     });
     expect(conversationCreate).not.toHaveBeenCalled();
     expect(conversationUpdate).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'conv-aberta-por-telefone' } }));
+  });
+
+  it('LID com telefone sem o nono dígito reutiliza a conversa recente do telefone cadastrado com nono dígito', async () => {
+    configDoDestino.mockResolvedValue({ id: 'cfg-vendedor', donoId: 'agente-1', filaId: null });
+    conversationFindFirst
+      .mockResolvedValueOnce(null) // o LID ainda não tem conversa
+      .mockResolvedValueOnce({
+        id: 'conv-com-nono-digito', contatoId: 'contato-canônico', canalConfigId: 'cfg-vendedor',
+        status: 'EM_ATENDIMENTO', filaId: null, agenteId: 'agente-1', ultimaMensagemEm: new Date(),
+      });
+    conversationFindMany.mockResolvedValue([{
+      contatoId: 'contato-canônico',
+      ultimaMensagemEm: new Date(),
+      mensagens: [{ autor: 'AGENTE', interno: false }],
+    }]);
+    conversationUpdate.mockResolvedValue({ id: 'conv-com-nono-digito', filaId: null, agenteId: 'agente-1' });
+
+    await registrarMensagemEntrante(mensagem({
+      enderecoExterno: '79233992933473@lid',
+      telefone: '556292885001',
+      identificadorDestino: 'vendedor-1',
+      idExterno: 'false_79233992933473@lid_variante-9-digito',
+    }));
+
+    expect(conversationFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        canalConfigId: 'cfg-vendedor',
+        enderecoExterno: { in: ['5562992885001'] },
+      }),
+    }));
+    expect(contactFindFirst).not.toHaveBeenCalled();
+    expect(conversationCreate).not.toHaveBeenCalled();
+    expect(conversationFindFirst.mock.calls[1]?.[0].where).toMatchObject({
+      contatoId: 'contato-canônico', canal: 'WHATSAPP', canalConfigId: 'cfg-vendedor',
+    });
   });
 
   it('linha pessoal do vendedor B NAO reaproveita a conversa aberta na linha pessoal do vendedor A', async () => {

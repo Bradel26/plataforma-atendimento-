@@ -432,14 +432,21 @@ async function encontrarOuCriarContato(dados: MensagemNormalizada, canalConfigId
     orderBy: { ultimaMensagemEm: 'desc' },
     select: { contatoId: true, ultimaMensagemEm: true },
   });
-  const alternativo = numeroBrAlternativo(dados.enderecoExterno);
-  if (alternativo) {
+  // Em mensagens @lid o enderecoExterno nao e telefone. Use tambem o telefone
+  // resolvido pelo conector para procurar a variante brasileira com/sem nono
+  // digito, sempre limitada a uma conversa recente aguardando resposta.
+  const telefoneResolvido = numeroNormalizado(dados.telefone);
+  const alternativos = [...new Set([
+    numeroBrAlternativo(dados.enderecoExterno),
+    telefoneResolvido ? numeroBrAlternativo(telefoneResolvido) : null,
+  ].filter((numero): numero is string => Boolean(numero)))];
+  if (alternativos.length) {
     const candidatos = await prisma.conversation.findMany({
       where: {
         canal: dados.canal,
         canalConfigId,
         status: { not: 'FINALIZADO' },
-        enderecoExterno: alternativo,
+        enderecoExterno: { in: alternativos },
         ultimaMensagemEm: { gte: new Date(Date.now() - 24 * 60 * 60_000) },
       },
       orderBy: { ultimaMensagemEm: 'desc' },
