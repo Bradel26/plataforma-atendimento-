@@ -1,9 +1,9 @@
-import type { Prisma } from '@prisma/client';
+import type { Operacao, Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { filtroDe, politicaContatos, politicaCredenciamentos } from '../../lib/politicas';
 import { usuarioAtualOuNulo } from '../../lib/tenant';
-import { apenasVisivel } from '../../lib/visibilidade';
-import { badRequest, notFound } from '../../lib/errors';
+import { badRequest, forbidden, notFound } from '../../lib/errors';
+import { acessoDoUsuarioAtual, filtroOperacoesPermitidas, resolverAcesso } from '../esteira/acesso';
 import { chaveDoVinculo, pertenceAoVinculo } from '../esteira/vinculo';
 import { criarVinculo } from '../esteira/vinculos.service';
 import { SEGMENTOS_PARCEIRO, identificarSegmentoParceiro, type SegmentoParceiro } from './segmentoParceiro';
@@ -18,8 +18,8 @@ import type {
 const inclusao = {
   contato: { select: { id: true, nome: true, email: true, telefone: true, uf: true, cidade: true } },
   conta: { select: { id: true, nome: true, cnpj: true } },
-  funil: { select: { id: true, nome: true } },
-  estagio: { select: { id: true, nome: true, ordem: true } },
+  funil: { select: { id: true, nome: true, operacao: true } },
+  estagio: { select: { id: true, nome: true, ordem: true, chave: true } },
   responsavel: { select: { id: true, nome: true } },
 } satisfies Prisma.CredenciamentoInclude;
 
@@ -31,7 +31,8 @@ function serialize(c: CredenciamentoDb) {
     contato: c.contato,
     conta: c.conta,
     funil: c.funil,
-    estagio: { ...c.estagio, papel: papelDoEstagio(c.estagio.nome) },
+    operacao: c.operacao,
+    estagio: { ...c.estagio, papel: papelDoEstagio(c.estagio.nome, c.estagio.chave) },
     responsavel: c.responsavel,
     situacaoExcecao: c.situacaoExcecao,
     motivoExcecao: c.motivoExcecao,
@@ -58,6 +59,21 @@ export function funisDaEsteira() {
   });
 }
 
+/**
+ * Funis ESTEIRA das operacoes que o usuario atual enxerga (spec 4.9). Funil sem
+ * operacao (anterior a migracao) nao aparece: credenciamento sempre tem operacao.
+ */
+export async function funisPermitidos() {
+  const [funis, acesso] = await Promise.all([funisDaEsteira(), acessoDoUsuarioAtual()]);
+  return funis.filter((f) => f.operacao !== null && acesso[f.operacao] !== undefined);
+}
+
+/** Funil pedido por id fora das operacoes permitidas: 404, sem revelar que existe. */
+export async function exigirFunilPermitido(funilId: string | undefined) {
+  if (!funilId) return;
+  if (!(await funisPermitidos()).some((f) => f.id === funilId)) throw notFound('Operação não encontrada');
+}
+
 /** Funil ESTEIRA de destino: o informado, ou o primeiro funil ESTEIRA ativo. */
 async function resolverFunilEsteira(funilId?: string, estagioId?: string) {
   const funil = funilId
@@ -78,9 +94,21 @@ async function resolverFunilEsteira(funilId?: string, estagioId?: string) {
   return { funil, estagio };
 }
 
+/** Filtro base: carteira, operacoes permitidas e vinculo nao arquivado (spec 4.9). */
+async function filtroBase(): Promise<Prisma.CredenciamentoWhereInput[]> {
+  return [await filtroDe(politicaCredenciamentos), await filtroOperacoesPermitidas(), { arquivadoEm: null }];
+}
+
+/** 403 para quem so tem LEITURA na operacao (as rotas antigas tambem escrevem). */
+async function exigirEdicao(operacao: Operacao) {
+  if (resolverAcesso(await acessoDoUsuarioAtual(), operacao, 'EDICAO') !== 'OK') {
+    throw forbidden('Você tem acesso somente leitura a esta operação');
+  }
+}
+
 async function carregarVisivel(id: string) {
   const c = await prisma.credenciamento.findFirst({
-    where: apenasVisivel(id, await filtroDe(politicaCredenciamentos)),
+    where: { AND: [{ id }, ...(await filtroBase())] },
     include: inclusao,
   });
   if (!c) throw notFound('Credenciamento não encontrado');
@@ -119,7 +147,7 @@ export async function listarCredenciamentos(query: ListarCredenciamentosQuery) {
   if (query.estagioId) filtros.push({ estagioId: query.estagioId });
   if (query.contaId) filtros.push({ contaId: query.contaId });
   if (query.contatoId) filtros.push({ contatoId: query.contatoId });
-  filtros.push(await filtroDe(politicaCredenciamentos));
+  filtros.push(...(await filtroBase()));
 
   const registros = await prisma.credenciamento.findMany({
     where: { AND: filtros },
@@ -153,6 +181,8 @@ export async function obterCredenciamento(id: string) {
 export async function criarCredenciamento(input: CriarCredenciamentoInput) {
   const { funil } = await resolverFunilEsteira(input.funilId);
   if (!funil.operacao) throw badRequest('A esteira informada não tem operação definida');
+  await exigirFunilPermitido(funil.id);
+  await exigirEdicao(funil.operacao);
   const vinculo = await criarVinculo(funil.operacao, {
     contatoId: input.contatoId,
     contaId: input.contaId,
@@ -192,10 +222,12 @@ export async function importarContatosClassificados(previa: boolean) {
     const segmento = identificarSegmentoParceiro(contato.segmentoParceiro, contato.observacoes);
     return segmento ? [{ ...contato, segmento }] : [];
   });
-  const funis = await funisDaEsteira();
+  // Destino pela OPERACAO do funil, nunca pelo nome (o ADMIN pode renomear),
+  // e so operacoes que o usuario enxerga.
+  const funis = await funisPermitidos();
   const destino = new Map<SegmentoParceiro, (typeof funis)[number] | undefined>([
-    ['TIM', funis.find((funil) => funil.nome.toLocaleLowerCase('pt-BR') === 'credenciamento tim')],
-    ['STARLINK', funis.find((funil) => funil.nome.toLocaleLowerCase('pt-BR') === 'credenciamento starlink')],
+    ['TIM', funis.find((funil) => funil.operacao === 'TIM')],
+    ['STARLINK', funis.find((funil) => funil.operacao === 'STARLINK')],
   ]);
   // Vinculos existentes dos contatos e das contas deles, pelo mesmo criterio de
   // `criarVinculo` (`pertenceAoVinculo` = `whereDoVinculo` em memoria):
@@ -289,6 +321,7 @@ export async function importarContatosClassificados(previa: boolean) {
 
 export async function atualizarCredenciamento(id: string, input: AtualizarCredenciamentoInput) {
   const atual = await carregarVisivel(id);
+  await exigirEdicao(atual.operacao);
   const mudouEstagio = input.estagioId !== undefined && input.estagioId !== atual.estagioId;
 
   if (mudouEstagio) {
@@ -347,21 +380,28 @@ export async function esteiraKanban(query: {
   responsavelId?: string;
   excecoes?: 'incluir' | 'ocultar' | 'somente';
 }) {
-  const { funil } = await resolverFunilEsteira(query.funilId);
+  const { funil } = await resolverFunilEsteira(query.funilId ?? (await funisPermitidos())[0]?.id);
+  await exigirFunilPermitido(funil.id);
 
   const registros = await prisma.credenciamento.findMany({
-    where: { AND: [{ funilId: funil.id }, ...filtrosDaConsulta(query), await filtroDe(politicaCredenciamentos)] },
+    where: { AND: [{ funilId: funil.id }, ...filtrosDaConsulta(query), ...(await filtroBase())] },
     include: inclusao,
     orderBy: { estagioDesde: 'asc' },
   });
   const serializados = registros.map(serialize);
 
   return {
-    funil: { id: funil.id, nome: funil.nome },
+    funil: { id: funil.id, nome: funil.nome, operacao: funil.operacao },
     colunas: funil.estagios.map((estagio) => {
       const itens = serializados.filter((c) => c.estagio.id === estagio.id);
       return {
-        estagio: { id: estagio.id, nome: estagio.nome, ordem: estagio.ordem, papel: papelDoEstagio(estagio.nome) },
+        estagio: {
+          id: estagio.id,
+          nome: estagio.nome,
+          ordem: estagio.ordem,
+          chave: estagio.chave,
+          papel: papelDoEstagio(estagio.nome, estagio.chave),
+        },
         credenciamentos: itens,
         total: itens.length,
       };

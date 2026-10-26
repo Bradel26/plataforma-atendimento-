@@ -17,7 +17,8 @@ import {
   atualizarCredenciamento,
   criarCredenciamento,
   esteiraKanban,
-  funisDaEsteira,
+  exigirFunilPermitido,
+  funisPermitidos,
   importarContatosClassificados,
   listarCredenciamentos,
   obterCredenciamento,
@@ -38,20 +39,30 @@ function periodoDe(q: { desde?: Date; ate?: Date }) {
   return { desde, ate };
 }
 
-/** Operacoes (funis ESTEIRA) com seus estagios — alimenta seletores e o menu. */
+/**
+ * Operacoes (funis ESTEIRA) com seus estagios — alimenta seletores e o menu.
+ * So as operacoes que o usuario enxerga (spec 4.9), com o codigo da operacao e
+ * a chave de cada etapa.
+ */
 credenciamentosRoutes.get(
   '/funis',
   asyncHandler(async (_req, res) => {
-    const funis = await funisDaEsteira();
+    const funis = await funisPermitidos();
     res.json({
       funis: funis.map((f) => ({
         id: f.id,
         nome: f.nome,
-        estagios: f.estagios.map((e) => ({ id: e.id, nome: e.nome, ordem: e.ordem })),
+        operacao: f.operacao,
+        estagios: f.estagios.map((e) => ({ id: e.id, nome: e.nome, ordem: e.ordem, chave: e.chave, tipo: e.tipoEtapa })),
       })),
     });
   }),
 );
+
+/**
+ * Painel, Gestao, Desempenho e Acompanhamentos filtram pelas operacoes
+ * permitidas dentro dos proprios indicadores (`whereCredenciamentos`).
+ */
 
 /** Dashboard: uma coluna por operacao. */
 credenciamentosRoutes.get(
@@ -70,6 +81,7 @@ credenciamentosRoutes.get(
   validateQuery(gestaoSchema),
   asyncHandler(async (_req, res) => {
     const q = res.locals.query;
+    await exigirFunilPermitido(q.funilId);
     res.json({
       gestao: await gestaoOperacao(periodoDe(q), {
         limiteDias: q.limiteDias,
@@ -87,6 +99,7 @@ credenciamentosRoutes.get(
   validateQuery(desempenhoSchema),
   asyncHandler(async (_req, res) => {
     const q = res.locals.query;
+    await exigirFunilPermitido(q.funilId);
     res.json({
       desempenho: await desempenhoOperacional(periodoDe(q), {
         consultorId: q.consultorId,
@@ -107,6 +120,7 @@ credenciamentosRoutes.get(
   }),
 );
 
+/** @deprecated Substituida por /api/esteiras/:operacao (Task 21 remove apos o front migrar). */
 credenciamentosRoutes.get(
   '/',
   validateQuery(listarCredenciamentosSchema),
@@ -115,6 +129,7 @@ credenciamentosRoutes.get(
   }),
 );
 
+/** @deprecated Substituida por /api/esteiras/:operacao (Task 21 remove apos o front migrar). */
 credenciamentosRoutes.get(
   '/kanban',
   validateQuery(filtrosEsteiraSchema),
@@ -130,6 +145,7 @@ credenciamentosRoutes.get(
   }),
 );
 
+/** @deprecated Substituida pela importacao da esteira (Task 21 remove apos o front migrar). */
 credenciamentosRoutes.post(
   '/importar-contatos-classificados',
   validateBody(z.object({ previa: z.boolean() })),
@@ -138,6 +154,7 @@ credenciamentosRoutes.post(
   }),
 );
 
+/** @deprecated Substituida por POST /api/esteiras/:operacao (Task 21 remove apos o front migrar). */
 credenciamentosRoutes.post(
   '/',
   validateBody(criarCredenciamentoSchema),
@@ -146,6 +163,7 @@ credenciamentosRoutes.post(
   }),
 );
 
+/** @deprecated Substituida pelos movimentos de /api/esteiras/:operacao (Task 21 remove apos o front migrar). */
 credenciamentosRoutes.patch(
   '/:id',
   validateBody(atualizarCredenciamentoSchema),

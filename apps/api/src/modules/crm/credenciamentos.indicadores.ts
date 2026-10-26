@@ -2,8 +2,20 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { filtroDe, politicaConversas, politicaCredenciamentos, politicaProtocolos } from '../../lib/politicas';
 import { organizacaoAtual } from '../../lib/tenant';
-import { funisDaEsteira } from './credenciamentos.service';
-import { DIA_MS, REGIAO_DA_UF, diasDesde, media, papelDoEstagio, semaforo, type PapelDoEstagio } from './esteira';
+import { filtroOperacoesPermitidas } from '../esteira/acesso';
+import { funisPermitidos } from './credenciamentos.service';
+import { DIA_MS, REGIAO_DA_UF, diasDesde, media, semaforo } from './esteira';
+import {
+  agruparTempoPorEtapa,
+  arred1,
+  concluidosNoPeriodo,
+  contarPorPapel,
+  emFluxo,
+  papelDoCard,
+  saidaReativavel,
+} from './indicadoresEsteira';
+
+export { agruparTempoPorEtapa } from './indicadoresEsteira';
 
 /**
  * Indicadores da operacao de credenciamento (SUGESTOES.docx).
@@ -18,40 +30,41 @@ import { DIA_MS, REGIAO_DA_UF, diasDesde, media, papelDoEstagio, semaforo, type 
 
 export type Periodo = { desde: Date; ate: Date };
 
-const ESTAGIOS_CONCLUIDOS: PapelDoEstagio[] = ['CREDENCIADO', 'ATIVO'];
-
 // ---------------------------------------------------------------------------
 // Dashboard
 // ---------------------------------------------------------------------------
 
 /**
- * Uma coluna por operacao (funil ESTEIRA). "Tela dividida ao meio com os dados
- * de cada operacao": com dois funis (TIM, Starlink) sao duas metades; com um so,
- * uma coluna; sem nenhum, lista vazia e o Dashboard nao mostra a secao.
+ * Uma coluna por operacao (TIM, Starlink), so as que o usuario enxerga. Os
+ * cards sao agrupados pela `operacao` do vinculo, nao pelo nome do funil, e os
+ * contadores seguem os papeis da chave (spec 4.7): saidas nao contam como
+ * pendente nem como ativo.
  */
 export async function painelOperacoes(periodo: Periodo) {
   const [funis, registros] = await Promise.all([
-    funisDaEsteira(),
+    funisPermitidos(),
     prisma.credenciamento.findMany({
-      where: await filtroDe(politicaCredenciamentos),
+      where: { AND: await filtrosBase() },
       select: {
-        funilId: true,
+        operacao: true,
         estagioId: true,
         situacaoExcecao: true,
         criadoEm: true,
+        estagio: { select: { nome: true, chave: true } },
         contato: { select: { uf: true } },
       },
     }),
   ]);
 
   return funis.map((funil) => {
-    const papelPorEstagio = new Map(funil.estagios.map((e) => [e.id, papelDoEstagio(e.nome)]));
-    const doFunil = registros.filter((r) => r.funilId === funil.id);
-    const emFluxo = doFunil.filter((r) => r.situacaoExcecao === null);
-    const comPapel = (papel: PapelDoEstagio) => emFluxo.filter((r) => papelPorEstagio.get(r.estagioId) === papel).length;
+    const operacao = funil.operacao!;
+    const daOperacao = registros.filter((r) => r.operacao === operacao);
+    const contagem = contarPorPapel(daOperacao);
+    // Situacao legada so vale em etapa sem chave (funil anterior a migracao).
+    const legado = daOperacao.filter((r) => !r.estagio.chave);
 
     const porUf = new Map<string, number>();
-    for (const r of doFunil) {
+    for (const r of daOperacao) {
       const uf = r.contato.uf ?? 'Sem UF';
       porUf.set(uf, (porUf.get(uf) ?? 0) + 1);
     }
@@ -64,18 +77,22 @@ export async function painelOperacoes(periodo: Periodo) {
       [...m.entries()].map(([rotulo, total]) => ({ rotulo, total })).sort((a, b) => b.total - a.total);
 
     return {
+      operacao,
       funil: { id: funil.id, nome: funil.nome },
-      total: doFunil.length,
-      ativos: comPapel('ATIVO'),
-      pendentes: comPapel('PENDENCIA'),
-      inativos: doFunil.filter((r) => r.situacaoExcecao === 'INATIVADO').length,
-      reprovados: doFunil.filter((r) => r.situacaoExcecao === 'REPROVADO').length,
-      cancelados: doFunil.filter((r) => r.situacaoExcecao === 'CANCELADO').length,
-      novosNoPeriodo: doFunil.filter((r) => r.criadoEm >= periodo.desde && r.criadoEm <= periodo.ate).length,
+      total: daOperacao.length,
+      ativos: contagem.ativos,
+      pendentes: contagem.pendentes,
+      inativos: legado.filter((r) => r.situacaoExcecao === 'INATIVADO').length,
+      reprovados: legado.filter((r) => r.situacaoExcecao === 'REPROVADO').length,
+      cancelados: legado.filter((r) => r.situacaoExcecao === 'CANCELADO').length,
+      novosNoPeriodo: daOperacao.filter((r) => r.criadoEm >= periodo.desde && r.criadoEm <= periodo.ate).length,
       porEstagio: funil.estagios.map((e) => ({
         id: e.id,
         nome: e.nome,
-        total: emFluxo.filter((r) => r.estagioId === e.id).length,
+        chave: e.chave,
+        tipo: e.tipoEtapa,
+        // Etapa de saida mostra quem saiu; nas demais, so quem esta no fluxo.
+        total: daOperacao.filter((r) => r.estagioId === e.id && (e.tipoEtapa === 'SAIDA' || emFluxo(r))).length,
       })),
       porUf: ordenar(porUf),
       porRegiao: ordenar(porRegiao),
@@ -89,8 +106,18 @@ export async function painelOperacoes(periodo: Periodo) {
 
 type FiltroCred = { funilId?: string; uf?: string; responsavelId?: string };
 
+/** Carteira + operacoes permitidas + vinculo nao arquivado (spec 4.9). Sempre em AND. */
+async function filtrosBase(): Promise<Prisma.CredenciamentoWhereInput[]> {
+  return [
+    await filtroDe(politicaCredenciamentos),
+    await filtroOperacoesPermitidas(),
+    { arquivadoEm: null },
+    { funil: { tipo: 'ESTEIRA' } },
+  ];
+}
+
 async function whereCredenciamentos(f: FiltroCred): Promise<Prisma.CredenciamentoWhereInput> {
-  const e: Prisma.CredenciamentoWhereInput[] = [await filtroDe(politicaCredenciamentos), { funil: { tipo: 'ESTEIRA' } }];
+  const e: Prisma.CredenciamentoWhereInput[] = await filtrosBase();
   if (f.funilId) e.push({ funilId: f.funilId });
   if (f.uf) e.push({ contato: { uf: f.uf } });
   if (f.responsavelId) e.push({ responsavelId: f.responsavelId });
@@ -100,46 +127,33 @@ async function whereCredenciamentos(f: FiltroCred): Promise<Prisma.Credenciament
 /**
  * Tempo medio do inicio do processo ate o credenciamento, em dias.
  *
- * "Credenciado" e a PRIMEIRA entrada num estagio Credenciado ou Ativo — quem
- * pulou direto para Ativo tambem concluiu. Conta quem concluiu dentro do
- * periodo, nao quem comecou nele: o numero responde "quanto demoraram os que
- * credenciamos este mes".
+ * Termina ao ENTRAR em CREDENCIADO (spec 4.7), pela chave; quem pulou direto
+ * para ATIVO tambem concluiu. Conta quem concluiu dentro do periodo, nao quem
+ * comecou nele. As passagens anteriores ao periodo vem junto para a regra pura
+ * (`concluidosNoPeriodo`) saber qual foi a PRIMEIRA entrada.
  */
 async function temposDeCredenciamento(periodo: Periodo, f: FiltroCred) {
   const passagens = await prisma.credenciamentoHistorico.findMany({
     where: {
-      criadoEm: { gte: periodo.desde, lte: periodo.ate },
+      criadoEm: { lte: periodo.ate },
       credenciamento: await whereCredenciamentos(f),
     },
     select: {
       credenciamentoId: true,
       criadoEm: true,
-      paraEstagio: { select: { nome: true } },
+      paraEstagio: { select: { nome: true, chave: true } },
       credenciamento: { select: { criadoEm: true, responsavelId: true } },
     },
     orderBy: { criadoEm: 'asc' },
   });
-
-  const vistos = new Set<string>();
-  const concluidos: Array<{ dias: number; responsavelId: string | null }> = [];
-  for (const p of passagens) {
-    if (vistos.has(p.credenciamentoId)) continue;
-    if (!ESTAGIOS_CONCLUIDOS.includes(papelDoEstagio(p.paraEstagio.nome))) continue;
-    vistos.add(p.credenciamentoId);
-    concluidos.push({
-      dias: (p.criadoEm.getTime() - p.credenciamento.criadoEm.getTime()) / DIA_MS,
-      responsavelId: p.credenciamento.responsavelId,
-    });
-  }
-  return concluidos;
+  return concluidosNoPeriodo(passagens, periodo);
 }
-
-const arred1 = (n: number | null) => (n === null ? null : Math.round(n * 10) / 10);
 
 /**
  * Tempo medio por etapa: media das passagens CONCLUIDAS no periodo (o card saiu
  * da etapa), em dias. Card que ainda esta na etapa nao entra — o tempo dele nao
- * terminou, e somar um valor parcial puxaria a media para baixo.
+ * terminou. Agrupa por (operacao, chave) — `agruparTempoPorEtapa` —, nunca pelo
+ * nome: a etapa da TIM e a da Starlink de mesmo nome sao etapas diferentes.
  */
 async function tempoPorEtapa(periodo: Periodo, f: FiltroCred & { estagioId?: string }) {
   const passagens = await prisma.credenciamentoHistorico.findMany({
@@ -149,28 +163,29 @@ async function tempoPorEtapa(periodo: Periodo, f: FiltroCred & { estagioId?: str
       segundosNoEstagio: { not: null },
       credenciamento: await whereCredenciamentos(f),
     },
-    select: { segundosNoEstagio: true, deEstagio: { select: { id: true, nome: true, ordem: true } } },
+    select: {
+      operacao: true,
+      segundosNoEstagio: true,
+      deEstagio: { select: { id: true, nome: true, ordem: true, chave: true } },
+    },
   });
 
-  const porEtapa = new Map<string, { nome: string; ordem: number; segundos: number[] }>();
-  for (const p of passagens) {
-    if (!p.deEstagio) continue;
-    // Agrupa pelo NOME: TIM e Starlink tem estagios com ids diferentes e o
-    // mesmo significado, e a pergunta e "qual etapa demora", nao "qual funil".
-    const chave = p.deEstagio.nome;
-    const atual = porEtapa.get(chave) ?? { nome: p.deEstagio.nome, ordem: p.deEstagio.ordem, segundos: [] };
-    atual.segundos.push(p.segundosNoEstagio!);
-    porEtapa.set(chave, atual);
-  }
-
-  return [...porEtapa.values()]
-    .sort((a, b) => a.ordem - b.ordem)
-    .map((e) => ({
-      etapa: e.nome,
-      papel: papelDoEstagio(e.nome),
-      passagens: e.segundos.length,
-      mediaDias: arred1(media(e.segundos)! / 86_400),
-    }));
+  return agruparTempoPorEtapa(
+    passagens.flatMap((p) =>
+      p.deEstagio && p.segundosNoEstagio !== null
+        ? [
+            {
+              operacao: p.operacao,
+              chave: p.deEstagio.chave,
+              estagioId: p.deEstagio.id,
+              nome: p.deEstagio.nome,
+              ordem: p.deEstagio.ordem,
+              segundos: p.segundosNoEstagio,
+            },
+          ]
+        : [],
+    ),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -188,12 +203,14 @@ export async function gestaoOperacao(
     temposDeCredenciamento(periodo, f),
     tempoPorEtapa(periodo, f),
     prisma.credenciamento.findMany({
-      where: { AND: [await whereCredenciamentos(f), { situacaoExcecao: null }] },
+      where: await whereCredenciamentos(f),
       select: {
         id: true,
+        operacao: true,
+        situacaoExcecao: true,
         estagioDesde: true,
         funil: { select: { id: true, nome: true } },
-        estagio: { select: { id: true, nome: true, ordem: true } },
+        estagio: { select: { id: true, nome: true, ordem: true, chave: true } },
         contato: { select: { id: true, nome: true } },
         conta: { select: { id: true, nome: true } },
         responsavel: { select: { id: true, nome: true } },
@@ -219,13 +236,13 @@ export async function gestaoOperacao(
       orderBy: { ultimaMensagemEm: 'asc' },
       take: 200,
     }),
-    funisDaEsteira(),
+    funisPermitidos(),
   ]);
 
   // "Parado" so vale para quem ainda tem caminho pela frente: parceiro Ativo e
-  // o fim da esteira, e ficar la e o objetivo, nao gargalo.
+  // o fim da esteira, e ficar la e o objetivo, nao gargalo. Saida nao e fluxo.
   const naEsteira = abertos
-    .filter((c) => papelDoEstagio(c.estagio.nome) !== 'ATIVO')
+    .filter((c) => emFluxo(c) && papelDoCard(c) !== 'ATIVO')
     .map((c) => {
       const dias = diasDesde(c.estagioDesde, agora);
       return {
@@ -233,7 +250,10 @@ export async function gestaoOperacao(
         parceiro: c.conta?.nome ?? c.contato.nome,
         contato: c.contato,
         responsavel: c.responsavel,
-        operacao: c.funil,
+        /** `id`/`nome` do funil (contrato antigo) + `codigo` da operacao. */
+        operacao: { ...c.funil, codigo: c.operacao },
+        estagioId: c.estagio.id,
+        chave: c.estagio.chave,
         etapa: c.estagio.nome,
         ultimaMovimentacao: c.estagioDesde,
         diasParado: dias,
@@ -255,7 +275,9 @@ export async function gestaoOperacao(
     tempoMedioCredenciamentoDias: arred1(media(concluidos.map((c) => c.dias))),
     credenciadosNoPeriodo: concluidos.length,
     parceirosParados: parados.length,
-    maiorTempoParado: maior ? { parceiro: maior.parceiro, dias: maior.diasParado, etapa: maior.etapa } : null,
+    maiorTempoParado: maior
+      ? { parceiro: maior.parceiro, dias: maior.diasParado, etapa: maior.etapa, operacao: maior.operacao.codigo }
+      : null,
     tempoMedioPorEtapa: porEtapa,
     atendimentosSemInteracao: {
       total: conversasParadas.length,
@@ -274,12 +296,16 @@ export async function gestaoOperacao(
     volumePorEtapa: funis
       .filter((fu) => !opcoes.funilId || fu.id === opcoes.funilId)
       .map((fu) => ({
+        operacao: fu.operacao,
         funil: { id: fu.id, nome: fu.nome },
         etapas: fu.estagios.map((e) => ({
           id: e.id,
           nome: e.nome,
-          total: abertos.filter((c) => c.estagio.id === e.id).length,
-          parados: parados.filter((c) => c.etapa === e.nome && c.operacao.id === fu.id).length,
+          chave: e.chave,
+          tipo: e.tipoEtapa,
+          total: abertos.filter((c) => c.estagio.id === e.id && (e.tipoEtapa === 'SAIDA' || emFluxo(c))).length,
+          // Pelo id da etapa: o nome se repete entre operacoes e pode ser renomeado.
+          parados: parados.filter((c) => c.estagioId === e.id).length,
         })),
       })),
     semMovimentacao: naEsteira.slice(0, 50),
@@ -487,15 +513,18 @@ export async function acompanhamentos(diasSemInteracao: number) {
 
   const [creds, retornos] = await Promise.all([
     prisma.credenciamento.findMany({
-      where: { AND: [await whereCredenciamentos({}), { OR: [{ situacaoExcecao: null }, { situacaoExcecao: 'INATIVADO' }] }] },
+      where: await whereCredenciamentos({}),
       select: {
         id: true,
+        operacao: true,
         situacaoExcecao: true,
         motivoExcecao: true,
+        motivoSituacao: true,
+        situacaoDesde: true,
         estagioDesde: true,
         fechadoEm: true,
         funil: { select: { id: true, nome: true } },
-        estagio: { select: { nome: true } },
+        estagio: { select: { nome: true, chave: true } },
         responsavel: { select: { id: true, nome: true } },
         conta: { select: { nome: true } },
         contato: {
@@ -539,14 +568,21 @@ export async function acompanhamentos(diasSemInteracao: number) {
     parceiro: c.conta?.nome ?? c.contato.nome,
     contato: { id: c.contato.id, nome: c.contato.nome, telefone: c.contato.telefone },
     responsavel: c.responsavel,
-    operacao: c.funil,
+    /** `id`/`nome` do funil (contrato antigo) + `codigo` da operacao. */
+    operacao: { ...c.funil, codigo: c.operacao },
+    chave: c.estagio.chave,
     etapa: c.estagio.nome,
     diasNaEtapa: diasDesde(c.estagioDesde, agora),
     ultimaInteracaoEm: c.contato.conversas[0]?.ultimaMensagemEm ?? null,
     ...extra,
   });
 
-  const emFluxo = creds.filter((c) => c.situacaoExcecao === null && papelDoEstagio(c.estagio.nome) !== 'ATIVO');
+  const pendentesDeAcao = creds.filter((c) => emFluxo(c) && papelDoCard(c) !== 'ATIVO');
+  // Reativacao: com chave, saidas recuperaveis (TIM descredenciado, Starlink em
+  // Nurture); sem chave (funil antigo), a situacao legada INATIVADO.
+  const paraReativar = creds.filter((c) =>
+    c.estagio.chave ? saidaReativavel(c.estagio.chave) : c.situacaoExcecao === 'INATIVADO',
+  );
 
   return {
     diasSemInteracao,
@@ -559,15 +595,20 @@ export async function acompanhamentos(diasSemInteracao: number) {
       contato: r.contato,
       responsavel: r.responsavel,
     })),
-    aguardandoDocumentacao: emFluxo.filter((c) => papelDoEstagio(c.estagio.nome) === 'PENDENCIA').map((c) => item(c)),
-    precisamDeContato: emFluxo
+    aguardandoDocumentacao: pendentesDeAcao.filter((c) => papelDoCard(c) === 'PENDENCIA').map((c) => item(c)),
+    precisamDeContato: pendentesDeAcao
       .filter((c) => c.contato.conversas.length === 0 || c.responsavel === null)
       .map((c) => item(c, { motivo: c.responsavel === null ? 'sem responsável' : 'nunca houve conversa' })),
-    semInteracao: emFluxo
+    semInteracao: pendentesDeAcao
       .filter((c) => c.contato.conversas[0] && c.contato.conversas[0].ultimaMensagemEm < limite)
       .map((c) => item(c)),
-    reativacao: creds
-      .filter((c) => c.situacaoExcecao === 'INATIVADO')
-      .map((c) => item(c, { motivo: c.motivoExcecao, inativadoEm: c.fechadoEm })),
+    reativacao: paraReativar.map((c) =>
+      item(
+        c,
+        c.estagio.chave
+          ? { motivo: c.motivoSituacao, inativadoEm: c.situacaoDesde ?? c.estagioDesde }
+          : { motivo: c.motivoExcecao, inativadoEm: c.fechadoEm },
+      ),
+    ),
   };
 }
