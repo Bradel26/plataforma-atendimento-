@@ -14,7 +14,7 @@ type CanalConfig = {
   ativo: boolean;
   /** Rotulo da linha — so importa quando ha mais de um numero do mesmo canal. */
   nome: string | null;
-  /** Dono da linha pessoal (vendedor com numero proprio). Nulo = linha compartilhada. */
+  /** Responsavel pela linha pessoal. Nulo = linha compartilhada. */
   dono: { id: string; nome: string } | null;
   phoneNumberId: string | null;
   pageId: string | null;
@@ -151,7 +151,7 @@ export function CanaisTab() {
    */
   const [conexaoGlobal, setConexaoGlobal] = useState(false);
 
-  // ----- Numeros pessoais (vendedor com WhatsApp proprio) -----
+  // ----- Numeros pessoais (usuario com WhatsApp proprio) -----
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [numeroForm, setNumeroForm] = useState(numeroVazio);
   const [numeroErro, setNumeroErro] = useState<string | null>(null);
@@ -173,9 +173,11 @@ export function CanaisTab() {
       setCanais(c.canais);
       setConexaoGlobal(c.whatsappConexaoGlobal === true);
       setFilas(f.filas);
-      // So quem pode atuar em conversa entra na lista de donos: dar numero
-      // proprio a um GESTOR ou ADMIN nao tem para onde a conversa ir depois.
-      setUsuarios(u.usuarios.filter((x) => x.perfil === 'COMERCIAL' || x.perfil === 'AGENTE'));
+      // Linhas pessoais podem pertencer a quem atende conversas ou a um ADMIN.
+      // Perfis de gestao sem atuacao direta em conversas continuam fora da lista.
+      setUsuarios(u.usuarios.filter((x) =>
+        x.perfil === 'ADMIN' || x.perfil === 'COMERCIAL' || x.perfil === 'AGENTE'
+      ));
 
       const zap = c.canais.find((x) => x.canal === 'WHATSAPP');
       if (!modoTocado.current) setModo(zap?.modo ?? 'OFICIAL');
@@ -457,7 +459,7 @@ export function CanaisTab() {
     setNumeroErro(null);
     setNumeroOk(null);
     if (!numeroForm.id && !numeroForm.donoId) {
-      setNumeroErro('Escolha o vendedor dono do número');
+      setNumeroErro('Escolha o usuário responsável pelo número');
       return;
     }
     setNumeroOcupado(true);
@@ -834,7 +836,7 @@ export function CanaisTab() {
         <div className="lg:col-span-2">
         <Card
           titulo="Números pessoais"
-          descricao="Um WhatsApp próprio por vendedor: a conversa nasce já atribuída a ele, sem passar por fila"
+          descricao="Um WhatsApp próprio por usuário: a conversa nasce já atribuída a ele, sem passar por fila"
         >
           <div className="space-y-4">
             {numeroErro && <Alerta>{numeroErro}</Alerta>}
@@ -843,14 +845,14 @@ export function CanaisTab() {
             {numeros.length === 0 ? (
               <EmptyState
                 titulo="Nenhum número pessoal"
-                descricao="Cadastre o WhatsApp de um vendedor abaixo — ele passa a atender pelo painel de Atendimento"
+                descricao="Cadastre o WhatsApp de um usuário abaixo — ele passa a atender pelo painel de Atendimento"
               />
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead>
                     <tr className="text-xs text-slate-500">
-                      <th className="pb-2 font-medium">Vendedor</th>
+                      <th className="pb-2 font-medium">Responsável</th>
                       <th className="pb-2 font-medium">Número</th>
                       <th className="pb-2 font-medium">Fila de espera</th>
                       <th className="pb-2 font-medium">Estado</th>
@@ -969,7 +971,7 @@ export function CanaisTab() {
                 {numeroForm.id ? 'Editar número' : 'Adicionar número'}
               </p>
               <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Vendedor" hint="Quem recebe as conversas deste número">
+                <Field label="Usuário responsável" hint="Quem recebe as conversas deste número">
                   <Select
                     value={numeroForm.donoId}
                     disabled={Boolean(numeroForm.id)}
@@ -984,7 +986,7 @@ export function CanaisTab() {
                 <Field label="Rótulo" hint="Como este número aparece na lista">
                   <Input
                     value={numeroForm.nome}
-                    placeholder="Ex.: Vendedor 1"
+                    placeholder="Ex.: Linha de teste"
                     onChange={(e) => setNumeroForm({ ...numeroForm, nome: e.target.value })}
                   />
                 </Field>
@@ -1005,7 +1007,7 @@ export function CanaisTab() {
                   </label>
                 )}
                 <div className="sm:col-span-2 rounded-lg border border-slate-200 p-3">
-                  <p className="text-xs font-medium text-slate-700">Como este vendedor conecta</p>
+                  <p className="text-xs font-medium text-slate-700">Como este usuário conecta</p>
                   <div className="mt-2 flex gap-4">
                     {(['OFICIAL', 'NAO_OFICIAL'] as const).map((opcao) => (
                       <label key={opcao} className="flex cursor-pointer items-center gap-2 text-sm">
@@ -1078,13 +1080,13 @@ export function CanaisTab() {
                 )}
                 <Field
                   label="Fila de espera (opcional)"
-                  hint="Deixe vazio: a conversa vai direto para o vendedor, sem espera"
+                  hint="Deixe vazio: a conversa vai direto para o usuário responsável, sem espera"
                 >
                   <Select
                     value={numeroForm.filaId}
                     onChange={(e) => setNumeroForm({ ...numeroForm, filaId: e.target.value })}
                   >
-                    <option value="">Nenhuma — direto para o vendedor</option>
+                    <option value="">Nenhuma — direto para o usuário responsável</option>
                     {filas.map((f) => (
                       <option key={f.id} value={f.id}>{f.nome}</option>
                     ))}
@@ -1099,7 +1101,7 @@ export function CanaisTab() {
                     checked={numeroForm.iaAtiva}
                     onChange={(e) => setNumeroForm({ ...numeroForm, iaAtiva: e.target.checked })}
                   />
-                  IA responde por este número antes do vendedor
+                  IA responde por este número antes do usuário responsável
                 </label>
                 {numeroForm.iaAtiva && (
                   <div className="mt-3 grid gap-3 sm:grid-cols-2">
