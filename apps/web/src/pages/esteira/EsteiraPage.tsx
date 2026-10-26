@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Alerta, Button, EmptyState } from '../../components/ui';
+import { Dropdown } from '../../components/ui/Dropdown';
 import { CabecalhoPagina, Segmentado } from '../../components/ui/Pagina';
 import { SkeletonBloco } from '../../components/ui/Skeleton';
+import { useToast } from '../../components/ui/Toast';
 import { useAuth } from '../../features/auth/AuthProvider';
-import { ApiError, api } from '../../lib/api';
-import type { EstruturaEsteira, FiltrosEsteira, Operacao } from '../../lib/esteiraTypes';
+import { ApiError, api, baixarArquivo } from '../../lib/api';
+import type { EstruturaEsteira, FiltrosEsteira, Operacao, VinculoResumo } from '../../lib/esteiraTypes';
 import { BarraDeFiltros } from './BarraDeFiltros';
+import { ROTULO_OPERACAO } from './cadastroEsteira';
+import { DetalheVinculo } from './DetalheVinculo';
 import {
   CHAVE_ULTIMA_OPERACAO,
   estadoDaUrl,
@@ -15,17 +19,21 @@ import {
   operacaoInicial,
   operacoesPermitidas,
   parametroDaOperacao,
+  queryDosFiltros,
   urlDoEstado,
   type FavoritoEsteira,
   type PropsDaVisao,
   type Visao,
 } from './estadoEsteira';
+import { diaDeHoje } from './funilEsteira';
 import { FunilView } from './FunilView';
+import { ImportarPlanilha } from './ImportarPlanilha';
 import { KanbanView } from './KanbanView';
+import { chavesParaExportar } from './listaEsteira';
 import { ListaView } from './ListaView';
+import { NovoParceiro } from './NovoParceiro';
 import { carregarPreferenciasEsteira, lembrarUltimaOperacao, usePreferenciaEsteira } from './usePreferenciaEsteira';
 
-const ROTULO_OPERACAO: Record<Operacao, string> = { TIM: 'TIM', STARLINK: 'Starlink' };
 const OPCOES_VISAO: ReadonlyArray<{ valor: Visao; rotulo: string }> = [
   { valor: 'kanban', rotulo: 'Kanban' },
   { valor: 'funil', rotulo: 'Funil' },
@@ -91,12 +99,19 @@ function IrParaOperacaoInicial({ permitidas, search }: { permitidas: Operacao[];
 }
 
 function EsteiraDaOperacao({ operacao, permitidas }: { operacao: Operacao; permitidas: Operacao[] }) {
-  const { usuario } = useAuth();
+  const { usuario, temPerfil } = useAuth();
+  const mostrar = useToast();
   const navigate = useNavigate();
   const { search } = useLocation();
   const [estrutura, setEstrutura] = useState<EstruturaEsteira | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [tentativa, setTentativa] = useState(0);
+  const [dialogo, setDialogo] = useState<'novo' | 'importar' | null>(null);
+  /** Cartão aberto pela casca (Novo parceiro: o criado ou o que já estava na esteira). */
+  const [cartao, setCartao] = useState<VinculoResumo | null>(null);
+  /** Muda depois de criar/importar/editar pela casca: remonta a visão, que recarrega os dados. */
+  const [versao, setVersao] = useState(0);
+  const [exportando, setExportando] = useState(false);
   const { pref, atualizar } = usePreferenciaEsteira(operacao, estrutura);
 
   useEffect(() => {
@@ -152,6 +167,34 @@ function EsteiraDaOperacao({ operacao, permitidas }: { operacao: Operacao; permi
   const mudarFavoritos = useCallback((lista: FavoritoEsteira[]) => atualizar({ favoritos: lista }), [atualizar]);
 
   const ComponenteDaVisao = VISOES[visao];
+  const recarregarVisao = useCallback(() => setVersao((v) => v + 1), []);
+  const fecharDialogo = useCallback(() => setDialogo(null), []);
+  const fecharCartao = useCallback(() => setCartao(null), []);
+
+  const podeEditar = estrutura?.nivel === 'EDICAO';
+  // Mesmos perfis da API: importar exige ADMIN/SUPERVISOR com EDICAO; exportar, ADMIN/SUPERVISOR.
+  const podeImportar = podeEditar && temPerfil('ADMIN', 'SUPERVISOR');
+  const podeExportar = temPerfil('ADMIN', 'SUPERVISOR');
+
+  /** Exporta com os filtros em vigor e as colunas escolhidas na Lista (a Lista tem a própria, com a ordenação dela). */
+  const exportar = async (formato: 'csv' | 'xlsx') => {
+    if (!estrutura || !pref) return;
+    const q = queryDosFiltros(filtros);
+    q.set('formato', formato);
+    q.set('colunas', chavesParaExportar(pref.lista.colunas, estrutura.colunas).join(','));
+    setExportando(true);
+    try {
+      await baixarArquivo(
+        `/esteiras/${parametroDaOperacao(operacao)}/exportar?${q.toString()}`,
+        `esteira-${parametroDaOperacao(operacao)}-${diaDeHoje()}.${formato}`,
+      );
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 403) mostrar('erro', 'Seu perfil não pode exportar');
+      else mostrar('erro', e instanceof ApiError ? e.message : 'Não foi possível exportar');
+    } finally {
+      setExportando(false);
+    }
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -177,6 +220,25 @@ function EsteiraDaOperacao({ operacao, permitidas }: { operacao: Operacao; permi
             <span className="text-[12.5px] font-semibold text-slate-500">Visualização:</span>
             <Segmentado rotulo="Visualização" opcoes={OPCOES_VISAO} valor={visao} aoMudar={mudarVisao} />
           </div>
+          {estrutura && (
+            <div className="flex flex-wrap items-center gap-2">
+              {podeExportar && visao !== 'lista' && (
+                <Dropdown
+                  rotulo={exportando ? 'Exportando…' : 'Exportar'}
+                  itens={[
+                    { chave: 'csv', rotulo: 'CSV', aoSelecionar: () => void exportar('csv'), desabilitado: exportando },
+                    { chave: 'xlsx', rotulo: 'XLSX (Excel)', aoSelecionar: () => void exportar('xlsx'), desabilitado: exportando },
+                  ]}
+                />
+              )}
+              {podeImportar && (
+                <Button variante="neutro" onClick={() => setDialogo('importar')}>
+                  Importar
+                </Button>
+              )}
+              {podeEditar && <Button onClick={() => setDialogo('novo')}>Novo parceiro</Button>}
+            </div>
+          )}
         </div>
       </CabecalhoPagina>
 
@@ -203,7 +265,40 @@ function EsteiraDaOperacao({ operacao, permitidas }: { operacao: Operacao; permi
             favoritos={pref.favoritos}
             aoMudarFavoritos={mudarFavoritos}
           />
-          <ComponenteDaVisao operacao={operacao} estrutura={estrutura} filtros={filtros} pref={pref} atualizarPref={atualizar} irPara={irPara} />
+          <ComponenteDaVisao
+            key={versao}
+            operacao={operacao}
+            estrutura={estrutura}
+            filtros={filtros}
+            pref={pref}
+            atualizarPref={atualizar}
+            irPara={irPara}
+          />
+          <NovoParceiro
+            aberto={dialogo === 'novo'}
+            operacao={operacao}
+            permitidas={permitidas}
+            aoFechar={fecharDialogo}
+            aoCriar={(v) => {
+              setDialogo(null);
+              recarregarVisao();
+              setCartao(v);
+            }}
+            aoAbrirCartao={(v) => {
+              setDialogo(null);
+              setCartao(v);
+            }}
+          />
+          {podeImportar && (
+            <ImportarPlanilha
+              aberto={dialogo === 'importar'}
+              operacao={operacao}
+              estrutura={estrutura}
+              aoFechar={fecharDialogo}
+              aoImportar={recarregarVisao}
+            />
+          )}
+          <DetalheVinculo vinculo={cartao} operacao={operacao} estrutura={estrutura} aoFechar={fecharCartao} aoMudar={recarregarVisao} />
         </>
       )}
     </div>
