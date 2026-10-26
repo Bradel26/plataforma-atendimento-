@@ -8,7 +8,8 @@
 - **Spec:** `docs/superpowers/specs/2026-10-23-esteiras-tim-starlink-design.md` (a autoridade de negócio).
 - **Plano:** `docs/superpowers/plans/2026-10-23-esteiras-tim-starlink.md` (22 tasks).
 - **Concluídas (1–18):** schema + migrations, catálogo de etapas, migração de dados, regras TIM e Starlink (puras), permissão por operação, API de vínculos (criar/mover/editar/notas/vendedores/auditoria), consultas (estrutura, Kanban, Lista), Funil, exportação/importação CSV/XLSX, preferências e configuração de etapas, indicadores/campanhas/ficha/assistente no backend, front: casca com URL e preferências, Kanban, gaveta, Lista, Funil. Testes: 1688 passam; typecheck e build do web limpos.
-- **Faltam (19–22):**
+- **Faltam (17b + 19–22):**
+  - **17b** Fechar as 3 lacunas das Tasks 17/18 (seção 2): exportar só os ids selecionados, Funil→Lista coerente (filtro "passou pela etapa X") e persistir tamanho de página/período do Funil.
   - **19** Novo parceiro, importação (prévia + mapeamento) e "adicionar à operação" na ficha da empresa.
   - **20** Configurações: operações por usuário e aba de etapas.
   - **21** Telas dependentes no front (Dashboard, Gestão, Desempenho, Acompanhamentos, ciclo, campanhas) + remoção da API antiga + E2E.
@@ -26,7 +27,7 @@ C:\Users\kaua.tavares\plataforma-atendimento\.worktrees\esteiras-tim-starlink
 1. docs/superpowers/plans/2026-10-26-esteiras-handoff.md (este roteiro)
 2. docs/superpowers/specs/2026-10-23-esteiras-tim-starlink-design.md
 3. .superpowers/sdd/2026-10-23-esteiras-tim-starlink/progress.md (ledger: rulings e pendências)
-Execute as Tasks 19, 20, 21 e 22 do plano docs/superpowers/plans/2026-10-23-esteiras-tim-starlink.md
+Execute PRIMEIRO a "Task 17b" (seção 2 do handoff) e depois as Tasks 19, 20, 21 e 22 do plano docs/superpowers/plans/2026-10-23-esteiras-tim-starlink.md
 com a skill superpowers:subagent-driven-development: um implementador por task
 (briefs já gerados em .superpowers/sdd/2026-10-23-esteiras-tim-starlink/task-N-brief.md),
 SEM revisores por task (pedido explícito do usuário em 26/10: "não use agentes para ficar
@@ -40,6 +41,19 @@ migrations no dev). Commits terminam com
 ## 2. Como executar cada task restante
 
 Despache um implementador (Agent, `general-purpose`, `run_in_background`) por task, com `model: opus` para as tasks de front grandes (19, 21) e `sonnet` para a 20. Use como modelo o despacho das Tasks 17+18 (veja o `progress.md`): cada despacho leva (1) o caminho de `regras-implementer.md`, (2) o caminho do brief, (3) as decisões do controlador, (4) o caminho do relatório. Lembre ao implementador: commits pequenos intermediários (a conexão da API caiu duas vezes e o trabalho só sobreviveu por isso) e "NÃO rodar a aplicação nem tocar o banco" até a Task 22.
+
+### Task 17b — Fechar as lacunas das Tasks 17/18 (fazer ANTES da 19)
+Origem: falhas do plano, não do implementador (o plano da Task 11 não previu `ids` na exportação; o da Task 17 pedia seleção em lote; o da 18 dizia "clicar na etapa abre a Lista filtrada por ela"; a Task 14 não incluiu página/período nas preferências). Despache um implementador (opus) com este escopo; três commits, um por item; TDD com funções puras.
+
+1. **Exportar só os selecionados (back + front).**
+   - API: `GET /api/esteiras/:operacao/exportar` passa a aceitar `ids` (CSV de uuid, máx. 1.000; inválido → 400). Os ids entram como **AND** com os filtros, a carteira e as operações permitidas (`whereDaConsulta`) — id de outra operação, arquivado ou fora da carteira simplesmente não casa (nunca 403/404 por id, para não revelar existência). Registrar no `RegistroEsteira` (`detalhe`) a quantidade e que foi por seleção. `parseFiltros`/`exportarQuerySchema` descartam chaves desconhecidas hoje: incluir `ids` explicitamente. Teste puro do parse e da composição do where.
+   - Front (`ListaView.tsx`): ligar `selecao` do `Table` (já suporta), com contador "N selecionados", "Limpar seleção" e botões Exportar CSV/XLSX usando `ids` quando houver seleção (senão, filtros atuais). Seleção some ao mudar de página? Decisão: **persiste entre páginas** na mesma visita (Set de ids em estado da Lista) e zera ao trocar filtros/operação. Teste puro de `chavesParaExportar`/estado da seleção.
+2. **Funil → Lista coerente (back + front).**
+   - API: novo filtro `passouPorEtapa` (chave de etapa do trilho da operação; chave de outra operação → 400) em `FiltrosEsteira`/`parseFiltros`/`whereDosFiltros`: vínculos que **alcançaram ao menos aquela etapa**, pela mesma regra do funil (`trilhoMaximo >= trilho(etapa)`, calculada com a etapa atual + `CredenciamentoHistorico.paraEstagioId`). Implementação sugerida: subconsulta `credenciamento.id IN (...)` com `OR` entre (a) etapa atual com `trilho >= N` e (b) existe histórico cujo `paraEstagio.chave` tem `trilho >= N` — **reaproveitar a lógica do `funil.ts` (`entradaDoVinculo`/`trilhoMaximo`)** em vez de duplicá-la; se a regra pura precisar de dados do histórico em lote, faça a consulta em lotes como o funil faz. Teste puro: where gerado e coerência com `calcularFunil` (o conjunto filtrado por etapa N tem o mesmo tamanho que `alcancaram[N]` para a mesma coorte, afirmado numa fixture pura).
+   - Front (`FunilView.tsx`/`irPara`): clicar numa etapa leva à Lista com `passouPorEtapa=<chave>` + `periodoCampo=criadoEm` + `desde`/`ate` do funil (mesma semântica de `ateExclusivo`) + os demais filtros comuns; remover o aviso "mostra quem está nela agora" e mostrar na Lista uma pílula "Funil: passou por <etapa> · criados entre X e Y" removível. `BarraDeFiltros` precisa exibir/limpar `passouPorEtapa`. Filtros `etapas`, `situacoes`, `paradoHaMaisDe` continuam ignorados no funil (e na Lista o `passouPorEtapa` combina normalmente com eles).
+3. **Persistir tamanho de página e período do Funil.**
+   - `PreferenciaEsteira` (`estadoEsteira.ts`): `lista.tamanhoPagina: 25|50|100` (padrão 50) e `funil: { periodo: { desde?: string; ate?: string } | { dias: number }; comparar: boolean }` (padrão últimos 90 dias, sem comparar). Atualizar `preferenciaPadrao`, `normalizarPreferencia` (tolerar lixo/versão antiga) e os testes de `estadoEsteira.test.ts`; `ListaView` e `FunilView` leem/gravam via `atualizarPref` (debounce já existe). Período relativo ("últimos N dias") deve persistir como `dias`, não como datas absolutas, para não ficar velho.
+Ao terminar: `npm test`, `npm run typecheck`, `npm run build -w @plataforma/web`, relatório `task-17b-report.md`, atualizar o ledger e remover da seção 3 do handoff os três itens correspondentes.
 
 ### Task 19 — Novo parceiro, importação e "adicionar à operação"
 - Brief: `task-19-brief.md`. Arquivos: `pages/esteira/NovoParceiro.tsx`, `ImportarPlanilha.tsx`; ajustar `pages/crm/ficha/CredenciamentosDaEmpresa.tsx` e `pages/crm/EnviarParaCredenciamento.tsx`; os botões "Novo parceiro", "Importar" e "Exportar" saíram da casca na Task 14 e voltam aqui (veja `EsteiraPage.tsx`).
@@ -68,9 +82,7 @@ Despache um implementador (Agent, `general-purpose`, `run_in_background`) por ta
 ## 3. Pendências conhecidas (do ledger — decidir ou cobrir antes de fechar)
 
 **Funcionalidade que ficou de fora ou limitada**
-- **Seleção em lote para exportar (Task 17):** não implementada; `GET /exportar` não aceita `ids`. Proposta: param `ids` (CSV de uuid) + ligar `selecao` do `Table`.
-- Funil → Lista mostra quem está **na etapa agora**, não a coorte que a alcançou (a tela avisa). Opção: levar `periodoCampo=criadoEm` com o período do funil.
-- Tamanho de página da Lista e período do Funil não persistem nas preferências.
+- **(Cobertos pela Task 17b — fazer primeiro)** seleção em lote para exportar (falta `ids` na API); Funil → Lista mostrando só quem está na etapa agora (falta o filtro `passouPorEtapa`); tamanho de página da Lista e período do Funil sem persistir.
 - Cartão do Kanban sem avisos e coluna desabilitada durante o arraste com motivo genérico (o `VinculoResumo` não traz avisos/pendências por destino); `kanban/coluna` não devolve total; auditoria/notas mostram só `usuarioId` (nome vem do histórico/responsável/usuário logado/`/usuarios` para ADMIN-SUPERVISOR); `DADOS_PENDENTES` genérico.
 - Auditoria da configuração de etapa só no log (`console.info esteira.etapa.configurada`); o enum de `RegistroEsteira` não cobre.
 - Exportação só para ADMIN/SUPERVISOR (regra copiada de `dados.routes`). Se o usuário quiser GESTOR/COMERCIAL, é uma linha na rota.
