@@ -113,6 +113,13 @@ describe('whereDosFiltros', () => {
       OR: [{ contaId: id }, { contato: { contaId: id } }],
     });
   });
+
+  it('contato (ficha do contato): vínculo do próprio contato ou da conta dele', () => {
+    const id = '0d8c3a1e-5b7f-4c2a-8e9d-1f2a3b4c5d6e';
+    expect(whereDosFiltros('STARLINK', { contatoId: id }, agora).AND).toContainEqual({
+      OR: [{ contatoId: id }, { conta: { is: { contatos: { some: { id } } } } }],
+    });
+  });
 });
 
 describe('parseFiltros', () => {
@@ -175,6 +182,12 @@ describe('parseFiltros', () => {
     const id = '7b0f9a52-3f7e-4a43-9a51-6c1f4f0d2c11';
     expect(parseFiltros({ contaId: id })).toEqual({ contaId: id });
     expect(() => parseFiltros({ contaId: 'abc' })).toThrow();
+  });
+
+  it('contatoId (ficha do contato) é um uuid', () => {
+    const id = '0d8c3a1e-5b7f-4c2a-8e9d-1f2a3b4c5d6e';
+    expect(parseFiltros({ contatoId: id })).toEqual({ contatoId: id });
+    expect(() => parseFiltros({ contatoId: 'abc' })).toThrow();
   });
 
   it('recusa valor inválido', () => {

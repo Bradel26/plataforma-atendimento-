@@ -28,6 +28,8 @@ export type FiltrosEsteira = {
   starlink?: { tipoCaptacao?: TipoCaptacao[]; vivensis?: VivensisStatus[]; vsm?: 'SIM' | 'NAO' | 'VAZIO' };
   /** Vínculos de uma empresa (ficha da empresa): da conta ou de um contato dela. */
   contaId?: string;
+  /** Vínculos de um contato (ficha do contato): do próprio contato ou da conta dele. */
+  contatoId?: string;
 };
 
 type Where = Prisma.CredenciamentoWhereInput;
@@ -154,6 +156,8 @@ export function whereDosFiltros(operacao: Operacao, f: FiltrosEsteira, agora: Da
   }
   if (f.origem?.length) c.push(condicaoDeOrigem(operacao, f.origem));
   if (f.contaId) c.push({ OR: [{ contaId: f.contaId }, { contato: { contaId: f.contaId } }] });
+  // O vínculo de quem tem conta é da conta (`whereDoVinculo`), mesmo criado por outro contato dela.
+  if (f.contatoId) c.push({ OR: [{ contatoId: f.contatoId }, { conta: { is: { contatos: { some: { id: f.contatoId } } } } }] });
   if (operacao === 'TIM' && f.tim) c.push(...condicoesTim(f.tim));
   if (operacao === 'STARLINK' && f.starlink) c.push(...condicoesStarlink(f.starlink));
   return { operacao, arquivadoEm: null, ...(c.length ? { AND: c } : {}) };
@@ -218,6 +222,7 @@ const filtrosSchema = z.object({
   vivensis: lista(z.nativeEnum(VivensisStatus)),
   vsm: z.enum(['SIM', 'NAO', 'VAZIO']).optional(),
   contaId: z.string().uuid().optional(),
+  contatoId: z.string().uuid().optional(),
 });
 
 /** Só as chaves definidas (objeto sem `undefined`, para comparar e serializar limpo). */
