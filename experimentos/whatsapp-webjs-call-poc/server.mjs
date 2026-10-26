@@ -44,6 +44,8 @@ const AUTENTICACAO_PAGINA_TIMEOUT_MS = Number(process.env.WEBJS_AUTH_TIMEOUT_MS 
 // A primeira sincronizacao do historico do WhatsApp Web pode demorar mais que
 // a emissao do QR. Nao encerre a sessao logo depois de o telefone autenticar.
 const AUTENTICACAO_PRONTO_TIMEOUT_MS = Number(process.env.WEBJS_AUTH_READY_TIMEOUT_MS || 300_000);
+const PULSO_PAGINA_INTERVALO_MS = Number(process.env.WEBJS_PAGE_PULSE_INTERVAL_MS || 10_000);
+const PULSO_PAGINA_TIMEOUT_MS = Number(process.env.WEBJS_PAGE_PULSE_TIMEOUT_MS || 5_000);
 const LIMPAR_LOCKS_DE_OUTRA_INSTANCIA = process.env.WEBJS_SINGLE_INSTANCE !== 'false';
 const API_WEBHOOK = process.env.WEBJS_INBOUND_WEBHOOK_URL?.trim() || localEnv.WEBJS_INBOUND_WEBHOOK_URL || `http://127.0.0.1:${API_PORT}/api/webhooks/wppconnect`;
 const app = express();
@@ -336,6 +338,14 @@ async function iniciarCliente(nomeSessao = 'teste-local') {
     const thisClient = client;
     sessao.client = client;
     let diagnosticosDaPaginaInstalados = false;
+    let intervaloPulsoPagina = null;
+    let pulsoPaginaEmCurso = null;
+    let encerramentoSolicitado = null;
+    let ultimoPulsoPagina = 'ainda não executado';
+    const pararPulsoPagina = () => {
+      if (intervaloPulsoPagina) clearInterval(intervaloPulsoPagina);
+      intervaloPulsoPagina = null;
+    };
     const instalarDiagnosticosDaPagina = () => {
       const page = client.pupPage;
       if (!page || diagnosticosDaPaginaInstalados) return;
@@ -352,6 +362,79 @@ async function iniciarCliente(nomeSessao = 'teste-local') {
         sessao.ultimoErroDaPagina = `Requisição falhou: ${detalhe}`;
         console.warn(`[whatsapp:${sessao.nome}] requisição da página falhou: ${detalhe}`);
       });
+      page.on('error', (error) => {
+        console.error(`[whatsapp:${sessao.nome}] Chromium informou queda da página: ${String(error?.message || error).slice(0, 300)}`);
+      });
+      page.on('close', () => {
+        console.warn(`[whatsapp:${sessao.nome}] página do WhatsApp Web fechada; estado=${sessao.status}; encerramento=${encerramentoSolicitado || 'não solicitado'}`);
+      });
+      client.pupBrowser?.on('disconnected', () => {
+        console.warn(`[whatsapp:${sessao.nome}] Chromium desconectado; estado=${sessao.status}; encerramento=${encerramentoSolicitado || 'não solicitado'}`);
+      });
+    };
+    const sondarPagina = () => {
+      if (sessao.client !== thisClient || sessao.status === 'conectado') return;
+      const page = thisClient.pupPage;
+      if (!page) {
+        ultimoPulsoPagina = 'página indisponível';
+        console.warn(`[whatsapp:${sessao.nome}] pulso da página indisponível; Chromium ainda não expôs a aba`);
+        return;
+      }
+      if (pulsoPaginaEmCurso) {
+        const decorrido = Date.now() - pulsoPaginaEmCurso.iniciadoEm;
+        if (decorrido >= PULSO_PAGINA_TIMEOUT_MS && Date.now() - pulsoPaginaEmCurso.ultimoAvisoEm >= PULSO_PAGINA_INTERVALO_MS) {
+          pulsoPaginaEmCurso.ultimoAvisoEm = Date.now();
+          ultimoPulsoPagina = `sem resposta há ${decorrido}ms`;
+          console.warn(`[whatsapp:${sessao.nome}] pulso da página continua sem resposta há ${decorrido}ms; nenhum novo evaluate será enfileirado`);
+        }
+        return;
+      }
+
+      const pulso = { iniciadoEm: Date.now(), ultimoAvisoEm: 0 };
+      pulsoPaginaEmCurso = pulso;
+      const avaliacao = Promise.resolve().then(() => page.evaluate(() => {
+        const possuiModulo = (nome) => {
+          try { return typeof window.require === 'function' && Boolean(window.require(nome)); }
+          catch { return false; }
+        };
+        return {
+          version: typeof window.Debug?.VERSION === 'string' ? window.Debug.VERSION : null,
+          readyState: document.readyState,
+          wwebjs: typeof window.WWebJS !== 'undefined',
+          connModel: possuiModulo('WAWebConnModel'),
+          meUser: possuiModulo('WAWebUserPrefsMeUser'),
+        };
+      }));
+      const timeout = setTimeout(() => {
+        if (pulsoPaginaEmCurso !== pulso) return;
+        pulso.ultimoAvisoEm = Date.now();
+        ultimoPulsoPagina = `sem resposta após ${PULSO_PAGINA_TIMEOUT_MS}ms`;
+        console.warn(`[whatsapp:${sessao.nome}] pulso da página sem resposta após ${PULSO_PAGINA_TIMEOUT_MS}ms`);
+      }, PULSO_PAGINA_TIMEOUT_MS);
+      timeout.unref?.();
+      Promise.resolve(avaliacao)
+        .then((resultado) => {
+          if (sessao.client !== thisClient || pulsoPaginaEmCurso !== pulso) return;
+          const duracao = Date.now() - pulso.iniciadoEm;
+          ultimoPulsoPagina = `respondeu em ${duracao}ms`;
+          console.info(`[whatsapp:${sessao.nome}] pulso da página: respondeu em ${duracao}ms; versão=${resultado.version || 'desconhecida'}; readyState=${resultado.readyState}; WWebJS=${resultado.wwebjs}; WAWebConnModel=${resultado.connModel}; WAWebUserPrefsMeUser=${resultado.meUser}`);
+        })
+        .catch((error) => {
+          if (sessao.client !== thisClient || pulsoPaginaEmCurso !== pulso) return;
+          const tipo = String(error?.name || 'erro').slice(0, 80);
+          ultimoPulsoPagina = `avaliação falhou (${tipo})`;
+          console.warn(`[whatsapp:${sessao.nome}] pulso da página falhou; tipo=${tipo}`);
+        })
+        .finally(() => {
+          clearTimeout(timeout);
+          if (pulsoPaginaEmCurso === pulso) pulsoPaginaEmCurso = null;
+        });
+    };
+    const iniciarPulsoPagina = () => {
+      if (intervaloPulsoPagina) return;
+      sondarPagina();
+      intervaloPulsoPagina = setInterval(sondarPagina, PULSO_PAGINA_INTERVALO_MS);
+      intervaloPulsoPagina.unref?.();
     };
     let timeoutInicializacao;
     const limparTimeout = () => {
@@ -362,10 +445,13 @@ async function iniciarCliente(nomeSessao = 'teste-local') {
       limparTimeout();
       timeoutInicializacao = setTimeout(() => {
         if (sessao.client !== thisClient || sessao.status === 'conectado') return;
+        encerramentoSolicitado = `timeout ${estado}`;
+        pararPulsoPagina();
         const diagnostico = [
           sessao.estadoWeb ? `estado=${sessao.estadoWeb}` : null,
           sessao.progressoDeCarregamento != null ? `carregamento=${sessao.progressoDeCarregamento}%` : null,
           sessao.ultimoErroDaPagina ? `último erro da página=${sessao.ultimoErroDaPagina}` : null,
+          `pulso=${ultimoPulsoPagina}`,
         ].filter(Boolean).join('; ');
         const message = `Tempo limite ao inicializar WhatsApp (${estado}); ${diagnostico || 'a página não informou erro ou estado adicional'}.`;
         console.error(`[whatsapp:${sessao.nome}] ${message}`);
@@ -400,6 +486,7 @@ async function iniciarCliente(nomeSessao = 'teste-local') {
       if (sessao.client !== thisClient) return;
       instalarDiagnosticosDaPagina();
       console.info(`[whatsapp:${sessao.nome}] telefone autenticado; aguardando WhatsApp Web pronto`);
+      iniciarPulsoPagina();
       aguardarProximoEstado('finalizacao da autenticacao', AUTENTICACAO_PRONTO_TIMEOUT_MS);
       sessao.status = 'autenticado';
       broadcast(sessao, { type: 'status', data: sessao.status });
@@ -407,6 +494,7 @@ async function iniciarCliente(nomeSessao = 'teste-local') {
     client.on('ready', () => {
       if (sessao.client !== thisClient) return;
       limparTimeout();
+      pararPulsoPagina();
       sessao.retryAfter = 0;
       sessao.lastError = null;
       sessao.ultimoErroDaPagina = null;
@@ -431,6 +519,8 @@ async function iniciarCliente(nomeSessao = 'teste-local') {
     client.on('auth_failure', (message) => {
       if (sessao.client !== thisClient) return;
       limparTimeout();
+      encerramentoSolicitado = 'falha de autenticação';
+      pararPulsoPagina();
       const detail = String(message || 'falha sem detalhe informado');
       console.error(`[whatsapp:${sessao.nome}] falha de autenticacao: ${detail}`);
       sessao.status = 'falha de autenticacao';
@@ -444,6 +534,8 @@ async function iniciarCliente(nomeSessao = 'teste-local') {
     client.on('disconnected', (reason) => {
       if (sessao.client !== thisClient) return;
       limparTimeout();
+      encerramentoSolicitado = 'sessão desconectada';
+      pararPulsoPagina();
       console.warn(`[whatsapp:${sessao.nome}] sessao desconectada: ${String(reason || 'motivo nao informado')}`);
       sessao.status = 'desconectado';
       sessao.lastError = String(reason || 'WhatsApp desconectado');
