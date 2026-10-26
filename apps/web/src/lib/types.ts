@@ -556,7 +556,13 @@ export type PapelEstagio = 'NOVO' | 'ANALISE' | 'PENDENCIA' | 'APROVACAO' | 'CRE
 export type EstagioEsteira = { id: string; nome: string; ordem: number; papel?: PapelEstagio };
 
 /** Operacao (funil ESTEIRA): TIM, Starlink... */
-export type OperacaoEsteira = { id: string; nome: string; estagios: EstagioEsteira[] };
+export type OperacaoEsteira = {
+  id: string;
+  nome: string;
+  /** Código da operação do funil (`GET /credenciamentos/funis`). */
+  operacao?: 'TIM' | 'STARLINK' | null;
+  estagios: EstagioEsteira[];
+};
 
 export type Semaforo = 'NORMAL' | 'ATENCAO' | 'CRITICO';
 

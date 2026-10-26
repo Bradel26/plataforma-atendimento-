@@ -4,6 +4,8 @@ import { Badge, Card } from '../../../components/ui';
 import { useAuth } from '../../../features/auth/AuthProvider';
 import { api } from '../../../lib/api';
 import { LABEL_SITUACAO_EXCECAO, type Credenciamento, type OperacaoEsteira } from '../../../lib/types';
+import type { Operacao } from '../../../lib/esteiraTypes';
+import { operacoesParaAdicionar } from '../../esteira/cadastroEsteira';
 import { PainelDoCiclo } from '../PainelDoCiclo';
 import { EnviarParaCredenciamento } from '../EnviarParaCredenciamento';
 
@@ -14,8 +16,8 @@ import { EnviarParaCredenciamento } from '../EnviarParaCredenciamento';
  *
  * AGENTE nao ve esteira (mesmo corte da API); para ele o bloco nem aparece.
  */
-export function CicloDoParceiro({ contatoId, segmentoParceiro }: { contatoId: string; segmentoParceiro?: 'TIM' | 'STARLINK' | null }) {
-  const { temPerfil } = useAuth();
+export function CicloDoParceiro({ contatoId }: { contatoId: string; segmentoParceiro?: 'TIM' | 'STARLINK' | null }) {
+  const { temPerfil, operacoes: acesso } = useAuth();
   const podeVer = temPerfil('ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL');
   const [creds, setCreds] = useState<Credenciamento[] | null>(null);
   const [operacoes, setOperacoes] = useState<OperacaoEsteira[]>([]);
@@ -92,11 +94,14 @@ export function CicloDoParceiro({ contatoId, segmentoParceiro }: { contatoId: st
           })}
         </div>
       )}
-      {/* So as operacoes em que ele ainda nao esta com processo aberto. */}
+      {/* So as operacoes em que ele ainda nao tem vinculo (a API recusa o segundo com 409). */}
       <div className="mt-4">
         <EnviarParaCredenciamento
-          contatos={[{ id: contatoId, nome: '', segmentoParceiro }]}
-          operacoes={operacoes.filter((o) => !creds.some((c) => c.funil.id === o.id && !c.situacaoExcecao))}
+          contatos={[{ id: contatoId, nome: '' }]}
+          operacoes={operacoesParaAdicionar(
+            acesso,
+            operacoes.flatMap((o): Operacao[] => (o.operacao && creds.some((c) => c.funil.id === o.id) ? [o.operacao] : [])),
+          )}
           aoEnviar={carregar}
         />
       </div>
