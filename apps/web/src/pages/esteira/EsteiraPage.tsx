@@ -140,6 +140,15 @@ function EsteiraDaOperacao({ operacao, permitidas }: { operacao: Operacao; permi
     [navigate, visao, atualizar],
   );
 
+  const irPara = useCallback(
+    (nova: Visao, novos: FiltrosEsteira) => {
+      const limpos = normalizarFiltros(novos);
+      navigate({ search: urlDoEstado(nova, limpos) });
+      atualizar({ visao: nova, filtros: limpos });
+    },
+    [navigate, atualizar],
+  );
+
   const mudarFavoritos = useCallback((lista: FavoritoEsteira[]) => atualizar({ favoritos: lista }), [atualizar]);
 
   const ComponenteDaVisao = VISOES[visao];
@@ -194,7 +203,7 @@ function EsteiraDaOperacao({ operacao, permitidas }: { operacao: Operacao; permi
             favoritos={pref.favoritos}
             aoMudarFavoritos={mudarFavoritos}
           />
-          <ComponenteDaVisao operacao={operacao} estrutura={estrutura} filtros={filtros} pref={pref} atualizarPref={atualizar} />
+          <ComponenteDaVisao operacao={operacao} estrutura={estrutura} filtros={filtros} pref={pref} atualizarPref={atualizar} irPara={irPara} />
         </>
       )}
     </div>

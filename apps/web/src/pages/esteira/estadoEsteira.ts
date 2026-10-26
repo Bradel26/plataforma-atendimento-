@@ -43,6 +43,8 @@ export type PropsDaVisao = {
   pref: PreferenciaEsteira;
   /** Grava parte da preferência da operação (debounce no servidor). */
   atualizarPref: (p: Partial<PreferenciaEsteira>) => void;
+  /** Troca de visão já com outros filtros (ex.: Funil → Lista da etapa); entra no histórico. */
+  irPara: (visao: Visao, filtros: FiltrosEsteira) => void;
 };
 
 export const VISOES: readonly Visao[] = ['kanban', 'funil', 'lista'];
