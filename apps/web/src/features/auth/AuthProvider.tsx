@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AUTH_EXPIRADA, api, loginRequest, refreshRequest, setAccessToken } from '../../lib/api';
-import type { AgentStatus, Perfil, Usuario } from '../../lib/types';
+import type { AcessoOperacoes, AgentStatus, Perfil, Usuario } from '../../lib/types';
+import { operacoesPermitidas } from '../../pages/esteira/estadoEsteira';
 
 type AuthContextValue = {
   usuario: Usuario | null;
@@ -10,6 +11,10 @@ type AuthContextValue = {
   alterarStatus: (status: AgentStatus) => Promise<void>;
   temPerfil: (...perfis: Perfil[]) => boolean;
   temModulo: (modulo: string) => boolean;
+  /** Operações da esteira acessíveis e o nível (vem da sessão; `/auth/me` se faltar). */
+  operacoes: AcessoOperacoes;
+  /** Módulo Esteira liberado E alguma operação acessível: decide menu e rotas da Esteira. */
+  temEsteira: boolean;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -61,8 +66,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const alterarStatus = useCallback(async (status: AgentStatus) => {
     const { usuario: atualizado } = await api.patch<{ usuario: Usuario }>('/usuarios/me/status', { status });
-    setUsuario(atualizado);
+    // A resposta de status não traz as operações: mantém as da sessão.
+    setUsuario((atual) => ({ ...atualizado, operacoes: atualizado.operacoes ?? atual?.operacoes }));
   }, []);
+
+  // Sessão sem `operacoes` (API anterior a este campo no login/refresh): busca em `/auth/me` uma vez.
+  const faltamOperacoes = Boolean(usuario && usuario.operacoes === undefined);
+  useEffect(() => {
+    if (!faltamOperacoes) return;
+    let ativo = true;
+    api
+      .get<{ usuario: Usuario }>('/auth/me')
+      .then(({ usuario: me }) => ativo && setUsuario((atual) => (atual ? { ...atual, operacoes: me.operacoes ?? {} } : atual)))
+      .catch(() => ativo && setUsuario((atual) => (atual ? { ...atual, operacoes: {} } : atual)));
+    return () => {
+      ativo = false;
+    };
+  }, [faltamOperacoes]);
 
   const temPerfil = useCallback(
     (...perfis: Perfil[]) => (usuario ? perfis.includes(usuario.perfil) : false),
@@ -96,9 +116,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [usuario]);
 
+  const operacoes = useMemo<AcessoOperacoes>(() => usuario?.operacoes ?? {}, [usuario?.operacoes]);
+  const temEsteira = temModulo('esteira') && operacoesPermitidas(operacoes).length > 0;
+
   const valor = useMemo(
-    () => ({ usuario, carregando, entrar, sair, alterarStatus, temPerfil, temModulo }),
-    [usuario, carregando, entrar, sair, alterarStatus, temPerfil, temModulo],
+    () => ({ usuario, carregando, entrar, sair, alterarStatus, temPerfil, temModulo, operacoes, temEsteira }),
+    [usuario, carregando, entrar, sair, alterarStatus, temPerfil, temModulo, operacoes, temEsteira],
   );
 
   return <AuthContext.Provider value={valor}>{children}</AuthContext.Provider>;

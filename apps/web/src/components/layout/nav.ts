@@ -92,14 +92,16 @@ export const NAV: NavItem[] = [
   { rota: '/atendimento', label: 'Atendimento', icone: IconAtendimento, animacao: 'balancar', fase: 1 },
   { rota: '/telefonia', label: 'Telefonia', icone: IconTelefonia, animacao: 'balancar', fase: 1 },
   // Esteira de Credenciamento logo depois do Atendimento: e a ordem de trabalho
-  // da operacao TIM/Starlink (SUGESTOES.docx). So aparece para a organizacao
-  // que tem funil ESTEIRA — ver o filtro em Sidebar.tsx.
+  // da operacao TIM/Starlink (SUGESTOES.docx). So aparece para quem acessa
+  // alguma operacao — ver o filtro em Sidebar.tsx e App.tsx.
   {
     rota: '/esteira',
     label: 'Esteira',
     icone: IconEsteira,
     animacao: 'deslizar',
     fase: 5,
+    // `/esteira/:operacao` e registrada em App.tsx (ROTAS_DA_PAGINA): nao e
+    // subrota porque comeca pela rota do proprio modulo.
   },
   { rota: '/monitoramento', label: 'Monitoramento', icone: IconMonitoramento, animacao: 'pulsar', fase: 3 },
   { rota: '/auditoria', label: 'Auditoria', icone: IconAuditoria, animacao: 'pulo', fase: 3 },

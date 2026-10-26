@@ -1,4 +1,9 @@
-export type Perfil = 'ADMIN' | 'SUPERVISOR' | 'GESTOR' | 'COMERCIAL' | 'SUPORTE' | 'AGENTE';
+import type { AcessoOperacoes } from './esteiraTypes';
+
+/** Tipos das esteiras TIM/Starlink (API nova `/esteiras/:operacao`). */
+export * from './esteiraTypes';
+
+export type Perfil = 'ADMIN'| 'SUPERVISOR' | 'GESTOR' | 'COMERCIAL' | 'SUPORTE' | 'AGENTE';
 
 export type AgentStatus = 'OFFLINE' | 'DISPONIVEL' | 'EM_ATENDIMENTO' | 'PAUSA';
 
@@ -32,6 +37,8 @@ export type Usuario = {
   /** Filial desta pessoa (item 6.5). Nulo = sem filial atribuida. */
   filialId?: string | null;
   modulosPermitidos?: string[];
+  /** Operações da esteira que a pessoa acessa e com que nível (só na sessão e em `/auth/me`). */
+  operacoes?: AcessoOperacoes;
 };
 
 export type EntidadeCampoCustomizado = 'CONTA' | 'LEAD' | 'OPORTUNIDADE';

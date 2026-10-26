@@ -16,7 +16,8 @@ export function validarPreferencia(chave: string, valor: unknown): ResultadoPref
   if (!PADRAO_CHAVE.test(chave)) {
     return { status: 400, mensagem: 'Chave inválida: use 1 a 80 caracteres entre letras, números, ":", "_" e "-"' };
   }
-  if (chave.toLowerCase().startsWith('esteira:')) {
+  // `esteira:ultimaOperacao` (spec 4.10) é a única chave de esteira sem operação.
+  if (chave.toLowerCase().startsWith('esteira:') && chave.toLowerCase() !== 'esteira:ultimaoperacao') {
     const operacao = chave.slice('esteira:'.length).split(':')[0] ?? '';
     if (!operacaoDaUrl(operacao)) {
       return { status: 400, mensagem: 'Chave de esteira com operação inválida (use TIM ou STARLINK)' };

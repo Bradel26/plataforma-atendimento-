@@ -10,6 +10,11 @@ describe('validarPreferencia', () => {
     expect(validarPreferencia('x', null)).toBeNull();
   });
 
+  it('aceita esteira:ultimaOperacao (spec 4.10), a única chave de esteira sem operação', () => {
+    expect(validarPreferencia('esteira:ultimaOperacao', { operacao: 'TIM' })).toBeNull();
+    expect(validarPreferencia('esteira:ultimaOperacao:x', 1)?.status).toBe(400);
+  });
+
   it('recusa chave fora do padrão ou longa demais', () => {
     expect(validarPreferencia('', 1)?.status).toBe(400);
     expect(validarPreferencia('com espaço', 1)?.status).toBe(400);
