@@ -32,7 +32,6 @@ const inclusaoLista = {
     select: {
       id: true,
       contatoId: true,
-      situacaoExcecao: true,
       operacao: true,
       funil: { select: { id: true, nome: true, operacao: true } },
       responsavel: { select: { id: true, nome: true } },
@@ -218,7 +217,6 @@ function serializar(c: CicloDb, interacoes: Map<string, Date>, agora = new Date(
     funil: c.credenciamento.funil,
     operacao: c.credenciamento.operacao,
     responsavel: c.credenciamento.responsavel,
-    situacaoExcecao: c.credenciamento.situacaoExcecao,
   };
 }
 

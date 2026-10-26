@@ -93,7 +93,6 @@ export type ItemCiclo = {
   contato: Ref & { telefone: string | null; uf: string | null; cidade: string | null };
   funil: Ref;
   responsavel: Ref | null;
-  situacaoExcecao: string | null;
 };
 
 export type ListaCiclos = {

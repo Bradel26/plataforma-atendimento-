@@ -2,30 +2,18 @@ import { Router } from 'express';
 import { asyncHandler } from '../../http/async-handler';
 import { requireAuth, requireRole } from '../../http/middleware/auth';
 import { requireModulo } from '../../lib/modulos';
-import { validateBody, validateQuery } from '../../http/middleware/validate';
-import { param } from '../../http/params';
-import {
-  atualizarCredenciamentoSchema,
-  criarCredenciamentoSchema,
-  desempenhoSchema,
-  filtrosEsteiraSchema,
-  gestaoSchema,
-  listarCredenciamentosSchema,
-  painelSchema,
-} from './credenciamentos.schemas';
-import {
-  atualizarCredenciamento,
-  criarCredenciamento,
-  esteiraKanban,
-  exigirFunilPermitido,
-  funisPermitidos,
-  importarContatosClassificados,
-  listarCredenciamentos,
-  obterCredenciamento,
-} from './credenciamentos.service';
+import { validateQuery } from '../../http/middleware/validate';
+import { desempenhoSchema, gestaoSchema, painelSchema } from './credenciamentos.schemas';
+import { exigirFunilPermitido, funisPermitidos } from './credenciamentos.service';
 import { acompanhamentos, desempenhoOperacional, gestaoOperacao, painelOperacoes } from './credenciamentos.indicadores';
 import { z } from 'zod';
 
+/**
+ * Indicadores da operacao de credenciamento (Dashboard, Gestao, Desempenho,
+ * Acompanhamentos) e a lista de operacoes. O cadastro, o Kanban, a Lista e os
+ * movimentos dos vinculos moram em `/api/esteiras/:operacao` (modules/esteira);
+ * as rotas antigas de CRUD daqui sairam com a Task 21.
+ */
 export const credenciamentosRoutes = Router();
 
 credenciamentosRoutes.use(requireAuth);
@@ -117,57 +105,5 @@ credenciamentosRoutes.get(
   validateQuery(z.object({ dias: z.coerce.number().int().min(1).max(180).default(7) })),
   asyncHandler(async (_req, res) => {
     res.json({ acompanhamentos: await acompanhamentos(res.locals.query.dias) });
-  }),
-);
-
-/** @deprecated Substituida por /api/esteiras/:operacao (Task 21 remove apos o front migrar). */
-credenciamentosRoutes.get(
-  '/',
-  validateQuery(listarCredenciamentosSchema),
-  asyncHandler(async (_req, res) => {
-    res.json({ credenciamentos: await listarCredenciamentos(res.locals.query) });
-  }),
-);
-
-/** @deprecated Substituida por /api/esteiras/:operacao (Task 21 remove apos o front migrar). */
-credenciamentosRoutes.get(
-  '/kanban',
-  validateQuery(filtrosEsteiraSchema),
-  asyncHandler(async (_req, res) => {
-    res.json(await esteiraKanban(res.locals.query));
-  }),
-);
-
-credenciamentosRoutes.get(
-  '/:id',
-  asyncHandler(async (req, res) => {
-    res.json({ credenciamento: await obterCredenciamento(param(req, 'id')) });
-  }),
-);
-
-/** @deprecated Substituida pela importacao da esteira (Task 21 remove apos o front migrar). */
-credenciamentosRoutes.post(
-  '/importar-contatos-classificados',
-  validateBody(z.object({ previa: z.boolean() })),
-  asyncHandler(async (req, res) => {
-    res.json(await importarContatosClassificados(req.body.previa));
-  }),
-);
-
-/** @deprecated Substituida por POST /api/esteiras/:operacao (Task 21 remove apos o front migrar). */
-credenciamentosRoutes.post(
-  '/',
-  validateBody(criarCredenciamentoSchema),
-  asyncHandler(async (req, res) => {
-    res.status(201).json({ credenciamento: await criarCredenciamento(req.body) });
-  }),
-);
-
-/** @deprecated Substituida pelos movimentos de /api/esteiras/:operacao (Task 21 remove apos o front migrar). */
-credenciamentosRoutes.patch(
-  '/:id',
-  validateBody(atualizarCredenciamentoSchema),
-  asyncHandler(async (req, res) => {
-    res.json({ credenciamento: await atualizarCredenciamento(param(req, 'id'), req.body) });
   }),
 );
