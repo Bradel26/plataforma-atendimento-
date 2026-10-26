@@ -27,6 +27,9 @@ const { registrarMensagemEntrante } = vi.hoisted(() => ({
 
 vi.mock('./inbound.service', () => ({ registrarMensagemEntrante }));
 
+const { registrarEstadoDaSessao } = vi.hoisted(() => ({ registrarEstadoDaSessao: vi.fn() }));
+vi.mock('./webhooks/eventos-de-canal', () => ({ registrarEstadoDaSessao }));
+
 const { obterSegredoWebhookWppConnect } = vi.hoisted(() => ({
   obterSegredoWebhookWppConnect: vi.fn(),
 }));
@@ -117,6 +120,7 @@ describe('POST /api/webhooks/wppconnect', () => {
     obterSegredoWebhookWppConnect.mockReturnValue(SEGREDO);
     channelConfigFindFirst.mockResolvedValue(CHANNEL_CONFIG_MOCK);
     registrarMensagemEntrante.mockResolvedValue({ duplicada: false, conversaId: 'conv-1', mensagemId: 'msg-1' });
+    registrarEstadoDaSessao.mockResolvedValue('processado');
   });
 
   it('recebe o payload, resolve a sessao e chega ate registrarMensagemEntrante', async () => {
@@ -139,6 +143,21 @@ describe('POST /api/webhooks/wppconnect', () => {
       }),
     );
     expect(res.json).toHaveBeenCalledWith({ ok: true, duplicada: false });
+  });
+
+  it('registra queda da sessão com motivo legível para a linha e seu responsável', async () => {
+    const req = fakeReq({ query: { secret: SEGREDO }, body: {
+      event: 'session_status', session: 'wpp-poc', status: 'disconnected', detail: 'WhatsApp desconectado: CONFLICT',
+    } });
+    const res = fakeRes();
+
+    await chamarRota(req, res);
+
+    expect(registrarEstadoDaSessao).toHaveBeenCalledWith('wpp-poc', {
+      estado: 'DESCONECTADO', detalhe: 'WhatsApp desconectado: CONFLICT', telefone: null,
+    }, { provider: 'webjs', organizacaoId: 'org-wpp-poc' });
+    expect(res.json).toHaveBeenCalledWith({ ok: true, estado: 'DESCONECTADO' });
+    expect(registrarMensagemEntrante).not.toHaveBeenCalled();
   });
 
   it('rejeita sem segredo configurado no servidor (503, nao processa nada)', async () => {

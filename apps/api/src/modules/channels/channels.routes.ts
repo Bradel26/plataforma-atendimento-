@@ -27,11 +27,12 @@ import {
   salvarCanal,
   type CanalExterno,
 } from './channels.service';
-import { AVISO_NAO_OFICIAL, modoEfetivo } from './whatsapp.modo';
+import { AVISO_NAO_OFICIAL, modoEfetivo, type EstadoDaPonte } from './whatsapp.modo';
 import { getWhatsAppProvider } from './whatsapp-provider.factory';
 import { estadoDaIa, estadoDaIaDoNumero, salvarIa, salvarIaDoNumero } from '../bots/ia.service';
 import { conectarNumeroMeta, desconectarNumeroMeta, estadoDoEmbeddedSignup, habilitarChamadasNumeroMeta } from './meta-embedded-signup.service';
 import { emitirTicketWebJsCall } from './webjs-call-ticket';
+import { gravacaoPertenceASessao } from './webjs-recording-access';
 
 export const channelsRoutes = Router();
 
@@ -176,6 +177,40 @@ async function marcarDesconectadoLocalmente(config: {
   );
 }
 
+/**
+ * O webhook de queda e a fonte primaria; esta leitura de estado tambem reconcilia
+ * o status se o container do conector tiver caido antes de conseguir notificar a API.
+ */
+async function sincronizarEstadoDaLinha(config: {
+  id: string;
+  ponteSessao: string | null;
+  donoId: string | null;
+  ponteStatus?: string | null;
+  ponteConectadoEm?: Date | null;
+}, estado: EstadoDaPonte): Promise<EstadoDaPonte> {
+  let status: string | null = null;
+  let resultado = estado;
+  if (estado.situacao === 'CONECTADO') status = 'CONECTADO';
+  else if (estado.situacao === 'AGUARDANDO_QR') status = config.ponteConectadoEm ? 'DESCONECTADO' : 'AGUARDANDO_QR';
+  else if (estado.situacao === 'DESCONECTADO') status = config.ponteConectadoEm ? 'DESCONECTADO' : 'AGUARDANDO_QR';
+  else if (estado.situacao === 'DESCONHECIDO' && config.ponteStatus === 'CONECTADO') {
+    status = 'DESCONECTADO';
+    resultado = { ...estado, situacao: 'DESCONECTADO', detalhe: estado.detalhe || 'Não foi possível consultar o conector; o estado da sessão é desconhecido. Tente reconectar.' };
+  }
+  if (!status || config.ponteStatus === status) return resultado;
+
+  const em = new Date();
+  await prisma.channelConfig.update({
+    where: { id: config.id },
+    data: { ponteStatus: status, ponteStatusEm: em, ...(status === 'CONECTADO' ? { ponteConectadoEm: em } : {}) },
+  });
+  notificarStatusCanal(
+    { id: config.id, ponteSessao: config.ponteSessao, status, detalhe: resultado.detalhe, em: em.toISOString() },
+    { agenteId: config.donoId },
+  );
+  return resultado;
+}
+
 const naoVazio = { message: 'Informe ao menos um campo' } as const;
 
 const salvarSchema = z.object(camposDoCanal).refine((d) => Object.keys(d).length > 0, naoVazio);
@@ -265,7 +300,8 @@ channelsRoutes.get(
       });
       return;
     }
-    res.json({ estado: await whatsAppProvider.getStatus(config), aviso: AVISO_NAO_OFICIAL, caminhoWebhook });
+    const estado = await whatsAppProvider.getStatus(config);
+    res.json({ estado: await sincronizarEstadoDaLinha(config, estado), aviso: AVISO_NAO_OFICIAL, caminhoWebhook });
   }),
 );
 
@@ -425,7 +461,7 @@ channelsRoutes.post(
 
     if (dados.recordingName) {
       const nome = dados.recordingName;
-      if (!nome.startsWith(`sessao-${config.ponteSessao}-chamada-`) || !nome.endsWith('-audio-completo.wav')) {
+      if (!gravacaoPertenceASessao(nome, config.ponteSessao!) || !nome.endsWith('-audio-completo.wav')) {
         throw badRequest('A gravação não pertence à sessão WhatsApp conectada.');
       }
       const { base, token } = webJsBridgeConfig();
@@ -477,7 +513,7 @@ channelsRoutes.post(
   asyncHandler(async (req, res) => {
     const config = await configDeChamadaWebJs(req);
     const base = param(req, 'base');
-    if (!base.startsWith(`sessao-${config.ponteSessao}-`)) throw notFound('Gravação não encontrada nesta linha.');
+    if (!gravacaoPertenceASessao(base, config.ponteSessao!) || base.endsWith('.wav')) throw notFound('Gravação não encontrada nesta linha.');
     // A análise pode transcrever as duas faixas e então gerar o resumo local.
     // O limite padrão de 20 s encerrava a requisição antes de o conector concluir.
     const resultado = await chamarWebJsBridge(
@@ -516,7 +552,7 @@ channelsRoutes.get(
   asyncHandler(async (req, res) => {
     const config = await configDeChamadaWebJs(req);
     const name = param(req, 'name');
-    if (!name.startsWith(`sessao-${config.ponteSessao}-`)) throw notFound('Gravação não encontrada nesta linha.');
+    if (!gravacaoPertenceASessao(name, config.ponteSessao!) || !name.endsWith('.wav')) throw notFound('Gravação não encontrada nesta linha.');
     const { base, token } = webJsBridgeConfig();
     let resposta: Response;
     try {
@@ -670,7 +706,8 @@ channelsRoutes.get(
       });
       return;
     }
-    res.json({ estado: await whatsAppProvider.getStatus(config), aviso: AVISO_NAO_OFICIAL, caminhoWebhook });
+    const estado = await whatsAppProvider.getStatus(config);
+    res.json({ estado: await sincronizarEstadoDaLinha(config, estado), aviso: AVISO_NAO_OFICIAL, caminhoWebhook });
   }),
 );
 

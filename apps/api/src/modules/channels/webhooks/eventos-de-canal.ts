@@ -46,7 +46,7 @@ function statusDaLinha(situacao: SituacaoSessao): 'CONECTADO' | 'DESCONECTADO' |
  * a mesma escrita e o mesmo evento Socket.IO que a Ponte usa
  * (`ponte.routes.ts`), para as telas atuais nao precisarem saber de onde veio.
  */
-async function registrarEstadoDaSessao(
+export async function registrarEstadoDaSessao(
   sessaoExterna: string,
   situacao: SituacaoSessao,
   contexto: { provider: string; organizacaoId: string },

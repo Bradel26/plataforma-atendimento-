@@ -1,6 +1,7 @@
 node_modules/
 .auth/
 .wwebjs_cache/
+.webjs-send-idempotency.json*
 recordings/
 .env*
 !.env.example

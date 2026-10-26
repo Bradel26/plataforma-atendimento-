@@ -1,6 +1,6 @@
 import express from 'express';
 import { createServer } from 'node:http';
-import { mkdir, writeFile, readdir, stat, readFile, lstat, readlink, unlink, rm } from 'node:fs/promises';
+import { mkdir, writeFile, readdir, stat, readFile, lstat, readlink, unlink, rm, copyFile, rename } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { hostname } from 'node:os';
@@ -9,15 +9,19 @@ import { PassThrough } from 'node:stream';
 import { WebSocketServer, WebSocket } from 'ws';
 import QRCode from 'qrcode';
 import wwebjs from 'whatsapp-web.js';
+import { RecordingAnalysisQueue } from './analysis-queue.mjs';
 
 const { Client, LocalAuth, MessageMedia } = wwebjs;
 
-const HOST = '127.0.0.1';
+const HOST = process.env.WEBJS_HOST?.trim() || '127.0.0.1';
 const PORT = Number(process.env.WEBJS_LOCAL_PORT || 4174);
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.WEBJS_DATA_DIR || ROOT;
 const AUTH_DIR = path.join(DATA_DIR, '.auth');
 const RECORDINGS_DIR = path.join(DATA_DIR, 'recordings');
+const WEB_VERSION = '2.3000.1051464192';
+const WEB_CACHE_DIR = path.join(DATA_DIR, '.wwebjs_cache');
+const WEB_CACHE_FILE = path.join(WEB_CACHE_DIR, `${WEB_VERSION}.html`);
 const LOCAL_ENV = path.resolve(ROOT, '../../apps/api/.env');
 let localEnv = {};
 try {
@@ -30,7 +34,9 @@ try {
   }));
 } catch { /* configuração pode ser injetada pelo processo */ }
 const PLATFORM_TOKEN = process.env.WEBJS_LOCAL_TOKEN || localEnv.WEBJS_LOCAL_TOKEN || process.env.WPP_CONNECT_WEBHOOK_SECRET || localEnv.WPP_CONNECT_WEBHOOK_SECRET || '';
-const WEBHOOK_SECRET = process.env.WPP_CONNECT_WEBHOOK_SECRET || localEnv.WPP_CONNECT_WEBHOOK_SECRET || '';
+let webhookSecretPersistido = '';
+try { webhookSecretPersistido = (await readFile(path.join(DATA_DIR, '.webhook-secret'), 'utf8')).trim(); } catch { /* configuracao pode vir do ambiente */ }
+const WEBHOOK_SECRET = process.env.WPP_CONNECT_WEBHOOK_SECRET || localEnv.WPP_CONNECT_WEBHOOK_SECRET || webhookSecretPersistido;
 const API_PORT = Number(process.env.API_PORT || localEnv.PORT || 3333);
 const TRANSCRICAO_URL = process.env.TRANSCRICAO_LOCAL_URL || localEnv.TRANSCRICAO_LOCAL_URL || 'http://127.0.0.1:3334/v1/audio/transcriptions';
 const TRANSCRICAO_MODELO = process.env.TRANSCRICAO_LOCAL_MODELO || localEnv.TRANSCRICAO_LOCAL_MODELO || 'base';
@@ -48,16 +54,59 @@ const PULSO_PAGINA_INTERVALO_MS = Number(process.env.WEBJS_PAGE_PULSE_INTERVAL_M
 const PULSO_PAGINA_TIMEOUT_MS = Number(process.env.WEBJS_PAGE_PULSE_TIMEOUT_MS || 5_000);
 const LIMPAR_LOCKS_DE_OUTRA_INSTANCIA = process.env.WEBJS_SINGLE_INSTANCE !== 'false';
 const API_WEBHOOK = process.env.WEBJS_INBOUND_WEBHOOK_URL?.trim() || localEnv.WEBJS_INBOUND_WEBHOOK_URL || `http://127.0.0.1:${API_PORT}/api/webhooks/wppconnect`;
+
+await mkdir(WEB_CACHE_DIR, { recursive: true });
+try {
+  await readFile(WEB_CACHE_FILE);
+} catch {
+  await copyFile(path.join(ROOT, 'web-version-cache', `${WEB_VERSION}.html`), WEB_CACHE_FILE);
+}
+
+async function avisarEstadoNaPlataforma(sessao, estado, detalhe = null) {
+  if (!WEBHOOK_SECRET) return;
+  const endpoint = new URL(API_WEBHOOK);
+  endpoint.searchParams.set('secret', WEBHOOK_SECRET);
+  try {
+    const resposta = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event: 'session_status', session: sessao.nome, status: estado, detail: detalhe }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!resposta.ok) console.warn(`[whatsapp:${sessao.nome}] API recusou atualizacao de estado; HTTP ${resposta.status}`);
+  } catch (error) {
+    console.warn(`[whatsapp:${sessao.nome}] API nao recebeu atualizacao de estado: ${error instanceof Error ? error.name : 'falha de rede'}`);
+  }
+}
+
 const app = express();
 const server = createServer(app);
 const origemPermitida = (origem) => !origem || /^https?:\/\/(127\.0\.0\.1|localhost):5173$/.test(origem);
 const wss = new WebSocketServer({
   server,
   path: '/audio',
-  verifyClient: ({ origin }, done) => done(origemPermitida(origin), 403, 'Origem local nao autorizada'),
+  verifyClient: ({ origin, req }, done) => {
+    const autorizado = HOST === '127.0.0.1' || req.headers.authorization === `Bearer ${PLATFORM_TOKEN}`;
+    done(origemPermitida(origin) && autorizado, 403, 'Origem ou credencial nao autorizada');
+  },
 });
 const sessoes = new Map();
+const filaAnaliseGravacoes = new RecordingAnalysisQueue();
 let encerrando = false;
+
+function gravacaoPertenceASessao(nome, sessaoEsperada) {
+  const resultado = /^sessao-([a-zA-Z0-9_-]{1,60})-chamada-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.\d{3}Z(?:-(?:audio-completo|audio-remoto|microfone-atendente)\.wav)?$/.exec(nome);
+  return resultado?.[1] === sessaoEsperada;
+}
+
+function motivoLegivelDaQueda(reason) {
+  const codigo = String(reason || '').trim().toUpperCase();
+  if (codigo === 'CONFLICT') return 'Outra sessão do WhatsApp foi iniciada com este número.';
+  if (codigo === 'UNPAIRED') return 'O telefone desvinculou esta sessão. Conecte novamente pelo QR.';
+  if (codigo === 'TOS_BLOCK') return 'O WhatsApp encerrou a sessão por uma restrição da conta. Confira o aplicativo no celular.';
+  if (codigo === 'LOGOUT') return 'A sessão foi encerrada no WhatsApp. Conecte novamente pelo QR.';
+  return codigo ? `O WhatsApp encerrou a sessão (código: ${codigo}).` : 'O WhatsApp encerrou a sessão. Conecte novamente pelo QR.';
+}
 
 async function prepararPerfilChrome(profileDir, nomeSessao) {
   await mkdir(profileDir, { recursive: true });
@@ -174,6 +223,10 @@ app.use((req, res, next) => {
 });
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(ROOT, 'public')));
+app.use('/api/recordings', (req, res, next) => {
+  if (HOST === '127.0.0.1') return next();
+  return autenticarPlataforma(req, res, next);
+});
 app.get('/api/status', (req, res) => {
   const sessao = obterSessao(req.query.session || 'teste-local');
   res.json({ status: sessao.status, call: sessao.currentCall ? { ...sessao.callInfo, from: sessao.currentCall.from, isVideo: sessao.currentCall.isVideo, fromMe: sessao.currentCall.fromMe } : null });
@@ -182,13 +235,13 @@ app.get('/api/recordings', async (req, res) => {
   const sessao = obterSessao(req.query.session || 'teste-local');
   await mkdir(RECORDINGS_DIR, { recursive: true });
   const files = await readdir(RECORDINGS_DIR);
-  const prefixo = `sessao-${sessao.nome}-`;
-  const items = await Promise.all(files.filter((f) => f.startsWith(prefixo) && f.endsWith('.wav')).map(async (name) => ({ name, bytes: (await stat(path.join(RECORDINGS_DIR, name))).size })));
+  const items = await Promise.all(files.filter((f) => gravacaoPertenceASessao(f, sessao.nome) && f.endsWith('.wav')).map(async (name) => ({ name, bytes: (await stat(path.join(RECORDINGS_DIR, name))).size })));
   res.json(items);
 });
 app.get('/api/recordings/:name/audio', async (req, res) => {
   const name = String(req.params.name || '');
-  if (!/^sessao-[a-zA-Z0-9_-]{1,60}-chamada-[a-zA-Z0-9._-]+\.wav$/.test(name)) return res.status(400).json({ error: 'Nome de gravação inválido.' });
+  const sessao = obterSessao(req.query.session || 'teste-local');
+  if (!gravacaoPertenceASessao(name, sessao.nome) || !name.endsWith('.wav')) return res.status(404).json({ error: 'Gravação não encontrada nesta linha.' });
   try {
     res.type('audio/wav').send(await readFile(path.join(RECORDINGS_DIR, name)));
   } catch (error) {
@@ -196,13 +249,11 @@ app.get('/api/recordings/:name/audio', async (req, res) => {
     return res.status(500).json({ error: 'Não foi possível ler a gravação local.' });
   }
 });
-app.post('/api/recordings/:base/analyze', async (req, res) => {
-  const base = String(req.params.base || '');
-  if (!/^sessao-[a-zA-Z0-9_-]{1,60}-chamada-[a-zA-Z0-9._-]+$/.test(base)) return res.status(400).json({ error: 'Identificador de gravação inválido.' });
+async function analisarGravacao(base) {
   const analysisPath = path.join(RECORDINGS_DIR, `${base}.analysis.json`);
   try {
     const cached = JSON.parse(await readFile(analysisPath, 'utf8'));
-    if (cached.analysisVersion === 2 && String(cached.transcript || '').trim() && String(cached.resumo || '').trim()) return res.json(cached);
+    if (cached.analysisVersion === 2 && String(cached.resumo || '').trim()) return cached;
   } catch { /* ainda não existe análise salva */ }
 
   const sources = [
@@ -221,13 +272,17 @@ app.post('/api/recordings/:base/analyze', async (req, res) => {
     try {
       response = await fetch(TRANSCRICAO_URL, { method: 'POST', body: form, signal: AbortSignal.timeout(300_000) });
     } catch {
-      return res.status(503).json({ error: 'Transcrição local indisponível. Inicie o serviço Whisper e tente novamente.' });
+      const error = new Error('Transcrição local indisponível. Inicie o serviço Whisper e tente novamente.');
+      error.statusCode = 503;
+      throw error;
     }
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || !String(payload.text || '').trim()) {
       const motivo = String(payload.detail || payload.error || '');
       if (/no speech detected|sem fala|nenhuma fala/i.test(motivo)) continue;
-      return res.status(response.status || 502).json({ error: motivo || 'Transcription failed.' });
+      const error = new Error(motivo || 'Transcription failed.');
+      error.statusCode = response.status || 502;
+      throw error;
     }
     parts.push({ speaker: source.speaker, text: String(payload.text).trim(), file: source.name, language: payload.language || null, avgLogprob: payload.avgLogprob ?? null, noSpeechProb: payload.noSpeechProb ?? null, alternatives: Array.isArray(payload.alternatives) ? payload.alternatives : [] });
   }
@@ -253,7 +308,7 @@ app.post('/api/recordings/:base/analyze', async (req, res) => {
       analyzedAt: new Date().toISOString(), engine: 'Whisper local \u2014 sem fala identific\u00e1vel',
     };
     await writeFile(analysisPath, JSON.stringify(result, null, 2), 'utf8');
-    return res.json(result);
+    return result;
   }
 
   const transcript = parts.map((part) => `${part.speaker}: ${part.text}`).join('\n\n');
@@ -313,7 +368,22 @@ app.post('/api/recordings/:base/analyze', async (req, res) => {
   const confiancaTranscricao = baixaQualidadeAsr || analysis.trechosIncertos?.length ? 'BAIXA' : sinalDeRiscoAsr && analysis.confiancaTranscricao === 'ALTA' ? 'MEDIA' : analysis.confiancaTranscricao;
   const result = { analysisVersion: 2, base, transcript: analysis.transcricaoPt, transcriptOriginal: transcript, parts, ...analysis, confiancaTranscricao, analyzedAt: new Date().toISOString(), engine: `Whisper + revisão contextual Ollama ${OLLAMA_MODELO} · confiança estimada ${confiancaTranscricao}` };
   await writeFile(analysisPath, JSON.stringify(result, null, 2), 'utf8');
-  res.json(result);
+  return result;
+}
+
+app.post('/api/recordings/:base/analyze', async (req, res) => {
+  const base = String(req.params.base || '');
+  if (!/^sessao-[a-zA-Z0-9_-]{1,60}-chamada-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.\d{3}Z$/.test(base)) return res.status(400).json({ error: 'Identificador de gravação inválido.' });
+  try {
+    const resultado = await filaAnaliseGravacoes.run(
+      base,
+      () => [...sessoes.values()].some((sessao) => Boolean(sessao.currentCall)),
+      () => analisarGravacao(base),
+    );
+    res.json(resultado);
+  } catch (error) {
+    res.status(error?.statusCode || 500).json({ error: error?.message || 'Não foi possível analisar a gravação.' });
+  }
 });
 async function iniciarCliente(nomeSessao = 'teste-local') {
   if (encerrando) return { ok: false, status: 'encerrando', error: 'O conector está reiniciando. Atualize a página em alguns segundos.' };
@@ -332,6 +402,8 @@ async function iniciarCliente(nomeSessao = 'teste-local') {
     await prepararPerfilChrome(profileDir, sessao.nome);
     const client = new Client({
       authStrategy: new LocalAuth({ clientId, dataPath: AUTH_DIR }),
+      webVersion: WEB_VERSION,
+      webVersionCache: { type: 'local', path: WEB_CACHE_DIR },
       authTimeoutMs: AUTENTICACAO_PAGINA_TIMEOUT_MS,
       puppeteer: { headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--autoplay-policy=no-user-gesture-required'] },
     });
@@ -362,14 +434,30 @@ async function iniciarCliente(nomeSessao = 'teste-local') {
         sessao.ultimoErroDaPagina = `Requisição falhou: ${detalhe}`;
         console.warn(`[whatsapp:${sessao.nome}] requisição da página falhou: ${detalhe}`);
       });
-      page.on('error', (error) => {
-        console.error(`[whatsapp:${sessao.nome}] Chromium informou queda da página: ${String(error?.message || error).slice(0, 300)}`);
-      });
+      const registrarQuedaDaPagina = (detalheTecnico, motivoLegivel) => {
+        console.error(`[whatsapp:${sessao.nome}] Chromium informou queda da página: ${detalheTecnico}`);
+        if (sessao.client !== thisClient || sessao.status !== 'conectado' || encerramentoSolicitado) return;
+        encerramentoSolicitado = 'queda inesperada da página';
+        sessao.status = 'desconectado';
+        sessao.lastError = motivoLegivel;
+        sessao.retryAfter = Date.now() + 60_000;
+        sessao.latestQr = null;
+        sessao.client = null;
+        broadcast(sessao, { type: 'status', data: sessao.status });
+        void avisarEstadoNaPlataforma(sessao, 'disconnected', motivoLegivel);
+        void thisClient.destroy().catch(() => {});
+      };
+      page.on('error', (error) => registrarQuedaDaPagina(
+        String(error?.message || error).slice(0, 300),
+        'O WhatsApp Web travou e a sessão foi interrompida. Tente conectar novamente pelo QR.',
+      ));
       page.on('close', () => {
         console.warn(`[whatsapp:${sessao.nome}] página do WhatsApp Web fechada; estado=${sessao.status}; encerramento=${encerramentoSolicitado || 'não solicitado'}`);
+        registrarQuedaDaPagina('page.close', 'A página do WhatsApp Web fechou inesperadamente. Conecte novamente pelo QR.');
       });
       client.pupBrowser?.on('disconnected', () => {
         console.warn(`[whatsapp:${sessao.nome}] Chromium desconectado; estado=${sessao.status}; encerramento=${encerramentoSolicitado || 'não solicitado'}`);
+        registrarQuedaDaPagina('browser.disconnected', 'O navegador do WhatsApp foi encerrado inesperadamente. Conecte novamente pelo QR.');
       });
     };
     const sondarPagina = () => {
@@ -460,6 +548,7 @@ async function iniciarCliente(nomeSessao = 'teste-local') {
         sessao.retryAfter = Date.now() + 60_000;
         sessao.latestQr = null;
         broadcast(sessao, { type: 'error', data: message });
+        void avisarEstadoNaPlataforma(sessao, 'failed', 'O WhatsApp Web não concluiu a conexão no tempo esperado. Tente conectar novamente pelo QR.');
         sessao.client = null;
         thisClient.destroy().catch((error) => console.error(`[whatsapp:${sessao.nome}] falha ao encerrar cliente apos timeout:`, error))
           .finally(() => descartarPerfilNuncaConectado(profileDir, sessao.nome));
@@ -490,6 +579,7 @@ async function iniciarCliente(nomeSessao = 'teste-local') {
       aguardarProximoEstado('finalizacao da autenticacao', AUTENTICACAO_PRONTO_TIMEOUT_MS);
       sessao.status = 'autenticado';
       broadcast(sessao, { type: 'status', data: sessao.status });
+      void avisarEstadoNaPlataforma(sessao, 'connected');
     });
     client.on('ready', () => {
       if (sessao.client !== thisClient) return;
@@ -528,6 +618,7 @@ async function iniciarCliente(nomeSessao = 'teste-local') {
       sessao.retryAfter = Date.now() + 60_000;
       sessao.latestQr = null;
       broadcast(sessao, { type: 'error', data: detail });
+      void avisarEstadoNaPlataforma(sessao, 'failed', 'Falha de autenticação do WhatsApp. Tente conectar novamente pelo QR.');
       sessao.client = null;
       thisClient.destroy().catch((error) => console.error(`[whatsapp:${sessao.nome}] falha ao fechar cliente nao autenticado:`, error));
     });
@@ -542,6 +633,7 @@ async function iniciarCliente(nomeSessao = 'teste-local') {
       sessao.retryAfter = Date.now() + 60_000;
       sessao.latestQr = null;
       broadcast(sessao, { type: 'status', data: `${sessao.status}: ${reason}` });
+      void avisarEstadoNaPlataforma(sessao, 'disconnected', motivoLegivelDaQueda(reason));
       if (sessao.client === thisClient) sessao.client = null;
       thisClient.destroy().catch((error) => console.error(`[whatsapp:${sessao.nome}] falha ao fechar cliente WhatsApp:`, error));
     });
@@ -575,6 +667,7 @@ async function iniciarCliente(nomeSessao = 'teste-local') {
       sessao.retryAfter = Date.now() + 60_000;
       sessao.latestQr = null;
       broadcast(sessao, { type: 'error', data: sessao.lastError });
+      void avisarEstadoNaPlataforma(sessao, 'failed', 'O conector não conseguiu iniciar a sessão do WhatsApp. Tente novamente pelo QR.');
       sessao.client = null;
       thisClient.destroy().catch((destroyError) => console.error(`[whatsapp:${sessao.nome}] falha ao encerrar inicializacao:`, destroyError))
         .finally(() => descartarPerfilNuncaConectado(profileDir, sessao.nome));
@@ -733,6 +826,7 @@ function autenticarPlataforma(req, res, next) {
   next();
 }
 app.use('/api/platform', autenticarPlataforma);
+app.get('/api/platform/health', (_req, res) => res.json({ status: 'ok' }));
 app.get('/api/platform/status', (req, res) => {
   const sessao = obterSessao(req.query.session || 'teste-local');
   if (!sessao.client) {
@@ -824,18 +918,21 @@ app.post('/api/platform/call/:action', async (req, res) => {
 app.post('/api/platform/recordings/:base/analyze', async (req, res) => {
   const sessao = obterSessao(req.query.session || req.body?.session || '');
   const base = String(req.params.base || '');
-  if (!base.startsWith(`sessao-${sessao.nome}-`) || !/^sessao-[a-zA-Z0-9_-]{1,60}-chamada-[a-zA-Z0-9._-]+$/.test(base)) {
+  if (!gravacaoPertenceASessao(base, sessao.nome) || base.endsWith('.wav')) {
     return res.status(404).json({ error: 'Gravação não encontrada nesta linha.' });
   }
   try {
-    const response = await fetch(`http://${HOST}:${PORT}/api/recordings/${encodeURIComponent(base)}/analyze`, { method: 'POST' });
+    const response = await fetch(`http://127.0.0.1:${PORT}/api/recordings/${encodeURIComponent(base)}/analyze`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${PLATFORM_TOKEN}` },
+    });
     res.status(response.status).json(await response.json().catch(() => ({})));
   } catch { res.status(503).json({ error: 'Não foi possível iniciar a análise da gravação.' }); }
 });
 app.get('/api/platform/recordings/:name/audio', async (req, res) => {
   const sessao = obterSessao(req.query.session || '');
   const name = String(req.params.name || '');
-  if (!name.startsWith(`sessao-${sessao.nome}-`) || !/^sessao-[a-zA-Z0-9_-]{1,60}-chamada-[a-zA-Z0-9._-]+-(?:audio-remoto|microfone-atendente|audio-completo)\.wav$/.test(name)) {
+  if (!gravacaoPertenceASessao(name, sessao.nome) || !name.endsWith('.wav')) {
     return res.status(404).json({ error: 'Gravação não encontrada nesta linha.' });
   }
   try { res.type('audio/wav').send(await readFile(path.join(RECORDINGS_DIR, name))); }
@@ -850,7 +947,41 @@ const LIMITE_ENVIAR_MS = 30_000;
 const LIMITE_TELEFONE_REMETENTE_MS = 5_000;
 const TEMPO_RETENCAO_IDEMPOTENCIA_MS = 24 * 60 * 60_000;
 const enviosIdempotentes = new Map();
+const ARQUIVO_IDEMPOTENCIA = path.join(DATA_DIR, '.webjs-send-idempotency.json');
 const telefonesPorLid = new WeakMap();
+
+let gravacaoEnvios = Promise.resolve();
+async function persistirEnviosIdempotentes() {
+  const snapshot = [...enviosIdempotentes].map(([chave, envio]) => ({
+    chave, fingerprint: envio.fingerprint, status: envio.status,
+    expiraEm: envio.expiraEm, resultado: envio.resultado,
+  }));
+  const proxima = gravacaoEnvios.then(async () => {
+    const temporario = `${ARQUIVO_IDEMPOTENCIA}.tmp`;
+    await writeFile(temporario, JSON.stringify(snapshot), 'utf8');
+    await rename(temporario, ARQUIVO_IDEMPOTENCIA);
+  });
+  gravacaoEnvios = proxima.catch(() => {});
+  await proxima;
+}
+
+try {
+  const salvos = JSON.parse(await readFile(ARQUIVO_IDEMPOTENCIA, 'utf8'));
+  if (Array.isArray(salvos)) {
+    for (const salvo of salvos) {
+      if (!salvo || typeof salvo.chave !== 'string' || typeof salvo.fingerprint !== 'string' ||
+          !['pending', 'completed', 'uncertain', 'failed'].includes(salvo.status) ||
+          !Number.isFinite(salvo.expiraEm) || salvo.expiraEm <= Date.now()) continue;
+      // Um pending após reinício pode ter sido entregue pelo WhatsApp. Bloqueie
+      // o retry ambíguo em vez de mandar a mesma mensagem novamente.
+      const status = salvo.status === 'pending' ? 'uncertain' : salvo.status;
+      enviosIdempotentes.set(salvo.chave, {
+        fingerprint: salvo.fingerprint, status, expiraEm: salvo.expiraEm,
+        resultado: salvo.resultado ?? null, promessa: null,
+      });
+    }
+  }
+} catch { /* primeiro boot: ainda não existe registro de envios */ }
 
 class EtapaExpirou extends Error {
   constructor(etapa, ms) {
@@ -918,6 +1049,7 @@ async function enviarTextoIdempotente(sessao, numero, texto, chaveIdempotencia) 
   enviosIdempotentes.set(chave, envio);
   envio.promessa = (async () => {
     try {
+      await persistirEnviosIdempotentes();
       const destino = await comTempoLimite(resolverDestinoWhatsapp(sessao.client, numero), LIMITE_RESOLVER_MS, 'resolver destinatario');
       const envioReal = Promise.resolve(sessao.client.sendMessage(destino, texto));
       // Mantem o resultado se a resposta HTTP expirar mas o WhatsApp Web concluir depois.
@@ -925,28 +1057,44 @@ async function enviarTextoIdempotente(sessao, numero, texto, chaveIdempotencia) 
         envio.status = 'completed';
         envio.resultado = { idExterno: sent.id?._serialized || null };
         envio.expiraEm = Date.now() + TEMPO_RETENCAO_IDEMPOTENCIA_MS;
+        void persistirEnviosIdempotentes().catch(() => console.error(`[whatsapp:${sessao.nome}] nao foi possivel persistir o resultado do envio idempotente`));
       }, () => {
-        if (envio.status === 'uncertain') envio.status = 'failed';
+        if (envio.status === 'uncertain') {
+          envio.status = 'failed';
+          void persistirEnviosIdempotentes().catch(() => {});
+        }
       });
       const sent = await comTempoLimite(envioReal, LIMITE_ENVIAR_MS, 'enviar');
       envio.status = 'completed';
       envio.resultado = { idExterno: sent.id?._serialized || null };
       envio.expiraEm = Date.now() + TEMPO_RETENCAO_IDEMPOTENCIA_MS;
+      await persistirEnviosIdempotentes();
       return envio.resultado;
     } catch (error) {
+      let erroParaRetornar = error instanceof Error ? error : new Error(String(error));
       if (error instanceof EtapaExpirou && error.etapa === 'enviar') {
         envio.status = 'uncertain';
+      } else if (envio.status === 'completed') {
+        // O WhatsApp confirmou o envio, mas o registro persistente falhou.
+        // Preserve a chave como ambígua; nunca permita que um retry envie de novo.
+        envio.status = 'uncertain';
+        erroParaRetornar = new Error('O envio pode ter sido concluído, mas não foi possível confirmar o registro. Confira a conversa antes de tentar novamente.');
+        erroParaRetornar.status = 409;
       } else {
         envio.status = 'failed';
       }
       envio.expiraEm = Date.now() + TEMPO_RETENCAO_IDEMPOTENCIA_MS;
-      throw error;
+      await persistirEnviosIdempotentes().catch(() => {});
+      throw erroParaRetornar;
     }
   })();
   try {
     return await envio.promessa;
   } catch (error) {
-    if (envio.status === 'failed') enviosIdempotentes.delete(chave);
+    if (envio.status === 'failed') {
+      enviosIdempotentes.delete(chave);
+      await persistirEnviosIdempotentes().catch(() => {});
+    }
     throw error;
   }
 }

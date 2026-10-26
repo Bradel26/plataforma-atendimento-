@@ -244,6 +244,7 @@ export function AtendimentoPage() {
   const [conectandoLinha, setConectandoLinha] = useState(false);
   const [desconectandoLinha, setDesconectandoLinha] = useState(false);
   const [erroConectar, setErroConectar] = useState<string | null>(null);
+  const [motivoLinhaWhatsapp, setMotivoLinhaWhatsapp] = useState<string | null>(null);
   const [mostrarSucessoConexao, setMostrarSucessoConexao] = useState(false);
 
   useEffect(() => {
@@ -263,17 +264,21 @@ export function AtendimentoPage() {
   // Roda de novo quando a conexao acontece, para trazer o numero que acabou de parear.
   useEffect(() => {
     if (!minhaLinha || minhaLinha.modo !== 'NAO_OFICIAL') return;
-    void api
-      .get<{ estado: { situacao: string; detalhe: string | null; telefone?: string | null } }>(
-        `/canais/numeros/${minhaLinha.id}/ponte/estado`,
-      )
+    let vivo = true;
+    const atualizarEstado = () => void api
+      .get<{ estado: { situacao: string; detalhe: string | null; telefone?: string | null } }>(`/canais/numeros/${minhaLinha.id}/ponte/estado`)
       .then(({ estado }) => {
+        if (!vivo) return;
         const conectado = estado.situacao === 'CONECTADO';
         setMinhaLinhaConectada(conectado);
         setNumeroConectado(conectado ? (estado.telefone ?? null) : null);
+        setMotivoLinhaWhatsapp(conectado ? null : estado.detalhe ?? null);
       })
       .catch(() => undefined);
-  }, [minhaLinha, minhaLinhaConectada]);
+    atualizarEstado();
+    const timer = window.setInterval(atualizarEstado, 30_000);
+    return () => { vivo = false; window.clearInterval(timer); };
+  }, [minhaLinha]);
 
   /** Insere ou atualiza uma previa recebida por evento de socket — ver `upsertPrevia` (Fase 11.7). */
   const aplicarPrevia = useCallback((p: Previa) => {
@@ -288,9 +293,11 @@ export function AtendimentoPage() {
     const token = getAccessToken();
     if (!token) return;
     const socket = conectar({ token });
-    socket.on(EVENTOS.canalStatus, (payload: { id: string; status: string }) => {
+    socket.on(EVENTOS.canalStatus, (payload: { id: string; status: string; detalhe?: string | null }) => {
       if (payload.id !== minhaLinha.id) return;
-      setMinhaLinhaConectada(payload.status === 'CONECTADO');
+      const conectado = payload.status === 'CONECTADO';
+      setMinhaLinhaConectada(conectado);
+      setMotivoLinhaWhatsapp(conectado ? null : payload.detalhe || 'O WhatsApp foi desconectado. Conecte novamente pelo QR.');
     });
     // O payload traz `canalConfigId` (usado pelo backend para escopar o
     // destinatario), que `Previa` nao tem — descartado aqui, sem precisar
@@ -877,7 +884,13 @@ export function AtendimentoPage() {
       )}
 
       {mostrarChat && (
-        <section aria-label="Conversa" className="min-w-0 flex-1 overflow-hidden bg-white">
+        <section aria-label="Conversa" className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white">
+          {minhaLinha && !minhaLinhaConectada && motivoLinhaWhatsapp && (
+            <div className="px-4 pt-3" role="alert">
+              <Alerta>WhatsApp desconectado: {motivoLinhaWhatsapp}</Alerta>
+            </div>
+          )}
+          <div className="min-h-0 flex-1 overflow-hidden">
           {erroAberta ? (
             <div className="p-5"><Alerta>{erroAberta}</Alerta></div>
           ) : aberta ? (
@@ -1012,6 +1025,7 @@ export function AtendimentoPage() {
               )}
             </div>
           )}
+          </div>
         </section>
       )}
 

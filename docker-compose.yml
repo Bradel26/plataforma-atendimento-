@@ -37,7 +37,7 @@ services:
   # Whisper local opcional para transcrever chamadas sem enviar áudio a uma API
   # paga. Inicie com `docker compose --profile transcricao up -d transcriber`.
   transcriber:
-    profiles: ["transcricao"]
+    profiles: ["transcricao", "webjs"]
     build:
       context: .
       dockerfile: apps/api/transcriber/Dockerfile
@@ -50,6 +50,12 @@ services:
       - "127.0.0.1:3334:3334"
     volumes:
       - transcriber-models:/models
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:3334/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
 
   # Ponte do WhatsApp nao oficial (Baileys). Opcional: so sobe com o perfil
   # "ponte" (`docker compose --profile ponte up -d`), porque quem usa a Cloud
@@ -86,8 +92,49 @@ services:
       timeout: 5s
       retries: 5
 
+  # Conector WhatsApp Web.js em processo/container separado. O bind local serve
+  # apenas para a API que roda no host durante desenvolvimento; Coolify usa rede
+  # privada e nao publica a porta do servico.
+  whatsapp-webjs:
+    profiles: ["webjs"]
+    depends_on:
+      transcriber:
+        condition: service_healthy
+    build:
+      context: ./experimentos/whatsapp-webjs-call-poc
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      WEBJS_HOST: 0.0.0.0
+      WEBJS_LOCAL_PORT: 4174
+      WEBJS_DATA_DIR: /data
+      WEBJS_LOCAL_TOKEN: ${WEBJS_LOCAL_TOKEN:?defina WEBJS_LOCAL_TOKEN}
+      WPP_CONNECT_WEBHOOK_SECRET: ${WPP_CONNECT_WEBHOOK_SECRET:?defina WPP_CONNECT_WEBHOOK_SECRET}
+      WEBJS_INBOUND_WEBHOOK_URL: ${WEBJS_INBOUND_WEBHOOK_URL:-http://host.docker.internal:3333/api/webhooks/wppconnect}
+      TRANSCRICAO_LOCAL_URL: ${TRANSCRICAO_LOCAL_URL:-http://transcriber:3334/v1/audio/transcriptions}
+      TRANSCRICAO_LOCAL_MODELO: ${TRANSCRICAO_LOCAL_MODELO:-base}
+      LIGACAO_IA_OLLAMA_URL: ${LIGACAO_IA_OLLAMA_URL:-http://host.docker.internal:11434}
+      LIGACAO_IA_OLLAMA_MODELO: ${LIGACAO_IA_OLLAMA_MODELO:-qwen3:4b}
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    ports:
+      - "127.0.0.1:4174:4174"
+    volumes:
+      - whatsapp-webjs-data:/data
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:4174/api/platform/health',{headers:{Authorization:'Bearer '+process.env.WEBJS_LOCAL_TOKEN}}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
 volumes:
   postgres-data:
   redis-data:
   ponte-dados:
   transcriber-models:
+  whatsapp-webjs-data:

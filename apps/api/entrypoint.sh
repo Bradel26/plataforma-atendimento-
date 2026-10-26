@@ -3,14 +3,6 @@ set -eu
 
 npx prisma migrate deploy
 BRIDGE_PID=""
-WHISPER_PID=""
-if [ "${TRANSCRICAO_PROVEDOR:-desativada}" = "local" ]; then
-  export WHISPER_MODEL_DIR="${WHISPER_MODEL_DIR:-/app/apps/api/storage/whisper-models}"
-  export WHISPER_CPU_THREADS="${WHISPER_CPU_THREADS:-2}"
-  mkdir -p "$WHISPER_MODEL_DIR"
-  /opt/whisper/bin/uvicorn main:app --app-dir /app/apps/api/transcriber --host 127.0.0.1 --port 3334 --no-access-log &
-  WHISPER_PID=$!
-fi
 if [ "${WHATSAPP_PROVIDER:-}" = "webjs" ]; then
   export WEBJS_LOCAL_PORT="${WEBJS_LOCAL_PORT:-4174}"
   export WEBJS_DATA_DIR="${WEBJS_DATA_DIR:-/app/apps/api/storage/whatsapp-webjs}"
@@ -26,8 +18,14 @@ if [ "${WHATSAPP_PROVIDER:-}" = "webjs" ]; then
     export WPP_CONNECT_WEBHOOK_SECRET
   fi
   export API_PORT="${PORT:-3333}"
-  node /app/experimentos/whatsapp-webjs-call-poc/server.mjs &
-  BRIDGE_PID=$!
+  case "${WEBJS_EMBUTIDO:-true}" in
+    true)
+      node /app/experimentos/whatsapp-webjs-call-poc/server.mjs &
+      BRIDGE_PID=$!
+      ;;
+    false) ;;
+    *) echo "WEBJS_EMBUTIDO deve ser true ou false." >&2; exit 1 ;;
+  esac
 fi
 
 node dist/src/main.js &
@@ -36,10 +34,8 @@ API_PID=$!
 shutdown() {
   trap - TERM INT
   if [ -n "$BRIDGE_PID" ]; then kill -TERM "$BRIDGE_PID" 2>/dev/null || true; fi
-  if [ -n "$WHISPER_PID" ]; then kill -TERM "$WHISPER_PID" 2>/dev/null || true; fi
   kill -TERM "$API_PID" 2>/dev/null || true
   if [ -n "$BRIDGE_PID" ]; then wait "$BRIDGE_PID" 2>/dev/null || true; fi
-  if [ -n "$WHISPER_PID" ]; then wait "$WHISPER_PID" 2>/dev/null || true; fi
   wait "$API_PID" 2>/dev/null || true
 }
 
@@ -52,9 +48,5 @@ fi
 if [ -n "$BRIDGE_PID" ]; then
   kill -TERM "$BRIDGE_PID" 2>/dev/null || true
   wait "$BRIDGE_PID" 2>/dev/null || true
-fi
-if [ -n "$WHISPER_PID" ]; then
-  kill -TERM "$WHISPER_PID" 2>/dev/null || true
-  wait "$WHISPER_PID" 2>/dev/null || true
 fi
 exit "$STATUS"

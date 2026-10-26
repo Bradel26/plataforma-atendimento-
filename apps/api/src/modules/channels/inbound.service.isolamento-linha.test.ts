@@ -135,6 +135,34 @@ describe('registrarMensagemEntrante — conversa nao atravessa linha (achado cri
     expect(notificarConversaAtualizada).not.toHaveBeenCalled();
   });
 
+  it('mensagem que chega por LID reutiliza a conversa aberta localizada pelo telefone resolvido', async () => {
+    configDoDestino.mockResolvedValue({ id: 'cfg-vendedor', donoId: 'agente-1', filaId: null });
+    contactFindFirst.mockResolvedValue({ id: 'contato-por-telefone', telefone: '5562999912345' });
+    conversationFindFirst
+      .mockResolvedValueOnce(null) // sem conversa para o endereço LID
+      .mockResolvedValueOnce({
+        id: 'conv-aberta-por-telefone', contatoId: 'contato-por-telefone', canalConfigId: 'cfg-vendedor',
+        status: 'EM_ATENDIMENTO', filaId: null, agenteId: 'agente-1', ultimaMensagemEm: new Date(),
+      });
+    conversationUpdate.mockResolvedValue({ id: 'conv-aberta-por-telefone', filaId: null, agenteId: 'agente-1' });
+
+    await registrarMensagemEntrante(mensagem({
+      enderecoExterno: '79233992933473@lid',
+      telefone: '5562999912345',
+      identificadorDestino: 'vendedor-1',
+      idExterno: 'false_79233992933473@lid_nova-msg',
+    }));
+
+    expect(contactFindFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ telefoneNormalizado: '5562999912345', excluidoEm: null }),
+    }));
+    expect(conversationFindFirst.mock.calls[1]?.[0].where).toMatchObject({
+      contatoId: 'contato-por-telefone', canal: 'WHATSAPP', canalConfigId: 'cfg-vendedor',
+    });
+    expect(conversationCreate).not.toHaveBeenCalled();
+    expect(conversationUpdate).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'conv-aberta-por-telefone' } }));
+  });
+
   it('linha pessoal do vendedor B NAO reaproveita a conversa aberta na linha pessoal do vendedor A', async () => {
     // Mensagem chega com o identificadorDestino da sessao do vendedor B.
     configDoDestino.mockResolvedValue({ id: 'cfg-vendedor-b', donoId: 'vendedor-b', filaId: null });

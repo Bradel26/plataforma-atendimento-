@@ -8,6 +8,7 @@ import { comOrganizacao, semOrganizacao } from '../../lib/tenant';
 import { obterSegredoWebhookWppConnect } from '../../config/wppconnect.config';
 import { registrarMensagemEntrante } from './inbound.service';
 import { normalizarEventoWpp } from './wppconnect.inbound';
+import { registrarEstadoDaSessao } from './webhooks/eventos-de-canal';
 
 /**
  * Entrada do WPPConnect Server: ele posta aqui todo evento (`onmessage`,
@@ -118,6 +119,24 @@ wppconnectWebhookRoutes.post(
         corpo && typeof corpo === 'object' && typeof (corpo as { event?: unknown }).event === 'string'
           ? (corpo as { event: string }).event
           : null;
+      if (eventoBruto === 'session_status') {
+        const statusBruto = corpo && typeof corpo === 'object' ? (corpo as { status?: unknown }).status : null;
+        const detalheBruto = corpo && typeof corpo === 'object' ? (corpo as { detail?: unknown }).detail : null;
+        const estado = statusBruto === 'connected' ? 'CONECTADO'
+          : statusBruto === 'disconnected' ? 'DESCONECTADO'
+            : statusBruto === 'failed' ? 'FALHOU' : null;
+        if (!estado) {
+          res.json({ ok: true, ignorada: true });
+          return;
+        }
+        await registrarEstadoDaSessao(sessaoBruta, {
+          estado,
+          detalhe: typeof detalheBruto === 'string' ? detalheBruto.slice(0, 500) : null,
+          telefone: null,
+        }, { provider: 'webjs', organizacaoId });
+        res.json({ ok: true, estado });
+        return;
+      }
       if (eventoBruto === 'onack') {
         const campos = corpo && typeof corpo === 'object' ? Object.keys(corpo as Record<string, unknown>) : [];
         log.info('mensagem', 'onack do wppconnect recebido, sem mapper ainda', {

@@ -63,7 +63,14 @@ export function registrarGatewayDeAudioWebJs(server: HttpServer) {
 
       wss.handleUpgrade(req, socket, head, (browserSocket) => {
         const port = process.env.WEBJS_LOCAL_PORT?.trim() || '4174';
-        const upstream = new WebSocket(`ws://127.0.0.1:${port}/audio?session=${encodeURIComponent(dados.sessao)}`);
+        const base = process.env.WEBJS_LOCAL_URL?.trim() || `http://127.0.0.1:${port}/api/platform`;
+        const token = process.env.WEBJS_LOCAL_TOKEN?.trim() || process.env.WPP_CONNECT_WEBHOOK_SECRET?.trim() || '';
+        const upstreamUrl = new URL(base);
+        upstreamUrl.protocol = upstreamUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+        upstreamUrl.pathname = '/audio';
+        upstreamUrl.search = '';
+        upstreamUrl.searchParams.set('session', dados.sessao);
+        const upstream = new WebSocket(upstreamUrl, { headers: { Authorization: `Bearer ${token}` } });
         upstream.binaryType = 'arraybuffer';
         browserSocket.binaryType = 'arraybuffer';
 

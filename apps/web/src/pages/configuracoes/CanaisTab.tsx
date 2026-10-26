@@ -35,6 +35,7 @@ type CanalConfig = {
   /** Ultimo status que a ponte avisou para esta linha. Nulo antes do primeiro aviso. */
   ponteStatus?: string | null;
   ponteStatusEm?: string | null;
+  ponteDetalhe?: string | null;
   espelharCelular?: boolean;
   whatsappCallingHabilitado?: boolean;
   gravarChamadasWhatsapp?: boolean;
@@ -237,7 +238,7 @@ export function CanaisTab() {
 
     socket.on(EVENTOS.canalStatus, (payload: { id: string; status: string; detalhe: string | null; em: string }) => {
       setCanais((atual) =>
-        atual.map((c) => (c.id === payload.id ? { ...c, ponteStatus: payload.status, ponteStatusEm: payload.em } : c)),
+        atual.map((c) => (c.id === payload.id ? { ...c, ponteStatus: payload.status, ponteStatusEm: payload.em, ponteDetalhe: payload.detalhe } : c)),
       );
     });
 
@@ -877,6 +878,9 @@ export function CanaisTab() {
                               )}
                               {n.modo === 'NAO_OFICIAL' && n.ponteStatus === 'AGUARDANDO_QR' && (
                                 <Badge>Aguardando conexão</Badge>
+                              )}
+                              {n.modo === 'NAO_OFICIAL' && n.ponteStatus !== 'CONECTADO' && n.ponteDetalhe && (
+                                <span className="basis-full text-xs text-amber-700">{n.ponteDetalhe}</span>
                               )}
                             </div>
                           </td>
