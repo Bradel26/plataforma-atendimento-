@@ -404,7 +404,7 @@ async function comColisaoDeSessaoTratada<T>(sessao: string | null | undefined, e
 export async function salvarCanal(canal: CanalExterno, input: SalvarCanalInput) {
   const gravado = await prisma.channelConfig.findFirst({ where: { canal, donoId: null } });
   const atual = gravado ? aberto(gravado) : null;
-  const paraGravar = await prepararGravacao(canal, atual, input);
+  const paraGravar = await prepararGravacao(canal, atual, input, gravado?.id);
 
   await comColisaoDeSessaoTratada(paraGravar.ponteSessao, () =>
     gravado
