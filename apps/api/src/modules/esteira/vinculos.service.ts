@@ -1192,7 +1192,9 @@ export async function importarVinculo(ctx: ContextoDeImportacao, entrada: Entrad
     tipoHistorico: 'IMPORTACAO',
     origemTim: 'PLANILHA',
     depoisDeCriar: async (tx, novoId) => {
-      const criado = await tx.credenciamento.findUniqueOrThrow({ where: { id: novoId }, include: inclusao });
+      // findFirst, não findUnique: a extensão de isolamento desvia o findUnique
+      // para fora da transação, e ele não veria o vínculo recém-criado (P2025).
+      const criado = await tx.credenciamento.findFirstOrThrow({ where: { id: novoId }, include: inclusao });
       // Replaneja sobre o vínculo gravado (mesmo resultado, com os campos reais para a auditoria).
       await gravarPlano(tx, criado, gravacaoDoPlano(planejarImportacao(pontoDoVinculo(criado), entrada, agora), usuarioId), agora);
     },
