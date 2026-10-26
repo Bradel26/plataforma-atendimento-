@@ -161,11 +161,12 @@ export async function obterImagemPrivada(path: string): Promise<Blob | null> {
 }
 
 /**
- * Baixa um CSV da API. Um <a href> simples nao serve: a rota exige o header
- * Authorization, que o navegador nao envia em navegacao — entao buscamos o
- * conteudo e disparamos o download por object URL.
+ * Baixa um arquivo da API (CSV, XLSX, PDF...). Um <a href> simples nao serve: a
+ * rota exige o header Authorization, que o navegador nao envia em navegacao —
+ * entao buscamos o conteudo e disparamos o download por object URL. Erro da API
+ * vira `ApiError` (status e codigo preservados).
  */
-export async function baixarCsv(path: string, nomeArquivo: string): Promise<void> {
+export async function baixarArquivo(path: string, nomeArquivo: string): Promise<void> {
   let res = await raw(path, { method: 'GET' });
 
   if (res.status === 401 && (await renovarSessao())) {
@@ -186,6 +187,9 @@ export async function baixarCsv(path: string, nomeArquivo: string): Promise<void
   link.remove();
   URL.revokeObjectURL(url);
 }
+
+/** Nome antigo, mantido para as telas que ja usam. */
+export const baixarCsv = baixarArquivo;
 
 /** Login e refresh sao chamados direto: nao devem entrar no ciclo de renovacao. */
 export async function loginRequest(email: string, senha: string) {

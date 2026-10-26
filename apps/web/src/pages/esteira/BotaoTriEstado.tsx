@@ -10,20 +10,23 @@ export function BotaoTriEstado({
   aoMudar,
   desabilitado = false,
   dica,
+  compacto = false,
 }: {
   rotulo: string;
   valor: boolean | null;
   aoMudar: (novo: boolean | null) => void;
   desabilitado?: boolean;
   dica?: string;
+  /** Na célula da Lista: rótulo só para leitor de tela e botões menores. */
+  compacto?: boolean;
 }) {
   const opcoes = [
     { valor: true, texto: 'Sim', ativo: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
     { valor: false, texto: 'Não', ativo: 'bg-red-50 text-red-700 border-red-200' },
   ] as const;
   return (
-    <div className="flex items-center justify-between gap-3 py-1.5">
-      <span className="min-w-0">
+    <div className={compacto ? 'inline-flex items-center' : 'flex items-center justify-between gap-3 py-1.5'}>
+      <span className={compacto ? 'sr-only' : 'min-w-0'}>
         <span className="block text-[13px] font-medium text-slate-700">{rotulo}</span>
         {dica && <span className="block text-xs text-slate-500">{dica}</span>}
       </span>
@@ -44,7 +47,7 @@ export function BotaoTriEstado({
                 disabled={desabilitado}
                 title={ativo ? 'Clique de novo para deixar sem resposta' : undefined}
                 onClick={() => aoMudar(proximoTriEstado(valor, o.valor))}
-                className={`anel-de-foco h-8 min-w-12 rounded-lg border px-2.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                className={`anel-de-foco ${compacto ? 'h-7 min-w-10 px-2' : 'h-8 min-w-12 px-2.5'} rounded-lg border text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
                   ativo ? o.ativo : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
                 }`}
               >
