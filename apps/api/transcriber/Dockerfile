@@ -8,7 +8,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 COPY apps/api/transcriber/requirements.txt ./requirements.txt
 RUN apt-get update \
- && apt-get install -y --no-install-recommends libgomp1 ca-certificates \
+ && apt-get install -y --no-install-recommends libgomp1 ca-certificates curl \
  && pip install --no-cache-dir -r requirements.txt \
  && rm -rf /var/lib/apt/lists/* \
  && mkdir -p /models \
