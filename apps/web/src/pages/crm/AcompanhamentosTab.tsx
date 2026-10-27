@@ -119,7 +119,7 @@ export function AcompanhamentosTab() {
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
-        <Card titulo="Aguardando retorno" descricao={`${dados.aguardandoRetorno.length} retorno(s) marcados é não feitos`}>
+        <Card titulo="Aguardando retorno" descricao={`${dados.aguardandoRetorno.length} retorno(s) marcados e não feitos`}>
           <Regra>Mostra os retornos que você ou a equipe agendaram e ainda não fizeram. Os vencidos ficam marcados como atrasados.</Regra>
           {dados.aguardandoRetorno.length === 0 ? (
             <p className="text-sm text-slate-500">Nenhum retorno pendente.</p>
@@ -156,12 +156,12 @@ export function AcompanhamentosTab() {
         </Card>
 
         <Card titulo="Precisam de contato" descricao="Na esteira sem responsável ou sem nenhuma conversa">
-          <Regra>Parceiros em credenciamento que ainda não tem responsável ou nunca conversaram com a equipe. Defina um responsável e inicie a conversa.</Regra>
+          <Regra>Parceiros em credenciamento que ainda não têm responsável ou nunca conversaram com a equipe. Defina um responsável e inicie a conversa.</Regra>
           <ListaDeParceiros itens={dados.precisamDeContato} vazio="Todos já tem responsável e conversa." />
         </Card>
 
         <Card titulo={`Sem interação há ${dados.diasSemInteracao}+ dias`} descricao="Última mensagem antiga, ainda na esteira">
-          <Regra>Parceiros em credenciamento que pararam de responder. O prazo e o número de dias no campo acima.</Regra>
+          <Regra>Parceiros em credenciamento que pararam de responder. O prazo é o número de dias do campo acima.</Regra>
           <ListaDeParceiros itens={dados.semInteracao} vazio="Nenhum parceiro esquecido." />
         </Card>
 

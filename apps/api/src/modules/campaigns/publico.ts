@@ -209,7 +209,7 @@ export function descreverFiltro(f: FiltroDePublico): string {
   if (f.tags?.length) partes.push(`etiquetas: ${f.tags.join(', ')}`);
   if (f.situacao?.length) partes.push(`parceiros: ${f.situacao.join(', ')}`);
   if (f.uf?.length) partes.push(`UF: ${f.uf.join(', ')}`);
-  if (f.funilIds?.length) partes.push(`operacoes: ${f.funilIds.length}`);
+  if (f.funilIds?.length) partes.push(`operações: ${f.funilIds.length}`);
   if (f.estagioIds?.length) partes.push(`etapas: ${f.estagioIds.length}`);
   if (f.responsavelId !== undefined) {
     partes.push(f.responsavelId === null ? 'sem responsável' : `responsável: ${f.responsavelId}`);

@@ -148,6 +148,10 @@ describe('descreverFiltro', () => {
     expect(descreverFiltro({ responsavelId: null })).toContain('sem responsável');
     expect(descreverFiltro({ responsavelId: 'u1' })).toContain('responsável: u1');
   });
+
+  it('escreve "operações" com acento (a frase aparece na tela da campanha)', () => {
+    expect(descreverFiltro({ funilIds: ['f1'] })).toBe('operações: 1');
+  });
 });
 
 describe('estagiosDaSituacao — situação do parceiro pela chave da etapa', () => {

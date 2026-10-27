@@ -1642,7 +1642,7 @@ export const LABEL_CICLO_DE_VIDA: Record<CicloDeVida, string> = {
 export const AJUDA_CICLO_DE_VIDA: Record<CicloDeVida, string> = {
   CLIENTE: 'Tem jornada ganha. Compra não expira: cliente que sumiu continua tendo comprado.',
   EM_NEGOCIACAO: 'Tem negociação aberta agora.',
-  PERDIDO: 'Perdeu é não tem nada aberto.',
+  PERDIDO: 'Perdeu e não tem nada aberto.',
   QUALIFICADO: 'Lead que passou da triagem, ainda sem jornada.',
   CONTATADO: 'Já houve conversa, ou existe lead na entrada.',
   LEAD: 'Cadastro e mais nada — nunca houve conversa.',

@@ -412,7 +412,7 @@ export function MontarPublico({
           )}
 
           <Button onClick={() => void aplicar()} disabled={ocupado || previa.total === 0}>
-            {ocupado ? 'Gravando...' : `Adicionar ${previa.total} a campanha`}
+            {ocupado ? 'Gravando...' : `Adicionar ${previa.total} à campanha`}
           </Button>
         </div>
       )}

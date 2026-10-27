@@ -103,7 +103,7 @@ export function CicloParceiroTab() {
 
       <Card
         titulo="Ciclo de vida do parceiro"
-        descricao="Como esta a relação com cada parceiro depois de credenciado. Não mede vendas: ainda não há produção por parceiro no CRM."
+        descricao="Como está a relação com cada parceiro depois de credenciado. Não mede vendas: ainda não há produção por parceiro no CRM."
       >
         {resumo.total === 0 ? (
           <EmptyState
