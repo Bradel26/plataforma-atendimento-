@@ -82,7 +82,6 @@ Ao terminar: `npm test`, `npm run typecheck`, `npm run build -w @plataforma/web`
 ## 3. Pendências conhecidas (do ledger — decidir ou cobrir antes de fechar)
 
 **Funcionalidade que ficou de fora ou limitada**
-- **(Cobertos pela Task 17b — fazer primeiro)** seleção em lote para exportar (falta `ids` na API); Funil → Lista mostrando só quem está na etapa agora (falta o filtro `passouPorEtapa`); tamanho de página da Lista e período do Funil sem persistir.
 - Cartão do Kanban sem avisos e coluna desabilitada durante o arraste com motivo genérico (o `VinculoResumo` não traz avisos/pendências por destino); `kanban/coluna` não devolve total; auditoria/notas mostram só `usuarioId` (nome vem do histórico/responsável/usuário logado/`/usuarios` para ADMIN-SUPERVISOR); `DADOS_PENDENTES` genérico.
 - Auditoria da configuração de etapa só no log (`console.info esteira.etapa.configurada`); o enum de `RegistroEsteira` não cobre.
 - Exportação só para ADMIN/SUPERVISOR (regra copiada de `dados.routes`). Se o usuário quiser GESTOR/COMERCIAL, é uma linha na rota.
