@@ -14,6 +14,7 @@ import { inclusaoDetalhe, toConversaDetalhe, toMensagem } from '../conversations
 import { reservarProtocolo } from '../conversations/protocolo';
 import type { MensagemNormalizada } from './meta.types';
 import { numeroNormalizado } from './whatsapp.modo';
+import { mesclarContatos, telefoneBrAlternativo } from '../contacts/merge.service';
 
 type DestinoConversa = { canalConfigId: string | null; filaId: string | null; agenteId: string | null };
 
@@ -402,22 +403,40 @@ async function criarMensagemOuDetectarCorrida(
   }
 }
 
-/**
- * O nono digito movel do Brasil pode aparecer de forma diferente entre um
- * cadastro legado e o JID que o WhatsApp devolve. So tratamos os dois formatos
- * como candidatos aqui; a associacao so ocorre se houver uma unica conversa
- * aberta, na mesma linha, aguardando resposta nas ultimas 24 horas.
- */
-function numeroBrAlternativo(numero: string): string | null {
-  if (!numero.startsWith('55')) return null;
-  const ddd = numero.slice(2, 4);
-  const local = numero.slice(4);
-  if (local.length === 8) return `55${ddd}9${local}`;
-  if (local.length === 9 && local.startsWith('9')) return `55${ddd}${local.slice(1)}`;
-  return null;
-}
-
 async function encontrarOuCriarContato(dados: MensagemNormalizada, canalConfigId: string | null) {
+  // Uma pessoa pode estar cadastrada com e sem o nono dígito brasileiro.
+  // Consolida variantes em todas as linhas da mesma organização; cada conversa
+  // conserva sua linha e seu endereço externo para que respostas saiam pelo canal certo.
+  const telefoneResolvido = numeroNormalizado(dados.telefone) ?? numeroNormalizado(dados.enderecoExterno);
+  const variantes = [...new Set([telefoneResolvido, telefoneResolvido ? telefoneBrAlternativo(telefoneResolvido) : null]
+    .filter((numero): numero is string => Boolean(numero)))];
+  if (variantes.length) {
+    const contatos = await prisma.contact.findMany({
+      where: { telefoneNormalizado: { in: variantes }, excluidoEm: null, anonimizadoEm: null },
+      orderBy: { criadoEm: 'asc' },
+    });
+    if (contatos.length) {
+      const numeroNonoDigito = variantes.find((numero) => numero.length === 13 && numero[4] === '9');
+      const contatoNonoDigito = numeroNonoDigito
+        ? contatos.find((contato) => contato.telefoneNormalizado === numeroNonoDigito)
+        : undefined;
+      const principal = contatoNonoDigito ?? contatos[0]!;
+      await prisma.$transaction(async (tx) => {
+        for (const contato of contatos) {
+          if (contato.id !== principal.id) await mesclarContatos(tx, principal.id, contato.id);
+        }
+        if (
+          telefoneResolvido?.length === 13 && telefoneResolvido.startsWith('55') && telefoneResolvido[4] === '9' &&
+          principal.telefoneNormalizado !== telefoneResolvido &&
+          telefoneBrAlternativo(principal.telefoneNormalizado ?? '') === telefoneResolvido && dados.telefone
+        ) {
+          await tx.contact.update({ where: { id: principal.id }, data: { telefone: dados.telefone } });
+        }
+      });
+      return prisma.contact.findUniqueOrThrow({ where: { id: principal.id } });
+    }
+  }
+
   // O endereco externo e a chave estavel; o telefone e a forma legivel dele no WhatsApp.
   const porConversa = await prisma.conversation.findFirst({
     where: {
@@ -435,10 +454,9 @@ async function encontrarOuCriarContato(dados: MensagemNormalizada, canalConfigId
   // Em mensagens @lid o enderecoExterno nao e telefone. Use tambem o telefone
   // resolvido pelo conector para procurar a variante brasileira com/sem nono
   // digito, sempre limitada a uma conversa recente aguardando resposta.
-  const telefoneResolvido = numeroNormalizado(dados.telefone);
   const alternativos = [...new Set([
-    numeroBrAlternativo(dados.enderecoExterno),
-    telefoneResolvido ? numeroBrAlternativo(telefoneResolvido) : null,
+    telefoneBrAlternativo(numeroNormalizado(dados.enderecoExterno) ?? ''),
+    telefoneResolvido ? telefoneBrAlternativo(telefoneResolvido) : null,
   ].filter((numero): numero is string => Boolean(numero)))];
   if (alternativos.length) {
     const candidatos = await prisma.conversation.findMany({

@@ -23,6 +23,7 @@ import type { MensagemNormalizada } from './meta.types';
 const {
   messageFindUnique,
   contactFindFirst,
+  contactFindMany,
   conversationFindFirst,
   conversationCreate,
   conversationUpdate,
@@ -30,6 +31,7 @@ const {
 } = vi.hoisted(() => ({
   messageFindUnique: vi.fn(),
   contactFindFirst: vi.fn(),
+  contactFindMany: vi.fn().mockResolvedValue([]),
   conversationFindFirst: vi.fn(),
   conversationCreate: vi.fn(),
   conversationUpdate: vi.fn(),
@@ -39,7 +41,7 @@ const {
 vi.mock('../../lib/prisma', () => ({
   prisma: {
     message: { findUnique: messageFindUnique, create: messageCreate },
-    contact: { findFirst: contactFindFirst, findUniqueOrThrow: vi.fn(), create: vi.fn() },
+    contact: { findFirst: contactFindFirst, findMany: contactFindMany, findUniqueOrThrow: vi.fn(), create: vi.fn() },
     conversation: { findFirst: conversationFindFirst, findMany: vi.fn().mockResolvedValue([]), create: conversationCreate, update: conversationUpdate },
     queue: { findFirst: vi.fn() },
   },
