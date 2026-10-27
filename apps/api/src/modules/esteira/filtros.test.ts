@@ -218,3 +218,35 @@ describe('cursor do Kanban', () => {
     });
   });
 });
+
+describe('passouPorEtapa', () => {
+  it('casa a etapa atual ou alguma passagem do histórico por etapa de trilho >= o da escolhida', () => {
+    const w = whereDosFiltros('TIM', { passouPorEtapa: 'TIM_POS_CRED' }, agora);
+    const chaves = ['TIM_POS_CRED', 'TIM_VENDA_LIBERADA', 'TIM_ACOMPANHAMENTO'];
+    expect(w.AND).toEqual([
+      {
+        OR: [
+          { estagio: { chave: { in: chaves } } },
+          { historico: { some: { paraEstagio: { chave: { in: chaves } } } } },
+        ],
+      },
+    ]);
+  });
+
+  it('combina com os demais filtros (inclusive etapa atual)', () => {
+    const w = whereDosFiltros('STARLINK', { passouPorEtapa: 'SL_CONTRATO', etapas: ['SL_NURTURE'] }, agora);
+    expect(w.AND).toHaveLength(2);
+  });
+
+  it('chave de outra operação, desvio ou saída → 400', () => {
+    for (const chave of ['SL_PARCEIRO', 'TIM_DESISTENCIA'] as const) {
+      expect(() => whereDosFiltros('TIM', { passouPorEtapa: chave }, agora)).toThrow(expect.objectContaining({ status: 400 }));
+    }
+    expect(() => whereDosFiltros('STARLINK', { passouPorEtapa: 'SL_MEI' }, agora)).toThrow(expect.objectContaining({ status: 400 }));
+  });
+
+  it('parseFiltros lê passouPorEtapa; chave desconhecida é erro', () => {
+    expect(parseFiltros({ passouPorEtapa: 'TIM_CRED_OK' })).toEqual({ passouPorEtapa: 'TIM_CRED_OK' });
+    expect(() => parseFiltros({ passouPorEtapa: 'XPTO' })).toThrow();
+  });
+});

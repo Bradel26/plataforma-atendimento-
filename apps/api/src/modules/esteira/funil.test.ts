@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { ETAPAS, etapa } from './catalogo';
+import { whereDosFiltros } from './filtros';
 import { calcularFunil, entradaDoVinculo, filtrosDaCoorte, mediana, periodoDosFiltros, type EntradaFunil } from './funil';
 
 const ETAPAS_TRILHO = [
@@ -154,5 +156,58 @@ describe('filtrosDaCoorte', () => {
       { desde, ate, ateExclusivo: true },
     );
     expect(f).toEqual({ ufs: ['GO'], periodoCampo: 'criadoEm', desde, ate, ateExclusivo: true });
+  });
+});
+
+describe('passouPorEtapa (Lista) é coerente com o funil', () => {
+  /** Avalia, em memória, o pedaço de where que `whereDosFiltros` gera para `passouPorEtapa`. */
+  type Registro = { estagio: { chave: string }; historico: Array<{ paraEstagio: { chave: string } }> };
+  const casa = (w: unknown, r: unknown): boolean =>
+    Object.entries(w as Record<string, unknown>).every(([k, v]) => {
+      if (k === 'AND') return (v as unknown[]).every((x) => casa(x, r));
+      if (k === 'OR') return (v as unknown[]).some((x) => casa(x, r));
+      if (k === 'some') return (r as unknown[]).some((x) => casa(v, x));
+      const campo = (r as Record<string, unknown>)[k];
+      if (v && typeof v === 'object' && 'in' in v) return (v as { in: unknown[] }).in.includes(campo);
+      if (v && typeof v === 'object') return casa(v, campo);
+      return campo === v;
+    });
+
+  // Ids dos estágios = chaves (o mapa do funil e o where falam a mesma língua).
+  const doEstagio = new Map(ETAPAS.TIM.map((e) => [e.chave, etapa(e.chave)] as const));
+  const passagem = (de: string | null, para: string) => ({ credenciamentoId: 'v', deEstagioId: de, paraEstagioId: para, segundosNoEstagio: 60 });
+  const coorte: Array<{ atual: string; passagens: ReturnType<typeof passagem>[] }> = [
+    { atual: 'TIM_NEGOCIACAO', passagens: [] },
+    { atual: 'TIM_CRED_ANDAMENTO', passagens: [passagem(null, 'TIM_NEGOCIACAO'), passagem('TIM_NEGOCIACAO', 'TIM_DOCUMENTACAO'), passagem('TIM_DOCUMENTACAO', 'TIM_CRED_ANDAMENTO')] },
+    { atual: 'TIM_DESISTENCIA', passagens: [passagem(null, 'TIM_NEGOCIACAO'), passagem('TIM_NEGOCIACAO', 'TIM_DOCUMENTACAO'), passagem('TIM_DOCUMENTACAO', 'TIM_DESISTENCIA')] },
+    // Voltou de etapa: continua tendo passado pela 3.
+    { atual: 'TIM_DOCUMENTACAO', passagens: [passagem(null, 'TIM_DOCUMENTACAO'), passagem('TIM_DOCUMENTACAO', 'TIM_CRED_ANDAMENTO'), passagem('TIM_CRED_ANDAMENTO', 'TIM_DOCUMENTACAO')] },
+    // Migrado direto numa etapa adiantada, sem histórico.
+    { atual: 'TIM_CRED_OK', passagens: [] },
+    { atual: 'TIM_DESCREDENCIADO', passagens: [] },
+    { atual: 'TIM_ACOMPANHAMENTO', passagens: [passagem(null, 'TIM_VENDA_LIBERADA'), passagem('TIM_VENDA_LIBERADA', 'TIM_ACOMPANHAMENTO')] },
+  ];
+
+  it('para cada etapa do trilho, a Lista filtrada tem o mesmo tamanho que "alcançaram" no funil', () => {
+    const entradas = coorte.map((v) => entradaDoVinculo(v.atual, v.passagens, doEstagio));
+    const trilho = ETAPAS.TIM.flatMap((e) => (e.trilho != null ? [{ trilho: e.trilho, chave: e.chave, nome: e.nome }] : []));
+    const funil = calcularFunil(entradas, trilho);
+    const registros: Registro[] = coorte.map((v) => ({
+      estagio: { chave: v.atual },
+      historico: v.passagens.map((p) => ({ paraEstagio: { chave: p.paraEstagioId } })),
+    }));
+    const agora = new Date('2026-10-27T12:00:00Z');
+    for (const e of funil) {
+      const where = whereDosFiltros('TIM', { passouPorEtapa: e.chave }, agora);
+      const clausula = (where.AND as unknown[])[0];
+      expect({ etapa: e.chave, lista: registros.filter((r) => casa(clausula, r)).length }).toEqual({ etapa: e.chave, lista: e.alcancaram });
+    }
+    expect(funil.map((e) => e.alcancaram)).toEqual([6, 5, 4, 2, 1, 1, 1]);
+  });
+
+  it('o funil ignora passouPorEtapa (filtrar pelo alcance destruiria a coorte)', () => {
+    const desde = new Date('2026-01-01T03:00:00Z');
+    const ate = new Date('2026-02-01T03:00:00Z');
+    expect(filtrosDaCoorte({ ufs: ['GO'], passouPorEtapa: 'TIM_CRED_OK' }, { desde, ate })).not.toHaveProperty('passouPorEtapa');
   });
 });

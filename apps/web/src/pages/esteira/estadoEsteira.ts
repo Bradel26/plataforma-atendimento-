@@ -134,6 +134,12 @@ export function normalizarFiltros(valor: unknown, etapasValidas?: Set<string>): 
     ufs: listaDe(valor.ufs, (s) => UF.test(s)),
     cidades: listaDe(valor.cidades, (s) => s.length <= 120),
     etapas: listaDe(valor.etapas, (s): s is ChaveEtapa => CHAVES_ETAPA.has(s) && (!etapasValidas || etapasValidas.has(s))),
+    passouPorEtapa:
+      typeof valor.passouPorEtapa === 'string' &&
+      CHAVES_ETAPA.has(valor.passouPorEtapa) &&
+      (!etapasValidas || etapasValidas.has(valor.passouPorEtapa))
+        ? (valor.passouPorEtapa as ChaveEtapa)
+        : undefined,
     situacoes: listaDe(valor.situacoes, de(SITUACOES)),
     periodoCampo: de(PERIODOS)(String(valor.periodoCampo ?? '')) ? (valor.periodoCampo as (typeof PERIODOS)[number]) : undefined,
     desde: dia(valor.desde),
@@ -148,7 +154,7 @@ export function normalizarFiltros(valor: unknown, etapasValidas?: Set<string>): 
 /** Quantos filtros estão preenchidos (período conta uma vez; `periodoCampo` sozinho não conta). */
 export function quantosFiltros(f: FiltrosEsteira): number {
   const n = normalizarFiltros(f);
-  const comuns = (['busca', 'responsavelIds', 'ufs', 'cidades', 'etapas', 'situacoes', 'paradoHaMaisDe', 'origem'] as const).filter(
+  const comuns = (['busca', 'responsavelIds', 'ufs', 'cidades', 'etapas', 'passouPorEtapa', 'situacoes', 'paradoHaMaisDe', 'origem'] as const).filter(
     (k) => n[k] !== undefined,
   ).length;
   return comuns + (n.desde || n.ate ? 1 : 0) + Object.keys(n.tim ?? {}).length + Object.keys(n.starlink ?? {}).length;
@@ -171,6 +177,7 @@ export function queryDosFiltros(f: FiltrosEsteira): URLSearchParams {
   por('ufs', n.ufs);
   por('cidades', n.cidades);
   por('etapas', n.etapas);
+  por('passouPorEtapa', n.passouPorEtapa);
   por('situacoes', n.situacoes);
   por('periodoCampo', n.periodoCampo);
   por('desde', n.desde);

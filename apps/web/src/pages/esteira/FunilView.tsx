@@ -8,6 +8,7 @@ import { SERIES } from '../../lib/viz';
 import { parametroDaOperacao, queryDosFiltros, type PropsDaVisao } from './estadoEsteira';
 import {
   diaDeHoje,
+  filtrosDaListaPelaEtapa,
   filtrosForaDoFunil,
   formatarDias,
   formatarPercentual,
@@ -35,9 +36,10 @@ const COR_BARRA = SERIES[0];
  * últimos 90 dias), quantos alcançaram cada etapa do trilho, conversão para a
  * próxima, saídas e mediana dos dias nas passagens concluídas; gargalo
  * destacado por forma e texto. "Comparar" põe o período anterior de mesma
- * duração ao lado. Clicar numa etapa abre a Lista filtrada por ela.
+ * duração ao lado. Clicar numa etapa abre a Lista com quem PASSOU por ela entre
+ * os que entraram no período daquele painel (mesmo número do funil).
  *
- * Etapa, situação e "parado há" não se aplicam (a API os ignora para não
+ * Etapa, situação, "parado há" e "passou pela etapa" não se aplicam (a API os ignora para não
  * enviesar a coorte), e o período é o daqui, por data de entrada.
  */
 export function FunilView({ operacao, filtros, irPara }: PropsDaVisao) {
@@ -56,6 +58,7 @@ export function FunilView({ operacao, filtros, irPara }: PropsDaVisao) {
     const q = queryDosFiltros({
       ...filtros,
       etapas: undefined,
+      passouPorEtapa: undefined,
       situacoes: undefined,
       paradoHaMaisDe: undefined,
       periodoCampo: undefined,
@@ -73,7 +76,7 @@ export function FunilView({ operacao, filtros, irPara }: PropsDaVisao) {
   const { dados, erro, carregando } = useFunil(`/esteiras/${parametroDaOperacao(operacao)}/funil?${query}`, invalido, tentativa);
   const fora = filtrosForaDoFunil(filtros);
 
-  const abrirNaLista = (chave: ChaveEtapa) => irPara('lista', { ...filtros, etapas: [chave] });
+  const abrirNaLista = (chave: ChaveEtapa, doPainel: PeriodoDias) => irPara('lista', filtrosDaListaPelaEtapa(filtros, chave, doPainel));
 
   const mudarPreset = (p: Preset) => {
     if (p === 'personalizado' && preset !== 'personalizado') setPersonalizado(periodo);
@@ -121,7 +124,7 @@ export function FunilView({ operacao, filtros, irPara }: PropsDaVisao) {
 
       <p className="text-xs text-slate-500">
         Coorte: parceiros que entraram no período. Mediana: mediana dos dias nas passagens concluídas pela etapa. Clique numa
-        etapa para ver os parceiros que estão nela agora.
+        etapa para ver na Lista os parceiros que passaram por ela.
       </p>
       {fora.length > 0 && (
         <p className="flex items-start gap-1.5 text-xs text-slate-500" role="note">
@@ -153,8 +156,14 @@ export function FunilView({ operacao, filtros, irPara }: PropsDaVisao) {
         </div>
       ) : (
         <div className={`grid gap-4 ${dados.comparado ? 'lg:grid-cols-2' : ''} ${carregando ? 'opacity-60' : ''}`} aria-busy={carregando}>
-          <PainelFunil titulo={dados.comparado ? 'Período escolhido' : 'Funil do período'} funil={dados.atual} aoAbrir={abrirNaLista} />
-          {dados.comparado && <PainelFunil titulo="Período anterior" funil={dados.comparado} aoAbrir={abrirNaLista} />}
+          <PainelFunil
+            titulo={dados.comparado ? 'Período escolhido' : 'Funil do período'}
+            funil={dados.atual}
+            aoAbrir={(chave) => abrirNaLista(chave, periodo)}
+          />
+          {dados.comparado && (
+            <PainelFunil titulo="Período anterior" funil={dados.comparado} aoAbrir={(chave) => abrirNaLista(chave, periodoAnterior(periodo))} />
+          )}
         </div>
       )}
     </div>
@@ -259,7 +268,7 @@ function PainelFunil({
                 <button
                   type="button"
                   onClick={() => aoAbrir(e.chave)}
-                  aria-label={`${descricao}. Ver na Lista os parceiros nesta etapa.`}
+                  aria-label={`${descricao}. Ver na Lista os parceiros que passaram por esta etapa.`}
                   className={`anel-de-foco group flex w-full flex-col gap-1.5 rounded-xl px-2.5 py-2 text-left transition hover:bg-slate-50 ${
                     e.gargalo ? 'outline-dashed outline-2 -outline-offset-2' : ''
                   }`}

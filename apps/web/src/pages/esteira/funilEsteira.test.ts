@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { EtapaFunil } from '../../lib/esteiraTypes';
 import {
   diaDeHoje,
+  filtrosDaListaPelaEtapa,
   filtrosForaDoFunil,
   formatarDias,
   formatarPercentual,
@@ -9,6 +10,8 @@ import {
   periodoDoPreset,
   percentuaisDoFunil,
   periodoExibido,
+  pilulaDoFunil,
+  semFiltroDoFunil,
 } from './funilEsteira';
 
 const etapa = (trilho: number, alcancaram: number, extra: Partial<EtapaFunil> = {}): EtapaFunil => ({
@@ -89,6 +92,7 @@ describe('filtrosForaDoFunil', () => {
     ]);
     expect(filtrosForaDoFunil({ desde: '2026-01-01' })).toEqual(['período dos filtros']);
     expect(filtrosForaDoFunil({ paradoHaMaisDe: 0 })).toEqual(['parado há']);
+    expect(filtrosForaDoFunil({ passouPorEtapa: 'TIM_CRED_OK' })).toEqual(['passou pela etapa']);
   });
 });
 
@@ -102,5 +106,43 @@ describe('formatação', () => {
     expect(formatarDias(4.25)).toBe('4,3 dias');
     expect(formatarDias(1)).toBe('1 dia');
     expect(formatarDias(null)).toBe('—');
+  });
+});
+
+describe('Funil → Lista', () => {
+  it('leva "passou pela etapa" + entrada no período do funil + os demais filtros; tira os que o funil ignora', () => {
+    const f = filtrosDaListaPelaEtapa(
+      { ufs: ['GO'], etapas: ['TIM_NEGOCIACAO'], situacoes: ['NURTURE'], paradoHaMaisDe: 3, periodoCampo: 'estagioDesde', desde: '2020-01-01', tim: { dep: ['TIM'] } },
+      'TIM_CRED_OK',
+      { desde: '2026-07-30', ate: '2026-10-27' },
+    );
+    expect(f).toEqual({
+      ufs: ['GO'],
+      tim: { dep: ['TIM'] },
+      passouPorEtapa: 'TIM_CRED_OK',
+      periodoCampo: 'criadoEm',
+      desde: '2026-07-30',
+      ate: '2026-10-27',
+    });
+  });
+
+  it('pílula: etapa e período de entrada; sem o filtro, nula', () => {
+    const f = { passouPorEtapa: 'TIM_CRED_OK' as const, periodoCampo: 'criadoEm' as const, desde: '2026-07-30', ate: '2026-10-27' };
+    expect(pilulaDoFunil(f, 'Credenciamento OK')).toBe('Funil: passou por Credenciamento OK · criados entre 30/07/2026 e 27/10/2026');
+    expect(pilulaDoFunil({ passouPorEtapa: 'TIM_CRED_OK' }, 'Credenciamento OK')).toBe('Funil: passou por Credenciamento OK');
+    expect(pilulaDoFunil({ passouPorEtapa: 'TIM_CRED_OK', desde: '2026-07-30' }, 'X')).toBe('Funil: passou por X · criados a partir de 30/07/2026');
+    expect(pilulaDoFunil({ passouPorEtapa: 'TIM_CRED_OK', periodoCampo: 'estagioDesde', desde: '2026-07-30' }, 'X')).toBe('Funil: passou por X');
+    expect(pilulaDoFunil({ ufs: ['GO'] }, 'X')).toBeNull();
+  });
+
+  it('remover a pílula tira a etapa e o período de entrada que vieram com ela; mantém o resto', () => {
+    expect(semFiltroDoFunil({ ufs: ['GO'], passouPorEtapa: 'TIM_CRED_OK', periodoCampo: 'criadoEm', desde: '2026-07-30', ate: '2026-10-27' })).toEqual({
+      ufs: ['GO'],
+    });
+    // Período por última movimentação não é o do funil: fica.
+    expect(semFiltroDoFunil({ passouPorEtapa: 'TIM_CRED_OK', periodoCampo: 'estagioDesde', desde: '2026-07-30' })).toEqual({
+      periodoCampo: 'estagioDesde',
+      desde: '2026-07-30',
+    });
   });
 });

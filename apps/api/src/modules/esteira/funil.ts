@@ -8,6 +8,7 @@
  */
 import type { Operacao } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
+import { alcancou } from './alcance';
 import { ETAPAS, etapa, type ChaveEtapa, type EtapaCatalogo } from './catalogo';
 import { whereDaConsulta } from './consultas.service';
 import type { FiltrosEsteira } from './filtros';
@@ -58,7 +59,7 @@ export function calcularFunil(
       trilho: e.trilho,
       chave: e.chave,
       nome: e.nome,
-      alcancaram: entradas.filter((x) => x.trilhoMaximo >= e.trilho).length,
+      alcancaram: entradas.filter((x) => alcancou(x.trilhoMaximo, e.trilho)).length,
       saidas: entradas.filter((x) => x.saiuNoTrilho === e.trilho).length,
       medianaDias: mediana(dias),
     };
@@ -95,11 +96,12 @@ export function periodoDosFiltros(f: FiltrosEsteira, agora: Date): PeriodoFunil 
 
 /**
  * Filtros da coorte: etapa, situação e "parado há" dependem da etapa ATUAL e
- * enviesariam a coorte (quem já avançou sumiria), então são ignorados; o período
- * é sempre por data de criação.
+ * enviesariam a coorte (quem já avançou sumiria), então são ignorados — assim
+ * como "passou pela etapa" (que é o próprio corte do funil); o período é sempre
+ * por data de criação.
  */
 export function filtrosDaCoorte(filtros: FiltrosEsteira, periodo: PeriodoFunil): FiltrosEsteira {
-  const { etapas: _e, situacoes: _s, paradoHaMaisDe: _p, ...demais } = filtros;
+  const { etapas: _e, situacoes: _s, paradoHaMaisDe: _p, passouPorEtapa: _pp, ...demais } = filtros;
   return { ...demais, periodoCampo: 'criadoEm', desde: periodo.desde, ate: periodo.ate, ateExclusivo: periodo.ateExclusivo };
 }
 

@@ -7,6 +7,7 @@
  */
 import { Channel, DepTim, OrigemTim, TipoCaptacao, VivensisStatus, type Operacao, type Prisma } from '@prisma/client';
 import { z } from 'zod';
+import { wherePassouPorEtapa } from './alcance';
 import { ETAPAS, type ChaveEtapa } from './catalogo';
 import { SITUACAO_DA_SAIDA, type Situacao } from './movimento';
 
@@ -16,6 +17,8 @@ export type FiltrosEsteira = {
   ufs?: string[];
   cidades?: string[];
   etapas?: ChaveEtapa[];
+  /** Passou (ao menos) por esta etapa do trilho — mesma regra do funil (`alcance.ts`). */
+  passouPorEtapa?: ChaveEtapa;
   situacoes?: Situacao[];
   periodoCampo?: 'criadoEm' | 'estagioDesde';
   desde?: Date;
@@ -142,6 +145,7 @@ export function whereDosFiltros(operacao: Operacao, f: FiltrosEsteira, agora: Da
     const validas = chavesDaOperacao(operacao);
     c.push({ estagio: { chave: { in: f.etapas.filter((e) => validas.has(e)) } } });
   }
+  if (f.passouPorEtapa) c.push(wherePassouPorEtapa(operacao, f.passouPorEtapa));
   if (f.situacoes?.length) c.push(condicaoDeSituacao(operacao, f.situacoes));
   if (f.desde || f.ate) {
     const fim = f.ate ? (f.ateExclusivo ? { lt: f.ate } : { lte: f.ate }) : {};
@@ -207,6 +211,7 @@ const filtrosSchema = z.object({
   ),
   cidades: lista(z.string().max(120)),
   etapas: lista(z.enum(CHAVES)),
+  passouPorEtapa: z.enum(CHAVES).optional(),
   situacoes: lista(z.enum(SITUACOES)),
   periodoCampo: z.enum(['criadoEm', 'estagioDesde']).optional(),
   desde: dataDaQuery,

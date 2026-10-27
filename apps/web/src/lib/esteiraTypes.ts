@@ -327,6 +327,8 @@ export type FiltrosEsteira = {
   ufs?: string[];
   cidades?: string[];
   etapas?: ChaveEtapa[];
+  /** Passou (ao menos) por esta etapa do trilho — a mesma regra do Funil. */
+  passouPorEtapa?: ChaveEtapa;
   situacoes?: Situacao[];
   periodoCampo?: 'criadoEm' | 'estagioDesde';
   desde?: string;

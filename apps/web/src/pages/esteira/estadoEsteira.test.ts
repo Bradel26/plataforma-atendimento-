@@ -210,6 +210,22 @@ describe('operação da rota', () => {
   });
 });
 
+describe('passouPorEtapa', () => {
+  it('vai e volta pela URL no formato de parseFiltros', () => {
+    expect(queryDosFiltros({ passouPorEtapa: 'SL_PARCEIRO' }).get('passouPorEtapa')).toBe('SL_PARCEIRO');
+    expect(estadoDaUrl('?visao=lista&passouPorEtapa=SL_PARCEIRO')).toEqual({ visao: 'lista', filtros: { passouPorEtapa: 'SL_PARCEIRO' } });
+  });
+
+  it('chave desconhecida ou fora da estrutura é descartada; conta como filtro', () => {
+    expect(estadoDaUrl('?passouPorEtapa=XPTO')).toEqual({});
+    expect(normalizarPreferencia({ filtros: { passouPorEtapa: 'TIM_CRED_OK' } }, estrutura).filtros).toEqual({});
+    expect(normalizarPreferencia({ filtros: { passouPorEtapa: 'SL_EM_ATENDIMENTO' } }, estrutura).filtros).toEqual({
+      passouPorEtapa: 'SL_EM_ATENDIMENTO',
+    });
+    expect(quantosFiltros({ passouPorEtapa: 'SL_EM_ATENDIMENTO' })).toBe(1);
+  });
+});
+
 describe('contagem de filtros', () => {
   it('conta cada filtro preenchido uma vez', () => {
     expect(quantosFiltros({})).toBe(0);

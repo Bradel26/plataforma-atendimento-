@@ -4,7 +4,7 @@
  * Períodos são dias `AAAA-MM-DD` (Brasília), com `ate` incluído: é o formato
  * que a API lê (`parseFiltros` transforma `ate` só com data em fim exclusivo).
  */
-import type { EtapaFunil, FiltrosEsteira, FunilDoPeriodo } from '../../lib/esteiraTypes';
+import type { ChaveEtapa, EtapaFunil, FiltrosEsteira, FunilDoPeriodo } from '../../lib/esteiraTypes';
 
 export type PeriodoDias = { desde: string; ate: string };
 export type EtapaComPercentuais = EtapaFunil & {
@@ -61,7 +61,48 @@ export function filtrosForaDoFunil(f: FiltrosEsteira): string[] {
   if (f.situacoes?.length) fora.push('situação');
   if (f.paradoHaMaisDe !== undefined) fora.push('parado há');
   if (f.desde || f.ate) fora.push('período dos filtros');
+  if (f.passouPorEtapa) fora.push('passou pela etapa');
   return fora;
+}
+
+// ---------------------------------------------------------------------------
+// Funil → Lista
+// ---------------------------------------------------------------------------
+
+/**
+ * Filtros da Lista ao clicar numa etapa do funil: quem PASSOU pela etapa
+ * (`passouPorEtapa`, mesma regra do funil na API) entre os que entraram no
+ * período do painel (`criadoEm`, `ate` incluído — a API o torna exclusivo como
+ * no funil), com os demais filtros da tela. Etapa atual, situação e "parado há"
+ * saem: o funil os ignora, e mantê-los faria a Lista divergir do número clicado.
+ */
+export function filtrosDaListaPelaEtapa(filtros: FiltrosEsteira, chave: ChaveEtapa, periodo: PeriodoDias): FiltrosEsteira {
+  const { etapas: _e, situacoes: _s, paradoHaMaisDe: _p, ...demais } = filtros;
+  return { ...demais, passouPorEtapa: chave, periodoCampo: 'criadoEm', desde: periodo.desde, ate: periodo.ate };
+}
+
+const diaLegivel = (dia: string) => dia.split('-').reverse().join('/');
+
+/** Período por data de entrada (o que acompanha o filtro do funil)? */
+const periodoDeEntrada = (f: FiltrosEsteira) => (f.periodoCampo ?? 'criadoEm') === 'criadoEm';
+
+/** Texto da pílula "Funil: passou por <etapa> · criados entre X e Y"; nulo sem o filtro. */
+export function pilulaDoFunil(f: FiltrosEsteira, nomeDaEtapa: string): string | null {
+  if (!f.passouPorEtapa) return null;
+  const base = `Funil: passou por ${nomeDaEtapa}`;
+  if (!periodoDeEntrada(f)) return base;
+  if (f.desde && f.ate) return `${base} · criados entre ${diaLegivel(f.desde)} e ${diaLegivel(f.ate)}`;
+  if (f.desde) return `${base} · criados a partir de ${diaLegivel(f.desde)}`;
+  if (f.ate) return `${base} · criados até ${diaLegivel(f.ate)}`;
+  return base;
+}
+
+/** Remover a pílula: tira a etapa e o período de entrada que vieram com ela; o resto fica. */
+export function semFiltroDoFunil(f: FiltrosEsteira): FiltrosEsteira {
+  const { passouPorEtapa: _pp, ...resto } = f;
+  if (!periodoDeEntrada(f)) return resto;
+  const { periodoCampo: _c, desde: _d, ate: _a, ...semPeriodo } = resto;
+  return semPeriodo;
 }
 
 export const formatarPercentual = (x: number | null) => (x === null ? '—' : `${Math.round(x * 100)}%`);

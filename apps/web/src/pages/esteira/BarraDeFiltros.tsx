@@ -12,6 +12,7 @@ import {
   salvarFavorito,
   type FavoritoEsteira,
 } from './estadoEsteira';
+import { pilulaDoFunil, semFiltroDoFunil } from './funilEsteira';
 import { UFS } from './ufs';
 
 const ESPERA_BUSCA_MS = 350;
@@ -325,6 +326,10 @@ export function BarraDeFiltros({
   const situacoes = estrutura.colunas.find((c) => c.chave === 'situacao')?.opcoes ?? SITUACOES_PADRAO[estrutura.operacao];
   const etapas = estrutura.etapas.filter((e) => e.ativa).map((e) => ({ valor: e.chave, rotulo: e.nome }));
   const soOsMeus = !!usuario && filtros.responsavelIds?.length === 1 && filtros.responsavelIds[0] === usuario.id;
+  const pilula = pilulaDoFunil(
+    filtros,
+    estrutura.etapas.find((e) => e.chave === filtros.passouPorEtapa)?.nome ?? filtros.passouPorEtapa ?? '',
+  );
 
   /** Valor de um específico: os de TIM em `tim`, os de Starlink em `starlink`. */
   const especifico = (chave: string): unknown =>
@@ -365,6 +370,24 @@ export function BarraDeFiltros({
           Limpar
         </Button>
       </div>
+
+      {pilula && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex max-w-full items-center gap-1 rounded-full bg-[var(--brand-primary)]/10 py-1 pl-3 pr-1 text-[12.5px] font-medium text-[var(--brand-primary)]">
+            <span className="min-w-0 truncate">{pilula}</span>
+            <button
+              type="button"
+              onClick={() => aoMudar(semFiltroDoFunil(filtros))}
+              aria-label={`Remover o filtro "${pilula}"`}
+              className="anel-de-foco inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full hover:bg-[var(--brand-primary)]/15"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} aria-hidden="true">
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
+            </button>
+          </span>
+        </div>
+      )}
 
       {expandido && (
         <div id={idPainel} className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-2.5">
