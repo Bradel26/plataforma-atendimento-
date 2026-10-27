@@ -1,10 +1,21 @@
 /**
  * Smoke das esteiras TIM e Starlink (`/api/esteiras/:operacao`), contra a API local.
  *
- * Opt-in: só roda com `SMOKE_ESTEIRAS=1` — ele grava na base de dev REAL (não
- * existe banco descartável neste projeto). Tudo o que cria leva o prefixo
- * `[TESTE]` e é apagado no `finally` (também apaga sobras de execuções
- * anteriores e o parceiro `[TESTE]` que o E2E `tests/e2e/esteira.spec.ts` deixa).
+ * Opt-in e travado: grava na base de dev REAL (não existe banco descartável
+ * neste projeto), então só roda com `SMOKE_ESTEIRAS=1` E com
+ * `SMOKE_DB_HOST_PERMITIDO` igual ao host do `DATABASE_URL` (allowlist
+ * explícita; ausente ou diferente → aborta). Também confere que a API grava no
+ * mesmo banco que o script lê (senão a limpeza não alcançaria o que foi criado).
+ *
+ * Tudo o que cria leva a marca da execução (`[TESTE] Smoke <execução>`). A
+ * limpeza do `finally` apaga SÓ o que esta execução criou: os ids anotados,
+ * sempre filtrando também pela organização e pela marca — nunca por prefixo
+ * solto. Ordem: usuário de teste primeiro, depois contatos (vínculos e filhos
+ * caem em cascata), contas e os `registros_esteira` do usuário de teste (por id).
+ *
+ * Com `SMOKE_LIMPAR_E2E=1`, apaga também o parceiro que o E2E
+ * `tests/e2e/esteira.spec.ts` deixa (`[TESTE] Parceiro E2E <número>`, nome
+ * exato por regex, na mesma organização).
  *
  * Roteiro: login admin; o mesmo CNPJ na TIM (201) e na Starlink (201); repetir
  * na TIM (409); mover TIM pulando etapa sem justificativa (409
@@ -15,10 +26,13 @@
  * só tinham passado no typecheck: Kanban, coluna, Lista, Funil, ficha (linha
  * do tempo), preferências, painel/gestão/desempenho/acompanhamentos.
  *
- * Uso: SMOKE_ESTEIRAS=1 npm run smoke:esteiras   (API de pé em :3333)
+ * Uso (API de pé em :3333):
+ *   SMOKE_ESTEIRAS=1 SMOKE_DB_HOST_PERMITIDO=<host do banco de dev> npm run smoke:esteiras
  * Variáveis: SMOKE_API (padrão http://localhost:3333/api), SMOKE_ADMIN_EMAIL,
- * SMOKE_ADMIN_SENHA (padrão: SEED_ADMIN_* do apps/api/.env, senão o do seed).
+ * SMOKE_ADMIN_SENHA (padrão: SEED_ADMIN_* do apps/api/.env, senão o do seed),
+ * SMOKE_LIMPAR_E2E=1.
  */
+import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -45,24 +59,43 @@ function carregarEnvDaApi() {
 }
 carregarEnvDaApi();
 
+const abortar = (mensagem) => {
+  console.error(`smoke:esteiras abortado: ${mensagem}`);
+  process.exit(1);
+};
+
 const API = process.env.SMOKE_API ?? 'http://localhost:3333/api';
-if (!/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(API)) {
-  console.error(`smoke:esteiras só roda contra a API local (SMOKE_API=${API}).`);
-  process.exit(1);
+if (!/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(API)) abortar(`só roda contra a API local (SMOKE_API=${API}).`);
+
+/** Host do banco sem o sufixo `-pooler` do Neon (a mesma base pela conexão direta ou pelo pool). */
+function hostDoBanco(url) {
+  try {
+    return new URL(url).hostname.replace('-pooler.', '.').toLowerCase();
+  } catch {
+    return null;
+  }
 }
-// Produção nunca: o compute de produção é o ep-empty-lake.
-if (/ep-empty-lake/.test(process.env.DATABASE_URL ?? '')) {
-  console.error('smoke:esteiras recusado: DATABASE_URL aponta para o banco de produção.');
-  process.exit(1);
+const permitido = (process.env.SMOKE_DB_HOST_PERMITIDO ?? '').trim().toLowerCase().replace('-pooler.', '.');
+if (!permitido) abortar('defina SMOKE_DB_HOST_PERMITIDO com o host do banco de dev (allowlist explícita).');
+for (const nome of ['DATABASE_URL', 'DIRECT_URL']) {
+  const valor = process.env[nome];
+  if (nome === 'DIRECT_URL' && !valor) continue;
+  const host = hostDoBanco(valor ?? '');
+  if (host !== permitido) abortar(`${nome} aponta para "${host ?? '(inválido)'}", fora da allowlist (SMOKE_DB_HOST_PERMITIDO).`);
 }
+// Produção nunca, mesmo que alguém a coloque na allowlist.
+if (/ep-empty-lake/.test(permitido)) abortar('o host permitido é o banco de produção.');
 
 const ADMIN_EMAIL = process.env.SMOKE_ADMIN_EMAIL ?? process.env.SEED_ADMIN_EMAIL ?? 'admin@plataforma.local';
 const ADMIN_SENHA = process.env.SMOKE_ADMIN_SENHA ?? process.env.SEED_ADMIN_PASSWORD ?? 'Admin@123';
-const PREFIXO = '[TESTE]';
-const EXECUCAO = Date.now().toString(36);
-const MARCA = `${PREFIXO} Smoke ${EXECUCAO}`;
+const EXECUCAO = `${Date.now().toString(36)}${randomUUID().slice(0, 4)}`;
+/** Marca única desta execução: todo nome criado começa com ela, e a limpeza filtra por ela. */
+const MARCA = `[TESTE] Smoke ${EXECUCAO}`;
 const EMAIL_TESTE = `smoke-esteiras-${EXECUCAO}@teste.local`;
+const SENHA_TEMPORARIA = `Tmp-${randomUUID()}`;
+const SENHA_NOVA = `Nova-${randomUUID()}`;
 const CHAVE_PREFERENCIA = `esteira:TIM:smoke-${EXECUCAO}`;
+const NOME_E2E = /^\[TESTE\] Parceiro E2E \d+$/;
 
 const { PrismaClient } = await import('@prisma/client');
 const prisma = new PrismaClient();
@@ -100,6 +133,9 @@ async function req(metodo, rota, { corpo, token, form, texto } = {}) {
 
 const resumo = (r) => `status ${r.status}${r.dados?.error ? ` ${r.dados.error.code}: ${r.dados.error.message}` : ''}`;
 
+/** `sub` do JWT de acesso (só para achar a organização do admin no banco). */
+const subDoToken = (token) => JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8')).sub;
+
 /** CNPJ válido (dígitos verificadores) a partir de 12 dígitos aleatórios. */
 function gerarCnpj() {
   const dv = (base) => {
@@ -116,30 +152,67 @@ function gerarCnpj() {
 const gerarTelefone = () => `629${String(Math.floor(Math.random() * 1e8)).padStart(8, '0')}`;
 
 // ---------------------------------------------------------------------------
-// Limpeza: tudo com prefixo [TESTE] (desta e de execuções anteriores, e o E2E)
+// O que esta execução criou (a limpeza só toca isto)
 // ---------------------------------------------------------------------------
 
-async function limpar(admin) {
-  const contatos = await prisma.contact.findMany({ where: { nome: { startsWith: PREFIXO } }, select: { id: true } });
-  const ids = contatos.map((c) => c.id);
-  // Vínculos (e histórico, campos, notas, auditoria, vendedores, ciclo) caem em cascata com o contato.
-  const vinculos = ids.length ? await prisma.credenciamento.count({ where: { contatoId: { in: ids } } }) : 0;
-  if (ids.length) await prisma.contact.deleteMany({ where: { id: { in: ids } } });
-  const contas = await prisma.account.deleteMany({ where: { nome: { startsWith: PREFIXO } } });
-  const registros = await prisma.$executeRaw`DELETE FROM registros_esteira WHERE detalhe::text LIKE ${`%${PREFIXO}%`}`;
+let organizacaoId = null;
+const criados = { usuarios: new Set(), contatos: new Set(), contas: new Set() };
 
-  let usuarios = 0;
-  const deTeste = await prisma.user.findMany({
-    where: { email: { startsWith: 'smoke-esteiras-', endsWith: '@teste.local' } },
-    select: { id: true },
-  });
-  for (const u of deTeste) {
-    // Pela API (mesmo caminho da tela); se a API não responder, direto no banco.
-    const r = admin ? await req('DELETE', `/usuarios/${u.id}/permanente`, { token: admin }) : { status: 0 };
-    if (r.status !== 200) await prisma.user.delete({ where: { id: u.id } });
-    usuarios += 1;
+/** Anota contato e conta de um vínculo devolvido pela API. */
+const anotarVinculo = (v) => {
+  if (!v) return;
+  criados.contatos.add(v.parceiro.contatoId);
+  if (v.parceiro.contaId) criados.contas.add(v.parceiro.contaId);
+};
+
+async function limpar(admin) {
+  if (!organizacaoId) return { aviso: 'organização desconhecida: nada apagado' };
+  const daMarca = { organizacaoId, nome: { startsWith: MARCA } };
+
+  // Registros de exportação/importação: só os do usuário de teste (ele fez as duas), por id,
+  // lidos ANTES de apagar o usuário (a FK vira nula depois).
+  const usuarios = [...criados.usuarios];
+  const registros = usuarios.length
+    ? (await prisma.registroEsteira.findMany({ where: { organizacaoId, usuarioId: { in: usuarios } }, select: { id: true } })).map((r) => r.id)
+    : [];
+
+  // 1. Usuário de teste primeiro: pela API (mesmo caminho da tela); se falhar, direto no banco.
+  let usuariosApagados = 0;
+  for (const id of usuarios) {
+    const r = admin ? await req('DELETE', `/usuarios/${id}/permanente`, { token: admin }) : { status: 0 };
+    if (r.status !== 200) await prisma.user.deleteMany({ where: { id, organizacaoId, email: EMAIL_TESTE } });
+    usuariosApagados += 1;
   }
-  return { contatos: ids.length, vinculos, contas: contas.count, registros, usuarios };
+
+  // 2. Contatos: os anotados + os da marca (pega o que nasceu antes de ser anotado). Os vínculos
+  //    (histórico, campos, notas, auditoria, vendedores, ciclo) caem em cascata.
+  const contatos = [
+    ...new Set([...criados.contatos, ...(await prisma.contact.findMany({ where: daMarca, select: { id: true } })).map((c) => c.id)]),
+  ];
+  const vinculos = contatos.length ? await prisma.credenciamento.count({ where: { organizacaoId, contatoId: { in: contatos } } }) : 0;
+  const c = contatos.length ? await prisma.contact.deleteMany({ where: { ...daMarca, id: { in: contatos } } }) : { count: 0 };
+
+  // 3. Contas, com o mesmo critério.
+  const contas = [
+    ...new Set([...criados.contas, ...(await prisma.account.findMany({ where: daMarca, select: { id: true } })).map((a) => a.id)]),
+  ];
+  const a = contas.length ? await prisma.account.deleteMany({ where: { ...daMarca, id: { in: contas } } }) : { count: 0 };
+
+  // 4. Registros da esteira do usuário de teste, por id.
+  const r = registros.length ? await prisma.registroEsteira.deleteMany({ where: { organizacaoId, id: { in: registros } } }) : { count: 0 };
+
+  // 5. Opcional: o parceiro do E2E (nome exato, mesma organização; vínculos em cascata).
+  let e2e = 0;
+  if (process.env.SMOKE_LIMPAR_E2E === '1') {
+    const candidatos = await prisma.contact.findMany({
+      where: { organizacaoId, nome: { startsWith: '[TESTE] Parceiro E2E ' } },
+      select: { id: true, nome: true },
+    });
+    const ids = candidatos.filter((x) => NOME_E2E.test(x.nome)).map((x) => x.id);
+    if (ids.length) e2e = (await prisma.contact.deleteMany({ where: { organizacaoId, id: { in: ids } } })).count;
+  }
+
+  return { usuarios: usuariosApagados, contatos: c.count, vinculos, contas: a.count, registros: r.count, e2e };
 }
 
 // ---------------------------------------------------------------------------
@@ -154,9 +227,33 @@ try {
   admin = login.dados.accessToken ?? null;
   if (!checar(Boolean(admin), 'login do admin', resumo(login))) throw new Error('sem login do admin');
   const t = { token: admin };
+  organizacaoId = (await prisma.user.findUnique({ where: { id: subDoToken(admin) }, select: { organizacaoId: true } }))?.organizacaoId ?? null;
+  if (!organizacaoId) throw new Error('o admin da API não existe neste banco: API e smoke em bancos diferentes');
 
-  const sobras = await limpar(admin);
-  console.log(`  (limpeza inicial: ${JSON.stringify(sobras)})`);
+  // --- Usuário de teste só-TIM (responsável pelos parceiros; faz exportação e importação) ---
+  const novo = await req('POST', '/usuarios', {
+    ...t,
+    corpo: { nome: `${MARCA} Só TIM`, email: EMAIL_TESTE, senha: SENHA_TEMPORARIA, perfil: 'SUPERVISOR' },
+  });
+  checar(novo.status === 201, 'cria usuário de teste (SUPERVISOR)', resumo(novo));
+  const usuarioId = novo.dados.usuario?.id;
+  if (!usuarioId) throw new Error('sem usuário de teste');
+  criados.usuarios.add(usuarioId);
+  const ops = await req('PUT', `/usuarios/${usuarioId}/operacoes`, { ...t, corpo: { TIM: 'EDICAO', STARLINK: 'SEM_ACESSO' } });
+  checar(ops.status === 200, 'Starlink SEM_ACESSO para o usuário de teste', resumo(ops));
+  const lidasOps = await req('GET', `/usuarios/${usuarioId}/operacoes`, t);
+  // A API devolve o nível efetivo e omite SEM_ACESSO (a tela mostra "Sem acesso" para o que falta).
+  checar(
+    lidasOps.dados.operacoes?.TIM === 'EDICAO' && !('STARLINK' in (lidasOps.dados.operacoes ?? {})),
+    'operações do usuário lidas de volta (Starlink omitida)',
+    JSON.stringify(lidasOps.dados.operacoes),
+  );
+  // Usuário criado pelo ADMIN nasce com senha temporária: troca antes do login.
+  const troca = await req('POST', '/auth/alterar-senha-inicial', { corpo: { email: EMAIL_TESTE, senhaAtual: SENHA_TEMPORARIA, novaSenha: SENHA_NOVA } });
+  checar(troca.status === 204, 'usuário de teste troca a senha temporária', resumo(troca));
+  const loginTeste = await req('POST', '/auth/login', { corpo: { email: EMAIL_TESTE, senha: SENHA_NOVA } });
+  const tk = { token: loginTeste.dados.accessToken };
+  if (!checar(Boolean(tk.token), 'login do usuário só-TIM', resumo(loginTeste))) throw new Error('sem login do usuário de teste');
 
   // --- Estrutura ------------------------------------------------------------
   const estTim = await req('GET', '/esteiras/tim/estrutura', t);
@@ -167,14 +264,19 @@ try {
 
   // --- Mesmo CNPJ nas duas operações ----------------------------------------
   const cnpj = gerarCnpj();
-  const parceiro = { nome: `${MARCA} Contato`, empresa: `${MARCA} Empresa`, cnpj, cidade: 'Goiânia', uf: 'GO' };
+  const parceiro = { nome: `${MARCA} Contato`, empresa: `${MARCA} Empresa`, cnpj, cidade: 'Goiânia', uf: 'GO', responsavelId: usuarioId };
   const cTim = await req('POST', '/esteiras/tim/vinculos', { ...t, corpo: parceiro });
-  checar(cTim.status === 201 && cTim.dados.vinculo?.etapa?.chave === 'TIM_NEGOCIACAO', 'cria parceiro na TIM (201, 1ª etapa)', resumo(cTim));
   const vTim = cTim.dados.vinculo;
+  anotarVinculo(vTim);
+  checar(cTim.status === 201 && vTim?.etapa?.chave === 'TIM_NEGOCIACAO', 'cria parceiro na TIM (201, 1ª etapa)', resumo(cTim));
+  if (vTim && !(await prisma.credenciamento.findFirst({ where: { id: vTim.id, organizacaoId }, select: { id: true } }))) {
+    throw new Error('o vínculo criado pela API não está neste banco: API e smoke em bancos diferentes');
+  }
 
-  const cSl = await req('POST', '/esteiras/starlink/vinculos', { ...t, corpo: { ...parceiro, tipoCaptacao: undefined } });
-  checar(cSl.status === 201, 'mesmo CNPJ na Starlink (201)', resumo(cSl));
+  const cSl = await req('POST', '/esteiras/starlink/vinculos', { ...t, corpo: parceiro });
   const vSl = cSl.dados.vinculo;
+  anotarVinculo(vSl);
+  checar(cSl.status === 201, 'mesmo CNPJ na Starlink (201)', resumo(cSl));
   checar(
     Boolean(vTim && vSl && vSl.parceiro.contaId === vTim.parceiro.contaId),
     'Starlink reaproveita a mesma conta da TIM',
@@ -190,7 +292,7 @@ try {
   checar(pulo.status === 409 && pulo.dados.error?.code === 'EXIGE_JUSTIFICATIVA', 'pular etapa sem justificativa (409 EXIGE_JUSTIFICATIVA)', resumo(pulo));
   const forcado = await req('POST', `/esteiras/tim/vinculos/${vTim.id}/mover`, {
     ...t,
-    corpo: { paraChave: 'TIM_CRED_ANDAMENTO', justificativa: `${PREFIXO} smoke: pulo autorizado` },
+    corpo: { paraChave: 'TIM_CRED_ANDAMENTO', justificativa: `${MARCA}: pulo autorizado` },
   });
   checar(forcado.status === 200 && forcado.dados.vinculo?.etapa?.chave === 'TIM_CRED_ANDAMENTO', 'pular etapa com justificativa como ADMIN (200)', resumo(forcado));
   const ultimo = forcado.dados.vinculo?.historico?.find((h) => h.para?.chave === 'TIM_CRED_ANDAMENTO');
@@ -201,14 +303,14 @@ try {
   checar(volta.status === 409, 'voltar uma etapa pede justificativa (409)', resumo(volta));
 
   // --- Edição, nota, vendedor PDV -------------------------------------------
-  const nota = await req('POST', `/esteiras/tim/vinculos/${vTim.id}/notas`, { ...t, corpo: { texto: `${PREFIXO} nota do smoke` } });
+  const nota = await req('POST', `/esteiras/tim/vinculos/${vTim.id}/notas`, { ...t, corpo: { texto: `${MARCA} nota` } });
   checar(nota.status === 201 && nota.dados.vinculo?.notas?.length === 1, 'nota no vínculo TIM (201)', resumo(nota));
   const edicao = await req('PATCH', `/esteiras/tim/vinculos/${vTim.id}`, { ...t, corpo: { campos: { dep: 'BRADEL', flagTrafegoPago: true } } });
   checar(edicao.status === 200 && edicao.dados.vinculo?.campos?.dep === 'BRADEL', 'edita campos TIM (DEP)', resumo(edicao));
   checar((edicao.dados.vinculo?.auditoria?.length ?? 0) >= 2, 'auditoria campo a campo', `${edicao.dados.vinculo?.auditoria?.length} linha(s)`);
-  const vendedor = await req('PUT', `/esteiras/tim/vinculos/${vTim.id}/vendedores`, { ...t, corpo: { nome: `${PREFIXO} Vendedor PDV` } });
+  const vendedor = await req('PUT', `/esteiras/tim/vinculos/${vTim.id}/vendedores`, { ...t, corpo: { nome: `${MARCA} Vendedor PDV` } });
   checar(vendedor.status === 200 && vendedor.dados.vinculo?.vendedores?.length === 1, 'vendedor PDV na TIM', resumo(vendedor));
-  const vendSl = await req('PUT', `/esteiras/starlink/vinculos/${vSl.id}/vendedores`, { ...t, corpo: { nome: `${PREFIXO} Vendedor` } });
+  const vendSl = await req('PUT', `/esteiras/starlink/vinculos/${vSl.id}/vendedores`, { ...t, corpo: { nome: `${MARCA} Vendedor` } });
   checar(vendSl.status === 404, 'vendedor PDV não existe na Starlink (404)', resumo(vendSl));
 
   // --- Starlink: treinamento sem VSM ----------------------------------------
@@ -239,13 +341,12 @@ try {
   checar(porConta.status === 200 && porConta.dados.total === 1, 'Lista por contaId (ficha da empresa)', resumo(porConta));
 
   const funil = await req('GET', `/esteiras/tim/funil?${busca}`, t);
-  checar(funil.status === 200 && Boolean(funil.dados.atual), 'Funil TIM', resumo(funil));
+  checar(funil.status === 200 && funil.dados.atual?.total === 1, 'Funil TIM', resumo(funil));
   const hoje = new Date().toISOString().slice(0, 10);
   const comparado = await req('GET', `/esteiras/tim/funil?${busca}&desde=2026-01-01&ate=${hoje}&compararDesde=2025-01-01&compararAte=2025-12-31`, t);
   checar(comparado.status === 200 && Boolean(comparado.dados.comparado), 'Funil TIM com comparação', resumo(comparado));
   const funilSl = await req('GET', `/esteiras/starlink/funil?${busca}`, t);
   checar(funilSl.status === 200, 'Funil Starlink', resumo(funilSl));
-  console.log(`  (funil TIM: ${JSON.stringify(funil.dados.atual).slice(0, 300)})`);
 
   // --- Ficha do contato/empresa: linha do tempo com a operação ---------------
   const linhaTempo = await req('GET', `/ficha/contato/${vTim.parceiro.contatoId}/timeline?tipos=CREDENCIAMENTO`, t);
@@ -271,7 +372,8 @@ try {
   checar(pref.status === 204 && lidas.dados.preferencias?.[CHAVE_PREFERENCIA]?.visao === 'lista', 'preferência gravada e lida', resumo(lidas));
   const prefRuim = await req('PUT', '/preferencias/esteira:VIVO:x', { ...t, corpo: { valor: 1 } });
   checar(prefRuim.status === 400, 'preferência com operação inválida (400)', resumo(prefRuim));
-  await req('DELETE', `/preferencias/${CHAVE_PREFERENCIA}`, t);
+  const prefApagada = await req('DELETE', `/preferencias/${CHAVE_PREFERENCIA}`, t);
+  checar(prefApagada.status === 204, 'preferência de teste apagada', resumo(prefApagada));
 
   // --- Configuração de etapa (restaurada no finally) -------------------------
   const etapaNeg = estTim.dados.etapas.find((e) => e.chave === 'TIM_NEGOCIACAO');
@@ -281,90 +383,71 @@ try {
   const confSaida = await req('PATCH', '/esteiras/tim/etapas/TIM_DESISTENCIA', { ...t, corpo: { diasParado: 5 } });
   checar(confSaida.status === 400, 'etapa de saída não aceita dias parado (400)', resumo(confSaida));
 
-  // --- Usuário só-TIM -------------------------------------------------------
-  const senhaTeste = `Smk!${EXECUCAO}a1`;
-  const novo = await req('POST', '/usuarios', {
-    ...t,
-    corpo: { nome: `${PREFIXO} Só TIM ${EXECUCAO}`, email: EMAIL_TESTE, senha: senhaTeste, perfil: 'SUPERVISOR' },
-  });
-  checar(novo.status === 201, 'cria usuário de teste (SUPERVISOR)', resumo(novo));
-  const usuarioId = novo.dados.usuario?.id;
-  if (usuarioId) {
-    const ops = await req('PUT', `/usuarios/${usuarioId}/operacoes`, { ...t, corpo: { TIM: 'EDICAO', STARLINK: 'SEM_ACESSO' } });
-    checar(ops.status === 200, 'Starlink SEM_ACESSO para o usuário de teste', resumo(ops));
-    const lidasOps = await req('GET', `/usuarios/${usuarioId}/operacoes`, t);
-    // A API devolve o nível efetivo e omite SEM_ACESSO (a tela mostra "Sem acesso" para o que falta).
-    checar(
-      lidasOps.dados.operacoes?.TIM === 'EDICAO' && !('STARLINK' in (lidasOps.dados.operacoes ?? {})),
-      'operações do usuário lidas de volta (Starlink omitida)',
-      JSON.stringify(lidasOps.dados.operacoes),
-    );
+  // --- Usuário só-TIM não enxerga a Starlink ---------------------------------
+  const vSlOutro = await req('GET', `/esteiras/starlink/vinculos/${vSl.id}`, tk);
+  checar(vSlOutro.status === 404, 'só-TIM: GET vínculo Starlink → 404', resumo(vSlOutro));
+  const expSl = await req('GET', '/esteiras/starlink/exportar?formato=csv', tk);
+  checar(expSl.status === 404, 'só-TIM: exportar Starlink → 404', resumo(expSl));
+  const estSlOutro = await req('GET', '/esteiras/starlink/estrutura', tk);
+  checar(estSlOutro.status === 404, 'só-TIM: estrutura Starlink → 404', resumo(estSlOutro));
+  const vTimOutro = await req('GET', `/esteiras/tim/vinculos/${vTim.id}`, tk);
+  checar(vTimOutro.status === 200, 'só-TIM: vínculo TIM da carteira → 200', resumo(vTimOutro));
+  const timeline = await req('GET', `/ficha/contato/${vTim.parceiro.contatoId}/timeline?tipos=CREDENCIAMENTO`, tk);
+  checar(
+    timeline.status === 200 && !(timeline.dados.eventos ?? []).some((e) => e.operacao === 'STARLINK'),
+    'só-TIM: a ficha não mostra eventos da Starlink',
+    `${resumo(timeline)} ${JSON.stringify((timeline.dados.eventos ?? []).map((e) => e.operacao))}`,
+  );
 
-    // Usuário criado pelo ADMIN nasce com senha temporária: troca antes do login.
-    const senhaNova = `${senhaTeste}-Nova!`;
-    const troca = await req('POST', '/auth/alterar-senha-inicial', { corpo: { email: EMAIL_TESTE, senhaAtual: senhaTeste, novaSenha: senhaNova } });
-    checar(troca.status === 204, 'usuário de teste troca a senha temporária', resumo(troca));
-    const loginTeste = await req('POST', '/auth/login', { corpo: { email: EMAIL_TESTE, senha: senhaNova } });
-    const tk = { token: loginTeste.dados.accessToken };
-    if (checar(Boolean(tk.token), 'login do usuário só-TIM', resumo(loginTeste))) {
-      const vSlOutro = await req('GET', `/esteiras/starlink/vinculos/${vSl.id}`, tk);
-      checar(vSlOutro.status === 404, 'só-TIM: GET vínculo Starlink → 404', resumo(vSlOutro));
-      const expSl = await req('GET', '/esteiras/starlink/exportar?formato=csv', tk);
-      checar(expSl.status === 404, 'só-TIM: exportar Starlink → 404', resumo(expSl));
-      const estSlOutro = await req('GET', '/esteiras/starlink/estrutura', tk);
-      checar(estSlOutro.status === 404, 'só-TIM: estrutura Starlink → 404', resumo(estSlOutro));
-      const estTimOutro = await req('GET', '/esteiras/tim/estrutura', tk);
-      checar(estTimOutro.status === 200, 'só-TIM: estrutura TIM → 200', resumo(estTimOutro));
-      const timeline = await req('GET', `/ficha/contato/${vTim.parceiro.contatoId}/timeline?tipos=CREDENCIAMENTO`, tk);
-      checar(
-        timeline.status !== 200 || !(timeline.dados.eventos ?? []).some((e) => e.operacao === 'STARLINK'),
-        'só-TIM: a ficha não mostra eventos da Starlink',
-        resumo(timeline),
-      );
-    }
-  }
-
-  // --- Exportação TIM filtrada ----------------------------------------------
-  const exp = await req('GET', `/esteiras/tim/exportar?formato=csv&${busca}&colunas=parceiro,cnpj,etapa,dep`, { ...t, texto: true });
+  // --- Exportação TIM filtrada (pelo usuário de teste) ------------------------
+  const exp = await req('GET', `/esteiras/tim/exportar?formato=csv&${busca}&colunas=parceiro,cnpj,etapa,dep`, { ...tk, texto: true });
   const linhasCsv = (exp.texto ?? '').replace(/^﻿/, '').split(/\r?\n/).filter(Boolean);
   checar(exp.status === 200 && linhasCsv.length === 2, 'exportar TIM CSV filtrado: cabeçalho + 1 linha', `status ${exp.status}, ${linhasCsv.length} linha(s)`);
   checar(linhasCsv[0] === 'Parceiro;CNPJ;Etapa;DEP', 'cabeçalho da exportação', linhasCsv[0]);
-  checar((linhasCsv[1] ?? '').includes(cnpj) || (linhasCsv[1] ?? '').includes(MARCA), 'linha exportada é o parceiro [TESTE]', linhasCsv[1]);
-  const expXlsx = await req('GET', `/esteiras/tim/exportar?formato=xlsx&${busca}`, { ...t, texto: true });
+  checar((linhasCsv[1] ?? '').includes(cnpj) && (linhasCsv[1] ?? '').includes(MARCA), 'linha exportada é o parceiro desta execução', linhasCsv[1]);
+  const expXlsx = await req('GET', `/esteiras/tim/exportar?formato=xlsx&${busca}`, { ...tk, texto: true });
   checar(expXlsx.status === 200, 'exportar TIM XLSX filtrado', `status ${expXlsx.status}`);
 
-  // --- Importação: a mesma planilha duas vezes -------------------------------
+  // --- Importação: a mesma planilha duas vezes (pelo usuário de teste) --------
   const cnpjA = gerarCnpj();
   const telB = gerarTelefone();
   const csv =
-    '﻿Parceiro;CNPJ;Telefone;Cidade;UF;Etapa;DEP\n' +
-    `${MARCA} Import A;${cnpjA};;Anápolis;GO;Documentação;Bradel\n` +
-    `${MARCA} Import B;;${telB};Goiânia;GO;;\n`;
+    '﻿Parceiro;CNPJ;Telefone;Cidade;UF;Etapa;DEP;Responsável\n' +
+    `${MARCA} Import A;${cnpjA};;Anápolis;GO;Documentação;Bradel;${EMAIL_TESTE}\n` +
+    `${MARCA} Import B;;${telB};Goiânia;GO;;;${EMAIL_TESTE}\n`;
   const enviar = (previa) => {
     const form = new FormData();
-    form.append('arquivo', new Blob([csv], { type: 'text/csv' }), `${PREFIXO}-smoke-esteiras.csv`);
+    form.append('arquivo', new Blob([csv], { type: 'text/csv' }), `smoke-esteiras-${EXECUCAO}.csv`);
     form.append('previa', previa ? 'true' : 'false');
-    return req('POST', '/esteiras/tim/importar', { ...t, form });
+    return req('POST', '/esteiras/tim/importar', { ...tk, form });
   };
+  const resumoImp = (r) => `${resumo(r)} ${JSON.stringify({ c: r.dados.criadas, a: r.dados.atualizadas, e: r.dados.erros, av: r.dados.avisos })}`;
   const previa = await enviar(true);
-  checar(previa.status === 200 && previa.dados.criadas === 2 && previa.dados.erros?.length === 0, 'prévia da importação: 2 a criar, sem erros', `${resumo(previa)} ${JSON.stringify(previa.dados).slice(0, 400)}`);
-  const naoGravou = await req('GET', `/esteiras/tim/lista?busca=${encodeURIComponent(`${MARCA} Import`)}`, t);
+  checar(previa.status === 200 && previa.dados.criadas === 2 && previa.dados.erros?.length === 0, 'prévia da importação: 2 a criar, sem erros', resumoImp(previa));
+  const buscaImport = `busca=${encodeURIComponent(`${MARCA} Import`)}`;
+  const naoGravou = await req('GET', `/esteiras/tim/lista?${buscaImport}`, t);
   checar(naoGravou.dados.total === 0, 'a prévia não grava nada', `total ${naoGravou.dados.total}`);
 
   const imp1 = await enviar(false);
-  checar(imp1.status === 200 && imp1.dados.criadas === 2 && imp1.dados.atualizadas === 0, 'importação 1: cria 2', `${resumo(imp1)} ${JSON.stringify({ c: imp1.dados.criadas, a: imp1.dados.atualizadas, e: imp1.dados.erros })}`);
+  const importados1 = await req('GET', `/esteiras/tim/lista?${buscaImport}`, t);
+  for (const l of importados1.dados.linhas ?? []) anotarVinculo(l);
+  checar(imp1.status === 200 && imp1.dados.criadas === 2 && imp1.dados.atualizadas === 0, 'importação 1: cria 2', resumoImp(imp1));
   const imp2 = await enviar(false);
-  checar(imp2.status === 200 && imp2.dados.criadas === 0 && imp2.dados.atualizadas === 2, 'importação 2: só atualiza', `${resumo(imp2)} ${JSON.stringify({ c: imp2.dados.criadas, a: imp2.dados.atualizadas, e: imp2.dados.erros })}`);
-  const importados = await req('GET', `/esteiras/tim/lista?busca=${encodeURIComponent(`${MARCA} Import`)}`, t);
+  checar(imp2.status === 200 && imp2.dados.criadas === 0 && imp2.dados.atualizadas === 2, 'importação 2: só atualiza', resumoImp(imp2));
+  const importados = await req('GET', `/esteiras/tim/lista?${buscaImport}`, t);
+  for (const l of importados.dados.linhas ?? []) anotarVinculo(l);
   checar(importados.dados.total === 2, 'sem duplicata depois das duas importações', `total ${importados.dados.total}`);
   const linhaA = importados.dados.linhas?.find((l) => l.parceiro.nome.endsWith('Import A'));
   checar(linhaA?.etapa?.chave === 'TIM_DOCUMENTACAO', 'importação aplicou a etapa da planilha', linhaA?.etapa?.chave);
+  checar(linhaA?.responsavel?.id === usuarioId, 'importação aplicou o responsável pelo e-mail', JSON.stringify(linhaA?.responsavel));
   const detalheA = linhaA ? await req('GET', `/esteiras/tim/vinculos/${linhaA.id}`, t) : null;
   checar(
     detalheA?.dados.vinculo?.historico?.filter((h) => h.tipo === 'IMPORTACAO').length >= 1,
     'histórico da importação (IMPORTACAO)',
     JSON.stringify(detalheA?.dados.vinculo?.historico?.map((h) => h.tipo)),
   );
+  const registros = await prisma.registroEsteira.count({ where: { organizacaoId, usuarioId } });
+  checar(registros === 4, 'registros da esteira: 2 exportações + 2 importações (a prévia não registra)', `${registros}`);
 } catch (erro) {
   falhas += 1;
   console.error('FALHOU roteiro interrompido:', erro instanceof Error ? erro.message : erro);
@@ -375,10 +458,19 @@ try {
       checar(r.status === 200, 'configuração da etapa restaurada', resumo(r));
     }
     const removidos = await limpar(admin);
-    console.log(`  (limpeza final: ${JSON.stringify(removidos)})`);
-    const restantes = await prisma.contact.count({ where: { nome: { startsWith: PREFIXO } } });
-    const contasRestantes = await prisma.account.count({ where: { nome: { startsWith: PREFIXO } } });
-    checar(restantes === 0 && contasRestantes === 0, 'base limpa (nenhum contato/conta [TESTE])', `${restantes} contato(s), ${contasRestantes} conta(s)`);
+    console.log(`  (limpeza: ${JSON.stringify(removidos)})`);
+    if (organizacaoId) {
+      const daMarca = { organizacaoId, nome: { startsWith: MARCA } };
+      const [contatos, contas, vinculos] = await Promise.all([
+        prisma.contact.count({ where: daMarca }),
+        prisma.account.count({ where: daMarca }),
+        prisma.credenciamento.count({ where: { organizacaoId, contato: { nome: { startsWith: MARCA } } } }),
+      ]);
+      checar(contatos + contas + vinculos === 0, 'nada desta execução sobrou', `${contatos} contato(s), ${contas} conta(s), ${vinculos} vínculo(s)`);
+    }
+    // Nenhum usuário de smoke (desta ou de outra execução) pode sobrar.
+    const usuariosSmoke = await prisma.user.count({ where: { email: { startsWith: 'smoke-esteiras-', endsWith: '@teste.local' } } });
+    checar(usuariosSmoke === 0, 'nenhum usuário smoke-esteiras-*@teste.local sobrou', `${usuariosSmoke}`);
   } catch (erro) {
     falhas += 1;
     console.error('FALHOU limpeza:', erro instanceof Error ? erro.message : erro);
