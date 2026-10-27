@@ -20,10 +20,12 @@ import type { FiltrosEsteira } from './filtros';
 import {
   cabecalhosDeExportacao,
   chaveImportavelEmAlguma,
+  detalheDaExportacao,
   linhasDeExportacao,
   mapearCabecalhos,
   neutralizarFormula,
   validarLinha,
+  whereDaSelecao,
   type LinhaImportada,
 } from './planilhas';
 import { lerArquivo } from './leituraPlanilha';
@@ -81,13 +83,14 @@ export async function exportar(
   chaves: string[],
   formato: 'csv' | 'xlsx',
   ordem?: { ordenarPor?: string; direcao: 'asc' | 'desc' },
+  ids?: string[],
 ): Promise<{ arquivo: Buffer; nome: string; tipo: string }> {
   const colunas = colunasDaExportacao(operacao, chaves);
   const orderBy = ordem?.ordenarPor ? ordenacaoDaColuna(operacao, ordem.ordenarPor, ordem.direcao) : ORDEM_PADRAO;
   if (!orderBy) throw badRequest('Esta coluna não pode ser ordenada');
 
   const agora = new Date();
-  const where = await whereDaConsulta(operacao, filtros, agora);
+  const where: Prisma.CredenciamentoWhereInput = whereDaSelecao(await whereDaConsulta(operacao, filtros, agora), ids);
   const quantidade = await prisma.credenciamento.count({ where });
   if (quantidade > LIMITE_EXPORTACAO) {
     throw new AppError(
@@ -120,7 +123,11 @@ export async function exportar(
           tipo: TIPO_CSV,
         };
 
-  await registrar(operacao, 'EXPORTACAO', { filtros, colunas: colunas.map((c) => c.chave), quantidade: vinculos.length, formato });
+  await registrar(
+    operacao,
+    'EXPORTACAO',
+    detalheDaExportacao({ filtros, colunas: colunas.map((c) => c.chave), quantidade: vinculos.length, formato, ids }),
+  );
   return resultado;
 }
 

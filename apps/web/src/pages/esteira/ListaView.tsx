@@ -19,11 +19,15 @@ import { useRegrasDaEsteira, type ExtrasDaRegra } from './DialogoMovimento';
 import { parametroDaOperacao, quantosFiltros, queryDosFiltros, type PropsDaVisao } from './estadoEsteira';
 import { diaDeHoje } from './funilEsteira';
 import {
+  LIMITE_SELECAO,
+  alternarPagina,
+  alternarSelecao,
   chavesParaExportar,
   colunasVisiveis,
   formatarCelula,
   larguraLimitada,
   montarPatchDeEdicao,
+  pedidoDeExportacao,
   proximaOrdenacao,
 } from './listaEsteira';
 import type { ContextoDialogo } from './regrasMovimento';
@@ -48,7 +52,8 @@ const resumoDaLinha = (l: VinculoLinha): VinculoResumo => ({ ...l, destinos: {} 
  * cabeçalho, colunas escolhidas/ordenadas/redimensionadas (salvas em
  * `pref.lista`), edição rápida das colunas editáveis (mesmas regras da gaveta:
  * recusa 409/403/400 abre o `DialogoMovimento`) e exportação CSV/XLSX com os
- * filtros e as colunas da tela. No celular, cartões.
+ * filtros e as colunas da tela — ou só das linhas selecionadas (a seleção
+ * persiste entre páginas e zera ao trocar filtros). No celular, cartões.
  */
 export function ListaView({ operacao, estrutura, filtros, pref, atualizarPref }: PropsDaVisao) {
   const mostrar = useToast();
@@ -68,6 +73,15 @@ export function ListaView({ operacao, estrutura, filtros, pref, atualizarPref }:
   const [paginaDe, setPaginaDe] = useState({ chave: chaveConsulta, pagina: 1 });
   const pagina = paginaDe.chave === chaveConsulta ? paginaDe.pagina : 1;
   const irParaPagina = (p: number) => setPaginaDe({ chave: chaveConsulta, pagina: Math.max(1, p) });
+
+  // Seleção para exportar: persiste entre páginas; zera ao trocar filtros ou operação.
+  const chaveSelecao = `${operacao}|${query}`;
+  const [selecaoDe, setSelecaoDe] = useState<{ chave: string; ids: Set<string> }>({ chave: chaveSelecao, ids: new Set() });
+  const selecionados = useMemo(
+    () => (selecaoDe.chave === chaveSelecao ? selecaoDe.ids : new Set<string>()),
+    [selecaoDe, chaveSelecao],
+  );
+  const mudarSelecao = (ids: Set<string>) => setSelecaoDe({ chave: chaveSelecao, ids });
 
   const [dados, setDados] = useState<RespostaLista | null>(null);
   const [carregando, setCarregando] = useState(true);
@@ -185,16 +199,20 @@ export function ListaView({ operacao, estrutura, filtros, pref, atualizarPref }:
   // ---------------------------------------------------------------------------
 
   const exportar = async (formato: 'csv' | 'xlsx') => {
-    const q = new URLSearchParams(query);
-    q.set('formato', formato);
-    q.set('colunas', chavesParaExportar(pref.lista.colunas, estrutura.colunas).join(','));
-    if (ordenacao) {
-      q.set('ordenarPor', ordenacao.chave);
-      q.set('direcao', ordenacao.direcao);
-    }
+    const pedido = pedidoDeExportacao({
+      query,
+      formato,
+      colunas: chavesParaExportar(pref.lista.colunas, estrutura.colunas),
+      ordenacao,
+      selecionados,
+    });
     setExportando(formato);
     try {
-      await baixarArquivo(`${base}/exportar?${q.toString()}`, `esteira-${parametroDaOperacao(operacao)}-${diaDeHoje()}.${formato}`);
+      await baixarArquivo(
+        `${base}/exportar?${pedido.query}`,
+        `esteira-${parametroDaOperacao(operacao)}-${diaDeHoje()}.${formato}`,
+        pedido.corpo,
+      );
     } catch (e) {
       if (e instanceof ApiError && e.status === 403) mostrar('erro', 'Seu perfil não pode exportar');
       else mostrar('erro', e instanceof ApiError ? e.message : 'Não foi possível exportar');
@@ -284,14 +302,28 @@ export function ListaView({ operacao, estrutura, filtros, pref, atualizarPref }:
           {podeEditar ? ' · clique na linha para abrir; edite as colunas editáveis no lugar' : ' · somente leitura'}
         </span>
         <div className="ml-auto flex flex-wrap items-center gap-2">
+          {selecionados.size > 0 && (
+            <span className="flex items-center gap-1.5 text-[12.5px] text-slate-600" aria-live="polite">
+              <span className="font-semibold tabular-nums text-slate-800">{selecionados.size.toLocaleString('pt-BR')}</span>
+              {selecionados.size === 1 ? 'selecionado' : 'selecionados'}
+              {selecionados.size >= LIMITE_SELECAO && ` (limite de ${LIMITE_SELECAO.toLocaleString('pt-BR')})`}
+              <button
+                type="button"
+                onClick={() => mudarSelecao(new Set())}
+                className="anel-de-foco rounded px-1 text-slate-500 underline decoration-dotted underline-offset-2 hover:text-slate-700"
+              >
+                Limpar seleção
+              </button>
+            </span>
+          )}
           <Button variante="neutro" tamanho="sm" onClick={recarregar}>
             Atualizar
           </Button>
           <Button variante="neutro" tamanho="sm" disabled={exportando !== null || total === 0} onClick={() => void exportar('csv')}>
-            {exportando === 'csv' ? 'Exportando…' : 'Exportar CSV'}
+            {exportando === 'csv' ? 'Exportando…' : selecionados.size ? 'Exportar CSV (seleção)' : 'Exportar CSV'}
           </Button>
           <Button variante="neutro" tamanho="sm" disabled={exportando !== null || total === 0} onClick={() => void exportar('xlsx')}>
-            {exportando === 'xlsx' ? 'Exportando…' : 'Exportar XLSX'}
+            {exportando === 'xlsx' ? 'Exportando…' : selecionados.size ? 'Exportar XLSX (seleção)' : 'Exportar XLSX'}
           </Button>
         </div>
       </div>
@@ -319,6 +351,12 @@ export function ListaView({ operacao, estrutura, filtros, pref, atualizarPref }:
             ordenacao={ordenacao}
             aoOrdenar={ordenar}
             aoClicarLinha={(l) => setAberto(resumoDaLinha(l))}
+            selecao={{
+              selecionados,
+              aoAlternar: (id) => mudarSelecao(alternarSelecao(selecionados, id)),
+              aoAlternarTodos: (marcado) =>
+                mudarSelecao(alternarPagina(selecionados, (dados?.linhas ?? []).map((l) => l.id), marcado)),
+            }}
             larguras={pref.lista.larguras}
             aoRedimensionar={redimensionar}
             aoReordenar={(colunas) => mudarLista({ colunas })}

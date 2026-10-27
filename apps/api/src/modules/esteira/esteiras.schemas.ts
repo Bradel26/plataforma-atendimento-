@@ -162,13 +162,36 @@ export const listaQuerySchema = z.object({
   direcao: z.enum(['asc', 'desc']).default('asc'),
 });
 
-/** Exportação: formato, colunas (chaves separadas por vírgula; vazio = as padrão) e a ordenação da Lista. */
+/** Teto de ids numa exportação por seleção (a seleção da Lista respeita o mesmo limite). */
+export const LIMITE_IDS_EXPORTACAO = 1000;
+
+/** `ids` da seleção: CSV ou parâmetro repetido, sem repetição; vazio = sem seleção. */
+const idsDaSelecao = z.preprocess(
+  (v) => {
+    const itens = (Array.isArray(v) ? v : [v])
+      .flatMap((x) => String(x ?? '').split(','))
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return itens.length ? [...new Set(itens)] : undefined;
+  },
+  z.array(z.string().uuid('Id inválido na seleção')).max(LIMITE_IDS_EXPORTACAO, `Selecione no máximo ${LIMITE_IDS_EXPORTACAO} parceiros`).optional(),
+);
+
+/**
+ * Exportação: formato, colunas (chaves separadas por vírgula; vazio = as padrão),
+ * a ordenação da Lista e, opcionalmente, os `ids` selecionados (em AND com os filtros).
+ */
 export const exportarQuerySchema = z.object({
   formato: z.enum(['csv', 'xlsx']).default('csv'),
   colunas: z.string().trim().max(2000).optional(),
   ordenarPor: z.string().trim().max(60).optional(),
   direcao: z.enum(['asc', 'desc']).default('asc'),
+  ids: idsDaSelecao,
 });
+
+/** POST da exportação: a seleção no corpo (os demais parâmetros seguem na query). */
+export const exportarCorpoSchema = z.object({ ids: idsDaSelecao });
+export type ExportarCorpo = z.infer<typeof exportarCorpoSchema>;
 
 /** Campos de texto do multipart da importação: `mapa` (JSON cabeçalho → chave ou nulo) e `previa`. */
 export const importarCorpoSchema = z.object({

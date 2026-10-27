@@ -69,6 +69,53 @@ export function chavesParaExportar(escolhidas: readonly string[], colunas: reado
   return colunasVisiveis(escolhidas, colunas).map((c) => c.chave);
 }
 
+// ---------------------------------------------------------------------------
+// Seleção para exportar
+// ---------------------------------------------------------------------------
+
+/** Teto da seleção: o mesmo da API (`LIMITE_IDS_EXPORTACAO`). */
+export const LIMITE_SELECAO = 1000;
+
+/** Marca/desmarca um id (conjunto novo; não passa do limite). */
+export function alternarSelecao(atual: ReadonlySet<string>, id: string): Set<string> {
+  const nova = new Set(atual);
+  if (nova.has(id)) nova.delete(id);
+  else if (nova.size < LIMITE_SELECAO) nova.add(id);
+  return nova;
+}
+
+/** "Selecionar todos" da página: marca os dela (até o limite) ou tira só os dela; as outras páginas ficam. */
+export function alternarPagina(atual: ReadonlySet<string>, idsDaPagina: readonly string[], marcado: boolean): Set<string> {
+  const nova = new Set(atual);
+  for (const id of idsDaPagina) {
+    if (!marcado) nova.delete(id);
+    else if (nova.size < LIMITE_SELECAO) nova.add(id);
+  }
+  return nova;
+}
+
+/**
+ * Query e corpo da exportação. Sem seleção: os filtros da tela. Com seleção: os
+ * ids vão no corpo (POST — 1.000 uuids não cabem na URL) e entram em AND com
+ * os filtros da query na API.
+ */
+export function pedidoDeExportacao(p: {
+  query: string;
+  formato: 'csv' | 'xlsx';
+  colunas: readonly string[];
+  ordenacao: Ordenacao;
+  selecionados: ReadonlySet<string>;
+}): { query: string; corpo?: { ids: string[] } } {
+  const q = new URLSearchParams(p.query);
+  q.set('formato', p.formato);
+  q.set('colunas', p.colunas.join(','));
+  if (p.ordenacao) {
+    q.set('ordenarPor', p.ordenacao.chave);
+    q.set('direcao', p.ordenacao.direcao);
+  }
+  return p.selecionados.size ? { query: q.toString(), corpo: { ids: [...p.selecionados] } } : { query: q.toString() };
+}
+
 /** Largura salva da coluna (mesmos limites da preferência). */
 export function larguraLimitada(px: number): number {
   if (!Number.isFinite(px)) return LARGURA_MIN;

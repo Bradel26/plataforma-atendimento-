@@ -166,11 +166,13 @@ export async function obterImagemPrivada(path: string): Promise<Blob | null> {
  * entao buscamos o conteudo e disparamos o download por object URL. Erro da API
  * vira `ApiError` (status e codigo preservados).
  */
-export async function baixarArquivo(path: string, nomeArquivo: string): Promise<void> {
-  let res = await raw(path, { method: 'GET' });
+export async function baixarArquivo(path: string, nomeArquivo: string, corpo?: unknown): Promise<void> {
+  // Com corpo, POST (ex.: exportar uma seleção grande de ids, que não cabe na URL).
+  const init = (): RequestInit => (corpo === undefined ? { method: 'GET' } : { method: 'POST', body: JSON.stringify(corpo) });
+  let res = await raw(path, init());
 
   if (res.status === 401 && (await renovarSessao())) {
-    res = await raw(path, { method: 'GET' });
+    res = await raw(path, init());
   }
   if (!res.ok) {
     await parse(res); // reaproveita o tratamento de erro padrao

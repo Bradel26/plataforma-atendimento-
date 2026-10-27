@@ -15,6 +15,7 @@ import {
   configEtapaSchema,
   criarVinculoSchema,
   editarVinculoSchemas,
+  exportarCorpoSchema,
   exportarQuerySchema,
   importarCorpoSchema,
   kanbanColunaQuerySchema,
@@ -24,6 +25,7 @@ import {
   notaSchema,
   vendedorSchema,
   type ConfigEtapaInput,
+  type ExportarCorpo,
   type ExportarQuery,
   type KanbanColunaQuery,
   type KanbanQuery,
@@ -158,28 +160,33 @@ esteirasRoutes.get(
 /**
  * Exportação: só os perfis que já exportam em `modules/dados` (ADMIN e
  * SUPERVISOR — nunca SUPORTE nem AGENTE), com LEITURA na operação. Mesma
- * consulta da Lista (filtros na query string), sem paginação.
+ * consulta da Lista (filtros na query string), sem paginação. `ids` (seleção)
+ * entra em AND com os filtros: na query (GET) ou no corpo (POST — 1.000 uuids
+ * passam do limite de tamanho da URL do Node).
  */
-esteirasRoutes.get(
-  '/:operacao/exportar',
-  requireRole('ADMIN', 'SUPERVISOR'),
-  exigirOperacao('LEITURA'),
-  validateQuery(exportarQuerySchema),
-  asyncHandler(async (req, res) => {
-    const { formato, colunas, ordenarPor, direcao } = res.locals.query as ExportarQuery;
-    const chaves = (colunas ?? '')
-      .split(',')
-      .map((c) => c.trim())
-      .filter(Boolean);
-    const { arquivo, nome, tipo } = await exportar(res.locals.operacao, filtrosDa(req), chaves, formato, {
-      ordenarPor: ordenarPor || undefined,
-      direcao,
-    });
-    res.setHeader('Content-Type', tipo);
-    res.setHeader('Content-Disposition', `attachment; filename="${nome}"`);
-    res.send(arquivo);
-  }),
-);
+const exportarHandler = asyncHandler(async (req, res) => {
+  const { formato, colunas, ordenarPor, direcao, ids: idsDaQuery } = res.locals.query as ExportarQuery;
+  const ids = req.method === 'POST' ? (req.body as ExportarCorpo).ids : idsDaQuery;
+  const chaves = (colunas ?? '')
+    .split(',')
+    .map((c) => c.trim())
+    .filter(Boolean);
+  const { arquivo, nome, tipo } = await exportar(
+    res.locals.operacao,
+    filtrosDa(req),
+    chaves,
+    formato,
+    { ordenarPor: ordenarPor || undefined, direcao },
+    ids,
+  );
+  res.setHeader('Content-Type', tipo);
+  res.setHeader('Content-Disposition', `attachment; filename="${nome}"`);
+  res.send(arquivo);
+});
+
+const exportacaoPermitida = [requireRole('ADMIN', 'SUPERVISOR'), exigirOperacao('LEITURA'), validateQuery(exportarQuerySchema)];
+esteirasRoutes.get('/:operacao/exportar', ...exportacaoPermitida, exportarHandler);
+esteirasRoutes.post('/:operacao/exportar', ...exportacaoPermitida, validateBody(exportarCorpoSchema), exportarHandler);
 
 const EXTENSOES_PLANILHA = /\.(csv|xlsx)$/i;
 /** Tipos com que navegadores e sistemas enviam CSV/XLSX (o Windows manda CSV como `vnd.ms-excel`). */

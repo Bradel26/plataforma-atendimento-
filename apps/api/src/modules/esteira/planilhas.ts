@@ -76,6 +76,28 @@ export function linhasDeExportacao(linhas: VinculoLinha[], colunas: ColunaEsteir
 }
 
 /**
+ * Exportação só dos selecionados: os ids entram em AND com o where da consulta
+ * (filtros + carteira + operações permitidas). Id de outra operação, arquivado
+ * ou fora da carteira simplesmente não casa — nunca 403/404 por id, para não
+ * revelar que existe. Sem seleção, o where fica intacto.
+ */
+export function whereDaSelecao<W extends object>(where: W, ids: readonly string[] | undefined): W | { AND: [W, { id: { in: string[] } }] } {
+  return ids?.length ? { AND: [where, { id: { in: [...ids] } }] } : where;
+}
+
+/** `detalhe` do registro da exportação: diz se foi por seleção e quantos ids foram pedidos. */
+export function detalheDaExportacao(d: {
+  filtros: unknown;
+  colunas: string[];
+  quantidade: number;
+  formato: 'csv' | 'xlsx';
+  ids?: readonly string[];
+}) {
+  const { ids, ...resto } = d;
+  return ids?.length ? { ...resto, porSelecao: true, selecionados: ids.length } : { ...resto, porSelecao: false };
+}
+
+/**
  * Cabeçalho de cada coluna: o rótulo; rótulo repetido (Starlink: "Parceiro" é o
  * nome e também o tri-estado) ganha a chave entre parênteses, que `mapearCabecalhos` reconhece.
  */

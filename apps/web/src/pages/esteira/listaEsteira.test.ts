@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { ColunaEsteira } from '../../lib/esteiraTypes';
 import {
+  LIMITE_SELECAO,
   alternarColuna,
+  alternarPagina,
+  alternarSelecao,
   chavesParaExportar,
+  pedidoDeExportacao,
   colunasVisiveis,
   formatarCelula,
   larguraLimitada,
@@ -174,5 +178,54 @@ describe('chavesParaExportar', () => {
   });
   it('sem nenhuma válida, as padrão', () => {
     expect(chavesParaExportar([], COLUNAS)).toEqual(['parceiro', 'responsavel', 'vsm']);
+  });
+});
+
+describe('seleção para exportar', () => {
+  it('alternar marca e desmarca um id, sem mudar o conjunto original', () => {
+    const vazio = new Set<string>();
+    const um = alternarSelecao(vazio, 'a');
+    expect([...um]).toEqual(['a']);
+    expect(vazio.size).toBe(0);
+    expect([...alternarSelecao(um, 'a')]).toEqual([]);
+  });
+
+  it('marcar a página acrescenta os dela (mantém os de outras páginas); desmarcar tira só os dela', () => {
+    const outras = new Set(['x']);
+    const marcada = alternarPagina(outras, ['a', 'b'], true);
+    expect([...marcada].sort()).toEqual(['a', 'b', 'x']);
+    expect([...alternarPagina(marcada, ['a', 'b'], false)]).toEqual(['x']);
+  });
+
+  it(`não passa de ${LIMITE_SELECAO} selecionados`, () => {
+    const cheio = new Set(Array.from({ length: LIMITE_SELECAO }, (_, i) => `id${i}`));
+    expect(alternarSelecao(cheio, 'novo').size).toBe(LIMITE_SELECAO);
+    expect(alternarSelecao(cheio, 'id0').size).toBe(LIMITE_SELECAO - 1);
+    const quase = new Set(Array.from({ length: LIMITE_SELECAO - 1 }, (_, i) => `id${i}`));
+    expect(alternarPagina(quase, ['p1', 'p2', 'p3'], true).size).toBe(LIMITE_SELECAO);
+  });
+
+  it('pedido de exportação: sem seleção, filtros + colunas + ordenação na query e sem corpo', () => {
+    const p = pedidoDeExportacao({
+      query: 'ufs=GO',
+      formato: 'xlsx',
+      colunas: ['parceiro', 'vsm'],
+      ordenacao: { chave: 'parceiro', direcao: 'desc' },
+      selecionados: new Set(),
+    });
+    const q = new URLSearchParams(p.query);
+    expect(q.get('ufs')).toBe('GO');
+    expect(q.get('formato')).toBe('xlsx');
+    expect(q.get('colunas')).toBe('parceiro,vsm');
+    expect(q.get('ordenarPor')).toBe('parceiro');
+    expect(q.get('direcao')).toBe('desc');
+    expect(p.corpo).toBeUndefined();
+  });
+
+  it('pedido de exportação: com seleção, os ids vão no corpo (em AND com os filtros da query)', () => {
+    const p = pedidoDeExportacao({ query: 'ufs=GO', formato: 'csv', colunas: ['parceiro'], ordenacao: null, selecionados: new Set(['b', 'a']) });
+    expect(new URLSearchParams(p.query).get('ufs')).toBe('GO');
+    expect(new URLSearchParams(p.query).has('ids')).toBe(false);
+    expect(p.corpo).toEqual({ ids: ['b', 'a'] });
   });
 });

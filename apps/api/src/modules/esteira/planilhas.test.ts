@@ -3,7 +3,9 @@ import { COLUNAS, type VinculoLinha } from './colunas';
 import {
   celulaDaPlanilha,
   cabecalhosDeExportacao,
+  detalheDaExportacao,
   linhasDeExportacao,
+  whereDaSelecao,
   mapearCabecalhos,
   neutralizarFormula,
   numerosDasLinhasCsv,
@@ -238,5 +240,24 @@ describe('tamanhoDescompactadoDoZip', () => {
     const truncado = zipDeclarando([5, 5]);
     truncado.writeUInt16LE(3, truncado.length - 22 + 10); // diz 3 entradas, tem 2
     expect(tamanhoDescompactadoDoZip(truncado)).toBeNull();
+  });
+});
+
+describe('exportação só dos selecionados', () => {
+  const base = { AND: [{ organizacaoId: 'org' }, { operacao: 'TIM' as const, arquivadoEm: null }] };
+
+  it('sem seleção: o where da consulta, intacto', () => {
+    expect(whereDaSelecao(base, undefined)).toBe(base);
+    expect(whereDaSelecao(base, [])).toBe(base);
+  });
+
+  it('com seleção: os ids entram em AND com filtros, carteira e operações (id de fora simplesmente não casa)', () => {
+    expect(whereDaSelecao(base, ['a', 'b'])).toEqual({ AND: [base, { id: { in: ['a', 'b'] } }] });
+  });
+
+  it('o registro diz que foi por seleção e quantos foram pedidos', () => {
+    const comum = { filtros: { ufs: ['GO'] }, colunas: ['parceiro'], quantidade: 2, formato: 'csv' as const };
+    expect(detalheDaExportacao({ ...comum, ids: ['a', 'b', 'c'] })).toEqual({ ...comum, porSelecao: true, selecionados: 3 });
+    expect(detalheDaExportacao(comum)).toEqual({ ...comum, porSelecao: false });
   });
 });
