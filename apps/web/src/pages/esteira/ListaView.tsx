@@ -70,12 +70,18 @@ export function ListaView({ operacao, estrutura, filtros, pref, atualizarPref }:
   // Trocar filtros, ordenação ou tamanho volta à primeira página (sem efeito extra nem busca em dobro).
   const chaveConsulta = `${query}|${ordenacao?.chave ?? ''}|${ordenacao?.direcao ?? ''}|${tamanho}`;
   const [paginaDe, setPaginaDe] = useState({ chave: chaveConsulta, pagina: 1 });
+  // Ajuste durante a renderização (padrão do React para "estado derivado de
+  // prop"): ao trocar a chave, o estado guardado é zerado de fato. Só comparar
+  // a chave na leitura fazia a página/seleção antiga voltar quando o usuário
+  // desfazia o filtro (ex.: buscava e depois limpava a busca).
+  if (paginaDe.chave !== chaveConsulta) setPaginaDe({ chave: chaveConsulta, pagina: 1 });
   const pagina = paginaDe.chave === chaveConsulta ? paginaDe.pagina : 1;
   const irParaPagina = (p: number) => setPaginaDe({ chave: chaveConsulta, pagina: Math.max(1, p) });
 
   // Seleção para exportar: persiste entre páginas; zera ao trocar filtros ou operação.
   const chaveSelecao = `${operacao}|${query}`;
   const [selecaoDe, setSelecaoDe] = useState<{ chave: string; ids: Set<string> }>({ chave: chaveSelecao, ids: new Set() });
+  if (selecaoDe.chave !== chaveSelecao) setSelecaoDe({ chave: chaveSelecao, ids: new Set() });
   const selecionados = useMemo(
     () => (selecaoDe.chave === chaveSelecao ? selecaoDe.ids : new Set<string>()),
     [selecaoDe, chaveSelecao],
