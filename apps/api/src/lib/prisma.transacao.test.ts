@@ -26,14 +26,28 @@ function arquivosTs(dir: string): string[] {
   });
 }
 
+/**
+ * Nomes usados para o cliente da transação (`tx`, `trx`, `cliente` — este último
+ * nos helpers tipados com `ClienteDeEscrita`). O texto inteiro é varrido, para
+ * pegar também a chamada quebrada em linhas (`tx.credenciamento\n  .findUnique(`).
+ */
+const LEITURA_UNICA_NA_TRANSACAO = /\b(?:tx|trx|cliente)\s*\.\s*\w+\s*\.\s*findUnique(?:OrThrow)?\s*\(/g;
+
+function ocorrenciasNoTexto(texto: string): number[] {
+  return [...texto.matchAll(LEITURA_UNICA_NA_TRANSACAO)].map((m) => texto.slice(0, m.index).split('\n').length);
+}
+
 describe('leituras dentro de transação interativa', () => {
-  it('nenhum tx.<modelo>.findUnique (a extensão o desvia para fora da transação)', () => {
+  it('o detector pega os aliases e a chamada quebrada em linhas, e ignora o cliente de fora', () => {
+    expect(ocorrenciasNoTexto('await tx.credenciamento.findUniqueOrThrow({})')).toEqual([1]);
+    expect(ocorrenciasNoTexto('x\nawait trx.user.findUnique({})')).toEqual([2]);
+    expect(ocorrenciasNoTexto('await cliente\n  .conta\n  .findUnique({})')).toEqual([1]);
+    expect(ocorrenciasNoTexto('await prisma.user.findUnique({}); await tx.user.findFirst({}); await meutx.a.findUnique({})')).toEqual([]);
+  });
+
+  it('nenhum <cliente da transação>.<modelo>.findUnique (a extensão o desvia para fora da transação)', () => {
     const ocorrencias = arquivosTs(SRC).flatMap((arquivo) =>
-      readFileSync(arquivo, 'utf8')
-        .split(/\r?\n/)
-        .flatMap((linha, i) =>
-          /\btx\.\w+\.findUnique(OrThrow)?\s*\(/.test(linha) ? [`${relative(SRC, arquivo)}:${i + 1}`] : [],
-        ),
+      ocorrenciasNoTexto(readFileSync(arquivo, 'utf8')).map((linha) => `${relative(SRC, arquivo)}:${linha}`),
     );
     expect(ocorrencias).toEqual([]);
   });
