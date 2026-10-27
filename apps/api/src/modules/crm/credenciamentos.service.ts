@@ -9,7 +9,10 @@ import { acessoDoUsuarioAtual } from '../esteira/acesso';
  * (`/api/esteiras/:operacao`); a API antiga de credenciamentos saiu na Task 21.
  */
 
-const comEstagios = { estagios: { orderBy: { ordem: 'asc' } } } satisfies Prisma.FunnelInclude;
+// Só etapas ativas: a migração desativa as etapas antigas sem chave (ex.:
+// Starlink "Treinamento realizado", "Ativo"), que não podem aparecer no
+// Dashboard, na Gestão nem nos seletores de etapa (Desempenho, Campanhas).
+const comEstagios = { estagios: { where: { ativa: true }, orderBy: { ordem: 'asc' } } } satisfies Prisma.FunnelInclude;
 
 /** Funis ESTEIRA ativos da organizacao — um por operacao (ex.: TIM, Starlink). */
 export function funisDaEsteira() {
