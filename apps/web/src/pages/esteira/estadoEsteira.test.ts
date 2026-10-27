@@ -120,6 +120,31 @@ describe('preferência da esteira', () => {
     expect(p.lista.ordenacao).toBeNull();
     expect(p.kanban.recolhidas).toEqual(['SL_MEI', 'SL_NURTURE']);
     expect(p.favoritos).toEqual([]);
+    expect(p.lista.tamanhoPagina).toBe(50);
+    expect(p.funil).toEqual({ periodo: { dias: 90 }, comparar: false });
+  });
+
+  it('tamanho de página: 25, 50 ou 100; outro valor (ou versão antiga sem ele) volta a 50', () => {
+    expect(normalizarPreferencia({ lista: { tamanhoPagina: 100 } }, estrutura).lista.tamanhoPagina).toBe(100);
+    expect(normalizarPreferencia({ lista: { tamanhoPagina: 25 } }, estrutura).lista.tamanhoPagina).toBe(25);
+    expect(normalizarPreferencia({ lista: { tamanhoPagina: 30 } }, estrutura).lista.tamanhoPagina).toBe(50);
+    expect(normalizarPreferencia({ lista: { tamanhoPagina: '100' } }, estrutura).lista.tamanhoPagina).toBe(50);
+    expect(normalizarPreferencia({ lista: { colunas: ['cnpj'] } }, estrutura).lista.tamanhoPagina).toBe(50);
+  });
+
+  it('período do funil: relativo em dias ou datas; lixo volta aos últimos 90 dias', () => {
+    const funil = (v: unknown) => normalizarPreferencia({ funil: v }, estrutura).funil;
+    expect(funil({ periodo: { dias: 30 }, comparar: true })).toEqual({ periodo: { dias: 30 }, comparar: true });
+    expect(funil({ periodo: { desde: '2026-01-01', ate: '2026-03-31' } })).toEqual({
+      periodo: { desde: '2026-01-01', ate: '2026-03-31' },
+      comparar: false,
+    });
+    expect(funil({ periodo: { dias: 0 } })).toEqual({ periodo: { dias: 90 }, comparar: false });
+    expect(funil({ periodo: { dias: 2.5 } })).toEqual({ periodo: { dias: 90 }, comparar: false });
+    expect(funil({ periodo: { desde: 'ontem', ate: '2026-03-31' } })).toEqual({ periodo: { dias: 90 }, comparar: false });
+    expect(funil({ periodo: { desde: '2026-04-01', ate: '2026-03-31' } })).toEqual({ periodo: { dias: 90 }, comparar: false });
+    expect(funil({ comparar: 'sim' })).toEqual({ periodo: { dias: 90 }, comparar: false });
+    expect(funil('lixo')).toEqual({ periodo: { dias: 90 }, comparar: false });
   });
 
   it('null ou lixo vira o padrão', () => {

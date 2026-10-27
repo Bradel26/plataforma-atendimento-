@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Alerta, Badge, Button, EmptyState, Input } from '../../components/ui';
 import { Segmentado } from '../../components/ui/Pagina';
 import { SkeletonBloco } from '../../components/ui/Skeleton';
@@ -15,11 +15,14 @@ import {
   percentuaisDoFunil,
   periodoAnterior,
   periodoDoPreset,
+  periodoDaPreferencia,
   periodoExibido,
+  preferenciaDoPeriodo,
   type PeriodoDias,
+  type PresetFunil,
 } from './funilEsteira';
 
-type Preset = '30' | '90' | '180' | '365' | 'personalizado';
+type Preset = PresetFunil;
 const PRESETS: ReadonlyArray<{ valor: Preset; rotulo: string }> = [
   { valor: '30', rotulo: '30 dias' },
   { valor: '90', rotulo: '90 dias' },
@@ -42,12 +45,27 @@ const COR_BARRA = SERIES[0];
  * Etapa, situação, "parado há" e "passou pela etapa" não se aplicam (a API os ignora para não
  * enviesar a coorte), e o período é o daqui, por data de entrada.
  */
-export function FunilView({ operacao, filtros, irPara }: PropsDaVisao) {
+export function FunilView({ operacao, filtros, irPara, pref, atualizarPref }: PropsDaVisao) {
   const hoje = useMemo(() => diaDeHoje(), []);
-  const [preset, setPreset] = useState<Preset>('90');
-  const [personalizado, setPersonalizado] = useState<PeriodoDias>(() => periodoDoPreset(hoje, 90));
-  const [comparar, setComparar] = useState(false);
+  // Período e "comparar" começam da preferência (relativo é recalculado a partir de hoje).
+  const [inicial] = useState(() => periodoDaPreferencia(pref.funil.periodo, hoje));
+  const [preset, setPreset] = useState<Preset>(inicial.preset);
+  const [personalizado, setPersonalizado] = useState<PeriodoDias>(inicial.personalizado);
+  const [comparar, setComparar] = useState(pref.funil.comparar);
   const [tentativa, setTentativa] = useState(0);
+
+  // Grava período e "comparar" (debounce no hook da preferência); personalizado inválido não grava.
+  const prefFunil = useRef(pref.funil);
+  prefFunil.current = pref.funil;
+  const atualizarRef = useRef(atualizarPref);
+  atualizarRef.current = atualizarPref;
+  useEffect(() => {
+    const periodo = preferenciaDoPeriodo(preset, personalizado);
+    if (!periodo) return;
+    const atual = prefFunil.current;
+    if (atual.comparar === comparar && JSON.stringify(atual.periodo) === JSON.stringify(periodo)) return;
+    atualizarRef.current({ funil: { periodo, comparar } });
+  }, [preset, personalizado, comparar]);
 
   const invalido =
     preset === 'personalizado' &&

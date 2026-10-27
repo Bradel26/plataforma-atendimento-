@@ -11,6 +11,8 @@ import {
   percentuaisDoFunil,
   periodoExibido,
   pilulaDoFunil,
+  periodoDaPreferencia,
+  preferenciaDoPeriodo,
   semFiltroDoFunil,
 } from './funilEsteira';
 
@@ -144,5 +146,31 @@ describe('Funil → Lista', () => {
       periodoCampo: 'estagioDesde',
       desde: '2026-07-30',
     });
+  });
+});
+
+describe('período do funil na preferência', () => {
+  const hoje = '2026-10-27';
+
+  it('relativo vira o preset (e continua valendo nos dias seguintes, sem datas fixas)', () => {
+    expect(periodoDaPreferencia({ dias: 30 }, hoje)).toEqual({ preset: '30', personalizado: periodoDoPreset(hoje, 30) });
+    expect(periodoDaPreferencia({ dias: 90 }, '2026-12-01').personalizado).toEqual(periodoDoPreset('2026-12-01', 90));
+  });
+
+  it('dias fora dos presets e datas fixas viram personalizado', () => {
+    expect(periodoDaPreferencia({ dias: 45 }, hoje)).toEqual({ preset: 'personalizado', personalizado: periodoDoPreset(hoje, 45) });
+    expect(periodoDaPreferencia({ desde: '2026-01-01', ate: '2026-03-31' }, hoje)).toEqual({
+      preset: 'personalizado',
+      personalizado: { desde: '2026-01-01', ate: '2026-03-31' },
+    });
+    // Só uma data: a outra vem do padrão (90 dias até hoje).
+    expect(periodoDaPreferencia({ desde: '2026-09-01' }, hoje).personalizado).toEqual({ desde: '2026-09-01', ate: hoje });
+  });
+
+  it('o que se grava: preset como dias; personalizado válido como datas; inválido não grava', () => {
+    expect(preferenciaDoPeriodo('180', { desde: '2026-01-01', ate: '2026-01-02' })).toEqual({ dias: 180 });
+    expect(preferenciaDoPeriodo('personalizado', { desde: '2026-01-01', ate: '2026-01-31' })).toEqual({ desde: '2026-01-01', ate: '2026-01-31' });
+    expect(preferenciaDoPeriodo('personalizado', { desde: '2026-02-01', ate: '2026-01-31' })).toBeNull();
+    expect(preferenciaDoPeriodo('personalizado', { desde: '', ate: '2026-01-31' })).toBeNull();
   });
 });

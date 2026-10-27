@@ -16,7 +16,7 @@ import { useResponsaveis } from './BarraDeFiltros';
 import { BotaoTriEstado } from './BotaoTriEstado';
 import { DetalheVinculo } from './DetalheVinculo';
 import { useRegrasDaEsteira, type ExtrasDaRegra } from './DialogoMovimento';
-import { parametroDaOperacao, quantosFiltros, queryDosFiltros, type PropsDaVisao } from './estadoEsteira';
+import { TAMANHOS_PAGINA, parametroDaOperacao, quantosFiltros, queryDosFiltros, type PropsDaVisao } from './estadoEsteira';
 import { diaDeHoje } from './funilEsteira';
 import {
   LIMITE_SELECAO,
@@ -33,8 +33,6 @@ import {
 import type { ContextoDialogo } from './regrasMovimento';
 import { SeletorDeColunas } from './SeletorDeColunas';
 
-const TAMANHOS = [25, 50, 100] as const;
-const TAMANHO_PADRAO = 50;
 /** Tipos que a célula edita no lugar; data e número só pela gaveta. */
 const TIPOS_EDITAVEIS = new Set<ColunaEsteira['tipo']>(['texto', 'enum', 'booleano', 'booleano3']);
 
@@ -67,7 +65,8 @@ export function ListaView({ operacao, estrutura, filtros, pref, atualizarPref }:
   const direcao = ordenacao?.direcao;
   const visiveis = useMemo(() => colunasVisiveis(pref.lista.colunas, estrutura.colunas), [pref.lista.colunas, estrutura.colunas]);
 
-  const [tamanho, setTamanho] = useState<number>(TAMANHO_PADRAO);
+  // Tamanho da página salvo na preferência (25, 50 ou 100).
+  const tamanho = pref.lista.tamanhoPagina;
   // Trocar filtros, ordenação ou tamanho volta à primeira página (sem efeito extra nem busca em dobro).
   const chaveConsulta = `${query}|${ordenacao?.chave ?? ''}|${ordenacao?.direcao ?? ''}|${tamanho}`;
   const [paginaDe, setPaginaDe] = useState({ chave: chaveConsulta, pagina: 1 });
@@ -375,10 +374,13 @@ export function ListaView({ operacao, estrutura, filtros, pref, atualizarPref }:
               Por página
               <select
                 value={tamanho}
-                onChange={(e) => setTamanho(Number(e.target.value))}
+                onChange={(e) => {
+                  const novo = TAMANHOS_PAGINA.find((t) => t === Number(e.target.value));
+                  if (novo) mudarLista({ tamanhoPagina: novo });
+                }}
                 className="anel-de-foco h-8 rounded-md border border-slate-300 bg-white px-1.5 text-[13px] text-slate-800"
               >
-                {TAMANHOS.map((t) => (
+                {TAMANHOS_PAGINA.map((t) => (
                   <option key={t} value={t}>
                     {t}
                   </option>

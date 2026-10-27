@@ -21,6 +21,9 @@ import type {
 export type Visao = 'kanban' | 'funil' | 'lista';
 export type CampoOcultavel = 'responsavel' | 'cidade' | 'etiquetas' | 'ultimaInteracao';
 export type FavoritoEsteira = { nome: string; filtros: FiltrosEsteira };
+export type TamanhoPagina = 25 | 50 | 100;
+/** Período do Funil salvo: relativo ("últimos N dias", nunca envelhece) ou datas fixas do personalizado. */
+export type PeriodoFunilPref = { desde?: string; ate?: string } | { dias: number };
 
 export type PreferenciaEsteira = {
   visao: Visao;
@@ -29,7 +32,9 @@ export type PreferenciaEsteira = {
     colunas: string[];
     larguras: Record<string, number>;
     ordenacao: { chave: string; direcao: 'asc' | 'desc' } | null;
+    tamanhoPagina: TamanhoPagina;
   };
+  funil: { periodo: PeriodoFunilPref; comparar: boolean };
   kanban: { recolhidas: string[]; densidade: 'compacta' | 'detalhada'; camposOcultos: CampoOcultavel[] };
   favoritos: FavoritoEsteira[];
 };
@@ -50,6 +55,10 @@ export type PropsDaVisao = {
 export const VISOES: readonly Visao[] = ['kanban', 'funil', 'lista'];
 export const OPERACOES: readonly Operacao[] = ['TIM', 'STARLINK'];
 export const LIMITE_FAVORITOS = 20;
+export const TAMANHOS_PAGINA: readonly TamanhoPagina[] = [25, 50, 100];
+const TAMANHO_PAGINA_PADRAO: TamanhoPagina = 50;
+const DIAS_FUNIL_PADRAO = 90;
+const DIAS_FUNIL_MAX = 3650;
 export const TAMANHO_NOME_FAVORITO = 60;
 const CAMPOS_OCULTAVEIS: readonly CampoOcultavel[] = ['responsavel', 'cidade', 'etiquetas', 'ultimaInteracao'];
 const LARGURA_MIN = 60;
@@ -219,7 +228,13 @@ export function preferenciaPadrao(estrutura: EstruturaEsteira): PreferenciaEstei
   return {
     visao: 'kanban',
     filtros: {},
-    lista: { colunas: estrutura.colunas.filter((c) => c.padrao).map((c) => c.chave), larguras: {}, ordenacao: null },
+    lista: {
+      colunas: estrutura.colunas.filter((c) => c.padrao).map((c) => c.chave),
+      larguras: {},
+      ordenacao: null,
+      tamanhoPagina: TAMANHO_PAGINA_PADRAO,
+    },
+    funil: { periodo: { dias: DIAS_FUNIL_PADRAO }, comparar: false },
     kanban: {
       recolhidas: estrutura.etapas.filter((e) => e.tipo !== 'NORMAL').map((e) => e.chave),
       densidade: 'detalhada',
@@ -227,6 +242,21 @@ export function preferenciaPadrao(estrutura: EstruturaEsteira): PreferenciaEstei
     },
     favoritos: [],
   };
+}
+
+/** Período do Funil salvo → válido: dias inteiros 1..3650, ou datas válidas com início antes do fim. */
+function normalizarPeriodoFunil(valor: unknown): PeriodoFunilPref {
+  const padrao = { dias: DIAS_FUNIL_PADRAO };
+  if (!ehObjeto(valor)) return padrao;
+  if ('dias' in valor) {
+    const n = valor.dias;
+    return typeof n === 'number' && Number.isInteger(n) && n >= 1 && n <= DIAS_FUNIL_MAX ? { dias: n } : padrao;
+  }
+  const desde = dia(valor.desde);
+  const ate = dia(valor.ate);
+  if ((valor.desde !== undefined && !desde) || (valor.ate !== undefined && !ate) || (!desde && !ate)) return padrao;
+  if (desde && ate && desde > ate) return padrao;
+  return definidos({ desde, ate });
 }
 
 function normalizarFavoritos(valor: unknown, etapas: Set<string>): FavoritoEsteira[] {
@@ -278,10 +308,14 @@ export function normalizarPreferencia(valor: unknown, estrutura: EstruturaEsteir
     ? (listaDe(kanban.recolhidas, (s) => etapas.has(s)) ?? [])
     : padrao.kanban.recolhidas;
 
+  const tamanhoPagina = TAMANHOS_PAGINA.find((t) => t === lista.tamanhoPagina) ?? TAMANHO_PAGINA_PADRAO;
+  const funil = ehObjeto(valor.funil) ? valor.funil : {};
+
   return {
     visao: typeof valor.visao === 'string' && de(VISOES)(valor.visao) ? valor.visao : 'kanban',
     filtros: normalizarFiltros(valor.filtros, etapas),
-    lista: { colunas: escolhidas ?? padrao.lista.colunas, larguras, ordenacao },
+    lista: { colunas: escolhidas ?? padrao.lista.colunas, larguras, ordenacao, tamanhoPagina },
+    funil: { periodo: normalizarPeriodoFunil(funil.periodo), comparar: funil.comparar === true },
     kanban: {
       recolhidas,
       densidade: kanban.densidade === 'compacta' ? 'compacta' : 'detalhada',

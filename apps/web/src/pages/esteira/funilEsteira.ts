@@ -5,8 +5,13 @@
  * que a API lê (`parseFiltros` transforma `ate` só com data em fim exclusivo).
  */
 import type { ChaveEtapa, EtapaFunil, FiltrosEsteira, FunilDoPeriodo } from '../../lib/esteiraTypes';
+import type { PeriodoFunilPref } from './estadoEsteira';
 
 export type PeriodoDias = { desde: string; ate: string };
+export type PresetFunil = '30' | '90' | '180' | '365' | 'personalizado';
+const DIAS_DOS_PRESETS = [30, 90, 180, 365] as const;
+const DIAS_PADRAO = 90;
+const DIA_ISO = /^\d{4}-\d{2}-\d{2}$/;
 export type EtapaComPercentuais = EtapaFunil & {
   /** Parte da primeira etapa do trilho que chegou aqui (0..1); nulo se a primeira está zerada. */
   daPrimeira: number | null;
@@ -111,4 +116,25 @@ export function formatarDias(dias: number | null): string {
   if (dias === null) return '—';
   const texto = dias.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
   return dias === 1 ? '1 dia' : `${texto} dias`;
+}
+
+// ---------------------------------------------------------------------------
+// Período na preferência
+// ---------------------------------------------------------------------------
+
+/** Preferência salva → preset da tela e as datas do personalizado (relativo é recalculado a partir de hoje). */
+export function periodoDaPreferencia(p: PeriodoFunilPref, hoje: string): { preset: PresetFunil; personalizado: PeriodoDias } {
+  if ('dias' in p) {
+    const preset = DIAS_DOS_PRESETS.find((d) => d === p.dias);
+    return { preset: preset ? (String(preset) as PresetFunil) : 'personalizado', personalizado: periodoDoPreset(hoje, p.dias) };
+  }
+  const padrao = periodoDoPreset(hoje, DIAS_PADRAO);
+  return { preset: 'personalizado', personalizado: { desde: p.desde ?? padrao.desde, ate: p.ate ?? padrao.ate } };
+}
+
+/** O que gravar: preset como "últimos N dias" (não envelhece); personalizado só se válido (senão nulo, não grava). */
+export function preferenciaDoPeriodo(preset: PresetFunil, personalizado: PeriodoDias): PeriodoFunilPref | null {
+  if (preset !== 'personalizado') return { dias: Number(preset) };
+  const { desde, ate } = personalizado;
+  return DIA_ISO.test(desde) && DIA_ISO.test(ate) && desde <= ate ? { desde, ate } : null;
 }
