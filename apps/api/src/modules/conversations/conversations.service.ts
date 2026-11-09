@@ -231,9 +231,8 @@ export async function listarAtendimentosAnteriores(
 }
 
 /**
- * Contadores por aba, com o mesmo filtro da lista de cada uma — senao o numero
- * da aba nao bate com o que aparece embaixo dele. Fila conta so as em espera,
- * que e o que a aba destaca. Arquivadas nunca contam (Fase 11.9-A, item 8).
+ * Contadores por aba: quantas conversas daquela aba (mesmo filtro da lista)
+ * ainda tem mensagem nao lida. Arquivadas nunca contam (Fase 11.9-A, item 8).
  *
  * Devolve tambem as filas do solicitante: a tela precisa delas para decidir se
  * uma conversa que chegou pelo socket entra na aba Fila.
@@ -245,8 +244,11 @@ export async function contarPorVisao() {
     { arquivada: false },
     { contato: { excluidoEm: null } },
   ];
+  // O numero da aba e um AVISO: so conta conversa com mensagem nao lida. Abrir
+  // a conversa zera `naoLidas` (POST /:id/ler) e o numero cai junto. A lista da
+  // aba continua mostrando todas; so o aviso acompanha o que ainda pede leitura.
   const contar = (extra: Prisma.ConversationWhereInput) =>
-    prisma.conversation.count({ where: { AND: [...base, extra] } });
+    prisma.conversation.count({ where: { AND: [...base, { naoLidas: { gt: 0 } }, extra] } });
 
   const [MINHAS, ATRIBUIDAS, ACOMPANHAR] = await Promise.all([
     contar(filtroDaVisao({ visao: 'MINHAS' }, ctx)),
