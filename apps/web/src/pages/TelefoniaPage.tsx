@@ -33,7 +33,9 @@ export function TelefoniaPage() {
   const [chamadaAtivaId, setChamadaAtivaId] = useState<string | null>(null);
   const [microfoneMudo, setMicrofoneMudo] = useState(false);
   const [audioConectado, setAudioConectado] = useState(false);
+  const [linhaCloudConfigurada, setLinhaCloudConfigurada] = useState(false);
   const [linhaCloudAtiva, setLinhaCloudAtiva] = useState(false);
+  const [habilitandoChamadas, setHabilitandoChamadas] = useState(false);
   const [sessaoChamadasWeb, setSessaoChamadasWeb] = useState('teste-local');
   const [linhaWebId, setLinhaWebId] = useState<string | null>(null);
   const [linhaWebAtiva, setLinhaWebAtiva] = useState(false);
@@ -79,6 +81,7 @@ export function TelefoniaPage() {
   useEffect(() => {
     void api.get<{ numero: { id?: string; modo?: string | null; ativo?: boolean; ponteSessao?: string | null; phoneNumberId?: string | null; whatsappCallingHabilitado?: boolean; transcricaoAutomaticaAtiva?: boolean } | null }>('/canais/numeros/meu')
       .then(({ numero }) => {
+        setLinhaCloudConfigurada(Boolean(numero?.ativo && numero.modo === 'OFICIAL' && numero.phoneNumberId));
         setLinhaCloudAtiva(Boolean(numero?.ativo && numero.modo === 'OFICIAL' && numero.phoneNumberId && numero.whatsappCallingHabilitado));
         const usaWeb = Boolean(numero?.modo === 'NAO_OFICIAL' && numero.ativo && numero.id && numero.ponteSessao);
         setLinhaWebAtiva(usaWeb);
@@ -86,8 +89,21 @@ export function TelefoniaPage() {
         if (usaWeb && numero?.ponteSessao) setSessaoChamadasWeb(numero.ponteSessao);
         setTranscricaoAtiva(Boolean(numero?.transcricaoAutomaticaAtiva));
       })
-      .catch(() => { setLinhaCloudAtiva(false); setLinhaWebAtiva(false); setLinhaWebId(null); });
+      .catch(() => { setLinhaCloudConfigurada(false); setLinhaCloudAtiva(false); setLinhaWebAtiva(false); setLinhaWebId(null); });
   }, []);
+
+  const habilitarChamadas = async () => {
+    if (habilitandoChamadas) return;
+    setHabilitandoChamadas(true); setErro(null); setAviso(null);
+    try {
+      await api.post('/canais/whatsapp/pessoal/meta/chamadas/habilitar', {});
+      setLinhaCloudAtiva(true);
+      setTranscricaoAtiva(true);
+      setAviso('Chamadas ativadas para esta linha. O WhatsApp no celular não será usado para atender pelo painel.');
+    } catch (e) {
+      setErro(e instanceof ApiError ? e.message : 'A Meta não habilitou chamadas para esta linha.');
+    } finally { setHabilitandoChamadas(false); }
+  };
   useEffect(() => () => {
     peerRef.current?.close();
     microfoneRef.current?.getTracks().forEach((track) => track.stop());
@@ -409,6 +425,14 @@ export function TelefoniaPage() {
 
       {erro && <Alerta>{erro}</Alerta>}
       {aviso && <Alerta tipo="sucesso">{aviso}</Alerta>}
+      {linhaCloudConfigurada && !linhaCloudAtiva && (
+        <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-sm text-amber-900">O número oficial está conectado para mensagens, mas o Calling API ainda não foi habilitado na Meta.</p>
+          <button type="button" onClick={() => void habilitarChamadas()} disabled={habilitandoChamadas} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+            {habilitandoChamadas ? 'Habilitando…' : 'Habilitar chamadas da Meta'}
+          </button>
+        </section>
+      )}
 
       <section aria-label="Indicadores das últimas 24 horas" className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
         {kpis.map((k) => (

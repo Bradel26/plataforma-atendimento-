@@ -4,7 +4,7 @@
 
 Esta integração usa a WhatsApp Business Platform (Cloud API) para enviar e receber **mensagens** pelo Atendimento. O botão de conexão usa o Embedded Signup da Meta. O modo de coexistência permite conectar uma linha elegível do WhatsApp Business App mantendo o aplicativo ativo no celular.
 
-Chamadas não fazem parte deste fluxo. O cadastro do número não ativa Calling API nem tenta habilitar voz.
+Chamadas (Calling API) não fazem parte desta validação. No fluxo de API exclusiva, o código tenta habilitá-las após conectar, sem impedir as mensagens se a Meta recusar; no modo de coexistência a Meta não oferece voz. A Calling API exige configuração e aprovação próprias, tratadas em etapa separada.
 
 ## Fluxo por usuário
 
@@ -52,7 +52,7 @@ A coexistência é destinada a uma linha ativa no WhatsApp Business App e depend
 
 ## Dependências para ativar uma conexão real
 
-O código não cria nem publica um aplicativo Meta por conta própria. Uma conexão real só fica disponível depois de configurar as variáveis acima no ambiente da API e concluir as configurações, permissões e análise do app no painel Meta. Não é necessário configurar a Calling API para o fluxo descrito aqui.
+O código não cria nem publica um aplicativo Meta por conta própria. Uma conexão real só fica disponível depois de configurar as variáveis acima no ambiente da API e concluir as configurações, permissões e análise do app no painel Meta. A Calling API não é necessária para mensagens.
 
 ## Variáveis no Coolify (serviço da API)
 

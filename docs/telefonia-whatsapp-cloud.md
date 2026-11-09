@@ -29,15 +29,11 @@ O endpoint de webhook configurado pela plataforma deve apontar para `/api/webhoo
 4. A API valida os dados retornados, registra a assinatura de eventos, habilita chamadas quando a Meta permitir e salva os tokens cifrados vinculados ao usuário.
 5. Para ligar para um contato, a plataforma consulta a permissão de chamada da Meta. Quando necessário, envia a solicitação de autorização pelo WhatsApp; a chamada só começa quando a ação estiver permitida.
 
-### Números já ativos no WhatsApp Business (coexistência)
+### Número usado no WhatsApp Business do celular
 
-Para manter o WhatsApp Business App ativo no celular e conectar a mesma linha à plataforma, use uma configuração Embedded Signup da Meta habilitada para `whatsapp_business_app_onboarding`. O frontend deve iniciar esse fluxo com `featureType: 'whatsapp_business_app_onboarding'` e receber o evento `FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING`. Configure o ID dessa configuração em `META_EMBEDDED_SIGNUP_COEX_CONFIG_ID`.
+Para atender mensagens e chamadas na plataforma com a mesma linha, conecte pelo Embedded Signup padrão em modo API exclusivo. A migração encerra o uso do WhatsApp Business nesse número no celular. Não escolha coexistência se o objetivo for chamadas no painel: ela mantém o app, mas não entrega as chamadas à Calling API.
 
-Nesse modo, a API não deve chamar `/{phone-number-id}/register`, pois a linha já permanece registrada no WhatsApp Business App. O endpoint de coexistência valida o WABA e o número concedido, assina os webhooks e salva a conexão vinculada ao usuário autenticado. Se a Meta não retornar `phone_number_id`, só é seguro inferir o número quando o WABA autorizado contém exatamente uma linha.
-
-O fluxo padrão e o fluxo de coexistência são separados de propósito. Não use o Embedded Signup padrão em linhas que precisam continuar no aplicativo, nem remova a conta do celular para contornar o erro “número já está em uso”. A Meta precisa liberar o tipo de onboarding para o app empresarial e para cada conta elegível. Linhas no WhatsApp Messenger comum não são o alvo desse fluxo.
-
-Coexistência é para mensagens. Calling API, histórico, gravação e transcrição dependem de suporte e habilitação à parte; valide cada capacidade antes de prometer que estará disponível para uma linha.
+Depois do cadastro, a API tenta habilitar Calling API para a linha. Se a Meta ainda não liberar a função, mensagens continuam conectadas e Telefonia permite repetir a habilitação. O app da Meta também precisa estar inscrito no webhook `calls`.
 
 Uma linha conectada somente por QR/Baileys não fornece áudio de chamada para o navegador. Para receber e originar chamadas WebRTC no painel, a linha precisa estar habilitada para Calling API/Cloud API pela Meta. A elegibilidade, a migração do número e a disponibilidade do recurso são decisões da Meta e precisam ser confirmadas durante a configuração real da conta.
 

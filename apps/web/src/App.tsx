@@ -11,6 +11,7 @@ import { ChamadoTiPage } from './pages/ChamadoTiPage';
 import { DashboardsPage } from './pages/DashboardsPage';
 import { GestaoPage } from './pages/GestaoPage';
 import { LoginPage } from './pages/LoginPage';
+import { PrivacidadePage, ExclusaoDeDadosPage } from './pages/PrivacidadePage';
 import { MonitoramentoPage } from './pages/MonitoramentoPage';
 import { TelefoniaPage } from './pages/TelefoniaPage';
 import { DesempenhoPage } from './pages/DesempenhoPage';
@@ -45,6 +46,8 @@ const PAGINAS: Record<string, ComponentType> = {
 function RotasPublicas() {
   return (
     <>
+      <Route path="/privacidade" element={<PrivacidadePage />} />
+      <Route path="/exclusao-de-dados" element={<ExclusaoDeDadosPage />} />
       {WEBCHAT_ATIVO && <Route path="/webchat" element={<WebchatPage />} />}
       <Route path="/avaliacao/:token" element={<AvaliacaoPage />} />
     </>
