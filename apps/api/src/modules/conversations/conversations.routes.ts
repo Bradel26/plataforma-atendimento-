@@ -29,6 +29,7 @@ import {
   enviarArquivo,
   enviarMensagem,
   finalizarConversa,
+  enviarPesquisaManual,
   iniciarConversa,
   listarAcompanhaveis,
   listarAtendimentosAnteriores,
@@ -234,6 +235,13 @@ conversationsRoutes.post(
     res.json({ conversa: await transferirConversa(quem(req), param(req, 'id'), req.body) });
   }),
 );
+conversationsRoutes.post(
+  '/:id/pesquisa',
+  asyncHandler(async (req, res) => {
+    res.json({ conversa: await enviarPesquisaManual(quem(req), param(req, 'id')) });
+  }),
+);
+
 
 conversationsRoutes.post(
   '/:id/finalizar',

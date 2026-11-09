@@ -362,6 +362,15 @@ export function PainelChat({
       const { conversa: nova } = await acao();
       onMudou(nova);
     } catch (err) {
+  const enviarPesquisa = () => {
+    if (!window.confirm(`Enviar a pesquisa de satisfação para ${conversa.contato.nome}?`)) return;
+    void executar(async () => {
+      const r = await api.post<{ conversa: ConversaDetalhe }>(`/conversas/${conversa.id}/pesquisa`);
+      mostrar('sucesso', 'Pesquisa enviada ao cliente.');
+      return r;
+    });
+  };
+
       setErro(err instanceof ApiError ? err.message : 'Falha na operação');
     } finally {
       setOcupado(false);
@@ -639,6 +648,11 @@ export function PainelChat({
                 {bloco.mensagens.map((m) => <Bolha key={m.id} mensagem={m} />)}
               </Fragment>
             ))}
+            {conversa.pesquisaManual && (
+              <div className="flex justify-center pt-3">
+                <Button disabled={ocupado} onClick={enviarPesquisa}>Enviar pesquisa de satisfação</Button>
+              </div>
+            )}
             {atendimentosAnteriores.blocos.length > 0 && (
               <li className="my-3 flex justify-center">
                 <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600">

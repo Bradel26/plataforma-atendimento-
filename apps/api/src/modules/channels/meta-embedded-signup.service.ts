@@ -163,6 +163,7 @@ export async function conectarNumeroMeta(input: {
     espelharCelular: Boolean(input.coexistencia),
     whatsappCallingHabilitado: false,
     gravarChamadasWhatsapp: !input.coexistencia,
+    pesquisaHabilitada: atual?.pesquisaHabilitada ?? false,
     transcreverChamadasWhatsapp: !input.coexistencia,
   };
 

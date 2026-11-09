@@ -119,6 +119,7 @@ const camposDoCanal = {
   filaId: z.string().uuid().nullable().optional(),
   whatsappCallingHabilitado: z.boolean().optional(),
   gravarChamadasWhatsapp: z.boolean().optional(),
+  pesquisaHabilitada: z.boolean().optional(),
   transcreverChamadasWhatsapp: z.boolean().optional(),
   /*
    * WhatsApp nos dois modos.

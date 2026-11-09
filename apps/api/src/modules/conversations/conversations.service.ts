@@ -894,6 +894,27 @@ export async function transferirConversa(solicitante: Solicitante, id: string, i
   if (conversa.status === 'FINALIZADO') throw badRequest('Conversa já finalizada');
 
   const sufixo = input.motivo ? ` Motivo: ${input.motivo}` : '';
+/**
+ * Envio MANUAL do convite de pesquisa numa conversa de WhatsApp ja encerrada.
+ * No WhatsApp a plataforma nunca envia pesquisa sozinha: mensagem automatica
+ * em massa e o que derruba linha. So vale se a linha liberou (`pesquisaHabilitada`).
+ */
+export async function enviarPesquisaManual(solicitante: Solicitante, id: string) {
+  void solicitante;
+  const conversa = await carregarOuFalhar(id);
+  if (conversa.canal !== 'WHATSAPP') throw badRequest('O envio manual de pesquisa vale só para conversas de WhatsApp');
+  if (!conversa.canalConfig?.pesquisaHabilitada) throw badRequest('Esta linha não está com a pesquisa liberada');
+  if (conversa.status !== 'FINALIZADO') throw badRequest('Finalize o atendimento antes de enviar a pesquisa');
+
+  const existente = await prisma.survey.findUnique({ where: { conversaId: id } });
+  if (existente?.entregueEm) throw badRequest('A pesquisa já foi enviada para este cliente');
+
+  await criarPesquisa(id);
+  const convite = await entregarPesquisa(id, { anotarFalha: true });
+  if (!convite.entregue) throw badRequest(`Pesquisa não enviada: ${convite.motivo ?? 'falha no canal'}`);
+  return publicar(id, { agenteAnteriorId: conversa.agenteId, filaAnteriorId: conversa.filaId });
+}
+
 
   if (input.agenteId) {
     const destino = await prisma.user.findUnique({ where: { id: input.agenteId } });
@@ -903,6 +924,11 @@ export async function transferirConversa(solicitante: Solicitante, id: string, i
     if (destino.id === conversa.agenteId) throw badRequest('A conversa já está com este agente');
 
     await prisma.conversation.update({
+  // WhatsApp: atendimento humano, sem mensagem automatica de saida (risco de
+  // banimento da linha). A pesquisa, quando liberada, e enviada pelo atendente.
+  if (conversa.canal === 'WHATSAPP') {
+    return publicar(id, { agenteAnteriorId: conversa.agenteId, filaAnteriorId: conversa.filaId });
+  }
       where: { id },
       // Transferencia direta muda a caixa de responsabilidade para a pessoa;
       // limpar a fila de origem impede que notificacoes continuem indo para a
