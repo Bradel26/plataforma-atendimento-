@@ -362,15 +362,6 @@ export function PainelChat({
       const { conversa: nova } = await acao();
       onMudou(nova);
     } catch (err) {
-  const enviarPesquisa = () => {
-    if (!window.confirm(`Enviar a pesquisa de satisfação para ${conversa.contato.nome}?`)) return;
-    void executar(async () => {
-      const r = await api.post<{ conversa: ConversaDetalhe }>(`/conversas/${conversa.id}/pesquisa`);
-      mostrar('sucesso', 'Pesquisa enviada ao cliente.');
-      return r;
-    });
-  };
-
       setErro(err instanceof ApiError ? err.message : 'Falha na operação');
     } finally {
       setOcupado(false);
@@ -384,6 +375,15 @@ export function PainelChat({
     void executar(async () => {
       const r = await api.post<{ conversa: ConversaDetalhe }>(`/conversas/${conversa.id}/finalizar`);
       mostrar('sucesso', 'Chat encerrado com sucesso.');
+      return r;
+    });
+  };
+
+  const enviarPesquisa = () => {
+    if (!window.confirm(`Enviar a pesquisa de satisfação para ${conversa.contato.nome}?`)) return;
+    void executar(async () => {
+      const r = await api.post<{ conversa: ConversaDetalhe }>(`/conversas/${conversa.id}/pesquisa`);
+      mostrar('sucesso', 'Pesquisa enviada ao cliente.');
       return r;
     });
   };
