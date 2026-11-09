@@ -2082,6 +2082,8 @@ model ChannelConfig {
   whatsappCallingHabilitado Boolean @default(false) @map("whatsapp_calling_habilitado")
   gravarChamadasWhatsapp Boolean @default(false) @map("gravar_chamadas_whatsapp")
   transcreverChamadasWhatsapp Boolean @default(false) @map("transcrever_chamadas_whatsapp")
+  /// Libera o botao manual "Enviar pesquisa" nas conversas desta linha. Nunca envia sozinha (protege a linha de banimento).
+  pesquisaHabilitada Boolean @default(false) @map("pesquisa_habilitada")
 
   atualizadoEm DateTime @updatedAt @map("atualizado_em")
 

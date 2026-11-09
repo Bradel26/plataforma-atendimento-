@@ -215,6 +215,8 @@ type ConversaBase = {
   iaAtiva: boolean | null;
   /** Modo do WhatsApp usado para aplicar a janela Meta de 24h. */
   modoWhatsApp?: 'OFICIAL' | 'NAO_OFICIAL' | null;
+  /** A linha liberou o botao manual "Enviar pesquisa" (nunca envia sozinha). */
+  pesquisaManual?: boolean;
   /** De qual numero a conversa e (2026-10-05). Nulo = Numero da empresa sem linha registrada. */
   linha: { id: string; donoId: string | null; nome: string | null } | null;
 };

@@ -110,6 +110,7 @@ export async function listarCanais() {
     espelharCelular: c.espelharCelular,
     whatsappCallingHabilitado: c.whatsappCallingHabilitado,
     gravarChamadasWhatsapp: c.gravarChamadasWhatsapp,
+    pesquisaHabilitada: c.pesquisaHabilitada,
     transcreverChamadasWhatsapp: c.transcreverChamadasWhatsapp,
     /*
      * Pronto para operar, por modo.
@@ -163,6 +164,7 @@ type SalvarCanalInput = {
   filaId?: string | null;
   whatsappCallingHabilitado?: boolean;
   gravarChamadasWhatsapp?: boolean;
+  pesquisaHabilitada?: boolean;
   transcreverChamadasWhatsapp?: boolean;
 };
 

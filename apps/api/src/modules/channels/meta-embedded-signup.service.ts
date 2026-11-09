@@ -121,6 +121,7 @@ export async function conectarNumeroMeta(input: {
     // independente e não devem ser ativadas como efeito colateral do signup.
     whatsappCallingHabilitado: atual?.whatsappCallingHabilitado ?? false,
     gravarChamadasWhatsapp: atual?.gravarChamadasWhatsapp ?? false,
+    pesquisaHabilitada: atual?.pesquisaHabilitada ?? false,
     transcreverChamadasWhatsapp: atual?.transcreverChamadasWhatsapp ?? false,
   };
 

@@ -38,6 +38,7 @@ type CanalConfig = {
   espelharCelular?: boolean;
   whatsappCallingHabilitado?: boolean;
   gravarChamadasWhatsapp?: boolean;
+  pesquisaHabilitada?: boolean;
   transcreverChamadasWhatsapp?: boolean;
 };
 
@@ -64,6 +65,7 @@ const numeroVazio = {
   iaSegredo: '',
   whatsappCallingHabilitado: false,
   gravarChamadasWhatsapp: false,
+  pesquisaHabilitada: false,
   transcreverChamadasWhatsapp: false,
 };
 
@@ -444,6 +446,7 @@ export function CanaisTab() {
       gravarChamadasWhatsapp: numero.gravarChamadasWhatsapp ?? false,
       transcreverChamadasWhatsapp: numero.transcreverChamadasWhatsapp ?? false,
       iaAtiva: ia?.ativa ?? false,
+      pesquisaHabilitada: numero.pesquisaHabilitada ?? false,
       iaUrlWebhook: ia?.webhook ?? '',
     });
   };
@@ -466,6 +469,7 @@ export function CanaisTab() {
       corpo.whatsappCallingHabilitado = numeroForm.modo === 'OFICIAL' && numeroForm.whatsappCallingHabilitado;
       corpo.gravarChamadasWhatsapp = numeroForm.modo === 'OFICIAL' && numeroForm.gravarChamadasWhatsapp;
       corpo.transcreverChamadasWhatsapp = numeroForm.modo === 'OFICIAL' && numeroForm.transcreverChamadasWhatsapp;
+      corpo.pesquisaHabilitada = numeroForm.pesquisaHabilitada;
       if (numeroForm.modo === 'NAO_OFICIAL') corpo.espelharCelular = numeroForm.espelharCelular;
       if (numeroForm.nome) corpo.nome = numeroForm.nome;
       if (numeroForm.donoId) corpo.donoId = numeroForm.donoId;
@@ -1078,6 +1082,10 @@ export function CanaisTab() {
                 )}
                 <Field
                   label="Fila de espera (opcional)"
+                <label className="flex items-start gap-2 text-xs text-slate-700">
+                  <input type="checkbox" className="mt-0.5" checked={numeroForm.pesquisaHabilitada} onChange={(e) => setNumeroForm({ ...numeroForm, pesquisaHabilitada: e.target.checked })} />
+                  <span>Permitir enviar pesquisa de satisfação nesta linha<span className="block text-slate-500">Nunca é enviada sozinha: o atendente clica em “Enviar pesquisa” depois de encerrar. Protege o número de bloqueios.</span></span>
+                </label>
                   hint="Deixe vazio: a conversa vai direto para o vendedor, sem espera"
                 >
                   <Select
