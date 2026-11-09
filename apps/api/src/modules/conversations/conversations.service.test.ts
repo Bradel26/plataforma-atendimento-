@@ -586,6 +586,15 @@ describe('listarConversas / contarPorStatus — exclusao de arquivadas (Fase 11.
     }
   });
 
+  it('contarPorVisao: so conta conversa com mensagem nao lida, para o aviso sumir ao abrir', async () => {
+    await comOrganizacao('org-1', () => contarPorVisao(), { id: 'user-1', perfil: 'ADMIN' });
+
+    expect(conversationCount).toHaveBeenCalledTimes(3);
+    for (const [args] of conversationCount.mock.calls) {
+      expect(JSON.stringify(args.where)).toContain('"naoLidas":{"gt":0}');
+    }
+  });
+
   // Contato excluido vira "Contato removido" (anonimizacao), mas a Conversation
   // nunca e apagada — existe so para a Auditoria. Sem este filtro ela reaparecia
   // na caixa de entrada e nos contadores com o nome anonimizado.
