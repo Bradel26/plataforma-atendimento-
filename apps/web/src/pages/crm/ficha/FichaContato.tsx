@@ -476,7 +476,7 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoVoltar }: FichaPro
           </Card>
 
           <div className="grid gap-4 xl:grid-cols-2">
-            <CicloDoParceiro contatoId={contatoId} segmentoParceiro={ficha?.contato.segmentoParceiro ?? null} />
+            <CicloDoParceiro contatoId={contatoId} />
             <Card titulo="Tarefas em aberto" descricao={`${atividadesAbertas.length} ${atividadesAbertas.length === 1 ? 'tarefa pendente' : 'tarefas pendentes'}`}>
               {atividadesAbertas.length > 0 ? (
                 <ul className="divide-y divide-slate-100">

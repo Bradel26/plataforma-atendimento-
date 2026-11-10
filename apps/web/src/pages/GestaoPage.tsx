@@ -8,6 +8,7 @@ import type { GestaoOperacao, OperacaoEsteira, Semaforo } from '../lib/types';
 import { BarraEmpilhada, Barras, Indicador, Painel, Selo } from './dashboard/blocos';
 import { ConsumoDeIaCard } from './gestao/ConsumoDeIa';
 import { ComercialTab } from './crm/ComercialTab';
+import { opcoesDeOperacao, rotuloDaEtapa, rotuloDaOperacao } from './esteira/indicadoresOperacao';
 
 const hoje = () => new Date().toISOString().slice(0, 10);
 const trintaDias = () => new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -100,8 +101,14 @@ export function GestaoPage() {
     void carregar();
   }, [carregar]);
 
+  // So as operacoes permitidas (a API ja filtra); "TIM + Starlink" e o consolidado.
+  const opcoes = opcoesDeOperacao(operacoes);
+  const rotuloSelecionado = opcoes.find((o) => o.valor === funilId)?.rotulo ?? opcoes[0]?.rotulo ?? '';
+  // Consolidado com as duas: a etapa leva a operacao na frente (nomes se repetem).
+  const consolidado = !funilId && opcoes.length > 1;
+
   const tempoEtapa = (dados?.tempoMedioPorEtapa ?? []).map((e) => ({
-    rotulo: `${e.etapa} (${e.passagens})`,
+    rotulo: `${rotuloDaEtapa(e.etapa, e.operacao, consolidado)} (${e.passagens})`,
     valor: e.mediaDias ?? 0,
   }));
   const lenta = [...(dados?.tempoMedioPorEtapa ?? [])].sort((a, b) => (b.mediaDias ?? 0) - (a.mediaDias ?? 0))[0];
@@ -135,9 +142,8 @@ export function GestaoPage() {
             <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
               Operação
               <Select value={funilId} onChange={(e) => setFunilId(e.target.value)} className="w-48">
-                <option value="">Todas</option>
-                {operacoes.map((o) => (
-                  <option key={o.id} value={o.id}>{o.nome}</option>
+                {opcoes.map((o) => (
+                  <option key={o.valor} value={o.valor}>{o.rotulo}</option>
                 ))}
               </Select>
             </label>
@@ -171,7 +177,8 @@ export function GestaoPage() {
 
           {erro && <Alerta>{erro}</Alerta>}
 
-          <section aria-label="Indicadores" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <p className="-mb-2 text-xs font-semibold text-slate-500">Indicadores · {rotuloSelecionado}</p>
+          <section aria-label={`Indicadores · ${rotuloSelecionado}`} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <Indicador
               rotulo="Tempo de credenciamento"
               valor={dias(dados?.tempoMedioCredenciamentoDias ?? null)}
@@ -188,14 +195,14 @@ export function GestaoPage() {
               valor={dados?.maiorTempoParado ? dias(dados.maiorTempoParado.dias) : '—'}
               detalhe={
                 dados?.maiorTempoParado
-                  ? `${dados.maiorTempoParado.parceiro} · ${dados.maiorTempoParado.etapa}`
+                  ? `${dados.maiorTempoParado.parceiro} · ${rotuloDaEtapa(dados.maiorTempoParado.etapa, dados.maiorTempoParado.operacao, consolidado)}`
                   : 'ninguém parado'
               }
             />
             <Indicador
               rotulo="Etapa mais lenta"
               valor={lenta ? dias(lenta.mediaDias) : '—'}
-              detalhe={lenta?.etapa ?? 'sem passagens no período'}
+              detalhe={lenta ? rotuloDaEtapa(lenta.etapa, lenta.operacao, consolidado) : 'sem passagens no período'}
             />
             <Indicador
               rotulo="Sem interação"
@@ -213,7 +220,7 @@ export function GestaoPage() {
                 <div className="flex flex-col gap-4">
                   {dados!.volumePorEtapa.map((v) => (
                     <div key={v.funil.id}>
-                      <p className="mb-2 text-[12.5px] font-bold text-slate-600">{v.funil.nome}</p>
+                      <p className="mb-2 text-[12.5px] font-bold text-slate-600">{rotuloDaOperacao(v.operacao, v.funil.nome)}</p>
                       <ol className="grid gap-1.5 [grid-template-columns:repeat(auto-fill,minmax(118px,1fr))]">
                         {v.etapas.map((e, i) => (
                           <li
@@ -281,7 +288,7 @@ export function GestaoPage() {
                             <Link to={`/contatos/${p.contato.id}`} className="font-bold text-blue-700 hover:underline">
                               {p.parceiro}
                             </Link>
-                            <span className="block text-xs text-slate-500">{p.operacao.nome}</span>
+                            <span className="block text-xs text-slate-500">{rotuloDaOperacao(p.operacao.codigo, p.operacao.nome)}</span>
                           </td>
                           <td className="px-4 py-2.5">{p.responsavel?.nome ?? '—'}</td>
                           <td className="px-4 py-2.5">{p.etapa}</td>

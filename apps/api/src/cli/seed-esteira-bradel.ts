@@ -1,47 +1,24 @@
 /**
- * Cria as esteiras (funis tipo ESTEIRA) da Bradel — uma por operacao, TIM e
- * Starlink —, com os 5 estagios do processo de credenciamento.
+ * Cria a estrutura das esteiras (funis tipo ESTEIRA) da Bradel — uma por
+ * operacao, TIM e Starlink —, com as etapas e chaves do catalogo
+ * (`modules/esteira/catalogo.ts`). So estrutura: nunca cria parceiros.
  *
- * Idempotente: funil que ja existe (mesmo nome) e pulado — seguro de rodar
- * mais de uma vez. Um funil antigo com outro nome continua como esta.
+ * Idempotente: usa a mesma sincronizacao da CLI `esteira:estrutura` — funil e
+ * etapas existentes sao reaproveitados, renomeacao do ADMIN e preservada e
+ * nada e apagado. Para migrar cards de uma base antiga, use `esteira:estrutura`.
  *
  * Uso:
  *   npm run esteira:seed -- <organizacaoId>
  */
 import { prisma } from '../lib/prisma';
-import { comOrganizacao } from '../lib/tenant';
+import { sincronizarEstrutura } from '../modules/esteira/estrutura.service';
 
-const NOMES_FUNIL = [
-  {
-    nome: 'Credenciamento TIM',
-    estagios: ['Em negociação', 'Credenciamento em andamento', 'Documentação', 'Credenciamento OK', 'Apto para venda'],
-  },
-  {
-    nome: 'Credenciamento Starlink',
-    estagios: ['Preencher o VSM', 'Contrato assinado', 'Treinamento realizado', 'Pronto para venda'],
-  },
-];
-
-async function main(_organizacaoId: string) {
+async function main(organizacaoId: string) {
   try {
-    for (const { nome, estagios } of NOMES_FUNIL) {
-      const existente = await prisma.funnel.findFirst({ where: { nome } });
-      if (existente) {
-        console.log(`Funil "${nome}" ja existe (id ${existente.id}) — pulado.`);
-        continue;
-      }
-      const criado = await prisma.funnel.create({
-        data: {
-          nome,
-          tipo: 'ESTEIRA',
-          estagios: {
-            createMany: { data: estagios.map((e, indice) => ({ nome: e, ordem: indice + 1 })) },
-          },
-        },
-        include: { estagios: { orderBy: { ordem: 'asc' } } },
-      });
-      console.log(`Funil "${criado.nome}" criado (id ${criado.id}) com ${criado.estagios.length} estágios.`);
-    }
+    const r = await sincronizarEstrutura(organizacaoId);
+    console.log(
+      `Esteiras: ${r.funisCriados} funil(is) criado(s), ${r.etapasCriadas} etapa(s) criada(s), ${r.etapasAtualizadas} atualizada(s).`,
+    );
   } finally {
     await prisma.$disconnect();
   }
@@ -53,4 +30,7 @@ if (!organizacaoId) {
   process.exit(1);
 }
 
-void comOrganizacao(organizacaoId, () => main(organizacaoId));
+void main(organizacaoId).catch((erro) => {
+  console.error(erro);
+  process.exitCode = 1;
+});

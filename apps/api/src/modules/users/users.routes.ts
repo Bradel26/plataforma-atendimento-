@@ -7,6 +7,7 @@ import { badRequest } from '../../lib/errors';
 import {
   createUserSchema,
   listUsersSchema,
+  operacoesUsuarioSchema,
   updateStatusSchema,
   updateUserSchema,
 } from './users.schemas';
@@ -14,9 +15,11 @@ import {
   createUser,
   deleteUserPermanently,
   deactivateUser,
+  getOperacoesUsuario,
   getUser,
   listUsers,
   registrarHeartbeat,
+  setOperacoesUsuario,
   updateStatus,
   updateUser,
 } from './users.service';
@@ -70,6 +73,23 @@ usersRoutes.get(
   requireRole('ADMIN', 'SUPERVISOR'),
   asyncHandler(async (req, res) => {
     res.json({ usuario: await getUser(param(req, 'id')) });
+  }),
+);
+
+usersRoutes.get(
+  '/:id/operacoes',
+  requireRole('ADMIN'),
+  asyncHandler(async (req, res) => {
+    res.json({ operacoes: await getOperacoesUsuario(param(req, 'id')) });
+  }),
+);
+
+usersRoutes.put(
+  '/:id/operacoes',
+  requireRole('ADMIN'),
+  validateBody(operacoesUsuarioSchema),
+  asyncHandler(async (req, res) => {
+    res.json({ operacoes: await setOperacoesUsuario(param(req, 'id'), req.body) });
   }),
 );
 

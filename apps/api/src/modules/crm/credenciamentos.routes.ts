@@ -2,29 +2,18 @@ import { Router } from 'express';
 import { asyncHandler } from '../../http/async-handler';
 import { requireAuth, requireRole } from '../../http/middleware/auth';
 import { requireModulo } from '../../lib/modulos';
-import { validateBody, validateQuery } from '../../http/middleware/validate';
-import { param } from '../../http/params';
-import {
-  atualizarCredenciamentoSchema,
-  criarCredenciamentoSchema,
-  desempenhoSchema,
-  filtrosEsteiraSchema,
-  gestaoSchema,
-  listarCredenciamentosSchema,
-  painelSchema,
-} from './credenciamentos.schemas';
-import {
-  atualizarCredenciamento,
-  criarCredenciamento,
-  esteiraKanban,
-  funisDaEsteira,
-  importarContatosClassificados,
-  listarCredenciamentos,
-  obterCredenciamento,
-} from './credenciamentos.service';
+import { validateQuery } from '../../http/middleware/validate';
+import { desempenhoSchema, gestaoSchema, painelSchema } from './credenciamentos.schemas';
+import { exigirFunilPermitido, funisPermitidos } from './credenciamentos.service';
 import { acompanhamentos, desempenhoOperacional, gestaoOperacao, painelOperacoes } from './credenciamentos.indicadores';
 import { z } from 'zod';
 
+/**
+ * Indicadores da operacao de credenciamento (Dashboard, Gestao, Desempenho,
+ * Acompanhamentos) e a lista de operacoes. O cadastro, o Kanban, a Lista e os
+ * movimentos dos vinculos moram em `/api/esteiras/:operacao` (modules/esteira);
+ * as rotas antigas de CRUD daqui sairam com a Task 21.
+ */
 export const credenciamentosRoutes = Router();
 
 credenciamentosRoutes.use(requireAuth);
@@ -38,20 +27,30 @@ function periodoDe(q: { desde?: Date; ate?: Date }) {
   return { desde, ate };
 }
 
-/** Operacoes (funis ESTEIRA) com seus estagios — alimenta seletores e o menu. */
+/**
+ * Operacoes (funis ESTEIRA) com seus estagios — alimenta seletores e o menu.
+ * So as operacoes que o usuario enxerga (spec 4.9), com o codigo da operacao e
+ * a chave de cada etapa.
+ */
 credenciamentosRoutes.get(
   '/funis',
   asyncHandler(async (_req, res) => {
-    const funis = await funisDaEsteira();
+    const funis = await funisPermitidos();
     res.json({
       funis: funis.map((f) => ({
         id: f.id,
         nome: f.nome,
-        estagios: f.estagios.map((e) => ({ id: e.id, nome: e.nome, ordem: e.ordem })),
+        operacao: f.operacao,
+        estagios: f.estagios.map((e) => ({ id: e.id, nome: e.nome, ordem: e.ordem, chave: e.chave, tipo: e.tipoEtapa })),
       })),
     });
   }),
 );
+
+/**
+ * Painel, Gestao, Desempenho e Acompanhamentos filtram pelas operacoes
+ * permitidas dentro dos proprios indicadores (`whereCredenciamentos`).
+ */
 
 /** Dashboard: uma coluna por operacao. */
 credenciamentosRoutes.get(
@@ -70,6 +69,7 @@ credenciamentosRoutes.get(
   validateQuery(gestaoSchema),
   asyncHandler(async (_req, res) => {
     const q = res.locals.query;
+    await exigirFunilPermitido(q.funilId);
     res.json({
       gestao: await gestaoOperacao(periodoDe(q), {
         limiteDias: q.limiteDias,
@@ -87,6 +87,7 @@ credenciamentosRoutes.get(
   validateQuery(desempenhoSchema),
   asyncHandler(async (_req, res) => {
     const q = res.locals.query;
+    await exigirFunilPermitido(q.funilId);
     res.json({
       desempenho: await desempenhoOperacional(periodoDe(q), {
         consultorId: q.consultorId,
@@ -104,52 +105,5 @@ credenciamentosRoutes.get(
   validateQuery(z.object({ dias: z.coerce.number().int().min(1).max(180).default(7) })),
   asyncHandler(async (_req, res) => {
     res.json({ acompanhamentos: await acompanhamentos(res.locals.query.dias) });
-  }),
-);
-
-credenciamentosRoutes.get(
-  '/',
-  validateQuery(listarCredenciamentosSchema),
-  asyncHandler(async (_req, res) => {
-    res.json({ credenciamentos: await listarCredenciamentos(res.locals.query) });
-  }),
-);
-
-credenciamentosRoutes.get(
-  '/kanban',
-  validateQuery(filtrosEsteiraSchema),
-  asyncHandler(async (_req, res) => {
-    res.json(await esteiraKanban(res.locals.query));
-  }),
-);
-
-credenciamentosRoutes.get(
-  '/:id',
-  asyncHandler(async (req, res) => {
-    res.json({ credenciamento: await obterCredenciamento(param(req, 'id')) });
-  }),
-);
-
-credenciamentosRoutes.post(
-  '/importar-contatos-classificados',
-  validateBody(z.object({ previa: z.boolean() })),
-  asyncHandler(async (req, res) => {
-    res.json(await importarContatosClassificados(req.body.previa));
-  }),
-);
-
-credenciamentosRoutes.post(
-  '/',
-  validateBody(criarCredenciamentoSchema),
-  asyncHandler(async (req, res) => {
-    res.status(201).json({ credenciamento: await criarCredenciamento(req.body) });
-  }),
-);
-
-credenciamentosRoutes.patch(
-  '/:id',
-  validateBody(atualizarCredenciamentoSchema),
-  asyncHandler(async (req, res) => {
-    res.json({ credenciamento: await atualizarCredenciamento(param(req, 'id'), req.body) });
   }),
 );

@@ -5,6 +5,7 @@ import { BotsTab } from './BotsTab';
 import { FluxosTab } from './FluxosTab';
 import { CamposCustomizadosTab } from './CamposCustomizadosTab';
 import { CanaisTab } from './CanaisTab';
+import { EsteirasTab } from './EsteirasTab';
 import { FilaTab } from './FilaTab';
 import { FilasTab } from './FilasTab';
 import { FiliaisTab } from './FiliaisTab';
@@ -19,6 +20,7 @@ const ABAS = [
   { id: 'usuarios', label: 'Usuários e permissões', grupo: 'Equipe e acesso', descricao: 'Quem entra na plataforma, com qual perfil e em quais módulos' },
   { id: 'filiais', label: 'Filiais', grupo: 'Equipe e acesso', descricao: 'Unidades da empresa e o que pertence a cada uma' },
   { id: 'filas', label: 'Filas', grupo: 'Equipe e acesso', descricao: 'Equipes de atendimento e quem recebe as conversas de cada uma' },
+  { id: 'esteiras', label: 'Esteiras', grupo: 'Equipe e acesso', descricao: 'Nome das etapas e prazo para considerar um vínculo parado, em TIM e Starlink' },
   { id: 'canais', label: 'Canais', grupo: 'Canais e atendimento', descricao: 'Números de WhatsApp, redes sociais e o widget do site' },
   { id: 'mensagens-rapidas', label: 'Mensagens rápidas', grupo: 'Canais e atendimento', descricao: 'Respostas prontas para usar durante o atendimento' },
   { id: 'bots', label: 'Chatbot', grupo: 'Canais e atendimento', descricao: 'Perguntas automáticas antes de a conversa chegar a uma pessoa' },
@@ -91,6 +93,7 @@ export function ConfiguracoesPage() {
         <CabecalhoPagina acima={atual.grupo} titulo={atual.label} descricao={atual.descricao} />
 
         {aba === 'usuarios' && <UsuariosTab />}
+        {aba === 'esteiras' && <EsteirasTab />}
         {aba === 'filiais' && <FiliaisTab />}
         {aba === 'campos-customizados' && <CamposCustomizadosTab />}
         {aba === 'filas' && <FilasTab />}

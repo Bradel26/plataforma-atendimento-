@@ -3,6 +3,8 @@ import type { Channel, PapelNaConta } from '@prisma/client';
 // modulo que o deriva. Importar de la e o que garante que o filtro da campanha e
 // a tela de contatos falem da mesma escada.
 import type { CicloDeVida } from '../crm/cicloDeVida';
+import { papelDoEstagio } from '../crm/esteira';
+import { chaveConhecida, papelDaChave } from '../esteira/catalogo';
 
 /**
  * Publico de campanha pelos filtros do CRM (item E.3).
@@ -53,6 +55,33 @@ export type FiltroDePublico = {
  */
 export const SITUACOES_PARCEIRO = ['TODOS', 'ATIVOS', 'EM_CREDENCIAMENTO', 'PENDENTES'] as const;
 export type SituacaoParceiro = (typeof SITUACOES_PARCEIRO)[number];
+
+/**
+ * Etapas que casam com as situações pedidas, separadas pela presença da chave.
+ *
+ * Com chave, o papel vem do catálogo (spec 4.7) e saídas ficam fora de tudo; o
+ * chamador não filtra `situacaoExcecao` nelas (é legado). Sem chave (funil
+ * antigo), o nome decide e o chamador exige `situacaoExcecao` nula, como antes.
+ * TODOS não restringe etapa.
+ */
+export function estagiosDaSituacao(
+  estagios: Array<{ id: string; nome: string; chave: string | null }>,
+  situacoes: SituacaoParceiro[],
+): { comChave: string[]; semChave: string[] } {
+  const casa = (s: SituacaoParceiro, e: { nome: string; chave: string | null }) => {
+    const papel = papelDoEstagio(e.nome, e.chave);
+    if (chaveConhecida(e.chave) && papelDaChave(e.chave) === null) return false;
+    if (s === 'ATIVOS') return papel === 'ATIVO';
+    if (s === 'PENDENTES') return papel === 'PENDENCIA';
+    if (s === 'EM_CREDENCIAMENTO') return papel !== 'ATIVO';
+    return false;
+  };
+  const alvo = estagios.filter((e) => situacoes.some((s) => casa(s, e)));
+  return {
+    comChave: alvo.filter((e) => chaveConhecida(e.chave)).map((e) => e.id),
+    semChave: alvo.filter((e) => !chaveConhecida(e.chave)).map((e) => e.id),
+  };
+}
 
 export type ContatoDoPublico = {
   id: string;
@@ -180,7 +209,7 @@ export function descreverFiltro(f: FiltroDePublico): string {
   if (f.tags?.length) partes.push(`etiquetas: ${f.tags.join(', ')}`);
   if (f.situacao?.length) partes.push(`parceiros: ${f.situacao.join(', ')}`);
   if (f.uf?.length) partes.push(`UF: ${f.uf.join(', ')}`);
-  if (f.funilIds?.length) partes.push(`operacoes: ${f.funilIds.length}`);
+  if (f.funilIds?.length) partes.push(`operações: ${f.funilIds.length}`);
   if (f.estagioIds?.length) partes.push(`etapas: ${f.estagioIds.length}`);
   if (f.responsavelId !== undefined) {
     partes.push(f.responsavelId === null ? 'sem responsável' : `responsável: ${f.responsavelId}`);

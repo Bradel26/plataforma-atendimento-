@@ -15,7 +15,8 @@
  * `FatosDoCiclo` e regras novas em `decidirAutomatico`, sem mexer no resto.
  */
 
-import { DIA_MS } from './esteira';
+import { chaveConhecida } from '../esteira/catalogo';
+import { DIA_MS, papelDoEstagio } from './esteira';
 
 export const STATUS_CICLO = [
   'NOVO_PARCEIRO',
@@ -39,6 +40,40 @@ export const ETAPAS_IMPLANTACAO = [
 ] as const;
 
 export const CHAVES_ETAPAS = ETAPAS_IMPLANTACAO.map((e) => e.chave) as [string, ...string[]];
+
+type ChaveImplantacao = (typeof ETAPAS_IMPLANTACAO)[number]['chave'];
+
+/**
+ * Etapa da esteira em que o ciclo comeca. Com chave: TIM ao entrar em
+ * Acompanhamento (6 -> 7; Venda liberada ainda nao) e Starlink em Pronto p/
+ * venda (spec 5.1/5.2). Sem chave (funil antigo), o nome decide, como antes.
+ */
+export function estagioIniciaCiclo(estagio: { nome: string; chave: string | null }): boolean {
+  if (chaveConhecida(estagio.chave)) return estagio.chave === 'TIM_ACOMPANHAMENTO' || estagio.chave === 'SL_PRONTO_VENDA';
+  return papelDoEstagio(estagio.nome, estagio.chave) === 'ATIVO';
+}
+
+/**
+ * Decide se o card ganha ciclo. Com chave, so a etapa decide: `situacaoExcecao`
+ * e legado (a migracao o deixa preenchido em quem foi para a saida), e um
+ * desistente reativado ou um Nurture reengajado que chega la precisa do ciclo.
+ * Sem chave (funil antigo), card em excecao continua fora, como antes.
+ */
+export function deveIniciarCiclo(c: { situacaoExcecao: string | null; estagio: { nome: string; chave: string | null } }): boolean {
+  if (chaveConhecida(c.estagio.chave)) return estagioIniciaCiclo(c.estagio);
+  return c.situacaoExcecao === null && estagioIniciaCiclo(c.estagio);
+}
+
+/**
+ * Etapas de implantacao que a esteira ja comprova quando o ciclo nasce (spec 7):
+ * TIM exige treinamento e sistemas liberados para chegar la; a Starlink, treinamento.
+ * O operador nao precisa marca-las de novo.
+ */
+export function etapasComprovadasPelaEsteira(chave: string | null): ChaveImplantacao[] {
+  if (chave?.startsWith('TIM_') && chaveConhecida(chave)) return ['TREINAMENTO', 'LIBERACAO_ACESSO'];
+  if (chave?.startsWith('SL_') && chaveConhecida(chave)) return ['TREINAMENTO'];
+  return [];
+}
 
 /** Mais que isto sem interacao registrada e o parceiro vira SEM_ACOMPANHAMENTO. */
 export const DIAS_SEM_ACOMPANHAMENTO = 30;

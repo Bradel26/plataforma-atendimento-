@@ -37,6 +37,13 @@ export const listUsersSchema = z.object({
 
 export const updateStatusSchema = z.object({ status });
 
+const nivelOperacao = z.enum(['LEITURA', 'SEM_ACESSO', 'EDICAO']).nullable().optional();
+
+/** EDICAO ou null apagam a linha (volta ao padrão); LEITURA/SEM_ACESSO gravam exceção. */
+export const operacoesUsuarioSchema = z.object({ TIM: nivelOperacao, STARLINK: nivelOperacao });
+
+export type OperacoesUsuarioInput = z.infer<typeof operacoesUsuarioSchema>;
+
 export type CreateUserInput = z.infer<typeof createUserSchema>;
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
 export type ListUsersQuery = z.infer<typeof listUsersSchema>;

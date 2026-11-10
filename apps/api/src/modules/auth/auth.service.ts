@@ -6,6 +6,7 @@ import { registrarPresenca } from '../metrics/metrics.service';
 import { toPublicUser } from '../users/users.serializer';
 import { modulosPermitidos } from '../../lib/modulos';
 import { comOrganizacao } from '../../lib/tenant';
+import { acessoDoUsuario } from '../esteira/acesso';
 import type { AlterarSenhaInicialInput, LoginInput } from './auth.schemas';
 import { garantirNaoBloqueado, limparFalhas, registrarFalha } from './tentativas';
 
@@ -109,7 +110,13 @@ async function buildSession(user: Awaited<ReturnType<typeof prisma.user.findUniq
   });
   const refreshToken = await issueRefreshToken(user.id, user.organizacaoId);
   const modulosPermitidosSessao = await comOrganizacao(user.organizacaoId, () => modulosPermitidos(user.perfil));
-  return { accessToken, refreshToken, usuario: { ...toPublicUser(user), modulosPermitidos: [...modulosPermitidosSessao] } };
+  // Mesmo campo de `/auth/me`: o front decide menu e rotas da Esteira por ele.
+  const operacoes = await comOrganizacao(user.organizacaoId, () => acessoDoUsuario(user.id, user.perfil));
+  return {
+    accessToken,
+    refreshToken,
+    usuario: { ...toPublicUser(user), modulosPermitidos: [...modulosPermitidosSessao], operacoes },
+  };
 }
 
 export async function marcarOffline(userId: string) {

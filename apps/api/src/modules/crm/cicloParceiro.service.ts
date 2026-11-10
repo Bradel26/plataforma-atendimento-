@@ -3,8 +3,8 @@ import { prisma } from '../../lib/prisma';
 import { filtroDe, politicaCredenciamentos } from '../../lib/politicas';
 import { usuarioAtualOuNulo } from '../../lib/tenant';
 import { apenasVisivel } from '../../lib/visibilidade';
-import { badRequest, notFound } from '../../lib/errors';
-import { papelDoEstagio } from './esteira';
+import { badRequest, forbidden, notFound } from '../../lib/errors';
+import { acessoDoUsuarioAtual, filtroOperacoesPermitidas, resolverAcesso } from '../esteira/acesso';
 import {
   CHAVES_ETAPAS,
   ETAPAS_IMPLANTACAO,
@@ -12,6 +12,8 @@ import {
   STATUS_CICLO,
   decidirAutomatico,
   diasEntre,
+  deveIniciarCiclo,
+  etapasComprovadasPelaEsteira,
   validarMudancaManual,
   type StatusCiclo,
 } from './cicloParceiro';
@@ -30,8 +32,8 @@ const inclusaoLista = {
     select: {
       id: true,
       contatoId: true,
-      situacaoExcecao: true,
-      funil: { select: { id: true, nome: true } },
+      operacao: true,
+      funil: { select: { id: true, nome: true, operacao: true } },
       responsavel: { select: { id: true, nome: true } },
       contato: { select: { id: true, nome: true, telefone: true, uf: true, cidade: true } },
     },
@@ -87,25 +89,30 @@ export async function ultimasInteracoes(contatoIds: string[]): Promise<Map<strin
 }
 
 /**
- * Cria o ciclo de quem chegou ao estagio Ativo da esteira e ainda nao tem um.
+ * Cria o ciclo de quem chegou a etapa que inicia o ciclo e ainda nao tem um.
  *
- * O estagio e reconhecido pelo NOME (`papelDoEstagio`), como no resto da esteira.
+ * A etapa e reconhecida pela CHAVE (`estagioIniciaCiclo`: TIM em Acompanhamento,
+ * Starlink em Pronto p/ venda); o nome so vale para funil sem chave. As etapas
+ * de implantacao que a esteira ja comprova nascem concluidas.
  * A data do credenciamento e a entrada no estagio atual — para quem ja estava la
  * antes desta funcionalidade existir, e a melhor data que o historico tem.
  */
 export async function iniciarCiclos(credenciamentoId?: string) {
   const candidatos = await prisma.credenciamento.findMany({
     where: {
-      situacaoExcecao: null,
       cicloParceiro: { is: null },
+      // Vinculo arquivado (duplicata ou saida definitiva) nao ganha ciclo.
+      arquivadoEm: null,
       ...(credenciamentoId ? { id: credenciamentoId } : {}),
     },
-    select: { id: true, estagioDesde: true, estagio: { select: { nome: true } } },
+    select: { id: true, estagioDesde: true, situacaoExcecao: true, estagio: { select: { nome: true, chave: true } } },
   });
 
   let criados = 0;
   for (const c of candidatos) {
-    if (papelDoEstagio(c.estagio.nome) !== 'ATIVO') continue;
+    // `situacaoExcecao` (legado) so vale no fallback por nome; com chave, a etapa decide.
+    if (!deveIniciarCiclo(c)) continue;
+    const comprovadas = etapasComprovadasPelaEsteira(c.estagio.chave);
     try {
       await prisma.cicloParceiro.create({
         data: {
@@ -113,6 +120,9 @@ export async function iniciarCiclos(credenciamentoId?: string) {
           credenciadoEm: c.estagioDesde,
           statusDesde: c.estagioDesde,
           status: 'NOVO_PARCEIRO',
+          ...(comprovadas.length
+            ? { etapas: { create: comprovadas.map((chave) => ({ chave, concluidaEm: c.estagioDesde })) } }
+            : {}),
           historico: {
             create: {
               paraStatus: 'NOVO_PARCEIRO',
@@ -205,8 +215,8 @@ function serializar(c: CicloDb, interacoes: Map<string, Date>, agora = new Date(
     implantacaoAtrasada: c.status === 'NOVO_PARCEIRO' && diasComoParceiro > 30,
     contato: c.credenciamento.contato,
     funil: c.credenciamento.funil,
+    operacao: c.credenciamento.operacao,
     responsavel: c.credenciamento.responsavel,
-    situacaoExcecao: c.credenciamento.situacaoExcecao,
   };
 }
 
@@ -214,13 +224,16 @@ export type CicloSerializado = ReturnType<typeof serializar>;
 
 export async function listarCiclos(query: { status?: StatusCiclo; busca?: string; responsavelId?: string }) {
   await iniciarCiclos();
-  const visivel = await filtroDe(politicaCredenciamentos);
   const ciclos = await prisma.cicloParceiro.findMany({
     where: {
       credenciamento: {
-        ...visivel,
-        ...(query.responsavelId ? { responsavelId: query.responsavelId } : {}),
-        ...(query.busca ? { contato: { nome: { contains: query.busca, mode: 'insensitive' } } } : {}),
+        AND: [
+          await filtroDe(politicaCredenciamentos),
+          await filtroOperacoesPermitidas(),
+          { arquivadoEm: null },
+          ...(query.responsavelId ? [{ responsavelId: query.responsavelId }] : []),
+          ...(query.busca ? [{ contato: { nome: { contains: query.busca, mode: 'insensitive' as const } } }] : []),
+        ],
       },
     },
     include: inclusaoLista,
@@ -250,12 +263,25 @@ export async function listarCiclos(query: { status?: StatusCiclo; busca?: string
   };
 }
 
-async function carregarCredenciamentoVisivel(credenciamentoId: string) {
+/**
+ * Vinculo visivel: carteira, operacao permitida e nao arquivado (spec 4.9 —
+ * operacao sem acesso e 404). Para alterar o ciclo, EDICAO na operacao.
+ */
+async function carregarCredenciamentoVisivel(credenciamentoId: string, exigido: 'LEITURA' | 'EDICAO' = 'LEITURA') {
   const c = await prisma.credenciamento.findFirst({
-    where: apenasVisivel(credenciamentoId, await filtroDe(politicaCredenciamentos)),
-    select: { id: true },
+    where: {
+      AND: [
+        apenasVisivel(credenciamentoId, await filtroDe(politicaCredenciamentos)),
+        await filtroOperacoesPermitidas(),
+        { arquivadoEm: null },
+      ],
+    },
+    select: { id: true, operacao: true },
   });
   if (!c) throw notFound('Credenciamento não encontrado');
+  if (resolverAcesso(await acessoDoUsuarioAtual(), c.operacao, exigido) === 'PROIBIDO') {
+    throw forbidden('Você tem acesso somente leitura a esta operação');
+  }
 }
 
 export async function obterCiclo(credenciamentoId: string) {
@@ -306,7 +332,7 @@ export async function obterCiclo(credenciamentoId: string) {
 
 export async function marcarEtapa(credenciamentoId: string, chave: string, concluida: boolean) {
   if (!CHAVES_ETAPAS.includes(chave)) throw badRequest('Etapa de implantação desconhecida');
-  await carregarCredenciamentoVisivel(credenciamentoId);
+  await carregarCredenciamentoVisivel(credenciamentoId, 'EDICAO');
   await iniciarCiclos(credenciamentoId);
   const ciclo = await prisma.cicloParceiro.findFirst({ where: { credenciamentoId }, select: { id: true } });
   if (!ciclo) throw badRequest('O parceiro ainda não chegou ao estágio Ativo da esteira');
@@ -327,7 +353,7 @@ export async function mudarStatusManual(
   credenciamentoId: string,
   input: { status: StatusCiclo; motivo?: string; observacao?: string },
 ) {
-  await carregarCredenciamentoVisivel(credenciamentoId);
+  await carregarCredenciamentoVisivel(credenciamentoId, 'EDICAO');
   await iniciarCiclos(credenciamentoId);
   const ciclo = await prisma.cicloParceiro.findFirst({ where: { credenciamentoId } });
   if (!ciclo) throw badRequest('O parceiro ainda não chegou ao estágio Ativo da esteira');
@@ -360,7 +386,7 @@ export async function mudarStatusManual(
 /** Uma nova interacao com o contato pode tirar o parceiro de SEM_ACOMPANHAMENTO. */
 export async function recalcularCiclosDoContato(contatoId: string) {
   const ciclos = await prisma.cicloParceiro.findMany({
-    where: { credenciamento: { contatoId } },
+    where: { credenciamento: { contatoId, arquivadoEm: null } },
     include: inclusaoLista,
   });
   if (ciclos.length > 0) await atualizarCiclos(ciclos);
@@ -369,7 +395,10 @@ export async function recalcularCiclosDoContato(contatoId: string) {
 /** Passada completa da organizacao: cria os ciclos que faltam e recalcula todos. */
 export async function recalcularTodos() {
   const criados = await iniciarCiclos();
-  const ciclos = await prisma.cicloParceiro.findMany({ include: inclusaoLista });
+  const ciclos = await prisma.cicloParceiro.findMany({
+    where: { credenciamento: { arquivadoEm: null } },
+    include: inclusaoLista,
+  });
   await atualizarCiclos(ciclos);
   return { criados, recalculados: ciclos.length };
 }

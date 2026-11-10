@@ -14,6 +14,7 @@ import {
 } from '../../lib/tokens';
 import { toPublicUser } from '../users/users.serializer';
 import { modulosPermitidos } from '../../lib/modulos';
+import { acessoDoUsuario } from '../esteira/acesso';
 import { alterarSenhaInicialSchema, loginSchema } from './auth.schemas';
 import { alterarSenhaInicial, login, marcarOffline, sessionForUserId } from './auth.service';
 
@@ -99,7 +100,8 @@ authRoutes.get(
     const user = await prisma.user.findUnique({ where: { id: req.user!.sub } });
     if (!user) throw notFound('Usuário não encontrado');
     const modulosPermitidosSessao = await comOrganizacao(user.organizacaoId, () => modulosPermitidos(user.perfil));
-    res.json({ usuario: { ...toPublicUser(user), modulosPermitidos: [...modulosPermitidosSessao] } });
+    const operacoes = await comOrganizacao(user.organizacaoId, () => acessoDoUsuario(user.id, user.perfil));
+    res.json({ usuario: { ...toPublicUser(user), modulosPermitidos: [...modulosPermitidosSessao], operacoes } });
   }),
 );
 

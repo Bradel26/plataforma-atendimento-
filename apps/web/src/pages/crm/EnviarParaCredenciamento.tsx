@@ -1,100 +1,95 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Alerta, Button, Field, Select } from '../../components/ui';
 import { useToast } from '../../components/ui/Toast';
 import { ApiError, api } from '../../lib/api';
-import type { OperacaoEsteira } from '../../lib/types';
+import type { CriarVinculoInput, Operacao, RespostaVinculo } from '../../lib/esteiraTypes';
+import { ROTULO_OPERACAO } from '../esteira/cadastroEsteira';
+import { parametroDaOperacao } from '../esteira/estadoEsteira';
 
 type Props = {
-  /** Quem pode entrar na esteira. Com um so, o seletor de contato some. */
-  contatos: Array<{ id: string; nome: string; segmentoParceiro?: 'TIM' | 'STARLINK' | null }>;
+  /** Quem pode entrar na esteira. Com um só, o seletor de contato some. */
+  contatos: Array<{ id: string; nome: string }>;
   contaId?: string | null;
-  operacoes: OperacaoEsteira[];
+  /** Nome da empresa: sem contato nenhum, o vínculo nasce da conta (a API cria o contato com este nome). */
+  nomeEmpresa?: string;
+  /** Operações em que pode entrar agora (EDICAO e ainda sem vínculo). */
+  operacoes: Operacao[];
   aoEnviar: () => void;
 };
 
 /**
- * "Enviar para credenciamento": coloca um contato do CRM na primeira etapa de
- * uma operacao da esteira (TIM, Starlink...) sem digitar nada de novo — o card
- * nasce ligado ao mesmo contato e a mesma empresa.
+ * "Adicionar à TIM/Starlink": cria o vínculo do parceiro na primeira etapa da
+ * operação escolhida (`POST /esteiras/:operacao/vinculos`), sem digitar nada de
+ * novo — o card nasce ligado ao mesmo contato e à mesma empresa. A operação é
+ * livre: o antigo `segmentoParceiro` não restringe mais (spec 4.2); o mesmo
+ * parceiro pode estar nas duas.
  */
-export function EnviarParaCredenciamento({ contatos, contaId, operacoes, aoEnviar }: Props) {
+export function EnviarParaCredenciamento({ contatos, contaId, nomeEmpresa, operacoes, aoEnviar }: Props) {
   const mostrarToast = useToast();
   const [contatoId, setContatoId] = useState(contatos.length === 1 ? contatos[0]!.id : '');
-  const [funilId, setFunilId] = useState('');
-  const [enviando, setEnviando] = useState(false);
-  const [erro, setErro] = useState<string | null>(null);
+  const [enviando, setEnviando] = useState<Operacao | null>(null);
+  const [erro, setErro] = useState<{ mensagem: string; operacao: Operacao; jaNaEsteira: boolean } | null>(null);
 
-  const contatoSelecionado = contatos.find((contato) => contato.id === contatoId);
-  const segmento = contatoSelecionado?.segmentoParceiro ?? null;
-  const termoOperacao = segmento === 'STARLINK' ? 'starlink' : segmento === 'TIM' ? 'tim' : null;
-  const operacoesDisponiveis = useMemo(
-    () => termoOperacao
-      ? operacoes.filter((operacao) => operacao.nome.toLocaleLowerCase('pt-BR').includes(termoOperacao))
-      : operacoes,
-    [termoOperacao, operacoes],
-  );
+  const semContato = contatos.length === 0;
+  if (operacoes.length === 0 || (semContato && !(contaId && nomeEmpresa))) return null;
 
-  useEffect(() => {
-    setFunilId(termoOperacao ? operacoesDisponiveis[0]?.id ?? '' : '');
-  }, [contatoId, termoOperacao, operacoesDisponiveis]);
-
-  if (operacoes.length === 0 || contatos.length === 0) return null;
-
-  const enviar = async () => {
-    setEnviando(true);
+  const enviar = async (operacao: Operacao) => {
+    const corpo: CriarVinculoInput = semContato
+      ? { contaId: contaId!, empresa: nomeEmpresa! }
+      : { contatoId, ...(contaId ? { contaId } : {}) };
+    setEnviando(operacao);
     setErro(null);
     try {
-      await api.post('/credenciamentos', { contatoId, funilId, ...(contaId ? { contaId } : {}) });
-      const operacao = operacoes.find((o) => o.id === funilId)?.nome ?? 'a esteira';
-      mostrarToast('sucesso', `Enviado para ${operacao}.`);
-      setFunilId('');
+      const { vinculo } = await api.post<RespostaVinculo>(`/esteiras/${parametroDaOperacao(operacao)}/vinculos`, corpo);
+      mostrarToast('sucesso', `${vinculo.parceiro.nome} entrou na esteira ${ROTULO_OPERACAO[operacao]}.`);
       aoEnviar();
     } catch (e) {
-      setErro(e instanceof ApiError ? e.message : 'Falha ao enviar para o credenciamento');
+      setErro({
+        mensagem: e instanceof ApiError ? e.message : 'Falha ao adicionar à esteira',
+        operacao,
+        jaNaEsteira: e instanceof ApiError && e.status === 409,
+      });
     } finally {
-      setEnviando(false);
+      setEnviando(null);
     }
   };
 
   return (
     <div className="space-y-3 rounded-lg border border-slate-200 p-3">
-      <p className="text-sm font-medium text-slate-700">Enviar para credenciamento</p>
-      {erro && <Alerta>{erro}</Alerta>}
-      <div className="grid gap-3 sm:grid-cols-2">
-        {contatos.length > 1 && (
-          <Field label="Contato">
-            <Select value={contatoId} onChange={(e) => setContatoId(e.target.value)}>
-              <option value="">Selecione...</option>
-              {contatos.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nome}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        )}
-        <Field label="Operação">
-          {segmento ? (
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-              {operacoesDisponiveis[0]
-                ? `${operacoesDisponiveis[0].nome} · ${operacoesDisponiveis[0].estagios[0]?.nome ?? 'primeira etapa'}`
-                : `Nenhuma esteira ativa para ${segmento === 'TIM' ? 'TIM' : 'Starlink'}`}
-            </div>
-          ) : (
-            <Select value={funilId} onChange={(e) => setFunilId(e.target.value)}>
-              <option value="">Selecione...</option>
-              {operacoesDisponiveis.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.nome}
-                </option>
-              ))}
-            </Select>
+      <p className="text-sm font-medium text-slate-700">Adicionar à esteira</p>
+      {erro && (
+        <Alerta tipo={erro.jaNaEsteira ? 'aviso' : 'erro'}>
+          {erro.mensagem}
+          {erro.jaNaEsteira && (
+            <>
+              {' '}
+              <Link className="font-medium underline" to={`/esteira/${parametroDaOperacao(erro.operacao)}`}>
+                Abrir a esteira {ROTULO_OPERACAO[erro.operacao]}
+              </Link>
+            </>
           )}
+        </Alerta>
+      )}
+      {contatos.length > 1 && (
+        <Field label="Contato">
+          <Select value={contatoId} onChange={(e) => setContatoId(e.target.value)}>
+            <option value="">Selecione...</option>
+            {contatos.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nome}
+              </option>
+            ))}
+          </Select>
         </Field>
+      )}
+      <div className="flex flex-wrap gap-2">
+        {operacoes.map((o) => (
+          <Button key={o} variante="neutro" onClick={() => void enviar(o)} disabled={enviando !== null || (!semContato && !contatoId)}>
+            {enviando === o ? 'Adicionando…' : `Adicionar à ${ROTULO_OPERACAO[o]}`}
+          </Button>
+        ))}
       </div>
-      <Button onClick={() => void enviar()} disabled={enviando || !contatoId || !funilId || (Boolean(segmento) && operacoesDisponiveis.length === 0)}>
-        {enviando ? 'Enviando...' : 'Enviar para credenciamento'}
-      </Button>
     </div>
   );
 }

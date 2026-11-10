@@ -16,6 +16,7 @@ import {
 import { indicadores, assuntos, monitoramentoAgentes, conversasAguardandoResposta } from '../metrics/metrics.service';
 import { gestaoOperacao, desempenhoOperacional } from './credenciamentos.indicadores';
 import { fichaContato, timeline } from './ficha.service';
+import { filtroOperacoesPermitidas } from '../esteira/acesso';
 
 type CandidatoContato = { id: string; nome: string; telefone: string | null; email: string | null };
 
@@ -100,7 +101,7 @@ async function eventosPermitidos(
     prisma.ticket.findMany({ where: { AND: [await filtroDe(politicaProtocolos), { OR: [{ contatoId }, ...daConta] }] }, select: { id: true } }),
     contaId ? prisma.opportunity.findMany({ where: { AND: [await filtroDe(politicaOportunidades), { contaId }] }, select: { id: true } }) : Promise.resolve([]),
     prisma.lead.findMany({ where: { AND: [await filtroDe(politicaLeads), { OR: [{ contatoId }, ...daConta] }] }, select: { id: true } }),
-    prisma.credenciamento.findMany({ where: { AND: [await filtroDe(politicaCredenciamentos), { OR: [{ contatoId }, ...daConta] }] }, select: { id: true } }),
+    prisma.credenciamento.findMany({ where: { AND: [await filtroDe(politicaCredenciamentos), await filtroOperacoesPermitidas(), { arquivadoEm: null }, { OR: [{ contatoId }, ...daConta] }] }, select: { id: true } }),
   ]);
   return {
     conversas: new Set(conversas.map((item) => item.id)),
@@ -731,8 +732,12 @@ export async function perguntarAoAssistenteCrm(
     };
   } else if (plano.entidade === 'esteira') {
     const politica = await filtroDe(politicaCredenciamentos);
+    // Operacoes permitidas e vinculo nao arquivado (spec 4.9). "Ativas" = fora
+    // das etapas de saida; `situacaoExcecao` (legado) so decide em etapa sem chave.
     const where = {
-      AND: [politica, ...(plano.situacao === 'ATIVAS' ? [{ situacaoExcecao: null }] : []),
+      AND: [politica, await filtroOperacoesPermitidas(), { arquivadoEm: null },
+        ...(plano.situacao === 'ATIVAS' ? [{ estagio: { tipoEtapa: { not: 'SAIDA' as const } } },
+          { OR: [{ estagio: { chave: { not: null } } }, { situacaoExcecao: null }] }] : []),
         ...(desde ? [{ criadoEm: { gte: desde } }] : []),
         ...(plano.situacao === 'PENDENTES' ? [{ estagioDesde: { lte: desde ?? new Date(Date.now() - 5 * 86_400_000) } }] : []),
         ...(termo ? [{ OR: [
@@ -745,7 +750,7 @@ export async function perguntarAoAssistenteCrm(
     total = await prisma.credenciamento.count({ where });
     evidencias = plano.metrica === 'contagem' ? [] : await prisma.credenciamento.findMany({
       where, orderBy: { estagioDesde: 'asc' }, take: 30,
-      select: { situacaoExcecao: true, motivoExcecao: true, criadoEm: true, estagioDesde: true,
+      select: { operacao: true, situacaoExcecao: true, motivoExcecao: true, criadoEm: true, estagioDesde: true,
         contato: { select: { nome: true, uf: true } }, conta: { select: { nome: true } },
         estagio: { select: { nome: true } }, funil: { select: { nome: true } }, responsavel: { select: { nome: true } } },
     });

@@ -3,7 +3,6 @@ import { Link, useLocation } from 'react-router-dom';
 import { Tooltip } from '../ui/Tooltip';
 import { useAuth } from '../../features/auth/AuthProvider';
 import { useBranding } from '../../features/branding/BrandingProvider';
-import { api } from '../../lib/api';
 import { NAV, itemDaRota } from './nav';
 
 const CHAVE_COLAPSO = 'plataforma:sidebar-colapsada';
@@ -21,7 +20,7 @@ const CHAVE_COLAPSO = 'plataforma:sidebar-colapsada';
  *   de la, porque o botao que abre mora fora deste componente).
  */
 export function Sidebar({ aberta, aoFechar }: { aberta: boolean; aoFechar: () => void }) {
-  const { temPerfil, temModulo } = useAuth();
+  const { temModulo, temEsteira } = useAuth();
   const { branding } = useBranding();
   const { pathname } = useLocation();
   const [colapsada, setColapsada] = useState(() => {
@@ -32,15 +31,6 @@ export function Sidebar({ aberta, aoFechar }: { aberta: boolean; aoFechar: () =>
     }
   });
   const navRef = useRef<HTMLElement>(null);
-  const [temEsteira, setTemEsteira] = useState(true);
-
-  useEffect(() => {
-    if (!temPerfil('ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL')) return;
-    void api
-      .get<{ funis: unknown[] }>('/credenciamentos/funis')
-      .then((r) => setTemEsteira(r.funis.length > 0))
-      .catch(() => setTemEsteira(false));
-  }, [temPerfil]);
 
   const itens = NAV.filter((item) => temModulo(item.rota.slice(1))).filter(
     (item) => item.rota !== '/esteira' || temEsteira,

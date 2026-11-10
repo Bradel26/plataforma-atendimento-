@@ -237,7 +237,8 @@ export function LinhaDoTempo({ base, raizId, recarregar = 0, eventosDemonstracao
                         >
                           {hora(evento.ocorridoEm)}
                         </time>
-                        <span className="text-xs text-slate-500">{evento.situacao ?? LABEL_TIPO_EVENTO[evento.tipo]}</span>
+                        {/* O tipo aqui; a situação vai no selo logo adiante (antes saía duas vezes). */}
+                        <span className="text-xs text-slate-500">{LABEL_TIPO_EVENTO[evento.tipo]}</span>
                         {/* Marca so o que vem da empresa: na ficha do contato, o
                             resto e dele, e um selo em cada linha seria ruido. */}
                         {evento.escopo === 'CONTA' && <Badge>Da empresa</Badge>}

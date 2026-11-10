@@ -5,6 +5,7 @@ import { PainelOperacoes } from './dashboard/PainelOperacoes';
 import { BarraComAlvo, BarraEmpilhada, Barras, Indicador, Painel, Selo, TituloSecao, type Tom } from './dashboard/blocos';
 import { useAuth } from '../features/auth/AuthProvider';
 import { ApiError, api, getAccessToken } from '../lib/api';
+import { mesPorExtenso } from '../lib/mes';
 import { EVENTOS, conectar } from '../lib/realtime';
 import { COR_STATUS_AGENTE, ESTADO, SERIES, duracao } from '../lib/viz';
 import {
@@ -52,9 +53,6 @@ function estadoDaTaxa(taxa: number | null): { tom: Tom; texto: string } | null {
   if (taxa < TAXA_ATENDIMENTO_ALVO) return { tom: 'atencao', texto: 'Abaixo do alvo' };
   return { tom: 'bom', texto: 'No alvo' };
 }
-
-const mesPorExtenso = (mes: string) =>
-  new Date(`${mes}-01T12:00:00`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
 export function DashboardsPage() {
   const [dados, setDados] = useState<Indicadores | null>(null);

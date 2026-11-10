@@ -962,7 +962,8 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
 
           <CredenciamentosDaEmpresa
             contaId={ficha.conta.id}
-            contatos={(ficha.conta.contatos ?? []).map((c) => ({ id: c.id, nome: c.nome, segmentoParceiro: c.segmentoParceiro }))}
+            nomeEmpresa={ficha.conta.nome}
+            contatos={(ficha.conta.contatos ?? []).map((c) => ({ id: c.id, nome: c.nome }))}
           />
 
           <Card titulo="Base instalada" descricao={`${ficha.produtosInstalados.length} equipamento(s)`}>

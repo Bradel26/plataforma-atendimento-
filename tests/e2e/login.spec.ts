@@ -5,7 +5,7 @@ test.describe('Login e permissao no menu', () => {
   test('senha errada mostra erro e nao entra', async ({ page }) => {
     await page.goto('/');
     await page.getByLabel('E-mail').fill(CONTAS.admin.email);
-    await page.getByLabel('Senha').fill('senha-errada-de-proposito');
+    await page.getByLabel('Senha', { exact: true }).fill('senha-errada-de-proposito');
     await page.getByRole('button', { name: 'Entrar' }).click();
 
     await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible();

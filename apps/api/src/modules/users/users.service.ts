@@ -2,12 +2,13 @@ import type { AgentStatus, Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { exigirUsuarioDaOrganizacao } from '../../lib/politicas';
 import { exigirFilialDaOrganizacao } from '../filiais/filiais.service';
-import { conflict, notFound } from '../../lib/errors';
+import { badRequest, conflict, notFound } from '../../lib/errors';
+import { acessoDoUsuario } from '../esteira/acesso';
 import { hashPassword } from '../../lib/password';
 import { notificarStatusAgente } from '../../realtime/hub';
 import { registrarPresenca } from '../metrics/metrics.service';
 import { toPublicUser } from './users.serializer';
-import type { CreateUserInput, ListUsersQuery, UpdateUserInput } from './users.schemas';
+import type { CreateUserInput, ListUsersQuery, OperacoesUsuarioInput, UpdateUserInput } from './users.schemas';
 
 export async function listUsers(query: ListUsersQuery) {
   const where: Prisma.UserWhereInput = {};
@@ -28,6 +29,40 @@ export async function getUser(id: string) {
   const user = await prisma.user.findUnique({ where: { id } });
   if (!user) throw notFound('Usuário não encontrado');
   return toPublicUser(user);
+}
+
+/** Usuário da organização atual (a extensão de tenant filtra), ou 404. */
+async function usuarioDaOrganizacao(id: string) {
+  const user = await prisma.user.findFirst({ where: { id }, select: { id: true, perfil: true } });
+  if (!user) throw notFound('Usuário não encontrado');
+  return user;
+}
+
+/** Nível efetivo do usuário nas operações (já aplicando o padrão EDICAO). */
+export async function getOperacoesUsuario(id: string) {
+  const user = await usuarioDaOrganizacao(id);
+  return acessoDoUsuario(user.id, user.perfil);
+}
+
+/** Grava só exceções: EDICAO/null apagam a linha, LEITURA/SEM_ACESSO fazem upsert. */
+export async function setOperacoesUsuario(id: string, input: OperacoesUsuarioInput) {
+  const user = await usuarioDaOrganizacao(id);
+  if (user.perfil === 'ADMIN') throw badRequest('Administradores sempre acessam as duas operações');
+
+  for (const operacao of ['TIM', 'STARLINK'] as const) {
+    const nivel = input[operacao];
+    if (nivel === undefined) continue;
+    if (nivel === null || nivel === 'EDICAO') {
+      await prisma.usuarioOperacao.deleteMany({ where: { usuarioId: id, operacao } });
+    } else {
+      await prisma.usuarioOperacao.upsert({
+        where: { usuarioId_operacao: { usuarioId: id, operacao } },
+        create: { usuarioId: id, operacao, nivel },
+        update: { nivel },
+      });
+    }
+  }
+  return acessoDoUsuario(user.id, user.perfil);
 }
 
 export async function createUser(input: CreateUserInput) {

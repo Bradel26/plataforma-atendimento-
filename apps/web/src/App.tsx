@@ -42,6 +42,14 @@ const PAGINAS: Record<string, ComponentType> = {
   '/configuracoes': ConfiguracoesPage,
 };
 
+/**
+ * Rotas com parametro dentro do proprio modulo (mesma pagina, mesma permissao).
+ * `/esteira` sozinho redireciona para a operacao; a tela e `/esteira/:operacao`.
+ */
+const ROTAS_DA_PAGINA: Record<string, string[]> = {
+  '/esteira': ['/esteira/:operacao'],
+};
+
 /** Rotas publicas: nao exigem sessao e existem logado ou nao. */
 function RotasPublicas() {
   return (
@@ -55,7 +63,7 @@ function RotasPublicas() {
 }
 
 function AppRoutes() {
-  const { usuario, carregando, temPerfil, temModulo } = useAuth();
+  const { usuario, carregando, temPerfil, temModulo, temEsteira } = useAuth();
 
   if (carregando) {
     return (
@@ -74,7 +82,9 @@ function AppRoutes() {
   }
 
   const permitidos = NAV.filter((item) => temModulo(item.rota.slice(1)));
-  const inicial = permitidos[0]?.rota ?? '/atendimento';
+  // A Esteira sem nenhuma operação acessível continua registrada (a URL digitada
+  // mostra "sem acesso"), mas não é a tela inicial nem aparece no menu.
+  const inicial = permitidos.find((item) => item.rota !== '/esteira' || temEsteira)?.rota ?? '/atendimento';
 
   return (
     <Routes>
@@ -92,6 +102,7 @@ function AppRoutes() {
           // uma permissao divergir da do menu sem ninguem notar.
           return [
             <Route key={rota} path={rota} element={<Pagina />} />,
+            ...(ROTAS_DA_PAGINA[rota] ?? []).map((r) => <Route key={r} path={r} element={<Pagina />} />),
             // A subrota pode restringir mais que o modulo: quem ve o CRM nao
             // necessariamente ve `/oportunidades/:id`. A rota nem e registrada
             // para quem nao tem o perfil, e a URL digitada cai no

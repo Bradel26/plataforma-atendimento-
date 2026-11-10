@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import 'dotenv/config';
 import { prisma, prismaSemIsolamento } from '../src/lib/prisma';
 import { ORGANIZACAO_INICIAL, comOrganizacao } from '../src/lib/tenant';
+import { sincronizarEstrutura } from '../src/modules/esteira/estrutura.service';
 
 // O seed usa o cliente COM isolamento e roda dentro do contexto da organizacao
 // inicial. Usar um cliente cru aqui gravaria linhas com organizacao vazia, e o
@@ -141,9 +142,8 @@ async function main() {
  * oportunidades. Idempotente — pode rodar de novo sem duplicar.
  */
 async function semearCrm() {
-  // Mesmo vocabulario da Esteira (`semearEsteira`, mais abaixo): a operacao e
-  // credenciamento de parceiro, nao venda classica, e as duas telas devem
-  // falar a mesma lingua sobre o mesmo tipo de jornada.
+  // Vocabulario de credenciamento de parceiro, nao de venda classica. As
+  // esteiras TIM/Starlink (`semearEsteira`) tem etapas proprias, do catalogo.
   const estagios = [
     { nome: 'Novo cadastro', probabilidade: 10 },
     { nome: 'Pendencia', probabilidade: 25 },
@@ -199,28 +199,14 @@ async function semearCrm() {
 }
 
 /**
- * Esteira de Credenciamento: funil separado do CRM comercial, usado para
- * acompanhar parceiros do cadastro ate o credenciamento ativo. Idempotente,
- * mesmo shape de `semearCrm` — pipeline diferente, entao funcao propria.
+ * Esteiras TIM e Starlink: so a estrutura (funis, etapas e chaves do catalogo),
+ * nunca parceiros. Idempotente — a mesma sincronizacao da CLI `esteira:estrutura`.
  */
 async function semearEsteira() {
-  // Uma esteira por operacao: o Dashboard divide a tela ao meio, uma metade por funil.
-  const estagiosEsteira = ['Novo cadastro', 'Pendencia', 'Aprovacao', 'Credenciado', 'Ativo'];
-  for (const nome of ['Credenciamento TIM', 'Credenciamento Starlink']) {
-    const funilEsteira = await prisma.funnel.upsert({
-      where: { organizacaoId_nome: { organizacaoId: ORGANIZACAO_INICIAL, nome } },
-      update: {},
-      create: { nome, tipo: 'ESTEIRA' },
-    });
-    for (const [indice, estagio] of estagiosEsteira.entries()) {
-      await prisma.funnelStage.upsert({
-        where: { funilId_ordem: { funilId: funilEsteira.id, ordem: indice + 1 } },
-        update: {},
-        create: { funilId: funilEsteira.id, ordem: indice + 1, nome: estagio },
-      });
-    }
-    console.log(`  funil: ${funilEsteira.nome} (${estagiosEsteira.length} estagios)`);
-  }
+  const r = await sincronizarEstrutura(ORGANIZACAO_INICIAL);
+  console.log(
+    `  esteiras: ${r.funisCriados} funil(is) criado(s), ${r.etapasCriadas} etapa(s) criada(s), ${r.etapasAtualizadas} atualizada(s)`,
+  );
 }
 
 /**

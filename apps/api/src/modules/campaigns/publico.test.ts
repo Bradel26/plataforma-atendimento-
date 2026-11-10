@@ -3,6 +3,7 @@ import {
   CAMPO_DO_CANAL,
   descreverFiltro,
   filtroVazio,
+  estagiosDaSituacao,
   montarPublico,
   type ContatoDoPublico,
 } from './publico';
@@ -146,5 +147,36 @@ describe('descreverFiltro', () => {
   it('distingue "sem responsável" de um responsável especifico', () => {
     expect(descreverFiltro({ responsavelId: null })).toContain('sem responsável');
     expect(descreverFiltro({ responsavelId: 'u1' })).toContain('responsável: u1');
+  });
+
+  it('escreve "operações" com acento (a frase aparece na tela da campanha)', () => {
+    expect(descreverFiltro({ funilIds: ['f1'] })).toBe('operações: 1');
+  });
+});
+
+describe('estagiosDaSituacao — situação do parceiro pela chave da etapa', () => {
+  const estagios = [
+    { id: 't1', nome: 'Em negociação', chave: 'TIM_NEGOCIACAO' },
+    { id: 't2', nome: 'Em andamento/Doc', chave: 'TIM_DOCUMENTACAO' },
+    // Renomeada pelo ADMIN: o nome sugere "ativo", a chave diz pendência.
+    { id: 's8', nome: 'Pronto para venda', chave: 'SL_MEI' },
+    { id: 't6', nome: 'Venda liberada', chave: 'TIM_VENDA_LIBERADA' },
+    { id: 't8', nome: 'Desistência', chave: 'TIM_DESISTENCIA' },
+    { id: 's10', nome: 'Nurture', chave: 'SL_NURTURE' },
+    { id: 'x1', nome: 'Pendência', chave: null },
+    { id: 'x2', nome: 'Ativo', chave: null },
+  ];
+
+  it('ATIVOS e PENDENTES pelo papel da chave; nome renomeado não engana', () => {
+    expect(estagiosDaSituacao(estagios, ['ATIVOS'])).toEqual({ comChave: ['t6'], semChave: ['x2'] });
+    expect(estagiosDaSituacao(estagios, ['PENDENTES'])).toEqual({ comChave: ['t2', 's8'], semChave: ['x1'] });
+  });
+
+  it('EM_CREDENCIAMENTO deixa de fora ativos e saídas', () => {
+    expect(estagiosDaSituacao(estagios, ['EM_CREDENCIAMENTO'])).toEqual({ comChave: ['t1', 't2', 's8'], semChave: ['x1'] });
+  });
+
+  it('TODOS não restringe etapa', () => {
+    expect(estagiosDaSituacao(estagios, ['TODOS'])).toEqual({ comChave: [], semChave: [] });
   });
 });

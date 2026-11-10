@@ -87,7 +87,7 @@ export async function entrarPeloFormulario(page: Page, conta: keyof typeof CONTA
   const { email, senha } = CONTAS[conta];
   await page.goto('/');
   await page.getByLabel('E-mail').fill(email);
-  await page.getByLabel('Senha').fill(senha);
+  await page.getByLabel('Senha', { exact: true }).fill(senha);
 
   // Le a resposta do login para poder explicar a falha. Sem isso, um 429 do
   // limite por IP aparece como "o titulo Entrar nao desapareceu", que manda
