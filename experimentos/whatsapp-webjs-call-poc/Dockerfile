@@ -17,7 +17,7 @@ RUN apt-get update \
 
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
-COPY server.mjs analysis-queue.mjs ./
+COPY server.mjs analysis-queue.mjs analise-chamada.mjs ./
 COPY public ./public
 COPY web-version-cache ./web-version-cache
 RUN mkdir -p /data \

@@ -2,6 +2,7 @@ import type { CallStatus } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { salvar } from '../../lib/storage';
 import { notificarChamada } from '../../realtime/hub';
+import { numeroBrAlternativo, numeroNormalizado } from './whatsapp.modo';
 
 export type RegistroChamadaWebJs = {
   callId: string;
@@ -28,20 +29,36 @@ export type RegistroChamadaWebJs = {
 
 const digitos = (value: string) => value.replace(/\D/g, '');
 
-async function contatoPorTelefone(telefone: string) {
-  const numero = digitos(telefone);
-  if (numero.length < 8) return null;
-  const candidatos = await prisma.contact.findMany({
-    where: { telefone: { contains: numero.slice(-8) } },
-    select: { id: true, telefone: true },
-    take: 20,
+/**
+ * Mesmo critério do fluxo de mensagens: `telefoneNormalizado` (com a variação do
+ * nono dígito) e o contato mais antigo vence. Nunca cria contato: se o número
+ * não for de ninguém cadastrado, a chamada fica só com o telefone.
+ */
+export async function contatoPorTelefone(telefone: string) {
+  const numero = numeroNormalizado(telefone);
+  if (!numero) return null;
+  const alternativo = numeroBrAlternativo(numero);
+  const exato = await prisma.contact.findFirst({
+    where: { telefoneNormalizado: { in: alternativo ? [numero, alternativo] : [numero] }, excluidoEm: null },
+    orderBy: { criadoEm: 'asc' },
+    select: { id: true, telefoneNormalizado: true },
   });
-  const canonico = (value: string) => {
-    const limpo = digitos(value);
-    return limpo.startsWith('55') && [12, 13].includes(limpo.length) ? limpo.slice(2) : limpo;
-  };
-  const exatos = candidatos.filter((item) => item.telefone && canonico(item.telefone) === canonico(numero));
-  return exatos.length === 1 ? exatos[0]!.id : null;
+  if (exato) return exato.id;
+
+  // Cadastros antigos sem `telefoneNormalizado`: compara pelo número sem formatação.
+  const ultimos = digitos(numero).slice(-8);
+  const candidatos = await prisma.contact.findMany({
+    where: { telefoneNormalizado: null, excluidoEm: null, telefone: { not: null } },
+    select: { id: true, telefone: true },
+    orderBy: { criadoEm: 'asc' },
+    take: 500,
+  });
+  const alvo = new Set([numero, alternativo].filter((v): v is string => Boolean(v)));
+  const legado = candidatos.find((c) => {
+    const norm = numeroNormalizado(c.telefone);
+    return norm ? alvo.has(norm) && norm.endsWith(ultimos) : false;
+  });
+  return legado?.id ?? null;
 }
 
 /** Cria/atualiza o CDR da chamada local e guarda os artefatos no storage da plataforma. */
