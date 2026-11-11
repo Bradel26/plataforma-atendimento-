@@ -17,6 +17,8 @@ import {
   classificarChamada,
   configPublica,
   indicadoresVoz,
+  criarContatoDaChamada,
+  excluirChamada,
   listarChamadas,
   obterConfig,
   originarChamada,
@@ -94,6 +96,25 @@ vozRoutes.get(
       chamadas: resultado.chamadas
         .map((c) => c.linha ? c : ({ ...c, transcricao: null, gravacaoUrl: null })),
     });
+  }),
+);
+
+vozRoutes.post(
+  '/chamadas/:id/contato',
+  requireAuth,
+  validateBody(z.object({ nome: z.string().trim().min(2, 'Informe o nome do contato').max(120) })),
+  asyncHandler(async (req, res) => {
+    res.status(201).json(await criarContatoDaChamada(param(req, 'id'), req.body.nome));
+  }),
+);
+
+vozRoutes.delete(
+  '/chamadas/:id',
+  requireAuth,
+  requireRole('ADMIN'),
+  asyncHandler(async (req, res) => {
+    await excluirChamada(param(req, 'id'));
+    res.status(204).end();
   }),
 );
 

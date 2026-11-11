@@ -2,7 +2,8 @@ import type { CallStatus } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { salvar } from '../../lib/storage';
 import { notificarChamada } from '../../realtime/hub';
-import { numeroBrAlternativo, numeroNormalizado } from './whatsapp.modo';
+import { telefoneBrAlternativo } from '../contacts/merge.service';
+import { numeroNormalizado } from './whatsapp.modo';
 
 export type RegistroChamadaWebJs = {
   callId: string;
@@ -37,7 +38,7 @@ const digitos = (value: string) => value.replace(/\D/g, '');
 export async function contatoPorTelefone(telefone: string) {
   const numero = numeroNormalizado(telefone);
   if (!numero) return null;
-  const alternativo = numeroBrAlternativo(numero);
+  const alternativo = telefoneBrAlternativo(numero);
   const exato = await prisma.contact.findFirst({
     where: { telefoneNormalizado: { in: alternativo ? [numero, alternativo] : [numero] }, excluidoEm: null },
     orderBy: { criadoEm: 'asc' },

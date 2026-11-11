@@ -12,6 +12,37 @@ type AnaliseChamada = { base: string; transcript: string; transcriptOriginal?: s
 const SERVICO_LOCAL = 'http://127.0.0.1:4174';
 const ANALISE_LOCAL = 'http://127.0.0.1:4175';
 
+const CHAVE_FATOR_ANALISE = 'telefonia:fator-analise-v2';
+/** Segundos de processamento por segundo de áudio. Medido em CPU (Whisper small, 4 threads): ~0,4x; 0,5 deixa folga. */
+const FATOR_ANALISE_PADRAO = 0.5;
+/** Custo fixo da análise: carregar o modelo e gerar o resumo. */
+const CUSTO_FIXO_ANALISE = 25;
+
+function fatorDeAnalise() {
+  try {
+    const salvo = Number(localStorage.getItem(CHAVE_FATOR_ANALISE));
+    return Number.isFinite(salvo) && salvo >= 0.1 && salvo <= 20 ? salvo : FATOR_ANALISE_PADRAO;
+  } catch { return FATOR_ANALISE_PADRAO; }
+}
+
+/** Estimativa em segundos: proporcional à duração da chamada, com piso fixo para carregar modelo e resumo. */
+function estimarAnalise(duracaoChamada: number) {
+  const base = duracaoChamada > 0 ? duracaoChamada : 30;
+  return Math.min(3600, Math.max(20, Math.round(base * fatorDeAnalise() + CUSTO_FIXO_ANALISE)));
+}
+
+function aprenderFatorDeAnalise(duracaoChamada: number, gastoSegundos: number) {
+  if (duracaoChamada < 5) return;
+  const medido = Math.min(20, Math.max(0.1, (gastoSegundos - CUSTO_FIXO_ANALISE) / duracaoChamada));
+  try { localStorage.setItem(CHAVE_FATOR_ANALISE, String(((fatorDeAnalise() + medido) / 2).toFixed(2))); } catch { /* sem armazenamento: usa o padrão */ }
+}
+
+function formatarEspera(segundos: number) {
+  const total = Math.max(0, Math.round(segundos));
+  if (total < 60) return `${total} s`;
+  return `${Math.floor(total / 60)} min ${String(total % 60).padStart(2, '0')} s`;
+}
+
 function formatarTempo(segundos: number) {
   const min = Math.floor(segundos / 60).toString().padStart(2, '0');
   const seg = (segundos % 60).toString().padStart(2, '0');
@@ -24,7 +55,7 @@ function nomeCurto(valor: string) {
 }
 
 /** Painel integrado para o conector Web testado localmente. */
-export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste-local', numeroId = null }: { somenteRecebidas?: boolean; sessao?: string; numeroId?: string | null }) {
+export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste-local', numeroId = null, ligarPara = null }: { somenteRecebidas?: boolean; sessao?: string; numeroId?: string | null; ligarPara?: { numero: string; id: number } | null }) {
   const [status, setStatus] = useState('verificando conex?o');
   const [qr, setQr] = useState<string | null>(null);
   const [destino, setDestino] = useState('');
@@ -39,6 +70,11 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste
   const [baseAnalise, setBaseAnalise] = useState<string | null>(null);
   const [analisando, setAnalisando] = useState(false);
   const [erroAnalise, setErroAnalise] = useState<string | null>(null);
+  const [perdida, setPerdida] = useState<string | null>(null);
+  const [analiseInicio, setAnaliseInicio] = useState<number | null>(null);
+  const [analiseEstimativa, setAnaliseEstimativa] = useState(0);
+  const [agora, setAgora] = useState(() => Date.now());
+  const duracaoChamadaRef = useRef(0);
   const [transcricaoAberta, setTranscricaoAberta] = useState(false);
   const [transcricaoOriginalAberta, setTranscricaoOriginalAberta] = useState(false);
   const [ocupado, setOcupado] = useState(false);
@@ -132,6 +168,7 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste
     if (atual) {
       const inicio = inicioRef.current;
       const duracao = inicio ? Math.max(0, Math.floor((Date.now() - inicio) / 1000)) : segundos;
+      duracaoChamadaRef.current = duracao;
       setResumo({ from: atual.from, fromMe: atual.fromMe, segundos: duracao, gravacao });
       registrar('Ligação encerrada.');
     }
@@ -235,7 +272,17 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste
           };
           void persistirHistorico();
         }
+        // Chamada recebida e não atendida: sai da tela de atendimento e vai para o histórico como perdida.
+        if (registroRef.current?.direcao === 'ENTRANTE' && String(msg.data?.status || '') === 'NAO_ATENDIDA') {
+          const quem = String(msg.data?.telefone || registroRef.current.telefone || chamadaRef.current?.from || '');
+          limparAudio();
+          setResumo(null);
+          setPerdida(quem || 'número desconhecido');
+          registrar('Chamada perdida.');
+          return;
+        }
         finalizarChamada();
+        if (Number(msg.data?.duracao) > 0) duracaoChamadaRef.current = Number(msg.data.duracao);
         if (baseGravacaoRef.current) void analisarGravacao(baseGravacaoRef.current);
       }
       if (msg.type === 'recording') {
@@ -311,20 +358,25 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste
   }
 
   async function ligar(e: React.FormEvent) {
-    e.preventDefault(); setOcupado(true); setErro(null);
-    destinoRef.current = destino;
+    e.preventDefault();
+    await iniciarLigacao(destino);
+  }
+
+  async function iniciarLigacao(numero: string) {
+    setOcupado(true); setErro(null); setPerdida(null);
+    destinoRef.current = numero;
     plataformaCallIdRef.current = null;
     baseGravacaoRef.current = null;
     setResumo(null);
     setAnalise(null);
     setBaseAnalise(null);
     setErroAnalise(null);
-    const iniciada = { from: destino, fromMe: true };
+    const iniciada = { from: numero, fromMe: true };
     chamadaRef.current = iniciada;
     setChamada(iniciada);
     setEtapaLigacao(0);
     setSegundos(0);
-    try { await requisitar('/api/call', { phone: destino }); setDestino(''); }
+    try { await requisitar('/api/call', { phone: numero }); setDestino(''); }
     catch (err) {
       chamadaRef.current = null;
       setChamada(null);
@@ -333,8 +385,45 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste
     finally { setOcupado(false); }
   }
 
+  // "Ligar para o cliente" vindo do histórico.
+  useEffect(() => {
+    if (!ligarPara) return;
+    setDestino(ligarPara.numero);
+    if (chamadaRef.current) { setErro('Já existe uma ligação em andamento. Encerre-a antes de ligar para outro número.'); return; }
+    if (status !== 'conectado') { setErro('O WhatsApp desta linha não está conectado. Conecte pelo Atendimento e tente de novo.'); return; }
+    void iniciarLigacao(ligarPara.numero);
+  }, [ligarPara?.id]);
+
+  // Rede de segurança: se o fim da chamada nunca chegar (queda da sessão), a que tocava e ninguém atendeu vira perdida.
+  useEffect(() => {
+    if (!chamada || chamada.fromMe || conectada) return;
+    const id = window.setTimeout(() => {
+      const atual = chamadaRef.current;
+      if (!atual || atual.fromMe) return;
+      if (registroRef.current) {
+        registroRef.current = { ...registroRef.current, status: 'NAO_ATENDIDA', encerradoEm: new Date().toISOString(), duracao: 0 };
+        void persistirHistorico();
+      }
+      limparAudio();
+      setResumo(null);
+      setPerdida(atual.from || 'número desconhecido');
+      registrar('Chamada perdida.');
+    }, 75_000);
+    return () => window.clearTimeout(id);
+  }, [chamada?.from, chamada?.fromMe, conectada]);
+
+  useEffect(() => {
+    if (!analisando) return;
+    const id = window.setInterval(() => setAgora(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [analisando]);
+
   async function analisarGravacao(base: string) {
     setBaseAnalise(base);
+    const inicioAnalise = Date.now();
+    setAnaliseInicio(inicioAnalise);
+    setAnaliseEstimativa(estimarAnalise(duracaoChamadaRef.current));
+    setAgora(inicioAnalise);
     setAnalisando(true);
     setErroAnalise(null);
     setAnalise(null);
@@ -355,6 +444,7 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste
         resultado = body as AnaliseChamada;
       }
       setAnalise(resultado);
+      aprenderFatorDeAnalise(duracaoChamadaRef.current, (Date.now() - inicioAnalise) / 1000);
     } catch (e) {
       setErroAnalise(e instanceof Error ? e.message : 'Não foi possível analisar esta chamada.');
     } finally {
@@ -512,6 +602,18 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste
               </> : analisando ? <div className="flex min-h-36 flex-col justify-center rounded-xl bg-blue-50 p-4">
                 <p className="text-sm font-semibold text-blue-900">Preparando a transcrição e o resumo…</p>
                 <p className="mt-1 text-xs leading-relaxed text-blue-700">O áudio está sendo processado neste computador. Chamadas longas podem levar alguns minutos.</p>
+                {(() => {
+                  const decorrido = analiseInicio ? Math.max(0, (agora - analiseInicio) / 1000) : 0;
+                  const restante = analiseEstimativa - decorrido;
+                  const progresso = analiseEstimativa > 0 ? Math.min(97, (decorrido / analiseEstimativa) * 100) : 0;
+                  return <div className="mt-3" role="status" aria-live="polite">
+                    <div className="h-1.5 overflow-hidden rounded-full bg-blue-100"><div className="h-full rounded-full bg-blue-600 transition-[width] duration-1000 ease-linear" style={{ width: `${progresso}%` }} /></div>
+                    <p className="mt-2 text-xs font-semibold text-blue-900">
+                      {restante > 0 ? `Pronto em cerca de ${formatarEspera(restante)}` : 'Finalizando… está levando um pouco mais que o previsto'}
+                    </p>
+                    <p className="text-[11px] text-blue-700">Previsão total: ~{formatarEspera(analiseEstimativa)} · decorrido {formatarEspera(decorrido)}</p>
+                  </div>;
+                })()}
               </div> : erroAnalise ? <div className="rounded-xl bg-amber-50 p-4">
                 <p className="text-sm font-semibold text-amber-900">A an?lise ainda não ficou pronta</p>
                 <p className="mt-1 text-xs leading-relaxed text-amber-800">{erroAnalise}</p>
@@ -554,6 +656,15 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste
         <p className="text-xs leading-relaxed text-slate-500">{numeroId ? 'Após a chamada, o áudio e a transcrição são salvos no histórico da Telefonia para consulta.' : 'Áudio e gravação desta prova de conceito ficam neste computador.'}</p>
         {gravacaoAtual && chamada && <span className="text-xs font-medium text-emerald-700">Gravação em andamento</span>}
       </div>
+      {perdida && (
+        <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-sm text-amber-900"><strong>Chamada perdida</strong> de {nomeCurto(perdida)}. Ela ficou no histórico, onde você pode ligar de volta.</p>
+          <div className="flex gap-2">
+            <button type="button" disabled={ocupado || status !== 'conectado'} onClick={() => void iniciarLigacao(perdida)} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-800 disabled:opacity-50">Ligar agora</button>
+            <button type="button" onClick={() => setPerdida(null)} className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-900">Fechar</button>
+          </div>
+        </div>
+      )}
       {erro && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{erro}</p>}
       {eventos.length > 0 && chamada && <div className="sr-only" aria-live="polite">{eventos[0]}</div>}
     </aside>

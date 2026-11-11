@@ -4,7 +4,10 @@ import { AppError, badRequest, notFound } from '../../lib/errors';
 import { cifrar, decifrar } from '../../lib/crypto-box';
 import { enfileirar } from '../../lib/fila';
 import { apos, decodificarCursor, fatiar } from '../../lib/paginacao';
-import { urlAssinada } from '../../lib/storage';
+import { ufDoTelefone } from '../../lib/ddd';
+import { remover, urlAssinada } from '../../lib/storage';
+import { telefoneBrAlternativo } from '../contacts/merge.service';
+import { numeroNormalizado } from '../channels/whatsapp.modo';
 import { organizacaoAtual } from '../../lib/tenant';
 import { notificarChamada } from '../../realtime/hub';
 import type { Credenciais, EventoChamada, Provedor } from './voice.provider';
@@ -223,6 +226,56 @@ export async function originarChamada(agenteId: string, destino: string) {
   return serializar(chamada);
 }
 
+/**
+ * Cria o contato do número de uma chamada que não tem cadastro e vincula a ele todas as chamadas sem contato
+ * daquele número. Se o telefone já pertence a um contato (inclusive com/sem o nono dígito), só vincula: nunca duplica.
+ */
+export async function criarContatoDaChamada(chamadaId: string, nome: string) {
+  const chamada = await prisma.call.findUnique({
+    where: { id: chamadaId },
+    select: { id: true, direcao: true, numeroOrigem: true, numeroDestino: true, contatoId: true },
+  });
+  if (!chamada) throw notFound('Chamada não encontrada');
+  if (chamada.contatoId) throw badRequest('Esta chamada já está vinculada a um contato.');
+
+  const telefone = (chamada.direcao === 'ENTRANTE' ? chamada.numeroOrigem : chamada.numeroDestino).replace(/\D/g, '');
+  const normalizado = numeroNormalizado(telefone);
+  if (!normalizado) throw badRequest('O número desta chamada não é um telefone válido para cadastro.');
+  const alternativo = telefoneBrAlternativo(normalizado);
+  const formatos = [normalizado, alternativo].filter((n): n is string => Boolean(n));
+
+  const existente = await prisma.contact.findFirst({
+    where: { telefoneNormalizado: { in: formatos }, excluidoEm: null },
+    orderBy: { criadoEm: 'asc' },
+    select: { id: true, nome: true },
+  });
+  const contato = existente ?? (await prisma.contact.create({
+    data: { nome, telefone: normalizado, uf: ufDoTelefone(normalizado), canalOrigem: 'WHATSAPP' },
+    select: { id: true, nome: true },
+  }));
+
+  const { count } = await prisma.call.updateMany({
+    where: {
+      contatoId: null,
+      OR: [
+        { direcao: 'ENTRANTE', numeroOrigem: { in: formatos } },
+        { direcao: 'SAINTE', numeroDestino: { in: formatos } },
+      ],
+    },
+    data: { contatoId: contato.id },
+  });
+  return { contato, criado: !existente, vinculadas: count };
+}
+
+/** Apaga a chamada (e a gravação no storage). Só para administrador: o histórico pode ficar poluído por testes e chamadas perdidas. */
+export async function excluirChamada(id: string) {
+  const chamada = await prisma.call.findUnique({ where: { id }, select: { id: true, gravacaoUrl: true } });
+  if (!chamada) throw notFound('Chamada não encontrada');
+  await prisma.call.delete({ where: { id: chamada.id } });
+  const prefixo = '/api/arquivos/';
+  if (chamada.gravacaoUrl?.startsWith(prefixo)) await remover(chamada.gravacaoUrl.slice(prefixo.length));
+}
+
 export async function listarChamadas(query: {
   limite: number;
   cursor?: string;
@@ -230,6 +283,13 @@ export async function listarChamadas(query: {
   agenteId?: string;
   direcao?: 'ENTRANTE' | 'SAINTE';
 }) {
+  // Chamada WhatsApp Web presa em CHAMANDO por mais de 3 min nunca recebeu o fim (a sessão caiu no meio):
+  // vira perdida, para não ficar "chamando" para sempre no histórico.
+  await prisma.call.updateMany({
+    where: { idExterno: { startsWith: 'webjs:' }, status: 'CHAMANDO', encerradoEm: null, iniciadoEm: { lt: new Date(Date.now() - 3 * 60_000) } },
+    data: { status: 'NAO_ATENDIDA', encerradoEm: new Date(), duracao: 0 },
+  });
+
   const filtros: Prisma.CallWhereInput[] = [];
   if (query.status) filtros.push({ status: query.status });
   if (query.agenteId) filtros.push({ agenteId: query.agenteId });

@@ -4,6 +4,7 @@ import { HistoricoDeChamadas } from './telefonia/HistoricoDeChamadas';
 import { PainelLigacoes, relogio, type PosLigacao } from './telefonia/PainelLigacoes';
 import { WhatsAppWebCallPanel } from './telefonia/WhatsAppWebCallPanel';
 import { Selo, type Tom } from './dashboard/blocos';
+import { useAuth } from '../features/auth/AuthProvider';
 import { ApiError, api, getAccessToken } from '../lib/api';
 import { conectar, EVENTOS } from '../lib/realtime';
 import { telefoneLegivel } from '../lib/telefone';
@@ -23,6 +24,7 @@ const TAXA_ATENDIMENTO_CRITICA = 80;
 const numeroLegivel = (numero: string) => (/^\d+$/.test(numero) ? telefoneLegivel(numero) : numero);
 
 export function TelefoniaPage() {
+  const { temPerfil } = useAuth();
   const [chamadas, setChamadas] = useState<Chamada[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [indicadores, setIndicadores] = useState<IndicadoresVoz | null>(null);
@@ -362,6 +364,31 @@ export function TelefoniaPage() {
     setCursor(proximoCursor);
   };
 
+  // "Ligar para o cliente" no histórico: entrega o número ao painel da linha WhatsApp e leva a tela até ele.
+  const [ligarPara, setLigarPara] = useState<{ numero: string; id: number } | null>(null);
+  const criarContato = async (chamada: Chamada, nome: string) => {
+    try {
+      const r = await api.post<{ contato: { id: string; nome: string }; criado: boolean; vinculadas: number }>(`/voz/chamadas/${encodeURIComponent(chamada.id)}/contato`, { nome });
+      setAviso(r.criado ? `Contato "${r.contato.nome}" criado e ${r.vinculadas} chamada(s) vinculada(s).` : `O número já era de "${r.contato.nome}"; ${r.vinculadas} chamada(s) vinculada(s).`);
+      window.dispatchEvent(new CustomEvent('voice-calls-updated'));
+    } catch (e) {
+      setErro(e instanceof ApiError ? e.message : 'Não foi possível criar o contato.');
+    }
+  };
+  const excluirChamada = async (chamada: Chamada) => {
+    try {
+      await api.del(`/voz/chamadas/${encodeURIComponent(chamada.id)}`);
+      setChamadas((atual) => atual.filter((c) => c.id !== chamada.id));
+      window.dispatchEvent(new CustomEvent('voice-calls-updated'));
+    } catch (e) {
+      setErro(e instanceof ApiError ? e.message : 'Não foi possível apagar a chamada.');
+    }
+  };
+  const ligarDeVolta = (numero: string) => {
+    setLigarPara({ numero, id: Date.now() });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const emCurso = chamadas.find((c) => STATUS_EM_CURSO.has(c.status));
   const recebidaTocando = chamadas.find((c) => c.direcao === 'ENTRANTE' && c.status === 'CHAMANDO');
 
@@ -449,7 +476,7 @@ export function TelefoniaPage() {
 
       <div className="flex flex-col gap-5">
         <div className="w-full">
-          {linhaWebAtiva && linhaWebId ? <WhatsAppWebCallPanel sessao={sessaoChamadasWeb} numeroId={linhaWebId} /> : linhaCloudAtiva || !import.meta.env.DEV ? <PainelLigacoes
+          {linhaWebAtiva && linhaWebId ? <WhatsAppWebCallPanel sessao={sessaoChamadasWeb} numeroId={linhaWebId} ligarPara={ligarPara} /> : linhaCloudAtiva || !import.meta.env.DEV ? <PainelLigacoes
             linhaCloudAtiva={linhaCloudAtiva}
             transcricaoAtiva={transcricaoAtiva}
             aba={abaPainel}
@@ -481,7 +508,7 @@ export function TelefoniaPage() {
             aoNovaChamada={() => { setPosLigacao(null); setAbaPainel('fazer'); }}
           /> : <WhatsAppWebCallPanel sessao={sessaoChamadasWeb} />}
         </div>
-        <HistoricoDeChamadas chamadas={chamadas} cursor={cursor} onCarregarMais={() => void carregarMais()} />
+        <HistoricoDeChamadas chamadas={chamadas} cursor={cursor} onCarregarMais={() => void carregarMais()} aoLigar={linhaWebAtiva && linhaWebId ? ligarDeVolta : undefined} aoExcluir={temPerfil('ADMIN') ? excluirChamada : undefined} aoCriarContato={criarContato} />
       </div>
       <audio ref={audioRef} autoPlay className="hidden" />
     </div>

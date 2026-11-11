@@ -65,11 +65,21 @@ export function HistoricoDeChamadas({
   chamadas,
   cursor,
   onCarregarMais,
+  aoLigar,
+  aoExcluir,
+  aoCriarContato,
 }: {
   chamadas: Chamada[];
   cursor: string | null;
   onCarregarMais: () => void;
+  /** Liga de volta para o número da chamada selecionada (só quando a tela tem um painel de ligação ativo). */
+  aoLigar?: (numero: string) => void;
+  /** Só administrador: apaga a chamada (e a gravação) do histórico. */
+  aoExcluir?: (chamada: Chamada) => Promise<void>;
+  /** Número sem cadastro: cria o contato (e vincula as chamadas desse número). */
+  aoCriarContato?: (chamada: Chamada, nome: string) => Promise<void>;
 }) {
+  const [excluindo, setExcluindo] = useState(false);
   const [filtro, setFiltro] = useState<Filtro>('todas');
   const [selecionadaId, setSelecionadaId] = useState<string | null>(null);
   const somenteDemo = import.meta.env.DEV && chamadas.length === 0;
@@ -184,6 +194,42 @@ export function HistoricoDeChamadas({
                   </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
+                  {aoLigar && !somenteDemo && numero && (
+                    <button
+                      type="button"
+                      onClick={() => aoLigar(numero)}
+                      className={`inline-flex h-8 items-center rounded-lg px-3 text-xs font-semibold ${recebida && STATUS_PERDIDA.has(chamada.status) ? 'bg-emerald-700 text-white hover:bg-emerald-800' : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}
+                    >
+                      Ligar para o cliente
+                    </button>
+                  )}
+                  {aoCriarContato && !somenteDemo && !chamada.contato && numero && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nome = window.prompt(`Nome do contato para ${numeroLegivel(numero)}:`)?.trim();
+                        if (nome) void aoCriarContato(chamada, nome);
+                      }}
+                      className="inline-flex h-8 items-center rounded-lg border border-blue-200 bg-blue-50 px-3 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                    >
+                      Criar contato
+                    </button>
+                  )}
+                  {aoExcluir && !somenteDemo && (
+                    <button
+                      type="button"
+                      disabled={excluindo}
+                      onClick={async () => {
+                        const quem = chamada.contato?.nome ?? numeroLegivel(numero);
+                        if (!window.confirm(`Apagar esta chamada (${quem}, ${dataHora(chamada.iniciadoEm)})? A gravação, a transcrição e o resumo também serão apagados. Isso não pode ser desfeito.`)) return;
+                        setExcluindo(true);
+                        try { await aoExcluir(chamada); } finally { setExcluindo(false); }
+                      }}
+                      className="inline-flex h-8 items-center rounded-lg border border-red-200 bg-white px-3 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+                    >
+                      {excluindo ? 'Apagando…' : 'Apagar'}
+                    </button>
+                  )}
                   <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${recebida ? 'bg-emerald-50 text-emerald-700' : 'bg-blue-50 text-blue-700'}`}>{recebida ? 'Recebida' : 'Feita'}</span>
                   <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${CLASSE_STATUS[chamada.status]}`}>{LABEL_CHAMADA_STATUS[chamada.status]}</span>
                 </div>
