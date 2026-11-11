@@ -1386,6 +1386,14 @@ export type FichaContato = {
   contato: Contato & { conta: { id: string; nome: string } | null };
   indicadores: IndicadoresFicha;
   atividadesAbertas: Atividade[];
+  /** Última ligação com análise confiável (resumo gerado pelo motor local). */
+  ultimaLigacao?: { id: string; iniciadoEm: string; direcao: 'ENTRANTE' | 'SAINTE'; duracao: number | null; resumo: string | null; sentimento: 'POSITIVO' | 'NEUTRO' | 'NEGATIVO' | null } | null;
+  /** Pendências ditas nas ligações que ainda não viraram tarefa. */
+  acoesSugeridas?: Array<{ id: string; texto: string; chamadaId: string; criadoEm: string }>;
+  /** Último contato em qualquer canal (VOZ = ligação). */
+  ultimoContato?: { em: string; canal: string } | null;
+  /** Data da ligação recebida e não atendida que ainda não teve nova ligação. */
+  ligacaoPerdidaSemRetorno?: string | null;
   temPreviaWhatsapp: boolean;
   solicitacoesExclusao: Array<{
     id: string; motivo: string; status: 'PENDENTE' | 'APROVADA' | 'REJEITADA' | 'CANCELADA';

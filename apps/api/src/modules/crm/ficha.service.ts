@@ -169,14 +169,25 @@ function fontes(raiz: Raiz, credenciamentos: string[]) {
       'CHAMADA',
       Prisma.sql`
         SELECT 'CHAMADA' AS tipo, ch.id, ch.iniciado_em AS ocorrido_em,
-               CASE ch.direcao WHEN 'ENTRANTE' THEN 'Chamada recebida'
-                               ELSE 'Chamada realizada' END AS titulo,
-               concat_ws(E'\\n',
+               CASE ch.direcao
+                 WHEN 'ENTRANTE' THEN CASE WHEN ch.status::text IN ('NAO_ATENDIDA', 'OCUPADA', 'CANCELADA', 'FALHOU')
+                                           THEN 'Chamada perdida' ELSE 'Chamada recebida' END
+                 ELSE 'Chamada realizada' END AS titulo,
+               concat_ws(E'\n',
                  CASE ch.direcao WHEN 'ENTRANTE' THEN ch.numero_origem
                                  ELSE ch.numero_destino END,
                  CASE WHEN ch.duracao IS NOT NULL THEN 'Duração: ' || ch.duracao || 's' END,
-                 CASE WHEN ch.transcricao IS NOT NULL AND ch.transcricao <> ''
-                      THEN 'Transcrição: ' || ch.transcricao END) AS detalhe,
+                 -- Resumo, não a transcrição bruta: áudio curto ou mudo gera texto inventado pelo Whisper.
+                 -- Sem análise confiável ("Não foi possível..." ou confiança BAIXA) o resumo não vai para a ficha.
+                 CASE WHEN ch.resumo IS NOT NULL AND ch.resumo <> '' AND ch.resumo NOT LIKE 'Não foi possível%' AND COALESCE(ch.analisado_por, '') NOT LIKE '%confiança estimada BAIXA%'
+                      THEN 'Resumo: ' || ch.resumo END,
+                 CASE WHEN ch.sentimento IS NOT NULL AND ch.resumo IS NOT NULL AND ch.resumo <> '' AND ch.resumo NOT LIKE 'Não foi possível%' AND COALESCE(ch.analisado_por, '') NOT LIKE '%confiança estimada BAIXA%'
+                      THEN 'Sentimento: ' || initcap(lower(ch.sentimento::text)) END,
+                 CASE WHEN ch.resumo IS NOT NULL AND ch.resumo <> '' AND ch.analisado_por LIKE '%confiança estimada BAIXA%'
+                      THEN 'Resumo indisponível: a transcrição teve baixa confiança. Ouça a gravação.' END,
+                 (SELECT 'Próximas ações: ' || string_agg(a.texto, '; ' ORDER BY a.ordem)
+                    FROM acoes_sugeridas_da_chamada a
+                   WHERE a.chamada_id = ch.id AND a.descartado_em IS NULL)) AS detalhe,
                'VOZ' AS canal, ch.status::text AS situacao,
                NULL::numeric AS valor, ch.id AS referencia,
                'CONTATO' AS escopo, u.nome AS usuario_nome, ch.gravacao_url, NULL::text AS operacao
@@ -403,7 +414,16 @@ export async function fichaContato(contatoId: string) {
   if (!contato) throw notFound('Contato não encontrado');
 
   const raiz: Raiz = { contatoId, contaId: contato.contaId };
-  const [indicadores, atividades, solicitacoesExclusao] = await Promise.all([
+  // Só análise confiável vai para a ficha: sem "Não foi possível..." e sem confiança BAIXA (texto inventado pelo Whisper em áudio ruim).
+  const analiseConfiavel: Prisma.CallWhereInput = {
+    resumo: { not: null },
+    AND: [
+      { resumo: { not: '' } },
+      { NOT: { resumo: { startsWith: 'Não foi possível' } } },
+      { NOT: { analisadoPor: { contains: 'confiança estimada BAIXA' } } },
+    ],
+  };
+  const [indicadores, atividades, solicitacoesExclusao, ultimaLigacao, acoesSugeridas, ultimaConversa, ultimaChamada] = await Promise.all([
     resumo(raiz),
     prisma.activity.findMany({
       where: { concluidoEm: null, prazo: { not: null }, contatoId },
@@ -415,13 +435,38 @@ export async function fichaContato(contatoId: string) {
       where: { contatoId }, orderBy: { solicitadoEm: 'desc' }, take: 20,
       include: { solicitadoPor: { select: { id: true, nome: true } }, aprovadoPor: { select: { id: true, nome: true } } },
     }),
+    prisma.call.findFirst({
+      where: { contatoId, ...analiseConfiavel },
+      orderBy: { iniciadoEm: 'desc' },
+      select: { id: true, iniciadoEm: true, direcao: true, duracao: true, resumo: true, sentimento: true },
+    }),
+    // Pendências ditas nas ligações que ainda não viraram tarefa nem foram descartadas.
+    prisma.callSuggestedAction.findMany({
+      where: { descartadoEm: null, atividadeId: null, chamada: { contatoId, ...analiseConfiavel } },
+      orderBy: [{ criadoEm: 'desc' }, { ordem: 'asc' }],
+      take: 5,
+      select: { id: true, texto: true, chamadaId: true, criadoEm: true },
+    }),
+    prisma.conversation.findFirst({ where: { contatoId }, orderBy: { ultimaMensagemEm: 'desc' }, select: { ultimaMensagemEm: true, canal: true } }),
+    prisma.call.findFirst({ where: { contatoId }, orderBy: { iniciadoEm: 'desc' }, select: { iniciadoEm: true, direcao: true, status: true } }),
   ]);
+
+  // Último contato com o cliente, qualquer canal. Sem interpretar nada: só a data e por onde foi.
+  const candidatos = [
+    ultimaConversa ? { em: ultimaConversa.ultimaMensagemEm, canal: ultimaConversa.canal as string } : null,
+    ultimaChamada ? { em: ultimaChamada.iniciadoEm, canal: 'VOZ' } : null,
+  ].filter((c): c is { em: Date; canal: string } => c !== null);
+  const ultimoContato = candidatos.length ? candidatos.reduce((a, b) => (b.em > a.em ? b : a)) : null;
+  // Cliente ligou e ninguém atendeu, e desde então não houve nova ligação: pede retorno.
+  const STATUS_PERDIDA = ['NAO_ATENDIDA', 'OCUPADA', 'CANCELADA', 'FALHOU'];
+  const ligacaoPerdidaSemRetorno =
+    ultimaChamada && ultimaChamada.direcao === 'ENTRANTE' && STATUS_PERDIDA.includes(ultimaChamada.status) ? ultimaChamada.iniciadoEm : null;
 
   const temPreviaWhatsapp = contato.telefone
     ? (await prisma.chatPreview.count({ where: { numero: contato.telefone } })) > 0
     : false;
 
-  return { contato, indicadores, atividadesAbertas: atividades, temPreviaWhatsapp, solicitacoesExclusao };
+  return { contato, indicadores, atividadesAbertas: atividades, temPreviaWhatsapp, solicitacoesExclusao, ultimaLigacao, acoesSugeridas, ultimoContato, ligacaoPerdidaSemRetorno };
 }
 
 export async function fichaConta(contaId: string) {

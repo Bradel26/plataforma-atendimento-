@@ -405,6 +405,8 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoVoltar }: FichaPro
         )}
       </Card>
 
+      {!demonstracaoLocal && <SituacaoDoCliente ficha={ficha} />}
+
       <section aria-label="Resumo do relacionamento com o cliente" className="grid shrink-0 grid-cols-2 gap-2 xl:grid-cols-4">
         {[
           { label: 'Conversas', value: indicadoresExibidos.conversas, descricao: indicadoresExibidos.conversas ? 'registradas' : 'nenhuma registrada', tone: 'bg-blue-500', text: 'text-sky-600' },
@@ -435,6 +437,35 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoVoltar }: FichaPro
               <p className="leading-relaxed text-slate-700">{contato.observacoes ?? (demonstracaoLocal ? 'Tem interesse em conhecer os serviços. Na nota de ontem, ficou combinado enviar informações e retornar em dois dias.' : 'Confira o histórico e os registros recentes antes de iniciar o contato.')}</p>
               <div className="rounded-lg bg-amber-50 px-3 py-2 text-[10px] font-medium leading-relaxed text-amber-800">● &nbsp;{demonstracaoLocal ? 'Confirmar o envio das informações e agendar o retorno combinado.' : atividadesAbertas[0]?.titulo ?? 'Nenhuma próxima ação registrada.'}</div>
               {atividadesAbertas[0]?.prazo && <p className="text-[10px] text-slate-500">Prazo: {dataHora(atividadesAbertas[0].prazo)}</p>}
+              {!demonstracaoLocal && ficha.ultimaLigacao?.resumo && (
+                <div className="rounded-lg border border-violet-100 bg-violet-50 px-3 py-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-700">
+                    Última ligação · {dataHora(ficha.ultimaLigacao.iniciadoEm)}
+                    {ficha.ultimaLigacao.sentimento ? ` · ${{ POSITIVO: 'positivo', NEUTRO: 'neutro', NEGATIVO: 'negativo' }[ficha.ultimaLigacao.sentimento]}` : ''}
+                  </p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-slate-800">{ficha.ultimaLigacao.resumo}</p>
+                </div>
+              )}
+              {!demonstracaoLocal && (ficha.acoesSugeridas?.length ?? 0) > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Pendências ditas nas ligações</p>
+                  {ficha.acoesSugeridas!.map((acao) => (
+                    <div key={acao.id} className="flex items-start justify-between gap-2 rounded-lg bg-amber-50 px-3 py-2">
+                      <span className="text-[11px] leading-relaxed text-amber-900">● {acao.texto}</span>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try { await api.post(`/voz/chamadas/${encodeURIComponent(acao.chamadaId)}/acoes/${encodeURIComponent(acao.id)}/tarefa`, {}); atualizar(); }
+                          catch (e) { setErro(e instanceof ApiError ? e.message : 'Não foi possível criar a tarefa.'); }
+                        }}
+                        className="shrink-0 rounded-md border border-amber-300 bg-white px-2 py-1 text-[10px] font-semibold text-amber-900 hover:bg-amber-100"
+                      >
+                        Criar tarefa
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </Card>
           <Card compact titulo="Dados do cliente">
@@ -525,5 +556,61 @@ export function FichaVazia() {
         </p>
       </div>
     </Card>
+  );
+}
+
+const ROTULO_CANAL: Record<string, string> = { VOZ: 'ligação', WHATSAPP: 'WhatsApp', EMAIL: 'e-mail', WEBCHAT: 'chat do site', TELEGRAM: 'Telegram', INSTAGRAM: 'Instagram', FACEBOOK: 'Facebook' };
+
+function haQuantoTempo(iso: string) {
+  const dias = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+  if (dias <= 0) return 'hoje';
+  if (dias === 1) return 'ontem';
+  if (dias < 30) return `há ${dias} dias`;
+  const meses = Math.floor(dias / 30);
+  return meses === 1 ? 'há 1 mês' : `há ${meses} meses`;
+}
+
+/** Faixa fixa no topo da ficha: onde está o relacionamento, sem interpretação de IA. Só fatos já registrados. */
+function SituacaoDoCliente({ ficha }: { ficha: Ficha }) {
+  const { indicadores: i, atividadesAbertas, ultimoContato, ligacaoPerdidaSemRetorno } = ficha;
+  const proxima = atividadesAbertas[0] ?? null;
+  const atrasada = Boolean(proxima?.prazo && new Date(proxima.prazo).getTime() < Date.now());
+  const emAberto = [
+    i.atividadesAbertas ? `${i.atividadesAbertas} ${i.atividadesAbertas === 1 ? 'tarefa' : 'tarefas'}` : null,
+    i.protocolosAbertos ? `${i.protocolosAbertos} ${i.protocolosAbertos === 1 ? 'protocolo' : 'protocolos'}` : null,
+    i.oportunidadesAbertas ? `${i.oportunidadesAbertas} ${i.oportunidadesAbertas === 1 ? 'oportunidade' : 'oportunidades'}` : null,
+  ].filter(Boolean);
+  const itens: Array<{ rotulo: string; valor: string; detalhe?: string; alerta?: boolean }> = [
+    {
+      rotulo: 'Último contato',
+      valor: ultimoContato ? haQuantoTempo(ultimoContato.em) : 'Nunca',
+      detalhe: ultimoContato ? `${ROTULO_CANAL[ultimoContato.canal] ?? ultimoContato.canal.toLowerCase()} · ${dataHora(ultimoContato.em)}` : 'Sem conversa nem ligação registrada',
+    },
+    {
+      rotulo: 'Próxima tarefa',
+      valor: proxima ? proxima.titulo : 'Nenhuma',
+      detalhe: proxima?.prazo ? `${atrasada ? 'Atrasada · ' : ''}prazo ${dataHora(proxima.prazo)}` : undefined,
+      alerta: atrasada,
+    },
+    { rotulo: 'Em aberto', valor: emAberto.length ? emAberto.join(' · ') : 'Nada pendente' },
+    { rotulo: 'Já comprou', valor: i.valorGanho > 0 ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(i.valorGanho) : 'Sem venda registrada', detalhe: i.oportunidadesGanhas ? `${i.oportunidadesGanhas} ${i.oportunidadesGanhas === 1 ? 'venda ganha' : 'vendas ganhas'}` : undefined },
+  ];
+  return (
+    <section aria-label="Situação do cliente" className="shrink-0 space-y-2">
+      {ligacaoPerdidaSemRetorno && (
+        <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">
+          ● O cliente ligou em {dataHora(ligacaoPerdidaSemRetorno)} e ninguém atendeu. Ainda não houve nova ligação: vale retornar.
+        </div>
+      )}
+      <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
+        {itens.map((item) => (
+          <div key={item.rotulo} className={`min-h-[62px] rounded-xl border px-3 py-2 shadow-sm ${item.alerta ? 'border-red-200 bg-red-50' : 'border-slate-200 bg-white'}`}>
+            <p className="text-[10px] font-medium uppercase text-slate-500">{item.rotulo}</p>
+            <p className={`mt-0.5 truncate text-sm font-semibold ${item.alerta ? 'text-red-700' : 'text-slate-900'}`} title={item.valor}>{item.valor}</p>
+            {item.detalhe && <p className="truncate text-[10px] text-slate-500" title={item.detalhe}>{item.detalhe}</p>}
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }

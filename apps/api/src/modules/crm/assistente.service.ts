@@ -187,7 +187,7 @@ async function resumirVidaDoCliente(
     // A lista de Telefonia esconde transcrição de quem não é gestor quando a
     // chamada não passou por uma linha WhatsApp configurada.
     if (evento.tipo === 'CHAMADA' && !permitidos.gestor && permitidos.chamadas.get(evento.id) === null && detalhe) {
-      detalhe = detalhe.split('\n').filter((linha) => !linha.trim().startsWith('Transcrição:')).join('\n');
+      detalhe = detalhe.split('\n').filter((linha) => !/^(Transcri|Resumo|Sentimento|Pr[óo]ximas a)[^:]*:/.test(linha.trim())).join('\n');
     }
     return {
     id: evento.id,
