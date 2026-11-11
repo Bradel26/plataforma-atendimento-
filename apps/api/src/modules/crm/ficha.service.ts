@@ -404,7 +404,11 @@ async function resumo(raiz: Raiz) {
   };
 }
 
-export async function fichaContato(contatoId: string) {
+/**
+ * `ator` decide o que sai de ligação: gestor vê todas; os demais, só as que atenderam (mesma regra da lista da
+ * Telefonia). Sem `ator`, nenhum dado derivado de ligação (resumo, pendências) é devolvido.
+ */
+export async function fichaContato(contatoId: string, ator?: { id: string; gestor: boolean }) {
   // A ficha e a porta de entrada do registro: se ele nao esta no escopo de quem
   // pediu, nem os indicadores devem ser calculados. 404, nao 403.
   const contato = await prisma.contact.findFirst({
@@ -423,6 +427,7 @@ export async function fichaContato(contatoId: string) {
       { NOT: { analisadoPor: { contains: 'confiança estimada BAIXA' } } },
     ],
   };
+  const visaoDasLigacoes: Prisma.CallWhereInput = ator && !ator.gestor ? { agenteId: ator.id } : {};
   const [indicadores, atividades, solicitacoesExclusao, ultimaLigacao, acoesSugeridas, ultimaConversa, ultimaChamada] = await Promise.all([
     resumo(raiz),
     prisma.activity.findMany({
@@ -435,18 +440,22 @@ export async function fichaContato(contatoId: string) {
       where: { contatoId }, orderBy: { solicitadoEm: 'desc' }, take: 20,
       include: { solicitadoPor: { select: { id: true, nome: true } }, aprovadoPor: { select: { id: true, nome: true } } },
     }),
-    prisma.call.findFirst({
-      where: { contatoId, ...analiseConfiavel },
-      orderBy: { iniciadoEm: 'desc' },
-      select: { id: true, iniciadoEm: true, direcao: true, duracao: true, resumo: true, sentimento: true },
-    }),
+    ator
+      ? prisma.call.findFirst({
+          where: { contatoId, ...analiseConfiavel, ...visaoDasLigacoes },
+          orderBy: { iniciadoEm: 'desc' },
+          select: { id: true, iniciadoEm: true, direcao: true, duracao: true, resumo: true, sentimento: true },
+        })
+      : null,
     // Pendências ditas nas ligações que ainda não viraram tarefa nem foram descartadas.
-    prisma.callSuggestedAction.findMany({
-      where: { descartadoEm: null, atividadeId: null, chamada: { contatoId, ...analiseConfiavel } },
-      orderBy: [{ criadoEm: 'desc' }, { ordem: 'asc' }],
-      take: 5,
-      select: { id: true, texto: true, chamadaId: true, criadoEm: true },
-    }),
+    ator
+      ? prisma.callSuggestedAction.findMany({
+          where: { descartadoEm: null, atividadeId: null, chamada: { contatoId, ...analiseConfiavel, ...visaoDasLigacoes } },
+          orderBy: [{ criadoEm: 'desc' }, { ordem: 'asc' }],
+          take: 5,
+          select: { id: true, texto: true, chamadaId: true, criadoEm: true },
+        })
+      : [],
     prisma.conversation.findFirst({ where: { contatoId }, orderBy: { ultimaMensagemEm: 'desc' }, select: { ultimaMensagemEm: true, canal: true } }),
     prisma.call.findFirst({ where: { contatoId }, orderBy: { iniciadoEm: 'desc' }, select: { iniciadoEm: true, direcao: true, status: true } }),
   ]);

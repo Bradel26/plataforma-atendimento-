@@ -58,7 +58,8 @@ const timelineSchema = z.object({
 fichaRoutes.get(
   '/contato/:id',
   asyncHandler(async (req, res) => {
-    res.json(await fichaContato(param(req, 'id')));
+    const gestor = req.user!.perfil === 'ADMIN' || req.user!.perfil === 'SUPERVISOR';
+    res.json(await fichaContato(param(req, 'id'), { id: req.user!.sub, gestor }));
   }),
 );
 
