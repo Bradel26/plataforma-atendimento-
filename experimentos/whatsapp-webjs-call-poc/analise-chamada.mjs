@@ -75,11 +75,13 @@ export function contarPalavras(texto) { return (String(texto).match(/[\p{L}\p{N}
 /** Confiança vem das métricas do Whisper e do volume de fala, não de um modelo reescrevendo o texto. */
 export function estimarConfianca(partes, palavras) {
   if (palavras < 12) return 'BAIXA';
-  // Média de "sem fala", não o pico: um único trecho duvidoso não pode derrubar uma conversa inteira bem reconhecida.
-  const semFala = (p) => p.noSpeechMedia ?? p.noSpeechProb ?? null;
-  const ruim = partes.some((p) => (p.avgLogprob != null && p.avgLogprob < -0.85) || (semFala(p) != null && semFala(p) >= 0.5));
+  // O avgLogprob é a medida estável de qualidade. "Sem fala" oscila entre execuções do mesmo áudio (cada faixa fica
+  // muda enquanto o outro fala), então só conta como sinal fraco quando o reconhecimento já não está bom.
+  const semFala = (p) => p.noSpeechMedia ?? p.noSpeechProb ?? 0;
+  const logprob = (p) => p.avgLogprob ?? -1;
+  const ruim = partes.some((p) => logprob(p) < -0.85 || (semFala(p) >= 0.5 && logprob(p) < -0.5));
   if (ruim) return 'BAIXA';
-  const risco = partes.some((p) => (p.avgLogprob != null && p.avgLogprob < -0.55) || (semFala(p) != null && semFala(p) >= 0.25));
+  const risco = partes.some((p) => logprob(p) < -0.55 || (semFala(p) >= 0.25 && logprob(p) < -0.35));
   return risco ? 'MEDIA' : 'ALTA';
 }
 

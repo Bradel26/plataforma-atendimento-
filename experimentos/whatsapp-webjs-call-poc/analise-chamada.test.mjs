@@ -61,6 +61,11 @@ test('confiança: pouca fala é BAIXA; métricas ruins BAIXA; risco MEDIA; limpo
   assert.equal(estimarConfianca([{ avgLogprob: -0.2, noSpeechProb: 0.01 }], 80), 'ALTA');
 });
 
+test('"sem fala" alto com reconhecimento ótimo não derruba a confiança (faixa fica muda quando o outro fala)', () => {
+  assert.equal(estimarConfianca([{ avgLogprob: -0.11, noSpeechProb: 0.88, noSpeechMedia: 0.55 }, { avgLogprob: -0.15, noSpeechProb: 0.73, noSpeechMedia: 0.4 }], 377), 'ALTA');
+  assert.equal(estimarConfianca([{ avgLogprob: -0.6, noSpeechProb: 0.9, noSpeechMedia: 0.6 }], 80), 'BAIXA');
+});
+
 test('divide texto grande entre falas, sem perder conteúdo', () => {
   const falas = Array.from({ length: 40 }, (_, i) => `Cliente: fala número ${i} ${'x'.repeat(300)}`);
   const blocos = dividirTexto(falas.join('\n\n'), 3000);
