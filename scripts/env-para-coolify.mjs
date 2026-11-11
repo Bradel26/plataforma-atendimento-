@@ -38,7 +38,10 @@ const ajustes = {
   TRUST_PROXY: 'true',
   TRANSCRICAO_PROVEDOR: 'local',
   TRANSCRICAO_LOCAL_URL: 'http://127.0.0.1:3334/v1/audio/transcriptions',
-  TRANSCRICAO_LOCAL_MODELO: 'base',
+  // `small` foi o modelo validado nas ligações (nomes e números); `base` erra mais. Sobrescreva no
+  // .env.production se a VPS não aguentar: o valor de lá vence este padrão.
+  TRANSCRICAO_LOCAL_MODELO: lido.TRANSCRICAO_LOCAL_MODELO || 'small',
+  LIGACAO_IA_OLLAMA_MODELO: lido.LIGACAO_IA_OLLAMA_MODELO || 'qwen3:4b',
 };
 
 const ORDEM = [
@@ -80,6 +83,11 @@ const ORDEM = [
   'TRANSCRICAO_PROVEDOR',
   'TRANSCRICAO_LOCAL_URL',
   'TRANSCRICAO_LOCAL_MODELO',
+  // Whisper do container: núcleos usados, idioma e vocabulário do negócio (ver docs/producao-analise-ligacoes.md).
+  'WHISPER_CPU_THREADS',
+  'TRANSCRICAO_IDIOMA',
+  'TRANSCRICAO_VOCABULARIO',
+  'WEBJS_TEMPO_TOQUE_MS',
   'OPORTUNIDADE_IA_OLLAMA_URL',
   'OPORTUNIDADE_IA_OLLAMA_MODELO',
   'CRM_IA_OLLAMA_URL',
@@ -110,3 +118,16 @@ console.log('Abra o arquivo, selecione tudo, copie, e cole no Coolify em');
 console.log('Environment Variables > Developer view.');
 console.log('');
 console.log('Nenhum valor foi impresso aqui de proposito.');
+
+// O resumo das ligações depende de um Ollama FORA do container. Sem a URL, o conector procura em 127.0.0.1
+// do próprio container, não acha, e o resumo nunca é gerado (a transcrição continua sendo salva).
+if (!final.LIGACAO_IA_OLLAMA_URL) {
+  console.log('');
+  console.log('ATENCAO: LIGACAO_IA_OLLAMA_URL nao esta no .env.production.');
+  console.log('Sem ela o resumo das ligacoes nao e gerado em producao.');
+  console.log('Suba o Ollama no Coolify e defina a URL interna (docs/producao-analise-ligacoes.md).');
+}
+if (final.TRANSCRICAO_LOCAL_MODELO === 'base') {
+  console.log('');
+  console.log('AVISO: TRANSCRICAO_LOCAL_MODELO=base. O modelo validado para as ligacoes e o small.');
+}
