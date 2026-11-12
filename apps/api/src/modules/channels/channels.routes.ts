@@ -293,9 +293,9 @@ channelsRoutes.get(
      */
     const caminhoWebhook = `/api/webhooks/ponte/whatsapp/${organizacaoAtual()}`;
 
-    if (!config || modoEfetivo(config.modo) !== 'NAO_OFICIAL') {
+    if (!config || !config.ativo || modoEfetivo(config.modo) !== 'NAO_OFICIAL') {
       res.json({
-        estado: { situacao: 'DESCONHECIDO', detalhe: 'o WhatsApp não está no modo não oficial' },
+        estado: { situacao: 'DESCONHECIDO', detalhe: config && !config.ativo ? 'a linha compartilhada está desativada' : 'o WhatsApp não está no modo não oficial' },
         aviso: AVISO_NAO_OFICIAL,
         caminhoWebhook,
       });
@@ -324,6 +324,11 @@ channelsRoutes.get(
 
     if (!config || modoEfetivo(config.modo) !== 'NAO_OFICIAL') {
       res.json({ qr: null, conectado: false, motivo: 'o WhatsApp não está no modo não oficial' });
+      return;
+    }
+    // Pedir o QR inicia a sessão (um Chromium inteiro no conector). Linha desativada não pode ressuscitar só porque o painel está aberto.
+    if (!config.ativo) {
+      res.json({ qr: null, conectado: false, motivo: 'a linha compartilhada está desativada' });
       return;
     }
 

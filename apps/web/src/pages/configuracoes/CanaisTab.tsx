@@ -182,7 +182,8 @@ export function CanaisTab() {
         x.perfil === 'ADMIN' || x.perfil === 'COMERCIAL' || x.perfil === 'AGENTE'
       ));
 
-      const zap = c.canais.find((x) => x.canal === 'WHATSAPP');
+      // O card "WhatsApp Business" é a linha compartilhada (sem dono); as pessoais aparecem em "Números pessoais".
+      const zap = c.canais.find((x) => x.canal === 'WHATSAPP' && !x.dono);
       if (!modoTocado.current) setModo(zap?.modo ?? 'OFICIAL');
 
       /*
@@ -532,7 +533,7 @@ export function CanaisTab() {
     });
   };
 
-  const atual = canais.find((c) => c.canal === editando);
+  const atual = canais.find((c) => c.canal === editando && !c.dono);
   const urlWebhook = `${window.location.origin}/api/webhooks/${editando.toLowerCase()}`;
 
   return (
@@ -543,7 +544,7 @@ export function CanaisTab() {
 
         <ul className="divide-y divide-slate-100">
           {SUPORTADOS.map((canal) => {
-            const config = canais.find((c) => c.canal === canal);
+            const config = canais.find((c) => c.canal === canal && !c.dono);
             return (
               <li key={canal} className="flex items-center justify-between gap-4 py-3">
                 <div className="min-w-0">
