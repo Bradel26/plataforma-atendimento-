@@ -100,6 +100,27 @@ function gravacaoPertenceASessao(nome, sessaoEsperada) {
   return resultado?.[1] === sessaoEsperada;
 }
 
+/** Registra no log se a pilha de chamadas do WhatsApp Web está ativa e o que o navegador enxerga de mídia. */
+async function registrarDiagnosticoVoip(sessao, momento) {
+  try {
+    const page = sessao.client?.pupPage;
+    if (!page) return;
+    const estado = await page.evaluate(async () => {
+      let pilha = 'indisponivel';
+      try { pilha = window.require('WAWebVoipStackInterface').getVoipStackInterface() ? 'ativa' : 'nula'; } catch (e) { pilha = `erro: ${String(e?.message || e).slice(0, 80)}`; }
+      let dispositivos = 'sem mediaDevices';
+      try {
+        const lista = navigator.mediaDevices ? await navigator.mediaDevices.enumerateDevices() : [];
+        dispositivos = lista.length ? lista.map((d) => d.kind).join(',') : 'nenhum';
+      } catch (e) { dispositivos = `erro: ${String(e?.message || e).slice(0, 80)}`; }
+      return { pilha, dispositivos, sab: typeof SharedArrayBuffer, wasm: typeof WebAssembly, isolado: Boolean(window.crossOriginIsolated) };
+    });
+    console.info(`[whatsapp:${sessao.nome}] diagnostico VoIP (${momento}): pilha=${estado.pilha}; dispositivos=${estado.dispositivos}; SharedArrayBuffer=${estado.sab}; WebAssembly=${estado.wasm}; isolado=${estado.isolado}`);
+  } catch (error) {
+    console.warn(`[whatsapp:${sessao.nome}] diagnostico VoIP falhou (${momento}): ${String(error?.message || error).slice(0, 160)}`);
+  }
+}
+
 function motivoLegivelDaQueda(reason) {
   const codigo = String(reason || '').trim().toUpperCase();
   if (codigo === 'CONFLICT') return 'Outra sessão do WhatsApp foi iniciada com este número.';
@@ -481,7 +502,10 @@ async function iniciarCliente(nomeSessao = 'teste-local') {
       webVersion: WEB_VERSION,
       webVersionCache: { type: 'local', path: WEB_CACHE_DIR },
       authTimeoutMs: AUTENTICACAO_PAGINA_TIMEOUT_MS,
-      puppeteer: { headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--autoplay-policy=no-user-gesture-required'] },
+      // Em container não há placa de áudio nem câmera: sem dispositivos de mídia falsos o WhatsApp Web não liga a pilha
+      // de chamadas (getVoipStackInterface() devolve nulo e nem ligar nem atender funciona). O áudio real da chamada
+      // não passa por aqui: o conector injeta o próprio fluxo (setupCallMediaStream).
+      puppeteer: { headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--autoplay-policy=no-user-gesture-required', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] },
     });
     const thisClient = client;
     sessao.client = client;
@@ -668,6 +692,7 @@ async function iniciarCliente(nomeSessao = 'teste-local') {
       sessao.progressoDeCarregamento = null;
       sessao.estadoWeb = null;
       console.info(`[whatsapp:${sessao.nome}] sessao pronta`);
+      setTimeout(() => { if (sessao.client === thisClient) void registrarDiagnosticoVoip(sessao, 'apos ficar pronta'); }, 30_000);
       sessao.status = 'conectado';
       sessao.latestQr = null;
       void marcarPerfilConectado(profileDir);
@@ -872,6 +897,7 @@ app.post('/api/call', async (req, res) => {
     sessao.currentCall = await sessao.client.call(phone, { waitForAnswer: true, answerTimeout: 45000 });
     if (!sessao.currentCall?.id) {
       sessao.currentCall = null;
+      void registrarDiagnosticoVoip(sessao, 'ligacao sem chamada ativa');
       return res.status(409).json({ error: 'O WhatsApp não retornou uma chamada ativa. Confira o número e tente novamente.' });
     }
     if (!sessao.callInfo) {
@@ -976,6 +1002,7 @@ app.post('/api/platform/call', async (req, res) => {
     sessao.currentCall = await sessao.client.call(phone, { waitForAnswer: true, answerTimeout: 45000 });
     if (!sessao.currentCall?.id) {
       sessao.currentCall = null;
+      void registrarDiagnosticoVoip(sessao, 'ligacao sem chamada ativa');
       return res.status(409).json({ error: 'O WhatsApp não retornou uma chamada ativa. Confira o número e tente novamente.' });
     }
     if (!sessao.callInfo) {
