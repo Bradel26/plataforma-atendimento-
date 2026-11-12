@@ -284,16 +284,33 @@ const FORMATO_RESUMO = {
 };
 const INSTRUCOES_RESUMO = 'Responda somente em português do Brasil. Você resume uma ligação de atendimento comercial entre um Cliente e um Atendente a partir da transcrição automática, que pode ter erros de reconhecimento. Regras: use SOMENTE o que está na transcrição; não invente nomes, números, produtos, datas ou valores; se um trecho for confuso, ignore-o em vez de interpretar; copie nomes e números exatamente como aparecem. O resumo tem de 2 a 4 frases objetivas sobre o que o cliente quer e o que foi combinado. proximasAcoes lista só compromissos ou pendências ditos na conversa, cada um curto e no imperativo, e fica vazia se não houver. sentimento é o do cliente.';
 
+// Servidor com pouca memória: contexto de 4096 tokens (metade do cache do modelo) e descarregar o modelo logo após o
+// resumo (keep_alive 0) deixam folga para o Chromium e o Whisper. Em máquina grande, suba pelas variáveis.
+const OLLAMA_NUM_CTX = Number(process.env.LIGACAO_IA_NUM_CTX) || 4096;
+const OLLAMA_KEEP_ALIVE = process.env.LIGACAO_IA_KEEP_ALIVE?.trim() || '0';
+const TENTATIVAS_RESUMO = 2;
+const ESPERA_ENTRE_TENTATIVAS_MS = Number(process.env.LIGACAO_IA_ESPERA_TENTATIVA_MS) || 20_000;
+
 async function chamarOllama(mensagens, timeoutMs = 240_000) {
-  const response = await fetch(new URL('/api/chat', OLLAMA_URL), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: OLLAMA_MODELO, stream: false, think: false, format: FORMATO_RESUMO, options: { temperature: 0, num_ctx: 8192 }, messages: mensagens }),
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-  if (!response.ok) throw new Error(`O resumo local respondeu HTTP ${response.status}.`);
-  const envelope = await response.json();
-  return JSON.parse(envelope.message?.content || '{}');
+  let ultimoErro;
+  for (let tentativa = 1; tentativa <= TENTATIVAS_RESUMO; tentativa += 1) {
+    try {
+      const response = await fetch(new URL('/api/chat', OLLAMA_URL), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: OLLAMA_MODELO, stream: false, think: false, keep_alive: OLLAMA_KEEP_ALIVE, format: FORMATO_RESUMO, options: { temperature: 0, num_ctx: OLLAMA_NUM_CTX }, messages: mensagens }),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (!response.ok) throw new Error(`O resumo local respondeu HTTP ${response.status}.`);
+      const envelope = await response.json();
+      return JSON.parse(envelope.message?.content || '{}');
+    } catch (error) {
+      ultimoErro = error;
+      console.warn(`[analise] resumo falhou (tentativa ${tentativa}/${TENTATIVAS_RESUMO}): ${String(error?.message || error).slice(0, 200)}`);
+      if (tentativa < TENTATIVAS_RESUMO) await new Promise((resolve) => setTimeout(resolve, ESPERA_ENTRE_TENTATIVAS_MS));
+    }
+  }
+  throw ultimoErro;
 }
 
 /** Estado dos motores da análise de ligações: log de inicialização e rota /api/platform/saude-analise. */
@@ -329,7 +346,7 @@ function registrarSaudeDaAnalise(estado) {
 
 /** Resume o diálogo. Conversa grande é resumida por partes e depois unificada, para caber no contexto do modelo. */
 async function resumirDialogo(dialogo) {
-  const blocos = dividirTexto(dialogo, 7000);
+  const blocos = dividirTexto(dialogo, 6000); // ~1.700 tokens: cabe com instruções e resposta em 4096
   if (blocos.length === 1) {
     return chamarOllama([{ role: 'system', content: INSTRUCOES_RESUMO }, { role: 'user', content: `Transcrição da ligação:\n\n${blocos[0]}` }]);
   }
