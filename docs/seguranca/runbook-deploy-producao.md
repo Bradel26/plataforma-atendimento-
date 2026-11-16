@@ -1,3 +1,5 @@
+> **SUBSTITUÍDO por `docs/producao/roteiro-deploy-ligacoes-prod.md`.** Este roteiro supunha o deploy pela `main` (CI), mas a produção é construída pela branch `release/ligacoes-prod` com deploy **manual** no Coolify (verificado em 2026-11-16). Não siga os passos de push/merge na `main` daqui.
+
 # Roteiro de publicação em produção — correções de segurança, sessão e Socket.IO
 
 **Estado: preparado, NÃO executado.** Nada aqui foi rodado contra produção, Neon, Upstash ou Coolify. Este roteiro só começa quando o responsável disser **"DEPLOY"**; naquele momento todas as verificações da §1 são refeitas contra o ambiente real e **cada ação com efeito externo (§3 em diante) pede autorização explícita**.
