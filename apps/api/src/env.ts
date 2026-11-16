@@ -57,6 +57,13 @@ const schema = z.object({
   /** Mesmo Ollama pode analisar chamadas; permite URL/modelo próprios para voz. */
   LIGACAO_IA_OLLAMA_URL: z.string().url().optional(),
   LIGACAO_IA_OLLAMA_MODELO: z.string().min(1).optional(),
+  /**
+   * Janela de contexto (tokens) do Ollama ao resumir uma ligacao. O texto vai em
+   * blocos de ~1.800 tokens, entao 8192 sobra com folga. Cada token de contexto custa
+   * memoria (qwen3:4b: ~150 KB/token; 16384 = ~2,4 GB alem do modelo). O conector le a
+   * MESMA variavel.
+   */
+  LIGACAO_IA_NUM_CTX: z.coerce.number().int().min(2048).max(262144).default(8192),
   /** Assistente conversacional de consultas somente leitura ao CRM. */
   CRM_IA_OLLAMA_URL: z.string().url().optional(),
   CRM_IA_OLLAMA_MODELO: z.string().min(1).optional(),

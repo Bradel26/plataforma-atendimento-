@@ -7,6 +7,7 @@ import { prismaSemIsolamento } from '../../lib/prisma';
 import { comOrganizacao, semOrganizacao } from '../../lib/tenant';
 import { obterSegredoWebhookWppConnect } from '../../config/wppconnect.config';
 import { registrarMensagemEntrante } from './inbound.service';
+import { env } from '../../env';
 import { normalizarEventoWpp } from './wppconnect.inbound';
 import { registrarEstadoDaSessao } from './webhooks/eventos-de-canal';
 import { segredoRecebido } from './providers/segredo-webhook';
@@ -85,7 +86,8 @@ async function organizacaoDaSessao(sessao: string): Promise<string | null> {
 wppconnectWebhookRoutes.post(
   '/',
   verificarSegredo,
-  json({ limit: '1mb' }),
+  // A midia vai em base64 dentro do corpo (~4/3 do binario): o limite acompanha UPLOAD_MAX_MB.
+  json({ limit: `${Math.ceil(env.UPLOAD_MAX_MB * 1.4) + 1}mb` }),
   asyncHandler(async (req, res) => {
     const corpo = req.body as unknown;
 

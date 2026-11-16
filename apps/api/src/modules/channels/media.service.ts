@@ -20,9 +20,11 @@ const GRAPH = `https://graph.facebook.com/${env.META_GRAPH_API_VERSION}`;
  */
 export async function baixarAnexo(
   canal: Channel,
-  dados: Pick<MensagemNormalizada, 'tipoAnexo' | 'anexoUrl' | 'anexoIdExterno' | 'anexoNome' | 'identificadorDestino'>,
+  dados: Pick<MensagemNormalizada, 'tipoAnexo' | 'anexoUrl' | 'anexoIdExterno' | 'anexoNome' | 'identificadorDestino' | 'anexoConteudo'>,
 ): Promise<{ url: string | null; motivo?: string }> {
   if (dados.tipoAnexo === 'TEXTO') return { url: null };
+  // Conector do WhatsApp Web: o binario ja veio no webhook, sem chamada externa.
+  if (dados.anexoConteudo) return salvarConteudoRecebido(dados);
   if (!dados.anexoIdExterno && !dados.anexoUrl) return { url: null, motivo: 'mensagem sem anexo localizável' };
 
   try {
@@ -77,3 +79,22 @@ async function metadadosCloudApi(mediaId: string, token: string | null) {
 
 const nomePadrao = (tipo: MensagemNormalizada['tipoAnexo']) =>
   ({ IMAGEM: 'imagem', AUDIO: 'audio', VIDEO: 'video', ARQUIVO: 'arquivo', TEXTO: 'arquivo' })[tipo];
+
+async function salvarConteudoRecebido(
+  dados: Pick<MensagemNormalizada, 'tipoAnexo' | 'anexoNome' | 'anexoConteudo'>,
+): Promise<{ url: string | null; motivo?: string }> {
+  try {
+    const { base64, mimetype } = dados.anexoConteudo!;
+    const tipo = mimetype.split(';')[0]!.trim().toLowerCase();
+    if (!tipoAceito(tipo)) return { url: null, motivo: `tipo não aceito: ${tipo || 'desconhecido'}` };
+    const buffer = Buffer.from(base64, 'base64');
+    if (buffer.length === 0) return { url: null, motivo: 'anexo vazio' };
+    if (buffer.length > limiteBytes) {
+      return { url: null, motivo: `anexo de ${Math.round(buffer.length / 1024 / 1024)} MB acima do limite` };
+    }
+    const salvo = await salvar({ buffer, nome: dados.anexoNome ?? nomePadrao(dados.tipoAnexo), tipo });
+    return { url: salvo.url };
+  } catch (err) {
+    return { url: null, motivo: err instanceof Error ? err.message : 'erro desconhecido' };
+  }
+}

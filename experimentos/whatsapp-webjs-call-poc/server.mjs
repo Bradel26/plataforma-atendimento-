@@ -282,11 +282,12 @@ const FORMATO_RESUMO = {
   required: ['resumo', 'pontosPrincipais', 'proximasAcoes', 'sentimento'],
   additionalProperties: false,
 };
-const INSTRUCOES_RESUMO = 'Responda somente em português do Brasil. Você resume uma ligação de atendimento comercial entre um Cliente e um Atendente a partir da transcrição automática, que pode ter erros de reconhecimento. Regras: use SOMENTE o que está na transcrição; não invente nomes, números, produtos, datas ou valores; se um trecho for confuso, ignore-o em vez de interpretar; copie nomes e números exatamente como aparecem. O resumo tem de 2 a 4 frases objetivas sobre o que o cliente quer e o que foi combinado. proximasAcoes lista só compromissos ou pendências ditos na conversa, cada um curto e no imperativo, e fica vazia se não houver. sentimento é o do cliente.';
+const INSTRUCOES_RESUMO = 'Responda somente em português do Brasil. Você resume uma ligação de atendimento comercial entre um Cliente e um Atendente a partir da transcrição automática, que pode ter erros de reconhecimento. Regras: use SOMENTE o que está na transcrição; não invente nomes, números, produtos, datas ou valores; se um trecho for confuso, ignore-o em vez de interpretar; Nunca adivinhe nem corrija uma palavra duvidosa: não escreva "provavelmente", não coloque suposições entre parênteses e não troque uma palavra por outra parecida. Palavra que você não entendeu fica fora do resumo; se isso mudar o sentido, escreva apenas "trecho incompreensível". copie nomes e números exatamente como aparecem. O resumo tem de 2 a 4 frases objetivas sobre o que o cliente quer e o que foi combinado. proximasAcoes lista só compromissos ou pendências ditos na conversa, cada um curto e no imperativo, e fica vazia se não houver. sentimento é o do cliente.';
 
-// Servidor com pouca memória: contexto de 4096 tokens (metade do cache do modelo) e descarregar o modelo logo após o
-// resumo (keep_alive 0) deixam folga para o Chromium e o Whisper. Em máquina grande, suba pelas variáveis.
-const OLLAMA_NUM_CTX = Number(process.env.LIGACAO_IA_NUM_CTX) || 4096;
+// Contexto de 8192 tokens: o texto vai em blocos de 6 mil caracteres (~1.800 tokens), que cabem com folga com o formato e a resposta, sem o Ollama
+// truncar o início do texto. Descarregar o modelo logo após o resumo (keep_alive 0) devolve a memória ao Chromium e ao
+// Whisper. Máquina menor pode reduzir por LIGACAO_IA_NUM_CTX.
+const OLLAMA_NUM_CTX = Number(process.env.LIGACAO_IA_NUM_CTX) || 8192;
 const OLLAMA_KEEP_ALIVE = process.env.LIGACAO_IA_KEEP_ALIVE?.trim() || '0';
 const TENTATIVAS_RESUMO = 2;
 const ESPERA_ENTRE_TENTATIVAS_MS = Number(process.env.LIGACAO_IA_ESPERA_TENTATIVA_MS) || 20_000;
@@ -345,21 +346,46 @@ function registrarSaudeDaAnalise(estado) {
 }
 
 /** Resume o diálogo. Conversa grande é resumida por partes e depois unificada, para caber no contexto do modelo. */
-async function resumirDialogo(dialogo) {
+// Numeros de 3+ digitos que o resumo cita e a fala NAO tem (ex.: "18000" virando "1800").
+// Compara numeros inteiros, nao trechos: "1800" e substring de "18000". "30 dias" pode vir de "trinta dias": so 3+ digitos.
+function numerosForaDaFala(resumo, dialogo) {
+  const limpo = (t) => t.replace(/[.,]/g, '');
+  const naFala = new Set((dialogo.match(/[0-9][0-9.,]*[0-9]|[0-9]/g) || []).map(limpo));
+  const citados = (resumo.match(/[0-9][0-9.,]*[0-9]/g) || []).map(limpo).filter((n) => n.length >= 3);
+  return [...new Set(citados)].filter((n) => !naFala.has(n));
+}
+const textoDoResumo = (a) => `${a?.resumo || ''} ${(a?.proximasAcoes || []).join(' ')}`;
+
+/** Resume e confere os numeros: repete uma vez se algum nao existir na fala e, persistindo, avisa no proprio resumo. */
+async function resumirComConferencia(dialogo) {
+  let analise = await resumirDialogo(dialogo);
+  let suspeitos = numerosForaDaFala(textoDoResumo(analise), dialogo);
+  if (!suspeitos.length) return analise;
+  try {
+    const aviso = `Atenção: o resumo anterior citou os números ${suspeitos.join(', ')}, que NÃO estão na transcrição. Refaça copiando os números exatamente como aparecem; se não tiver certeza de um número, não o cite.`;
+    analise = await resumirDialogo(dialogo, aviso);
+  } catch { /* mantem o primeiro resumo e avisa abaixo */ }
+  suspeitos = numerosForaDaFala(textoDoResumo(analise), dialogo);
+  if (suspeitos.length) analise.resumo = `${analise.resumo || ''} [Conferir no áudio: o número ${suspeitos.join(', ')} citado neste resumo não aparece na transcrição.]`.trim();
+  return analise;
+}
+
+async function resumirDialogo(dialogo, aviso = '') {
+  const instrucoes = aviso ? `${INSTRUCOES_RESUMO} ${aviso}` : INSTRUCOES_RESUMO;
   const blocos = dividirTexto(dialogo, 6000); // ~1.700 tokens: cabe com instruções e resposta em 4096
   if (blocos.length === 1) {
-    return chamarOllama([{ role: 'system', content: INSTRUCOES_RESUMO }, { role: 'user', content: `Transcrição da ligação:\n\n${blocos[0]}` }]);
+    return chamarOllama([{ role: 'system', content: instrucoes }, { role: 'user', content: `Transcrição da ligação:\n\n${blocos[0]}` }]);
   }
   const anotacoes = [];
   for (const [i, bloco] of blocos.entries()) {
     const parcial = await chamarOllama([
-      { role: 'system', content: `${INSTRUCOES_RESUMO} Esta é a parte ${i + 1} de ${blocos.length} da mesma ligação; resuma apenas esta parte.` },
+      { role: 'system', content: `${instrucoes} Esta é a parte ${i + 1} de ${blocos.length} da mesma ligação; resuma apenas esta parte.` },
       { role: 'user', content: `Parte ${i + 1} da transcrição:\n\n${bloco}` },
     ]);
     anotacoes.push(`Parte ${i + 1}: ${parcial.resumo || ''}\nPontos: ${(parcial.pontosPrincipais || []).join('; ')}\nPendências: ${(parcial.proximasAcoes || []).join('; ')}\nSentimento do cliente: ${parcial.sentimento || 'NEUTRO'}`);
   }
   return chamarOllama([
-    { role: 'system', content: `${INSTRUCOES_RESUMO} Você recebe anotações de partes consecutivas da mesma ligação. Una em um único resumo, sem repetir, e junte as pendências sem duplicar.` },
+    { role: 'system', content: `${instrucoes} Você recebe anotações de partes consecutivas da mesma ligação. Una em um único resumo, sem repetir, e junte as pendências sem duplicar.` },
     { role: 'user', content: anotacoes.join('\n\n') },
   ]);
 }
@@ -468,7 +494,7 @@ async function analisarGravacao(base) {
     analysis = { resumo: 'N\u00e3o foi poss\u00edvel gerar um resumo confi\u00e1vel a partir do trecho de fala reconhecido. Consulte o \u00e1udio e a transcri\u00e7\u00e3o antes de registrar conclus\u00f5es.', pontosPrincipais: [], proximasAcoes: [], sentimento: null };
   } else {
     try {
-      analysis = await resumirDialogo(transcript);
+      analysis = await resumirComConferencia(transcript);
     } catch {
       analysis = { resumo: 'A transcri\u00e7\u00e3o foi salva, mas o resumo n\u00e3o ficou dispon\u00edvel. Confira o \u00e1udio antes de tirar conclus\u00f5es.', pontosPrincipais: [], proximasAcoes: [], sentimento: null };
     }
@@ -820,6 +846,31 @@ async function iniciarCliente(nomeSessao = 'teste-local') {
   }
   finally { if (sessao.starting === inicializacao) sessao.starting = null; }
 }
+// Midia recebida (audio, foto, video, documento): o conector baixa e manda o binario
+// em base64 no webhook. Falha ou tamanho acima do limite NAO impedem a mensagem:
+// ela segue sem anexo e a plataforma registra o rotulo ("[audio recebido]").
+const MIDIA_MAX_BYTES = Number(process.env.WEBJS_MEDIA_MAX_BYTES) || 10 * 1024 * 1024;
+const MIDIA_TIMEOUT_MS = 25_000;
+async function baixarMidiaDaMensagem(sessao, message) {
+  if (!message.hasMedia) return null;
+  try {
+    const media = await Promise.race([
+      message.downloadMedia(),
+      new Promise((_, rejeitar) => setTimeout(() => rejeitar(new Error('tempo esgotado ao baixar a midia')), MIDIA_TIMEOUT_MS)),
+    ]);
+    if (!media?.data) return null;
+    const bytes = Math.floor((media.data.length * 3) / 4);
+    if (bytes > MIDIA_MAX_BYTES) {
+      console.warn(`[whatsapp:${sessao.nome}] midia acima do limite (${Math.round(bytes / 1024 / 1024)} MB); enviada sem anexo; tipo=${message.type}`);
+      return null;
+    }
+    console.info(`[whatsapp:${sessao.nome}] midia baixada; tipo=${message.type}, mimetype=${media.mimetype}, ${Math.round(bytes / 1024)} KB`);
+    return { mimetype: media.mimetype || 'application/octet-stream', nome: media.filename || null, base64: media.data };
+  } catch (error) {
+    console.warn(`[whatsapp:${sessao.nome}] nao foi possivel baixar a midia; tipo=${message.type}:`, error instanceof Error ? error.message : error);
+    return null;
+  }
+}
 async function entregarMensagemNaPlataforma(sessao, message, fromMe) {
   if (!message?.id?._serialized) {
     console.warn(`[whatsapp:${sessao.nome}] evento de mensagem sem identificador; não encaminhado`);
@@ -842,6 +893,11 @@ async function entregarMensagemNaPlataforma(sessao, message, fromMe) {
     type: message.type || 'chat', notifyName: message._data?.notifyName || null,
     telefoneContato,
   };
+  // So mensagem recebida: a propria conta nao precisa devolver o que enviou.
+  if (!fromMe) {
+    const midia = await baixarMidiaDaMensagem(sessao, message);
+    if (midia) payload.midia = midia;
+  }
   console.info(`[whatsapp:${sessao.nome}] encaminhando evento; remetente=${message.from?.endsWith('@lid') ? 'lid' : 'telefone'}, telefoneResolvido=${Boolean(telefoneContato)}`);
   const tentativas = 3;
 
@@ -853,7 +909,7 @@ async function entregarMensagemNaPlataforma(sessao, message, fromMe) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(10_000),
+        signal: AbortSignal.timeout(payload.midia ? 45_000 : 10_000),
       });
       resultado = await resposta.json().catch(() => ({}));
     } catch (error) {
@@ -1006,17 +1062,51 @@ app.get('/api/platform/qr', async (req, res) => {
     res.json({ qr: sessao.status === 'conectado' ? null : sessao.latestQr || null, connected: sessao.status === 'conectado', status: sessao.status, motivo: sessao.latestQr || sessao.status === 'conectado' ? null : sessao.lastError || `Sessão ${sessao.status}` });
   } catch (error) { res.status(500).json({ error: error.message }); }
 });
+// O 9o digito movel do Brasil varia entre contas (12 ou 13 digitos). Gera o numero
+// digitado e a variante; quem liga tenta na ordem. NAO usar `getNumberId().user`:
+// ele pode devolver um identificador interno (LID), que `client.call` recusa.
+function candidatosParaLigar(digitado) {
+  const candidatos = [digitado];
+  if (digitado.startsWith('55')) {
+    const ddd = digitado.slice(2, 4);
+    const local = digitado.slice(4);
+    if (local.length === 8) candidatos.push(`55${ddd}9${local}`);
+    else if (local.length === 9 && local.startsWith('9')) candidatos.push(`55${ddd}${local.slice(1)}`);
+  }
+  return candidatos;
+}
 app.post('/api/platform/call', async (req, res) => {
   const sessao = obterSessao(req.body?.session || 'teste-local');
   if (!sessao.client || sessao.status !== 'conectado') return res.status(409).json({ error: 'Conecte o WhatsApp pelo Atendimento primeiro.' });
   const phone = String(req.body?.phone || '').replace(/\D/g, '');
   if (!phone) return res.status(400).json({ error: 'Informe o telefone com código do país.' });
   try {
+    const proprio = String(sessao.client.info?.wid?.user || '');
+    const candidatos = candidatosParaLigar(phone);
+    if (proprio && candidatos.includes(proprio)) {
+      return res.status(400).json({ error: 'Esse é o número da própria linha conectada: o WhatsApp não permite ligar para si mesmo.' });
+    }
     sessao.callInfo = null;
     sessao.recordingChunks = [];
     sessao.micRecordingChunks = [];
-    sessao.numeroDiscado = phone;
-    sessao.currentCall = await sessao.client.call(phone, { waitForAnswer: true, answerTimeout: 45000 });
+    sessao.currentCall = null;
+    let ultimoErro = null;
+    for (const numero of candidatos) {
+      try {
+        sessao.numeroDiscado = numero;
+        sessao.currentCall = await sessao.client.call(numero, { waitForAnswer: true, answerTimeout: 45000 });
+        if (numero !== phone) console.info(`[whatsapp:${sessao.nome}] ligacao feita com a variante do 9o digito; digitado ${phone.length} digitos, usado ${numero.length}`);
+        break;
+      } catch (erro) {
+        ultimoErro = erro;
+        // So troca de variante quando o WhatsApp diz que o numero nao existe; qualquer outro erro e real.
+        if (!/not registered on WhatsApp/i.test(String(erro?.message || ''))) throw erro;
+      }
+    }
+    if (!sessao.currentCall && ultimoErro) {
+      console.warn(`[whatsapp:${sessao.nome}] ligacao recusada: numero nao esta no WhatsApp; tentados=${candidatos.map((n) => `${n.length}dig`).join(',')}`);
+      return res.status(404).json({ error: 'Esse número não está registrado no WhatsApp. Confira o DDD e o 9º dígito.' });
+    }
     if (!sessao.currentCall?.id) {
       sessao.currentCall = null;
       void registrarDiagnosticoVoip(sessao, 'ligacao sem chamada ativa');

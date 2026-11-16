@@ -78,6 +78,11 @@ export type MensagemNormalizada = {
   /** Nome original quando o canal informa (documento do WhatsApp). */
   anexoNome: string | null;
   /**
+   * Conteudo ja baixado pelo conector (WhatsApp Web por QR): o binario vem no
+   * proprio webhook, sem URL nem media id. Opcional: os demais canais nao usam.
+   */
+  anexoConteudo?: { base64: string; mimetype: string } | null;
+  /**
    * Numero/pagina que RECEBEU a mensagem (phone_number_id no WhatsApp, o id da
    * pagina no Messenger/Instagram). Com mais de uma linha do mesmo canal na
    * mesma organizacao — o caso do vendedor com WhatsApp proprio —, e este

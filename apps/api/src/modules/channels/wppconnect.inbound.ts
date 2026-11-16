@@ -18,6 +18,38 @@ import type { MensagemNormalizada } from './meta.types';
  *     opaca de privacidade do WhatsApp) em vez de `@c.us` — e preservado
  *     verbatim, nunca reconstruido como telefone.
  */
+/** `type` do whatsapp-web.js -> tipo de anexo da plataforma. Lista fechada. */
+const TIPO_ANEXO_POR_TIPO_WPP: Record<string, MensagemNormalizada['tipoAnexo']> = {
+  ptt: 'AUDIO',
+  audio: 'AUDIO',
+  image: 'IMAGEM',
+  sticker: 'IMAGEM',
+  video: 'VIDEO',
+  document: 'ARQUIVO',
+};
+
+const ROTULO_ANEXO: Record<MensagemNormalizada['tipoAnexo'], string> = {
+  TEXTO: '',
+  AUDIO: '[áudio recebido]',
+  IMAGEM: '[imagem recebida]',
+  VIDEO: '[vídeo recebido]',
+  ARQUIVO: '[arquivo recebido]',
+};
+
+function conteudoDaMidia(bruto: unknown): { base64: string; mimetype: string } | null {
+  if (!bruto || typeof bruto !== 'object') return null;
+  const m = bruto as Record<string, unknown>;
+  if (typeof m.base64 !== 'string' || !m.base64) return null;
+  if (typeof m.mimetype !== 'string' || !m.mimetype.trim()) return null;
+  return { base64: m.base64, mimetype: m.mimetype.trim() };
+}
+
+function nomeDaMidia(bruto: unknown): string | null {
+  if (!bruto || typeof bruto !== 'object') return null;
+  const nome = (bruto as { nome?: unknown }).nome;
+  return typeof nome === 'string' && nome.trim() ? nome.trim().slice(0, 200) : null;
+}
+
 export function normalizarEventoWpp(bruto: unknown): MensagemNormalizada | null {
   if (!bruto || typeof bruto !== 'object') return null;
   const evento = bruto as Record<string, unknown>;
@@ -38,11 +70,17 @@ export function normalizarEventoWpp(bruto: unknown): MensagemNormalizada | null 
     '';
   if (!enderecoExterno) return null;
 
-  const conteudo =
+  const legenda =
     (typeof evento.body === 'string' && evento.body.trim()) ||
     (typeof evento.content === 'string' && evento.content.trim()) ||
     '';
-  if (!conteudo) return null;
+  // Mensagem de midia (audio, foto, video, documento) nao tem texto: o corpo e a
+  // legenda, quase sempre vazia. Sem isto ela era descartada. So os tipos da
+  // tabela abaixo entram; e2e_notification, protocol, call_log etc. continuam
+  // ignorados quando nao tem texto.
+  const tipoAnexo = typeof evento.type === 'string' ? TIPO_ANEXO_POR_TIPO_WPP[evento.type] : undefined;
+  if (!legenda && !tipoAnexo) return null;
+  const conteudo = legenda || (tipoAnexo ? ROTULO_ANEXO[tipoAnexo] : '');
 
   const sender =
     evento.sender && typeof evento.sender === 'object' ? (evento.sender as Record<string, unknown>) : {};
@@ -85,12 +123,14 @@ export function normalizarEventoWpp(bruto: unknown): MensagemNormalizada | null 
     telefone,
     idExterno,
     conteudo,
-    tipoAnexo: 'TEXTO',
-    // ETAPA 5 cobre so texto (o payload real capturado e "type":"chat"); midia
-    // fica para uma proxima fase, e nao inventamos anexo aqui.
+    tipoAnexo: tipoAnexo ?? 'TEXTO',
+    // O conector whatsapp-web.js baixa a midia e manda o binario em `midia`
+    // (base64 + mimetype). Nao ha URL nem media id.
     anexoUrl: null,
     anexoIdExterno: null,
-    anexoNome: null,
+    anexoNome: tipoAnexo ? nomeDaMidia(evento.midia) : null,
+    // So mensagem de midia leva a chave: o resultado de texto fica identico ao de antes.
+    ...(tipoAnexo ? { anexoConteudo: conteudoDaMidia(evento.midia) } : {}),
     identificadorDestino: sessao,
   };
 }
