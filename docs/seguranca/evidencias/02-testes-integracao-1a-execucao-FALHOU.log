@@ -1,0 +1,117 @@
+﻿
+> plataforma-atendimento@0.1.0 test:integracao
+> vitest run --config vitest.integracao.config.ts
+
+
+ RUN  v4.1.11 C:/Users/kaua.tavares/plataforma-atendimento
+
+node.exe : stderr | apps/api/src/integracao/sessao-e-admins.integracao.test.ts > isolamento por organizacao — filtro 
+real da extensao > a consulta REAL de validarSessao respeita a organizacao do token
+No linha:1 caractere:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (stderr | apps/a...izacao do token:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+[sessao] falha ao consultar a versao da sessão: Consulta ao banco sem organização ativa. Abra o contexto com 
+comOrganizacao, ou declare a exceção com semOrganizacao.
+
+stderr | apps/api/src/integracao/sessao-e-admins.integracao.test.ts > validarSessao contra o banco real, de ponta a 
+ponta > mudanca de perfil: token antigo (sv=0) cai na hora, o novo (sv=1) passa; token legado (sem sv) tambem cai
+[sessao] falha ao consultar a versao da sessão: Consulta ao banco sem organização ativa. Abra o contexto com 
+comOrganizacao, ou declare a exceção com semOrganizacao.
+
+stderr | apps/api/src/integracao/sessao-e-admins.integracao.test.ts > validarSessao contra o banco real, de ponta a 
+ponta > desativar e excluir: a sessao deixa de valer
+[sessao] falha ao consultar a versao da sessão: Consulta ao banco sem organização ativa. Abra o contexto com 
+comOrganizacao, ou declare a exceção com semOrganizacao.
+
+ ❯ apps/api/src/integracao/sessao-e-admins.integracao.test.ts (14 tests | 3 failed) 3422ms
+     ✓ a coluna e NOT NULL com default 0, e usuario novo nasce com versao 0 28ms
+     ✓ a segunda transacao da MESMA organizacao espera a primeira terminar  838ms
+     ✓ organizacoes DIFERENTES nao se bloqueiam  811ms
+     ✓ dois ADMIN rebaixados ao mesmo tempo, 15 rodadas: sempre um passa, um recebe 409, sobra 1 ADMIN 290ms
+     ✓ PATCH, desativar e excluir misturados em 3 ADMIN: ao menos 1 sobra, e no maximo 2 operacoes passam 143ms
+     ✓ 40 incrementos concorrentes direto no SQL: nenhum se perde (versao final = 40) 165ms
+     ✓ 10 trocas de senha concorrentes pelo servico: versao final = 10  746ms
+     ✓ mudar so o nome NAO sobe a versao; mudar o perfil sobe exatamente 1 18ms
+     ✓ o ultimo ADMIN de cada organizacao e protegido SO pelos ADMIN dela (rebaixar os dois ao mesmo tempo: ambos 409) 13ms
+     ✓ usuario de OUTRA organizacao nao e alcancado: 404, e a versao dele nao muda 19ms
+     ✓ mesmo e-mail em duas organizacoes: versoes independentes 13ms
+     × a consulta REAL de validarSessao respeita a organizacao do token 11ms
+     × mudanca de perfil: token antigo (sv=0) cai na hora, o novo (sv=1) passa; token legado (sem sv) tambem cai 4ms
+     × desativar e excluir: a sessao deixa de valer 109ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/api/src/integracao/sessao-e-admins.integracao.test.ts > isolamento por organizacao — filtro real da 
+extensao > a consulta REAL de validarSessao respeita a organizacao do token
+AssertionError: promise rejected "AppError: Não foi possível validar a sess… { …(3) }" instead of resolving
+ ❯ apps/api/src/integracao/sessao-e-admins.integracao.test.ts:260:64
+    258|     const u = await criarUsuario(orgA, 'AGENTE', 'validado');
+    259|
+    260|     await expect(validarSessao({ sub: u.id, org: orgA, sv: 0 })).resol…
+       |                                                                ^
+    261|     // Mesmo id, organizacao errada no token: o filtro devolve nulo ->…
+    262|     invalidarSessaoLocal(orgB, u.id);
+
+Caused by: AppError: Não foi possível validar a sessão agora. Tente novamente em instantes.
+ ❯ SESSAO_INDISPONIVEL apps/api/src/lib/sessao.ts:42:3
+ ❯ Module.validar apps/api/src/lib/sessao.ts:114:15
+ ❯ apps/api/src/integracao/sessao-e-admins.integracao.test.ts:260:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { status: 503, code: 'SESSAO_INDISPONIVEL', details: undefined }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  apps/api/src/integracao/sessao-e-admins.integracao.test.ts > validarSessao contra o banco real, de ponta a 
+ponta > mudanca de perfil: token antigo (sv=0) cai na hora, o novo (sv=1) passa; token legado (sem sv) tambem cai
+AssertionError: promise rejected "AppError: Não foi possível validar a sess… { …(3) }" instead of resolving
+ ❯ apps/api/src/integracao/sessao-e-admins.integracao.test.ts:272:58
+    270|     const u = await criarUsuario(org, 'SUPERVISOR', 'ponta-a-ponta');
+    271|
+    272|     await expect(validarSessao({ sub: u.id, org, sv: 0 })).resolves.to…
+       |                                                          ^
+    273|     await expect(validarSessao({ sub: u.id, org })).resolves.toBeUndef…
+    274|
+
+Caused by: AppError: Não foi possível validar a sessão agora. Tente novamente em instantes.
+ ❯ SESSAO_INDISPONIVEL apps/api/src/lib/sessao.ts:42:3
+ ❯ Module.validar apps/api/src/lib/sessao.ts:114:15
+ ❯ apps/api/src/integracao/sessao-e-admins.integracao.test.ts:272:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { status: 503, code: 'SESSAO_INDISPONIVEL', details: undefined }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  apps/api/src/integracao/sessao-e-admins.integracao.test.ts > validarSessao contra o banco real, de ponta a 
+ponta > desativar e excluir: a sessao deixa de valer
+AssertionError: expected AppError: Não foi possível validar a sess… { …(3) } to match object { status: 401 }
+(3 matching properties omitted from actual)
+
+- Expected
++ Received
+
+- {
+-   "status": 401,
++ AppError {
++   "status": 503,
+  }
+
+ ❯ apps/api/src/integracao/sessao-e-admins.integracao.test.ts:292:58
+    290|     await como(org, () => deleteUserPermanently(b.id));
+    291|
+    292|     await expect(validarSessao({ sub: a.id, org, sv: 0 })).rejects.toM…
+       |                                                          ^
+    293|     await expect(validarSessao({ sub: a.id, org, sv: 1 })).rejects.toM…
+    294|     await expect(validarSessao({ sub: b.id, org, sv: 0 })).rejects.toM…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 11 passed (14)
+   Start at  12:03:11
+   Duration  4.23s (transform 327ms, setup 73ms, import 509ms, tests 3.42s, environment 0ms)
+
+

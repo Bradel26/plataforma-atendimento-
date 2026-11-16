@@ -1,0 +1,19 @@
+warn The configuration property `package.json#prisma` is deprecated and will be removed in Prisma 7. Please migrate to a Prisma config file (e.g., `prisma.config.ts`).
+For more information, see: https://pris.ly/prisma-config
+
+Environment variables loaded from .env
+Prisma schema loaded from prisma\schema.prisma
+Datasource "db": PostgreSQL database "plataforma_teste_semcoluna", schema "public" at "127.0.0.1:55432"
+
+84 migrations found in prisma/migrations
+
+Applying migration `20261116120000_sessao_versao_usuario`
+
+The following migration(s) have been applied:
+
+migrations/
+  └─ 20261116120000_sessao_versao_usuario/
+    └─ migration.sql
+      
+All migrations have been successfully applied.
+{"usuarios":{"total":25,"em_zero":25,"nulos":0},"coluna":{"is_nullable":"NO","column_default":"0"},"lock_timeout_da_sessao_do_cliente":"0"}

@@ -1,0 +1,284 @@
+﻿
+> plataforma-atendimento@0.1.0 test:integracao:preparar
+> npm run test:integracao:preparar -w @plataforma/api
+
+
+> @plataforma/api@0.1.0 test:integracao:preparar
+> tsx src/cli/preparar-banco-teste.ts
+
+Aplicando migrations em 127.0.0.1:55432/plataforma_teste ...
+node.exe : warn The configuration property `package.json#prisma` is deprecated and will be removed in Prisma 7. Please 
+migrate to a Prisma config file (e.g., `prisma.config.ts`).
+No linha:1 caractere:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (warn The config...ma.config.ts`).:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+For more information, see: https://pris.ly/prisma-config
+
+Environment variables loaded from .env
+Prisma schema loaded from prisma\schema.prisma
+Datasource "db": PostgreSQL database "plataforma_teste", schema "public" at "127.0.0.1:55432"
+
+84 migrations found in prisma/migrations
+
+Applying migration `20260824115503_fase0_fundacao`
+Applying migration `20260824120625_fase1_atendimento`
+Applying migration `20260824122355_fase2_crm`
+Applying migration `20260824123846_fase2_protocolo`
+Applying migration `20260824130500_fase2_canais_externos`
+Applying migration `20260824134500_fase3_gestao`
+Applying migration `20260824141500_fase4_campanhas_bot`
+Applying migration `20260824150000_pesquisa_entrega`
+Applying migration `20260825120000_lgpd_retencao`
+Applying migration `20260825140000_voz`
+Applying migration `20260827121459_atividades_e_historico_estagio`
+Applying migration `20260827121500_estagio_desde_retroativo`
+Applying migration `20260827160000_ponte_ia`
+Applying migration `20260828120000_organizacao`
+Applying migration `20260828121000_organizacao_sentinela`
+Applying migration `20260828140000_organizacao_unicidades`
+Applying migration `20260828150000_organizacao_atividades`
+Applying migration `20260828190000_perfis_gestor_comercial`
+Applying migration `20260828191000_gestor_de_equipe`
+Applying migration `20260828192000_responsavel_contato_conta`
+Applying migration `20260831100000_tags_conta_e_indice`
+Applying migration `20260902140000_tags_conversa`
+Applying migration `20260902200000_item_desconto_recorrencia`
+Applying migration `20260902210000_alcada_de_desconto`
+Applying migration `20260903100000_tarefa_obrigatoria_por_etapa`
+Applying migration `20260903120000_auditoria_da_oportunidade`
+Applying migration `20260903140000_condicoes_da_proposta`
+Applying migration `20260903160000_metas_mensais`
+Applying migration `20260903180000_qsa_e_enriquecimento`
+Applying migration `20260903200000_classificacao_da_chamada`
+Applying migration `20260903220000_checkin_de_visita`
+Applying migration `20260904000000_consumo_de_ia`
+Applying migration `20260904020000_temperatura_e_origem`
+Applying migration `20260904040000_assistente_da_ligacao`
+Applying migration `20260904060000_whatsapp_nao_oficial`
+Applying migration `20260904090000_base_instalada`
+Applying migration `20260904150000_visoes_salvas`
+Applying migration `20260904170000_filiais`
+Applying migration `20260904190000_campos_customizados`
+Applying migration `20260904200000_canal_numeros_por_dono`
+Applying migration `20260909193827_esteira_credenciamento`
+Applying migration `20260909194000_credenciamentos_organizacao_check`
+Applying migration `20260911194833_propostas_geradas`
+Applying migration `20260914120000_ponte_status_sessao_auth`
+Applying migration `20260915090000_previas_chat`
+Applying migration `20260915100000_previas_chat_indice_organizacao`
+Applying migration `20260916120000_conversa_arquivada`
+Applying migration `20260916140000_ponte_sessao_unica_global`
+Applying migration `20260925101356_mensagem_interna`
+Applying migration `20260928120000_operacao_credenciamento`
+Applying migration `20260928180000_heartbeat_presenca`
+Applying migration `20260929120000_perfil_suporte`
+Applying migration `20260929130000_chamado_ti`
+Applying migration `20260929143000_credenciamento_funis_default`
+Applying migration `20260929170000_senha_temporaria`
+Applying migration `20260929210000_branding_padrao_bradel`
+Applying migration `20260930120000_origem_prospeccao_indicacao`
+Applying migration `20260930150000_ciclo_vida_parceiro`
+Applying migration `20260930170000_metas_operacionais`
+Applying migration `20261005193000_segmento_parceiro`
+Applying migration `20261009120000_atendimento_estilo_pcm`
+Applying migration `20261009180000_qualificacao_reativacao`
+Applying migration `20261009190000_mensagens_rapidas`
+Applying migration `20261009200000_mensagens_rapidas_tenant_check`
+Applying migration `20261013120000_alerta_sla_monitoramento`
+Applying migration `20261013140000_construtor_fluxos`
+Applying migration `20261013150000_fluxos_midias`
+Applying migration `20261013170000_registro_manual_esteiras_operacionais`
+Applying migration `20261013190000_crm_restante_sugestoes`
+Applying migration `20261013200000_operacoes_contas`
+Applying migration `20261013210000_comunicados_marketing_anexos`
+Applying migration `20261013220000_checkpoint_envio_anexos_campanha`
+Applying migration `20261013230000_anexos_campanhas_parceiros`
+Applying migration `20261013240000_origem_cadastro_conta`
+Applying migration `20261013250000_mapeamento_origem_contatos`
+Applying migration `20261013260000_recorrencia_sem_fim`
+Applying migration `20261013270000_status_pareamento_whatsapp`
+Applying migration `20261014000000_aguardando_cliente_e_descartada`
+Applying migration `20261015190000_permissoes_modulo`
+Applying migration `20261015210000_telefone_normalizado_contatos`
+Applying migration `20261016120000_status_entrega_mensagem`
+Applying migration `20261016140000_whatsapp_calling_por_linha`
+Applying migration `20261109120000_pesquisa_manual_por_linha`
+Applying migration `20261116120000_sessao_versao_usuario`
+
+The following migration(s) have been applied:
+
+migrations/
+  └─ 20260824115503_fase0_fundacao/
+    └─ migration.sql
+  └─ 20260824120625_fase1_atendimento/
+    └─ migration.sql
+  └─ 20260824122355_fase2_crm/
+    └─ migration.sql
+  └─ 20260824123846_fase2_protocolo/
+    └─ migration.sql
+  └─ 20260824130500_fase2_canais_externos/
+    └─ migration.sql
+  └─ 20260824134500_fase3_gestao/
+    └─ migration.sql
+  └─ 20260824141500_fase4_campanhas_bot/
+    └─ migration.sql
+  └─ 20260824150000_pesquisa_entrega/
+    └─ migration.sql
+  └─ 20260825120000_lgpd_retencao/
+    └─ migration.sql
+  └─ 20260825140000_voz/
+    └─ migration.sql
+  └─ 20260827121459_atividades_e_historico_estagio/
+    └─ migration.sql
+  └─ 20260827121500_estagio_desde_retroativo/
+    └─ migration.sql
+  └─ 20260827160000_ponte_ia/
+    └─ migration.sql
+  └─ 20260828120000_organizacao/
+    └─ migration.sql
+  └─ 20260828121000_organizacao_sentinela/
+    └─ migration.sql
+  └─ 20260828140000_organizacao_unicidades/
+    └─ migration.sql
+  └─ 20260828150000_organizacao_atividades/
+    └─ migration.sql
+  └─ 20260828190000_perfis_gestor_comercial/
+    └─ migration.sql
+  └─ 20260828191000_gestor_de_equipe/
+    └─ migration.sql
+  └─ 20260828192000_responsavel_contato_conta/
+    └─ migration.sql
+  └─ 20260831100000_tags_conta_e_indice/
+    └─ migration.sql
+  └─ 20260902140000_tags_conversa/
+    └─ migration.sql
+  └─ 20260902200000_item_desconto_recorrencia/
+    └─ migration.sql
+  └─ 20260902210000_alcada_de_desconto/
+    └─ migration.sql
+  └─ 20260903100000_tarefa_obrigatoria_por_etapa/
+    └─ migration.sql
+  └─ 20260903120000_auditoria_da_oportunidade/
+    └─ migration.sql
+  └─ 20260903140000_condicoes_da_proposta/
+    └─ migration.sql
+  └─ 20260903160000_metas_mensais/
+    └─ migration.sql
+  └─ 20260903180000_qsa_e_enriquecimento/
+    └─ migration.sql
+  └─ 20260903200000_classificacao_da_chamada/
+    └─ migration.sql
+  └─ 20260903220000_checkin_de_visita/
+    └─ migration.sql
+  └─ 20260904000000_consumo_de_ia/
+    └─ migration.sql
+  └─ 20260904020000_temperatura_e_origem/
+    └─ migration.sql
+  └─ 20260904040000_assistente_da_ligacao/
+    └─ migration.sql
+  └─ 20260904060000_whatsapp_nao_oficial/
+    └─ migration.sql
+  └─ 20260904090000_base_instalada/
+    └─ migration.sql
+  └─ 20260904150000_visoes_salvas/
+    └─ migration.sql
+  └─ 20260904170000_filiais/
+    └─ migration.sql
+  └─ 20260904190000_campos_customizados/
+    └─ migration.sql
+  └─ 20260904200000_canal_numeros_por_dono/
+    └─ migration.sql
+  └─ 20260909193827_esteira_credenciamento/
+    └─ migration.sql
+  └─ 20260909194000_credenciamentos_organizacao_check/
+    └─ migration.sql
+  └─ 20260911194833_propostas_geradas/
+    └─ migration.sql
+  └─ 20260914120000_ponte_status_sessao_auth/
+    └─ migration.sql
+  └─ 20260915090000_previas_chat/
+    └─ migration.sql
+  └─ 20260915100000_previas_chat_indice_organizacao/
+    └─ migration.sql
+  └─ 20260916120000_conversa_arquivada/
+    └─ migration.sql
+  └─ 20260916140000_ponte_sessao_unica_global/
+    └─ migration.sql
+  └─ 20260925101356_mensagem_interna/
+    └─ migration.sql
+  └─ 20260928120000_operacao_credenciamento/
+    └─ migration.sql
+  └─ 20260928180000_heartbeat_presenca/
+    └─ migration.sql
+  └─ 20260929120000_perfil_suporte/
+    └─ migration.sql
+  └─ 20260929130000_chamado_ti/
+    └─ migration.sql
+  └─ 20260929143000_credenciamento_funis_default/
+    └─ migration.sql
+  └─ 20260929170000_senha_temporaria/
+    └─ migration.sql
+  └─ 20260929210000_branding_padrao_bradel/
+    └─ migration.sql
+  └─ 20260930120000_origem_prospeccao_indicacao/
+    └─ migration.sql
+  └─ 20260930150000_ciclo_vida_parceiro/
+    └─ migration.sql
+  └─ 20260930170000_metas_operacionais/
+    └─ migration.sql
+  └─ 20261005193000_segmento_parceiro/
+    └─ migration.sql
+  └─ 20261009120000_atendimento_estilo_pcm/
+    └─ migration.sql
+  └─ 20261009180000_qualificacao_reativacao/
+    └─ migration.sql
+  └─ 20261009190000_mensagens_rapidas/
+    └─ migration.sql
+  └─ 20261009200000_mensagens_rapidas_tenant_check/
+    └─ migration.sql
+  └─ 20261013120000_alerta_sla_monitoramento/
+    └─ migration.sql
+  └─ 20261013140000_construtor_fluxos/
+    └─ migration.sql
+  └─ 20261013150000_fluxos_midias/
+    └─ migration.sql
+  └─ 20261013170000_registro_manual_esteiras_operacionais/
+    └─ migration.sql
+  └─ 20261013190000_crm_restante_sugestoes/
+    └─ migration.sql
+  └─ 20261013200000_operacoes_contas/
+    └─ migration.sql
+  └─ 20261013210000_comunicados_marketing_anexos/
+    └─ migration.sql
+  └─ 20261013220000_checkpoint_envio_anexos_campanha/
+    └─ migration.sql
+  └─ 20261013230000_anexos_campanhas_parceiros/
+    └─ migration.sql
+  └─ 20261013240000_origem_cadastro_conta/
+    └─ migration.sql
+  └─ 20261013250000_mapeamento_origem_contatos/
+    └─ migration.sql
+  └─ 20261013260000_recorrencia_sem_fim/
+    └─ migration.sql
+  └─ 20261013270000_status_pareamento_whatsapp/
+    └─ migration.sql
+  └─ 20261014000000_aguardando_cliente_e_descartada/
+    └─ migration.sql
+  └─ 20261015190000_permissoes_modulo/
+    └─ migration.sql
+  └─ 20261015210000_telefone_normalizado_contatos/
+    └─ migration.sql
+  └─ 20261016120000_status_entrega_mensagem/
+    └─ migration.sql
+  └─ 20261016140000_whatsapp_calling_por_linha/
+    └─ migration.sql
+  └─ 20261109120000_pesquisa_manual_por_linha/
+    └─ migration.sql
+  └─ 20261116120000_sessao_versao_usuario/
+    └─ migration.sql
+      
+All migrations have been successfully applied.
+

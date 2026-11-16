@@ -1,0 +1,22 @@
+﻿node.exe : warn The configuration property `package.json#prisma` is deprecated and will be removed in Prisma 7. Please 
+migrate to a Prisma config file (e.g., `prisma.config.ts`).
+No linha:1 caractere:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (warn The config...ma.config.ts`).:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+For more information, see: https://pris.ly/prisma-config
+
+
+[*] Changed the `branding` table
+  [*] Altered column `app_name` (default changed from `Some(Value(String("Plataforma de Atendimento")))` to `Some(Value(String("Plataforma de Atendimento Bradel")))`)
+
+[*] Changed the `mapeamentos_origem_importacao` table
+  [*] Renamed the foreign key "mapeamentos_origem_importacao_org_fkey" to "mapeamentos_origem_importacao_organizacao_id_fkey"
+  [*] Renamed index `mapeamentos_origem_importacao_org_operacao_idx` to `mapeamentos_origem_importacao_organizacao_id_operacao_idx`
+  [*] Renamed index `mapeamentos_origem_importacao_org_origem_key` to `mapeamentos_origem_importacao_organizacao_id_origem_key`
+
+[*] Changed the `solicitacoes_exclusao_contato` table
+  [*] Renamed index `solicitacoes_exclusao_contato_organizacao_id_status_solicitado_` to `solicitacoes_exclusao_contato_organizacao_id_status_solicit_idx`
+

@@ -1,0 +1,18 @@
+﻿
+> plataforma-atendimento@0.1.0 test:integracao
+> vitest run --config vitest.integracao.config.ts
+
+
+ RUN  v4.1.11 C:/Users/kaua.tavares/plataforma-atendimento
+
+ ✓ apps/api/src/integracao/sessao-e-admins.integracao.test.ts (14 tests) 3365ms
+     ✓ a segunda transacao da MESMA organizacao espera a primeira terminar  841ms
+     ✓ organizacoes DIFERENTES nao se bloqueiam  817ms
+     ✓ 10 trocas de senha concorrentes pelo servico: versao final = 10  721ms
+
+ Test Files  1 passed (1)
+      Tests  14 passed (14)
+   Start at  12:04:06
+   Duration  4.18s (transform 336ms, setup 73ms, import 525ms, tests 3.37s, environment 0ms)
+
+

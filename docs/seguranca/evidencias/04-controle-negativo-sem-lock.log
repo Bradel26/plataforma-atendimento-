@@ -1,0 +1,71 @@
+﻿
+> plataforma-atendimento@0.1.0 test:integracao
+> vitest run --config vitest.integracao.config.ts
+
+
+ RUN  v4.1.11 C:/Users/kaua.tavares/plataforma-atendimento
+
+ ❯ apps/api/src/integracao/sessao-e-admins.integracao.test.ts (14 tests | 2 failed) 2985ms
+     ✓ a coluna e NOT NULL com default 0, e usuario novo nasce com versao 0 15ms
+     ✓ a segunda transacao da MESMA organizacao espera a primeira terminar  820ms
+     ✓ organizacoes DIFERENTES nao se bloqueiam  808ms
+     × dois ADMIN rebaixados ao mesmo tempo, 15 rodadas: sempre um passa, um recebe 409, sobra 1 ADMIN 99ms
+     × PATCH, desativar e excluir misturados em 3 ADMIN: ao menos 1 sobra, e no maximo 2 operacoes passam 87ms
+     ✓ 40 incrementos concorrentes direto no SQL: nenhum se perde (versao final = 40) 161ms
+     ✓ 10 trocas de senha concorrentes pelo servico: versao final = 10  695ms
+     ✓ mudar so o nome NAO sobe a versao; mudar o perfil sobe exatamente 1 13ms
+     ✓ o ultimo ADMIN de cada organizacao e protegido SO pelos ADMIN dela (rebaixar os dois ao mesmo tempo: ambos 409) 13ms
+     ✓ usuario de OUTRA organizacao nao e alcancado: 404, e a versao dele nao muda 10ms
+     ✓ mesmo e-mail em duas organizacoes: versoes independentes 13ms
+     ✓ a consulta REAL de validarSessao respeita a organizacao do token 6ms
+     ✓ mudanca de perfil: token antigo (sv=0) cai na hora, o novo (sv=1) passa; token legado (sem sv) tambem cai 9ms
+     ✓ desativar e excluir: a sessao deixa de valer 83ms
+node.exe : 
+No linha:1 caractere:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  apps/api/src/integracao/sessao-e-admins.integracao.test.ts > ultimo ADMIN — concorrencia real > dois ADMIN 
+rebaixados ao mesmo tempo, 15 rodadas: sempre um passa, um recebe 409, sobra 1 ADMIN
+AssertionError: rodada 1: expected [ { status: 'fulfilled', …(1) }, …(1) ] to have a length of 1 but got 2
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ apps/api/src/integracao/sessao-e-admins.integracao.test.ts:152:77
+    150|       ]);
+    151|
+    152|       expect(r.filter((x) => x.status === 'fulfilled'), `rodada ${roda…
+       |                                                                             ^
+    153|       const recusada = r.find((x) => x.status === 'rejected') as Promi…
+    154|       expect(recusada.reason).toMatchObject({ status: 409 });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  apps/api/src/integracao/sessao-e-admins.integracao.test.ts > ultimo ADMIN — concorrencia real > PATCH, 
+desativar e excluir misturados em 3 ADMIN: ao menos 1 sobra, e no maximo 2 operacoes passam
+AssertionError: expected 0 to be greater than or equal to 1
+ ❯ apps/api/src/integracao/sessao-e-admins.integracao.test.ts:173:37
+    171|     ]);
+    172|
+    173|     expect(await adminsAtivos(org)).toBeGreaterThanOrEqual(1);
+       |                                     ^
+    174|     expect(r.filter((x) => x.status === 'fulfilled').length).toBeLessT…
+    175|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 12 passed (14)
+   Start at  12:04:18
+   Duration  3.76s (transform 316ms, setup 67ms, import 499ms, tests 2.99s, environment 0ms)
+
+
