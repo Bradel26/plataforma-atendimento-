@@ -63,11 +63,13 @@ function RotasPublicas() {
 }
 
 function AppRoutes() {
-  const { usuario, carregando, temPerfil, temModulo, temEsteira } = useAuth();
+  const { usuario, carregando, reconectando, temPerfil, temModulo, temEsteira } = useAuth();
 
   if (carregando) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-slate-500">Carregando sessão...</div>
+      <div className="flex h-full items-center justify-center text-sm text-slate-500">
+        {reconectando ? 'Servidor indisponível. Tentando reconectar...' : 'Carregando sessão...'}
+      </div>
     );
   }
 

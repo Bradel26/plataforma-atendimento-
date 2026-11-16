@@ -54,20 +54,45 @@ async function parse<T>(res: Response): Promise<T> {
   return corpo as T;
 }
 
-type Sessao = { accessToken: string; usuario: import('./types').Usuario };
+export type Sessao = { accessToken: string; usuario: import('./types').Usuario };
+
+/**
+ * Resultado de uma renovacao. Tres estados, e nao dois, porque "nao consegui
+ * renovar" mistura coisas opostas:
+ *  - `expirada`: o servidor respondeu 401 — a sessao acabou (cookie ausente,
+ *    invalido, conta desativada, perfil/senha mudaram). Unico caso de logout.
+ *  - `indisponivel`: 5xx, 429, falha de rede ou resposta ilegivel. O servidor
+ *    NAO disse que a credencial e invalida; o cookie continua valido e a
+ *    renovacao deve ser tentada de novo quando o servico voltar.
+ */
+export type ResultadoRefresh = { estado: 'ok'; sessao: Sessao } | { estado: 'expirada' } | { estado: 'indisponivel' };
 
 /** Espera curta antes da segunda tentativa, para o cookie novo chegar. */
 const espera = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
 
-async function chamarRefresh(): Promise<{ sessao: Sessao | null; codigo: string | null }> {
+async function chamarRefresh(): Promise<{ resultado: ResultadoRefresh; codigo: string | null }> {
+  let res: Response;
   try {
-    const res = await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' });
-    if (res.ok) return { sessao: (await res.json()) as Sessao, codigo: null };
-    const corpo = (await res.json().catch(() => null)) as { error?: { code?: string } } | null;
-    return { sessao: null, codigo: corpo?.error?.code ?? 'DESCONHECIDO' };
+    res = await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' });
   } catch {
-    return { sessao: null, codigo: 'REDE' };
+    return { resultado: { estado: 'indisponivel' }, codigo: 'REDE' };
   }
+
+  if (res.ok) {
+    try {
+      return { resultado: { estado: 'ok', sessao: (await res.json()) as Sessao }, codigo: null };
+    } catch {
+      return { resultado: { estado: 'indisponivel' }, codigo: 'RESPOSTA_ILEGIVEL' };
+    }
+  }
+
+  const corpo = (await res.json().catch(() => null)) as { error?: { code?: string } } | null;
+  const codigo = corpo?.error?.code ?? 'DESCONHECIDO';
+  // So um 401 DA API (com o corpo de erro dela) encerra a sessao. 5xx, 429 e um 401
+  // sem o formato da API (proxy, balanceador no meio de uma queda) nao provam que a
+  // credencial morreu — deslogar por isso transformaria uma queda em perda de sessao.
+  if (res.status === 401 && codigo !== 'DESCONHECIDO') return { resultado: { estado: 'expirada' }, codigo };
+  return { resultado: { estado: 'indisponivel' }, codigo };
 }
 
 /**
@@ -80,19 +105,21 @@ async function chamarRefresh(): Promise<{ sessao: Sessao | null; codigo: string 
  * cookie invalido (diferente de "sem cookie") ganha uma segunda tentativa, que
  * cobre o caso de outra aba ter rotacionado primeiro.
  */
-let refreshEmCurso: Promise<Sessao | null> | null = null;
+let refreshEmCurso: Promise<ResultadoRefresh> | null = null;
 
-export function refreshRequest(): Promise<Sessao | null> {
+export function refreshRequest(): Promise<ResultadoRefresh> {
   if (!refreshEmCurso) {
     refreshEmCurso = (async () => {
       const primeira = await chamarRefresh();
-      let sessao = primeira.sessao;
-      if (!sessao && primeira.codigo !== 'SEM_SESSAO') {
+      let final = primeira;
+      // Uma segunda tentativa curta, sem repetir quando nao ha cookie nenhum:
+      // cobre a outra aba que rotacionou primeiro (401) e o tremor de rede (5xx).
+      if (primeira.resultado.estado !== 'ok' && primeira.codigo !== 'SEM_SESSAO') {
         await espera(150);
-        sessao = (await chamarRefresh()).sessao;
+        final = await chamarRefresh();
       }
-      if (sessao) setAccessToken(sessao.accessToken);
-      return sessao;
+      if (final.resultado.estado === 'ok') setAccessToken(final.resultado.sessao.accessToken);
+      return final.resultado;
     })();
     // Libera na proxima microtask, para chamadas concorrentes compartilharem
     // o resultado desta.
@@ -105,8 +132,12 @@ export function refreshRequest(): Promise<Sessao | null> {
   return refreshEmCurso;
 }
 
-async function renovarSessao(): Promise<boolean> {
-  return (await refreshRequest()) !== null;
+const SESSAO_INDISPONIVEL = () =>
+  new ApiError(503, 'SESSAO_INDISPONIVEL', 'Serviço temporariamente indisponível. Tentando novamente...');
+
+function encerrarSessaoNoCliente() {
+  setAccessToken(null);
+  window.dispatchEvent(new Event(AUTH_EXPIRADA));
 }
 
 async function enviar<T>(path: string, init: RequestInit): Promise<T> {
@@ -114,11 +145,14 @@ async function enviar<T>(path: string, init: RequestInit): Promise<T> {
 
   const podeRenovar = res.status === 401 && !path.startsWith('/auth/');
   if (podeRenovar) {
-    if (await renovarSessao()) {
+    const renovacao = await refreshRequest();
+    if (renovacao.estado === 'ok') {
       res = await raw(path, init);
+    } else if (renovacao.estado === 'expirada') {
+      encerrarSessaoNoCliente();
     } else {
-      setAccessToken(null);
-      window.dispatchEvent(new Event(AUTH_EXPIRADA));
+      // Servico fora: nao desloga. A proxima chamada tenta renovar de novo.
+      throw SESSAO_INDISPONIVEL();
     }
   }
 
@@ -148,10 +182,10 @@ export const api = {
 export async function obterImagemPrivada(path: string): Promise<Blob | null> {
   let res = await raw(path, { method: 'GET', cache: 'no-store' });
   if (res.status === 401) {
-    if (await renovarSessao()) res = await raw(path, { method: 'GET', cache: 'no-store' });
+    const renovacao = await refreshRequest();
+    if (renovacao.estado === 'ok') res = await raw(path, { method: 'GET', cache: 'no-store' });
     else {
-      setAccessToken(null);
-      window.dispatchEvent(new Event(AUTH_EXPIRADA));
+      if (renovacao.estado === 'expirada') encerrarSessaoNoCliente();
       return null;
     }
   }
@@ -171,8 +205,10 @@ export async function baixarArquivo(path: string, nomeArquivo: string, corpo?: u
   const init = (): RequestInit => (corpo === undefined ? { method: 'GET' } : { method: 'POST', body: JSON.stringify(corpo) });
   let res = await raw(path, init());
 
-  if (res.status === 401 && (await renovarSessao())) {
-    res = await raw(path, init());
+  if (res.status === 401) {
+    const renovacao = await refreshRequest();
+    if (renovacao.estado === 'ok') res = await raw(path, init());
+    else if (renovacao.estado === 'indisponivel') throw SESSAO_INDISPONIVEL();
   }
   if (!res.ok) {
     await parse(res); // reaproveita o tratamento de erro padrao

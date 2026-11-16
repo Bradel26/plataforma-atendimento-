@@ -1,11 +1,14 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AUTH_EXPIRADA, api, loginRequest, refreshRequest, setAccessToken } from '../../lib/api';
+import { restaurarSessao } from '../../lib/restaurarSessao';
 import type { AcessoOperacoes, AgentStatus, Perfil, Usuario } from '../../lib/types';
 import { operacoesPermitidas } from '../../pages/esteira/estadoEsteira';
 
 type AuthContextValue = {
   usuario: Usuario | null;
   carregando: boolean;
+  /** O servidor nao respondeu ao restaurar a sessao: tentando de novo, sem deslogar. */
+  reconectando: boolean;
   entrar: (email: string, senha: string) => Promise<void>;
   sair: () => Promise<void>;
   alterarStatus: (status: AgentStatus) => Promise<void>;
@@ -22,13 +25,21 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [carregando, setCarregando] = useState(true);
+  const [reconectando, setReconectando] = useState(false);
 
   // Restaura a sessao a partir do cookie de refresh (sobrevive a recarregar a pagina).
   useEffect(() => {
     let ativo = true;
-    refreshRequest()
+    // 401 confirmado -> login. Servidor fora (5xx/rede) -> continua tentando, com o
+    // cookie intacto, e entra sozinho quando o servico volta.
+    restaurarSessao({
+      renovar: refreshRequest,
+      aoIndisponivel: () => ativo && setReconectando(true),
+      cancelado: () => !ativo,
+    })
       .then((sessao) => {
         if (!ativo) return;
+        setReconectando(false);
         if (sessao) {
           setAccessToken(sessao.accessToken);
           setUsuario(sessao.usuario);
@@ -120,8 +131,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const temEsteira = temModulo('esteira') && operacoesPermitidas(operacoes).length > 0;
 
   const valor = useMemo(
-    () => ({ usuario, carregando, entrar, sair, alterarStatus, temPerfil, temModulo, operacoes, temEsteira }),
-    [usuario, carregando, entrar, sair, alterarStatus, temPerfil, temModulo, operacoes, temEsteira],
+    () => ({ usuario, carregando, reconectando, entrar, sair, alterarStatus, temPerfil, temModulo, operacoes, temEsteira }),
+    [usuario, carregando, reconectando, entrar, sair, alterarStatus, temPerfil, temModulo, operacoes, temEsteira],
   );
 
   return <AuthContext.Provider value={valor}>{children}</AuthContext.Provider>;
