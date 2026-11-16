@@ -438,15 +438,17 @@ export function TelefoniaPage() {
         </div>
         <span
           className={`inline-flex h-9 items-center gap-2 rounded-full px-3.5 text-[13px] font-semibold ${
-            linhaCloudAtiva ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+            linhaCloudAtiva ? 'bg-emerald-50 text-emerald-700' : linhaWebAtiva ? 'bg-sky-50 text-sky-700' : 'bg-amber-50 text-amber-700'
           }`}
         >
-          <span className={`h-2 w-2 rounded-full ${linhaCloudAtiva ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+          <span className={`h-2 w-2 rounded-full ${linhaCloudAtiva ? 'bg-emerald-500' : linhaWebAtiva ? 'bg-sky-500' : 'bg-amber-500'}`} />
           {linhaCloudAtiva
             ? 'WhatsApp Calling ativo na sua linha'
-            : import.meta.env.DEV
-              ? 'Chamadas pelo conector WhatsApp Web local'
-              : 'Chamadas WhatsApp aguardando ativação da Meta'}
+            : linhaWebAtiva
+              ? 'Modo QR do WhatsApp Business configurado'
+              : import.meta.env.DEV
+                ? 'Chamadas pelo conector WhatsApp Web local'
+              : 'Conecte uma linha WhatsApp para habilitar chamadas'}
         </span>
       </div>
 

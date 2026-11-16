@@ -17,7 +17,12 @@ function rejeitar(socket: Duplex, codigo = 401, texto = 'Unauthorized') {
 function origemPermitida(req: IncomingMessage) {
   const origem = req.headers.origin;
   if (!origem) return env.NODE_ENV !== 'production';
-  if (origem === env.WEB_ORIGIN) return true;
+  try {
+    // O browser omite a barra final em Origin; WEB_ORIGIN pode incluí-la.
+    if (new URL(origem).origin === new URL(env.WEB_ORIGIN).origin) return true;
+  } catch {
+    return false;
+  }
 
   // Em desenvolvimento, localhost e 127.0.0.1 são usados alternadamente
   // para abrir o Vite. Aceite ambos somente na porta local do frontend.
@@ -46,12 +51,18 @@ export function registrarGatewayDeAudioWebJs(server: HttpServer) {
   server.on('upgrade', (req, socket, head) => {
     const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
     if (url.pathname !== CAMINHO) return;
-    if (!origemPermitida(req)) return rejeitar(socket, 403, 'Forbidden');
+    if (!origemPermitida(req)) {
+      console.warn('[webjs-call] audio_ws_rejected reason=origin');
+      return rejeitar(socket, 403, 'Forbidden');
+    }
     const ticket = url.searchParams.get('ticket') || '';
 
     void (async () => {
       const dados = await consumirTicketWebJsCall(ticket);
-      if (!dados) return rejeitar(socket);
+      if (!dados) {
+        console.warn('[webjs-call] audio_ws_rejected reason=ticket');
+        return rejeitar(socket);
+      }
 
       const config = await comOrganizacao(dados.organizacaoId, async () =>
         await prisma.channelConfig.findFirst({
@@ -59,7 +70,10 @@ export function registrarGatewayDeAudioWebJs(server: HttpServer) {
           select: { id: true, donoId: true },
         }),
       );
-      if (!config || (config.donoId && config.donoId !== dados.usuarioId)) return rejeitar(socket, 403, 'Forbidden');
+      if (!config || (config.donoId && config.donoId !== dados.usuarioId)) {
+        console.warn('[webjs-call] audio_ws_rejected reason=channel');
+        return rejeitar(socket, 403, 'Forbidden');
+      }
 
       wss.handleUpgrade(req, socket, head, (browserSocket) => {
         const port = process.env.WEBJS_LOCAL_PORT?.trim() || '4174';
@@ -73,6 +87,16 @@ export function registrarGatewayDeAudioWebJs(server: HttpServer) {
         const upstream = new WebSocket(upstreamUrl, { headers: { Authorization: `Bearer ${token}` } });
         upstream.binaryType = 'arraybuffer';
         browserSocket.binaryType = 'arraybuffer';
+        const timeoutUpstream = setTimeout(() => {
+          if (upstream.readyState !== WebSocket.CONNECTING) return;
+          console.warn('[webjs-call] audio_ws_upstream_timeout');
+          upstream.terminate();
+          browserSocket.close(1011, 'Conector de audio indisponivel');
+        }, 5_000);
+        upstream.once('open', () => {
+          clearTimeout(timeoutUpstream);
+          console.info('[webjs-call] audio_ws_upstream_connected');
+        });
 
         const fecharPonte = () => {
           if (upstream.readyState === WebSocket.OPEN || upstream.readyState === WebSocket.CONNECTING) upstream.close();
@@ -85,8 +109,12 @@ export function registrarGatewayDeAudioWebJs(server: HttpServer) {
         });
         browserSocket.on('close', fecharPonte);
         browserSocket.on('error', fecharPonte);
-        upstream.on('close', () => browserSocket.close());
-        upstream.on('error', () => browserSocket.close(1011, 'Serviço de áudio indisponível'));
+        upstream.on('close', () => { clearTimeout(timeoutUpstream); browserSocket.close(); });
+        upstream.on('error', () => {
+          clearTimeout(timeoutUpstream);
+          console.error('[webjs-call] audio_ws_upstream_error');
+          browserSocket.close(1011, 'Audio bridge unavailable');
+        });
       });
     })().catch((erro) => {
       console.error('[webjs-call] Falha ao autorizar o canal de áudio:', erro instanceof Error ? erro.message : 'erro interno');

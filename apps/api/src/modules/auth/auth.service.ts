@@ -1,6 +1,6 @@
 import { prisma } from '../../lib/prisma';
 import { AppError, unauthorized } from '../../lib/errors';
-import { hashPassword, verifyPassword } from '../../lib/password';
+import { gastarTempoDeVerificacao, hashPassword, verifyPassword } from '../../lib/password';
 import { issueRefreshToken, signAccessToken } from '../../lib/tokens';
 import { registrarPresenca } from '../metrics/metrics.service';
 import { toPublicUser } from '../users/users.serializer';
@@ -12,35 +12,52 @@ import { garantirNaoBloqueado, limparFalhas, registrarFalha } from './tentativas
 
 const CREDENCIAIS_INVALIDAS = new AppError(401, 'INVALID_CREDENTIALS', 'Email ou senha incorretos');
 
-export async function login({ email, senha }: LoginInput) {
-  await garantirNaoBloqueado(email);
+type UsuarioDoLogin = Awaited<ReturnType<typeof prisma.user.findFirstOrThrow>>;
 
-  /*
-   * O e-mail deixou de ser identificador global: ele e unico POR organizacao.
-   *
-   * `take: 2` em vez de `findFirst` de proposito. Com `findFirst`, duas pessoas
-   * com o mesmo e-mail em organizacoes diferentes fariam o login entrar sempre na
-   * primeira que o banco devolvesse — silenciosamente, e sem jeito de a segunda
-   * pessoa entrar nunca. Ler duas transforma isso em pergunta em vez de sorteio.
-   */
+/**
+ * Acha a conta cujo e-mail E senha conferem.
+ *
+ * O e-mail e unico POR organizacao, entao o mesmo e-mail pode existir em mais de
+ * uma. Antes, a ambiguidade era anunciada (409) ANTES de conferir a senha: qualquer
+ * pessoa, sem credencial nenhuma, descobria quais e-mails existem em varias
+ * organizacoes. Agora a senha e conferida em todos os candidatos primeiro:
+ *
+ *   - nenhum confere (ou nao ha conta) -> a mesma resposta generica;
+ *   - exatamente um confere            -> e ele;
+ *   - mais de um confere               -> ai sim a ambiguidade, que so chega a
+ *                                         quem ja provou conhecer a senha.
+ *
+ * `take: 2` de proposito: um terceiro candidato nao muda a resposta.
+ * Quando nao ha conta, gasta-se o mesmo tempo de bcrypt de uma senha errada, para
+ * o tempo de resposta nao denunciar se o e-mail existe.
+ */
+async function autenticarPorSenha(email: string, senha: string): Promise<UsuarioDoLogin | null> {
   const candidatos = await prisma.user.findMany({ where: { email: email.toLowerCase() }, take: 2 });
-  if (candidatos.length > 1) {
+  if (candidatos.length === 0) {
+    await gastarTempoDeVerificacao(senha);
+    return null;
+  }
+
+  const conferem: UsuarioDoLogin[] = [];
+  for (const candidato of candidatos) {
+    if (await verifyPassword(senha, candidato.senhaHash)) conferem.push(candidato);
+  }
+  if (conferem.length > 1) {
     throw new AppError(
       409,
       'ORGANIZACAO_AMBIGUA',
       'Este e-mail existe em mais de uma organização. Informe qual delas.',
     );
   }
+  return conferem[0] ?? null;
+}
 
-  const user = candidatos[0];
+export async function login({ email, senha }: LoginInput) {
+  await garantirNaoBloqueado(email);
+
+  const user = await autenticarPorSenha(email, senha);
   if (!user) {
     // Conta o erro mesmo sem usuario: sem isso, varrer emails sai de graca.
-    await registrarFalha(email);
-    throw CREDENCIAIS_INVALIDAS;
-  }
-
-  const senhaOk = await verifyPassword(senha, user.senhaHash);
-  if (!senhaOk) {
     await registrarFalha(email);
     throw CREDENCIAIS_INVALIDAS;
   }
@@ -74,12 +91,8 @@ export async function login({ email, senha }: LoginInput) {
 /** A troca da senha temporaria ocorre antes de emitir qualquer sessao autenticada. */
 export async function alterarSenhaInicial({ email, senhaAtual, novaSenha }: AlterarSenhaInicialInput) {
   await garantirNaoBloqueado(email);
-  const candidatos = await prisma.user.findMany({ where: { email: email.toLowerCase() }, take: 2 });
-  if (candidatos.length > 1) {
-    throw new AppError(409, 'ORGANIZACAO_AMBIGUA', 'Este e-mail existe em mais de uma organização.');
-  }
-  const user = candidatos[0];
-  if (!user || !(await verifyPassword(senhaAtual, user.senhaHash))) {
+  const user = await autenticarPorSenha(email, senhaAtual);
+  if (!user) {
     await registrarFalha(email);
     throw CREDENCIAIS_INVALIDAS;
   }

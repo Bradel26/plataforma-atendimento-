@@ -924,7 +924,7 @@ describe('enviarMensagem/enviarArquivo — transicao de status', () => {
 
     await comOrganizacao(
       'org-1',
-      () => enviarArquivo(SOLICITANTE, conversa.id, { buffer: Buffer.from('x'), nome: 'arquivo.pdf', tipo: 'application/pdf' }, undefined, false),
+      () => enviarArquivo(SOLICITANTE, conversa.id, { buffer: Buffer.from('%PDF-1.4'), nome: 'arquivo.pdf', tipo: 'application/pdf' }, undefined, false),
       { id: 'user-1', perfil: 'ADMIN' },
     );
 
@@ -941,7 +941,7 @@ describe('enviarMensagem/enviarArquivo — transicao de status', () => {
 
     await comOrganizacao(
       'org-1',
-      () => enviarArquivo(SOLICITANTE, conversa.id, { buffer: Buffer.from('x'), nome: 'arquivo.pdf', tipo: 'application/pdf' }, undefined, true),
+      () => enviarArquivo(SOLICITANTE, conversa.id, { buffer: Buffer.from('%PDF-1.4'), nome: 'arquivo.pdf', tipo: 'application/pdf' }, undefined, true),
       { id: 'user-1', perfil: 'ADMIN' },
     );
 

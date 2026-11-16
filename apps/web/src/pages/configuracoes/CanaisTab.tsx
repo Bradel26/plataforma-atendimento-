@@ -448,9 +448,9 @@ export function CanaisTab() {
       espelharCelular: numero.espelharCelular ?? true,
       whatsappCallingHabilitado: numero.whatsappCallingHabilitado ?? false,
       gravarChamadasWhatsapp: numero.gravarChamadasWhatsapp ?? false,
+      pesquisaHabilitada: numero.pesquisaHabilitada ?? false,
       transcreverChamadasWhatsapp: numero.transcreverChamadasWhatsapp ?? false,
       iaAtiva: ia?.ativa ?? false,
-      pesquisaHabilitada: numero.pesquisaHabilitada ?? false,
       iaUrlWebhook: ia?.webhook ?? '',
     });
   };
@@ -471,9 +471,9 @@ export function CanaisTab() {
     try {
       const corpo: Record<string, unknown> = { ativo: numeroForm.ativo, modo: numeroForm.modo };
       corpo.whatsappCallingHabilitado = numeroForm.modo === 'OFICIAL' && numeroForm.whatsappCallingHabilitado;
+      corpo.pesquisaHabilitada = numeroForm.pesquisaHabilitada;
       corpo.gravarChamadasWhatsapp = numeroForm.modo === 'OFICIAL' && numeroForm.gravarChamadasWhatsapp;
       corpo.transcreverChamadasWhatsapp = numeroForm.modo === 'OFICIAL' && numeroForm.transcreverChamadasWhatsapp;
-      corpo.pesquisaHabilitada = numeroForm.pesquisaHabilitada;
       if (numeroForm.modo === 'NAO_OFICIAL') corpo.espelharCelular = numeroForm.espelharCelular;
       if (numeroForm.nome) corpo.nome = numeroForm.nome;
       if (numeroForm.donoId) corpo.donoId = numeroForm.donoId;

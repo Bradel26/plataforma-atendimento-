@@ -28,8 +28,17 @@ type RefreshPayload = { sub: string; jti: string };
 const refreshKey = (jti: string) => `refresh:${jti}`;
 const REFRESH_TTL_SECONDS = env.JWT_REFRESH_TTL_DAYS * 24 * 60 * 60;
 
+/**
+ * Algoritmo fixo nos dois lados. A biblioteca ja recusa `none` e so aceita
+ * familia HMAC com segredo simetrico, mas depender de um padrao implicito e deixar
+ * a seguranca na mao de uma atualizacao de versao: aqui fica escrito.
+ */
+const ALGORITMO = 'HS256' as const;
+const VERIFICACAO = { algorithms: [ALGORITMO] } satisfies jwt.VerifyOptions;
+
 export function signAccessToken(payload: AccessPayload): string {
   return jwt.sign(payload, env.JWT_ACCESS_SECRET, {
+    algorithm: ALGORITMO,
     expiresIn: env.JWT_ACCESS_TTL as SignOptions['expiresIn'],
   });
 }
@@ -37,7 +46,7 @@ export function signAccessToken(payload: AccessPayload): string {
 export function verifyAccessToken(token: string): AccessPayload {
   let payload: AccessPayload & { tipo?: string };
   try {
-    payload = jwt.verify(token, env.JWT_ACCESS_SECRET) as AccessPayload & { tipo?: string };
+    payload = jwt.verify(token, env.JWT_ACCESS_SECRET, VERIFICACAO) as AccessPayload & { tipo?: string };
   } catch {
     throw unauthorized('Token de acesso inválido ou expirado');
   }
@@ -67,13 +76,13 @@ export type WebchatPayload = {
  * como token de usuario interno (ver verifyAccessToken).
  */
 export function signWebchatToken(dados: Omit<WebchatPayload, 'tipo'>): string {
-  return jwt.sign({ ...dados, tipo: WEBCHAT_TIPO }, env.JWT_ACCESS_SECRET, { expiresIn: '12h' });
+  return jwt.sign({ ...dados, tipo: WEBCHAT_TIPO }, env.JWT_ACCESS_SECRET, { algorithm: ALGORITMO, expiresIn: '12h' });
 }
 
 export function verifyWebchatToken(token: string): WebchatPayload {
   let payload: WebchatPayload;
   try {
-    payload = jwt.verify(token, env.JWT_ACCESS_SECRET) as WebchatPayload;
+    payload = jwt.verify(token, env.JWT_ACCESS_SECRET, VERIFICACAO) as WebchatPayload;
   } catch {
     throw unauthorized('Sessão do webchat inválida ou expirada');
   }
@@ -98,6 +107,7 @@ export async function issueRefreshToken(userId: string, organizacaoId: string): 
     console.warn(`[auth] issueRefreshToken: Redis indisponível, sessão criada sem registro — renovação futura desta sessão não será possível`);
   }
   return jwt.sign({ sub: userId, jti } satisfies RefreshPayload, env.JWT_REFRESH_SECRET, {
+    algorithm: ALGORITMO,
     expiresIn: `${env.JWT_REFRESH_TTL_DAYS}d`,
   });
 }
@@ -116,7 +126,7 @@ export async function consumeRefreshToken(
 
   let payload: RefreshPayload;
   try {
-    payload = jwt.verify(token, env.JWT_REFRESH_SECRET) as RefreshPayload;
+    payload = jwt.verify(token, env.JWT_REFRESH_SECRET, VERIFICACAO) as RefreshPayload;
   } catch {
     throw unauthorized('Sessão expirada, faca login novamente');
   }
@@ -141,7 +151,7 @@ export async function consumeRefreshToken(
 export async function revokeRefreshToken(token: string | undefined): Promise<void> {
   if (!token) return;
   try {
-    const payload = jwt.verify(token, env.JWT_REFRESH_SECRET) as RefreshPayload;
+    const payload = jwt.verify(token, env.JWT_REFRESH_SECRET, VERIFICACAO) as RefreshPayload;
     await redis.del(refreshKey(payload.jti));
   } catch {
     // token ja invalido — nada a revogar

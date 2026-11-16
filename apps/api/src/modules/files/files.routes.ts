@@ -13,6 +13,22 @@ import { prisma } from '../../lib/prisma';
 export const arquivosRoutes = Router();
 
 /**
+ * Content-Disposition seguro (RFC 6266 / 5987).
+ *
+ * O nome vem do cliente que enviou o arquivo. Cabecalho HTTP so admite Latin-1:
+ * um nome com travessao ou emoji ("Proposta – final.pdf") fazia o Node lancar
+ * ERR_INVALID_CHAR e a resposta virava 500. Aqui o nome simples sai ASCII sem
+ * aspas, barras nem controles (nada que quebre o cabecalho ou injete outro), e o
+ * nome real segue em `filename*` codificado.
+ */
+export function contentDisposition(tipo: 'inline' | 'attachment', nome: string): string {
+  const limpo = nome.replace(/[\r\n\t\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 200) || 'arquivo';
+  const ascii = limpo.replace(/[^\x20-\x7e]/g, '_').replace(/["\\/;]/g, '_');
+  const utf8 = encodeURIComponent(limpo).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+  return `${tipo}; filename="${ascii}"; filename*=UTF-8''${utf8}`;
+}
+
+/**
  * Arquivo servido tem de estar referenciado por um anexo de protocolo ou por uma
  * mensagem. Arquivo orfao no disco — upload interrompido, registro apagado — nao
  * e servido.
@@ -101,12 +117,17 @@ const servir = asyncHandler(async (req, res) => {
     res.setHeader('Content-Type', tipo);
     res.setHeader('Content-Length', String(info.size));
     res.setHeader('Cache-Control', 'private, max-age=3600');
-    res.setHeader(
-      'Content-Disposition',
-      `${podeExibirInline(tipo) ? 'inline' : 'attachment'}; filename="${nome.replace(/"/g, '')}"`,
-    );
+    res.setHeader('Content-Disposition', contentDisposition(podeExibirInline(tipo) ? 'inline' : 'attachment', nome));
 
-    createReadStream(caminho).pipe(res);
+    // Sem este handler, um arquivo removido entre o `stat` e a leitura emite
+    // 'error' sem ninguem escutando — e um evento 'error' nao tratado derruba o
+    // processo inteiro, nao so a requisicao.
+    const leitura = createReadStream(caminho);
+    leitura.on('error', () => {
+      if (!res.headersSent) res.status(404).end();
+      else res.destroy();
+    });
+    leitura.pipe(res);
     });
 });
 

@@ -648,11 +648,6 @@ export function PainelChat({
                 {bloco.mensagens.map((m) => <Bolha key={m.id} mensagem={m} />)}
               </Fragment>
             ))}
-            {conversa.pesquisaManual && (
-              <div className="flex justify-center pt-3">
-                <Button disabled={ocupado} onClick={enviarPesquisa}>Enviar pesquisa de satisfação</Button>
-              </div>
-            )}
             {atendimentosAnteriores.blocos.length > 0 && (
               <li className="my-3 flex justify-center">
                 <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600">
@@ -674,6 +669,11 @@ export function PainelChat({
             <p className="pt-4 text-center text-sm text-slate-500">
               Atendimento finalizado em {new Date(conversa.finalizadoEm!).toLocaleString('pt-BR')}.
             </p>
+            {conversa.pesquisaManual && (
+              <div className="flex justify-center pt-3">
+                <Button disabled={ocupado} onClick={enviarPesquisa}>Enviar pesquisa de satisfação</Button>
+              </div>
+            )}
           </>
         ) : (
           <>

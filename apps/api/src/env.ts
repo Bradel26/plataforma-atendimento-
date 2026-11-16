@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { z } from 'zod';
+import { resolverTrustProxy } from './lib/trust-proxy';
 
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -69,11 +70,22 @@ const schema = z.object({
   /** Pasta do driver local de storage, relativa ao cwd da API. */
   STORAGE_DIR: z.string().default('./storage'),
   UPLOAD_MAX_MB: z.coerce.number().int().positive().max(100).default(10),
-  /** Ligue quando houver proxy reverso na frente (Nginx, Caddy, load balancer). */
+  /**
+   * Proxies confiaveis para resolver o IP do cliente (X-Forwarded-For).
+   * `false`, um numero de saltos (`1`) ou lista de IP/CIDR (`10.0.0.0/8`).
+   * `true` continua aceito por compatibilidade, mas confia em todo o cabecalho
+   * — ver `lib/trust-proxy.ts` e docs/seguranca/auditoria-seguranca.md.
+   */
   TRUST_PROXY: z
-    .enum(['true', 'false'])
+    .string()
     .default('false')
-    .transform((v) => v === 'true'),
+    .superRefine((v, ctx) => {
+      try {
+        resolverTrustProxy(v);
+      } catch (erro) {
+        ctx.addIssue({ code: 'custom', message: erro instanceof Error ? erro.message : 'TRUST_PROXY invalido' });
+      }
+    }),
   /**
    * HSTS so pode ser enviado quando o endereco publico atende em HTTPS.
    * O dominio temporario sslip.io opera em HTTP e, se recebesse esse cabecalho,

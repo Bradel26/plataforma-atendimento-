@@ -2,6 +2,7 @@ import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { mkdir, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 import { env } from '../env';
+import { conteudoCompativel } from './conteudo-arquivo';
 import { badRequest, notFound } from './errors';
 import { ORGANIZACAO_INICIAL, organizacaoAtual } from './tenant';
 
@@ -85,6 +86,13 @@ export async function salvar(entrada: { buffer: Buffer; nome: string; tipo: stri
   const tipo = entrada.tipo.split(';')[0]!.trim().toLowerCase();
   if (!tipoAceito(tipo)) throw badRequest(`Tipo de arquivo não aceito: ${tipo}`);
   if (entrada.buffer.length === 0) throw badRequest('Arquivo vazio');
+  // O tipo declarado e so um rotulo: o conteudo tem de ser desse tipo. Nao loga
+  // nome nem bytes — so o tipo declarado, que ajuda a achar um provedor que
+  // rotula errado sem expor nada do cliente.
+  if (!conteudoCompativel(tipo, entrada.buffer)) {
+    console.warn(`[upload] conteúdo incompatível com o tipo declarado (${tipo}); arquivo recusado`);
+    throw badRequest('O conteúdo do arquivo não corresponde ao tipo informado');
+  }
   const limiteDoArquivo = Math.max(limiteBytes, Math.min(100 * 1024 * 1024, entrada.limiteBytesMaximo ?? limiteBytes));
   if (entrada.buffer.length > limiteDoArquivo) {
     throw badRequest(`Arquivo acima do limite de ${Math.floor(limiteDoArquivo / (1024 * 1024))} MB`);
@@ -155,7 +163,9 @@ export function assinar(chave: string) {
 export function assinaturaValida(chave: string, assinatura: string | undefined) {
   const [expira, digest] = (assinatura ?? '').split('.');
   if (!expira || !digest) return false;
-  if (Number(expira) < Date.now()) return false;
+  // `NaN < x` e sempre falso: sem checar que e um inteiro finito, um prazo
+  // ilegivel passaria pela verificacao de validade em vez de ser recusado.
+  if (!/^\d{1,15}$/.test(expira) || Number(expira) < Date.now()) return false;
 
   const esperado = Buffer.from(hmac(chave, Number(expira)));
   const recebido = Buffer.from(digest);

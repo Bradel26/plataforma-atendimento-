@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { log } from '../../../../lib/log';
 import type { RequisicaoDeWebhook } from '../channel-provider';
+import { segredoRecebido, segredosIguais } from '../segredo-webhook';
 
 /**
  * Autenticacao do webhook do WAHA — fail-closed.
@@ -38,8 +39,7 @@ export function webhookWahaAutentico(req: RequisicaoDeWebhook, segredo: string |
     return confere;
   }
 
-  const recebido = typeof req.query.secret === 'string' ? req.query.secret : null;
-  return recebido !== null && iguais(recebido, segredo);
+  return segredosIguais(segredoRecebido(req), segredo);
 }
 
 /** Comparacao em tempo constante; tamanhos diferentes ja sao diferentes. */

@@ -9,6 +9,7 @@ import { obterSegredoWebhookWppConnect } from '../../config/wppconnect.config';
 import { registrarMensagemEntrante } from './inbound.service';
 import { normalizarEventoWpp } from './wppconnect.inbound';
 import { registrarEstadoDaSessao } from './webhooks/eventos-de-canal';
+import { segredoRecebido } from './providers/segredo-webhook';
 
 /**
  * Entrada do WPPConnect Server: ele posta aqui todo evento (`onmessage`,
@@ -52,7 +53,11 @@ function verificarSegredo(req: Request, res: Response, next: NextFunction) {
     return;
   }
 
-  const recebido = typeof req.query.secret === 'string' ? req.query.secret : null;
+  const cabecalho = req.headers?.['x-webhook-secret'];
+  const recebido = segredoRecebido({
+    header: () => (typeof cabecalho === 'string' ? cabecalho : undefined),
+    query: req.query ?? {},
+  });
   if (!segredoValido(recebido, segredo)) {
     res.status(401).json({ error: { code: 'SEGREDO_INVALIDO', message: 'Segredo do webhook inválido' } });
     return;

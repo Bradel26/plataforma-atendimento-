@@ -35,7 +35,7 @@ import { inclusaoDetalhe, semNotasInternas, toConversaDetalhe, toMensagem } from
  * depois — o operador veria "enviada" para algo que o cliente nunca recebeu.
  */
 const JANELA_HORAS: Partial<Record<Channel, number>> = {
-  WHATSAPP: 24,
+  // WhatsApp sem janela: nao usamos a API oficial (webjs), entao nao ha regra de 24h.
   // Messenger e Instagram Direct: 7 dias na politica de mensagem padrao.
   FACEBOOK: 24 * 7,
   INSTAGRAM: 24 * 7,

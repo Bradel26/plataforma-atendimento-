@@ -59,12 +59,21 @@ import { webchatRoutes } from './modules/webchat/webchat.routes';
 import { fluxosRoutes } from './modules/fluxos/fluxos.routes';
 import { assistenteCrmRoutes } from './modules/crm/assistente.routes';
 
+import { resolverTrustProxy } from './lib/trust-proxy';
+
 export function createApp() {
   const app = express();
 
   // Atras de proxy reverso o IP real vem no X-Forwarded-For; sem isto, o limite
   // por IP contaria todo mundo como o mesmo cliente (o proprio proxy).
-  if (env.TRUST_PROXY) app.set('trust proxy', true);
+  const proxy = resolverTrustProxy(env.TRUST_PROXY);
+  if (proxy.valor !== false) app.set('trust proxy', proxy.valor);
+  if (proxy.modoLegado && env.NODE_ENV === 'production') {
+    console.warn(
+      '[seguranca] TRUST_PROXY=true confia em todo o X-Forwarded-For: um cliente pode forjar o IP e escapar do limite de tentativas. ' +
+        'Defina o numero de saltos (ex.: TRUST_PROXY=1) ou os CIDRs dos proxies. Ver docs/seguranca/auditoria-seguranca.md.',
+    );
+  }
 
   // Nao anuncie HSTS nem forceHTTPS antes de haver HTTPS de verdade: os dois
   // fazem o navegador reescrever a visita para HTTPS, inclusive no dominio

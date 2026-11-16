@@ -304,8 +304,8 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste
       }
       if (msg.type === 'error') setErro(String(msg.data));
     };
-      ws.onerror = () => { setStatus('conector indisponível'); setErro(numeroId ? 'O serviço de chamadas não respondeu. Tente recarregar a página.' : 'Inicie o serviço local de chamadas na porta 4174.'); };
-    ws.onclose = () => { if (socketRef.current === ws) setStatus(numeroId ? 'conector desconectado' : 'conector local desconectado'); };
+      ws.onerror = () => { setStatus('conector indisponivel'); setErro(numeroId ? 'Falha ao abrir o canal de audio com o conector. Confira os eventos [webjs-call] no log da API no Coolify.' : 'Inicie o servico local de chamadas na porta 4174.'); };
+    ws.onclose = (event) => { if (socketRef.current === ws) { setStatus(numeroId ? 'conector desconectado' : 'conector local desconectado'); if (numeroId && event.code === 1011) setErro('O conector interno recusou ou perdeu o canal de audio. Confira os eventos [webjs-call] no log da API no Coolify.'); } };
     })().catch((e) => {
       if (vivo) setErro(e instanceof Error ? e.message : 'Não foi possível conectar o áudio da chamada.');
     });

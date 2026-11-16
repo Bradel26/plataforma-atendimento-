@@ -25,6 +25,12 @@ const cnpj = /\b\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}\b/g;
 const bearer = /\bBearer\s+[\w-]+\.?[\w-]*\.?[\w-]*/gi;
 const jwt = /\beyJ[\w-]{8,}\.[\w-]+\.[\w-]+/g;
 const hexLongo = /\b[0-9a-f]{32,}\b/gi;
+/**
+ * Credencial em query string (`?secret=`, `?t=` do link assinado de arquivo...).
+ * O formato do valor e livre — pode ser curto ou nao-hex e escapar de `hexLongo` —,
+ * entao a regra e pelo NOME do parametro.
+ */
+const parametroSecreto = /([?&;](?:secret|token|access_token|t|key|api_?key|signature|sig)=)[^&\s"'<>#]+/gi;
 
 /** Campos cujo valor nunca deve aparecer, qualquer que seja o formato. */
 const CAMPOS_PROIBIDOS = new Set([
@@ -44,6 +50,7 @@ const CAMPOS_PROIBIDOS = new Set([
 
 export function redigirTexto(valor: string): string {
   return valor
+    .replace(parametroSecreto, '$1[omitido]')
     .replace(jwt, '[token]')
     .replace(bearer, 'Bearer [token]')
     .replace(cnpj, '[cnpj]')
