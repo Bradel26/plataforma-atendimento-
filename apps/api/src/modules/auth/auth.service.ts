@@ -1,7 +1,8 @@
 import { prisma } from '../../lib/prisma';
 import { AppError, unauthorized } from '../../lib/errors';
 import { gastarTempoDeVerificacao, hashPassword, verifyPassword } from '../../lib/password';
-import { issueRefreshToken, signAccessToken } from '../../lib/tokens';
+import { consumirRefresh, issueRefreshToken, lerRefreshToken, signAccessToken } from '../../lib/tokens';
+import { invalidarSessaoLocal, SESSAO_INDISPONIVEL } from '../../lib/sessao';
 import { registrarPresenca } from '../metrics/metrics.service';
 import { toPublicUser } from '../users/users.serializer';
 import { modulosPermitidos } from '../../lib/modulos';
@@ -85,7 +86,13 @@ export async function login({ email, senha }: LoginInput) {
   // ha dias por alguem que fechou a aba sem clicar em "Sair".
   await registrarPresenca(atualizado.id, atualizado.status, { forcarNovoIntervalo: true });
 
-  return buildSession(atualizado);
+  // Os tokens saem com a versao e o perfil do momento em que a SENHA foi conferida
+  // (`user`), nao com os da linha devolvida pelo update: se um reset de senha ou
+  // uma mudanca de perfil acontecer entre a conferencia e o update, `atualizado`
+  // ja traz a versao nova e assinar com ela daria sessao valida a quem usou a
+  // senha antiga. Com a versao do snapshot o token nasce velho e e recusado no
+  // primeiro uso.
+  return buildSession({ ...atualizado, sessaoVersao: user.sessaoVersao, perfil: user.perfil });
 }
 
 /** A troca da senha temporaria ocorre antes de emitir qualquer sessao autenticada. */
@@ -101,35 +108,74 @@ export async function alterarSenhaInicial({ email, senhaAtual, novaSenha }: Alte
 
   await prisma.user.update({
     where: { id: user.id },
-    data: { senhaHash: await hashPassword(novaSenha), senhaPendente: false },
+    // Troca de senha encerra qualquer sessao anterior (mesma regra do reset por ADMIN).
+    data: { senhaHash: await hashPassword(novaSenha), senhaPendente: false, sessaoVersao: { increment: 1 } },
   });
+  invalidarSessaoLocal(user.organizacaoId, user.id);
   await limparFalhas(email);
 }
 
-/** Emite um novo par de tokens a partir de um refresh token ja validado. */
-export async function sessionForUserId(userId: string) {
-  const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user || !user.ativo) throw unauthorized('Sessão inválida, faca login novamente');
-  return buildSession(user);
+/**
+ * Falha do banco nao e credencial invalida. Erro de dominio (AppError) segue como
+ * esta; qualquer outro vira 503, para o cliente nao tratar como 401.
+ */
+async function daBase<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (erro) {
+    if (erro instanceof AppError) throw erro;
+    console.error('[auth] falha do banco na renovação:', erro instanceof Error ? erro.message : erro);
+    throw SESSAO_INDISPONIVEL();
+  }
 }
 
-async function buildSession(user: Awaited<ReturnType<typeof prisma.user.findUniqueOrThrow>>) {
+/**
+ * Renova a sessao a partir do cookie de refresh.
+ *
+ * A ORDEM importa: ler -> validar no banco -> consumir -> emitir. O token so e
+ * gasto depois que o banco respondeu; se o banco falhar, responde 503 e o cookie
+ * continua valido para uma nova tentativa. Conta desativada ou versao de sessao
+ * diferente (perfil/senha mudaram) responde 401, e o token novo nasce com a
+ * versao e o perfil de agora.
+ */
+export async function renovarSessao(token: string | undefined) {
+  const lido = await lerRefreshToken(token);
+
+  return comOrganizacao(lido.organizacaoId, async () => {
+    const user = await daBase(() => prisma.user.findUnique({ where: { id: lido.userId } }));
+    if (!user || !user.ativo) throw unauthorized('Sessão inválida, faca login novamente');
+    // Refresh legado, sem `sv`, vale como 0 — ver `lib/sessao.ts` para a justificativa.
+    if ((lido.sv ?? 0) !== user.sessaoVersao) throw unauthorized('Sessão encerrada, faça login novamente');
+
+    const modulos = await daBase(() => modulosPermitidos(user.perfil));
+    // Uso unico: outra renovacao com o mesmo cookie pode ter chegado antes.
+    if (!(await consumirRefresh(lido.jti))) throw unauthorized('Sessão expirada, faca login novamente');
+
+    return montarSessao(user, modulos);
+  });
+}
+
+type UsuarioDaSessao = Awaited<ReturnType<typeof prisma.user.findUniqueOrThrow>>;
+
+async function buildSession(user: UsuarioDaSessao) {
+  const modulos = await comOrganizacao(user.organizacaoId, () => modulosPermitidos(user.perfil));
+  return montarSessao(user, modulos);
+}
+
+/** Todo token sai com a versao de sessao ATUAL da pessoa (`sv`), inclusive na renovacao. */
+async function montarSessao(user: UsuarioDaSessao, modulos: Set<string>) {
   const accessToken = signAccessToken({
     sub: user.id,
     nome: user.nome,
     email: user.email,
     perfil: user.perfil,
     org: user.organizacaoId,
+    sv: user.sessaoVersao,
   });
-  const refreshToken = await issueRefreshToken(user.id, user.organizacaoId);
-  const modulosPermitidosSessao = await comOrganizacao(user.organizacaoId, () => modulosPermitidos(user.perfil));
+  const refreshToken = await issueRefreshToken(user.id, user.organizacaoId, user.sessaoVersao);
   // Mesmo campo de `/auth/me`: o front decide menu e rotas da Esteira por ele.
   const operacoes = await comOrganizacao(user.organizacaoId, () => acessoDoUsuario(user.id, user.perfil));
-  return {
-    accessToken,
-    refreshToken,
-    usuario: { ...toPublicUser(user), modulosPermitidos: [...modulosPermitidosSessao], operacoes },
-  };
+  return { accessToken, refreshToken, usuario: { ...toPublicUser(user), modulosPermitidos: [...modulos], operacoes } };
 }
 
 export async function marcarOffline(userId: string) {

@@ -19,6 +19,8 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:integracao": "vitest run --config vitest.integracao.config.ts",
+    "test:integracao:preparar": "npm run test:integracao:preparar -w @plataforma/api",
     "lint": "npm run typecheck",
     "infra:up": "docker compose up -d",
     "infra:down": "docker compose down",

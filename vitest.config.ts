@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 
 /**
  * Testes de unidade das funcoes puras.
@@ -11,6 +11,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['apps/*/src/**/*.test.ts'],
+    // Integracao com PostgreSQL real: so com `npm run test:integracao`, contra banco descartavel.
+    exclude: [...configDefaults.exclude, '**/*.integracao.test.ts'],
     setupFiles: ['tests/setup.ts'],
     reporters: 'default',
   },

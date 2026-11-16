@@ -70,7 +70,7 @@ async function api(caminho, opcoes = {}) {
   } catch {
     corpo = texto.slice(0, 200);
   }
-  return { status: r.status, corpo };
+  return { status: r.status, corpo, cookies: r.headers.getSetCookie?.() ?? [] };
 }
 
 /** Caminha todas as paginas de uma listagem e devolve os itens. */
@@ -119,6 +119,34 @@ checar('GET /auth/me', eu.status === 200, `status ${eu.status}`);
 const perfil = eu.corpo?.usuario?.perfil;
 checar('perfil do admin preservado', perfil === 'ADMIN', `perfil=${perfil}`);
 relatorio.perfil = perfil;
+
+// ── 2b. renovacao de sessao ─────────────────────────────────────────────────
+// Exercita o caminho do refresh token (onde a versao de sessao `sv` e conferida) sem
+// escrever dados: o login acima ja criou a sessao; aqui so se troca o cookie por um
+// access token novo. O cookie e usado so em memoria e nunca impresso.
+const cookieRefresh = (entrada.cookies ?? []).map((c) => c.split(';')[0]).find((c) => c.startsWith('refresh_token='));
+checar('login devolveu o cookie de renovacao', Boolean(cookieRefresh));
+if (cookieRefresh) {
+  const renovado = await api('/api/auth/refresh', { method: 'POST', semToken: true, headers: { cookie: cookieRefresh } });
+  checar('POST /auth/refresh renova a sessao', renovado.status === 200 && Boolean(renovado.corpo?.accessToken), `status ${renovado.status}`);
+  if (renovado.status === 200 && renovado.corpo?.accessToken) {
+    token = renovado.corpo.accessToken;
+    // Informativo (nao reprova): o claim `sv` so existe depois do deploy da versao de sessao.
+    // Na linha de base (antes do deploy) vem `false`; depois do deploy tem de vir `true`.
+    try {
+      const corpoJwt = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
+      relatorio.tokenTemSv = typeof corpoJwt.sv === 'number';
+      console.log(`  info    access token com claim sv: ${relatorio.tokenTemSv}`);
+    } catch {
+      relatorio.tokenTemSv = null;
+    }
+    const meDepois = await api('/api/auth/me');
+    checar('GET /auth/me com o token renovado', meDepois.status === 200, `status ${meDepois.status}`);
+  }
+  // O cookie e de uso unico: reaproveita-lo tem de falhar com 401 (e nao com 5xx).
+  const reuso = await api('/api/auth/refresh', { method: 'POST', semToken: true, headers: { cookie: cookieRefresh } });
+  checar('refresh reaproveitado e recusado com 401', reuso.status === 401, `status ${reuso.status}`);
+}
 
 // sem token, tudo fechado — prova que a autorizacao nao caiu junto com a mudanca
 const semSessao = await api('/api/contatos', { semToken: true });

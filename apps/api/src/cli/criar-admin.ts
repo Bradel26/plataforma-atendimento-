@@ -93,7 +93,9 @@ async function main() {
 
   const usuario = await prisma.user.upsert({
     where: { organizacaoId_email: { organizacaoId: ORGANIZACAO_INICIAL, email } },
-    update: { perfil: 'ADMIN', senhaHash, ativo: true },
+    // Perfil e senha mudam: sessoes anteriores deixam de valer (sessaoVersao). O CLI
+    // roda fora da API, entao nao limpa o cache de 5 s nem derruba sockets abertos.
+    update: { perfil: 'ADMIN', senhaHash, ativo: true, sessaoVersao: { increment: 1 } },
     create: { nome, email, perfil: 'ADMIN', senhaHash },
     select: { id: true, nome: true, email: true },
   });

@@ -148,6 +148,12 @@ model User {
   perfil          Role        @default(AGENTE)
   status          AgentStatus @default(OFFLINE)
   ativo           Boolean     @default(true)
+  /// Versao das sessoes da pessoa. Todo token (acesso e refresh) carrega o valor
+  /// de quando foi emitido (claim `sv`); `requireAuth` e a renovacao recusam o que
+  /// nao bate com este numero. Sobe, na MESMA transacao da mudanca, quando o
+  /// perfil muda, a senha muda ou a conta e desativada — e com isso toda sessao
+  /// anterior deixa de valer. Nunca desce. Token legado, sem `sv`, vale como 0.
+  sessaoVersao    Int         @default(0) @map("sessao_versao")
   ultimoLogin     DateTime?   @map("ultimo_login")
   /// Ultimo "estou aqui" recebido do front (heartbeat) enquanto a aba fica
   /// visivel. Base do job que fecha a presenca de quem fechou a aba ou ficou

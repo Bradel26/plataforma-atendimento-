@@ -18,9 +18,14 @@ export type AccessPayload = {
    * um login a mais, uma vez, para quem estava com sessao aberta no deploy.
    */
   org: string;
+  /**
+   * Versao da sessao (`User.sessaoVersao`) no momento da emissao. Opcional so
+   * para LER token legado; todo token emitido aqui leva o valor. Ver `lib/sessao.ts`.
+   */
+  sv?: number;
 };
 
-type RefreshPayload = { sub: string; jti: string };
+type RefreshPayload = { sub: string; jti: string; sv?: number };
 
 // Prefixo por organizacao em toda chave de sessao. O jti ja e unico; o prefixo
 // existe para que apagar as sessoes de uma organizacao seja uma varredura de
@@ -95,7 +100,7 @@ export function verifyWebchatToken(token: string): WebchatPayload {
  * Emite um refresh token e registra o jti no Redis.
  * O jti no Redis e a fonte de verdade: permite revogar (logout) e rotacionar.
  */
-export async function issueRefreshToken(userId: string, organizacaoId: string): Promise<string> {
+export async function issueRefreshToken(userId: string, organizacaoId: string, sv: number): Promise<string> {
   const jti = randomUUID();
   // `<organizacao>:<usuario>` no valor: a renovacao devolve os dois, e assim ela
   // nao pode mudar de organizacao no caminho.
@@ -106,22 +111,39 @@ export async function issueRefreshToken(userId: string, organizacaoId: string): 
   } catch {
     console.warn(`[auth] issueRefreshToken: Redis indisponível, sessão criada sem registro — renovação futura desta sessão não será possível`);
   }
-  return jwt.sign({ sub: userId, jti } satisfies RefreshPayload, env.JWT_REFRESH_SECRET, {
+  return jwt.sign({ sub: userId, jti, sv } satisfies RefreshPayload, env.JWT_REFRESH_SECRET, {
     algorithm: ALGORITMO,
     expiresIn: `${env.JWT_REFRESH_TTL_DAYS}d`,
   });
 }
 
+/** Valor guardado no Redis: `<organizacao>:<usuario>`. Recusa sessao sem organizacao ou de outro usuario. */
+function lerValorDaSessao(valor: string | null, payload: RefreshPayload) {
+  if (!valor) throw unauthorized('Sessão expirada, faca login novamente');
+  const [organizacaoId, userId] = valor.split(':');
+  if (!organizacaoId || !userId || userId !== payload.sub) {
+    throw unauthorized('Sessão expirada, faca login novamente');
+  }
+  return { organizacaoId, userId };
+}
+
+/** Falha do Redis nao e "sessao invalida": 503, para o cliente nao concluir que a credencial morreu. */
+const redisIndisponivel = (erro: unknown) => {
+  console.error('[auth] Redis indisponível ao ler a sessão:', erro instanceof Error ? erro.message : erro);
+  return new AppError(503, 'SESSAO_INDISPONIVEL', 'Não foi possível validar a sessão agora. Tente novamente em instantes.');
+};
+
+export type RefreshLido = { userId: string; organizacaoId: string; jti: string; sv: number | undefined };
+
 /**
- * Consome o refresh token (rotacao de uso unico) e devolve o userId.
+ * Le o refresh token SEM consumi-lo: confere assinatura e o registro no Redis.
  *
- * Distingue 'nao ha cookie' de 'cookie invalido' de proposito: o cliente usa o
- * codigo para decidir se vale tentar de novo. Sem sessao nao ha corrida a
- * recuperar; com cookie invalido pode ser outra aba que acabou de rotacionar.
+ * A renovacao precisa validar no banco (conta ativa, versao de sessao) antes de
+ * gastar o token. Se consumisse primeiro e o banco falhasse, o cliente — que
+ * trata qualquer falha de renovacao como sessao expirada — perderia a sessao por
+ * uma falha transitoria. O consumo (uso unico) acontece em `consumirRefresh`.
  */
-export async function consumeRefreshToken(
-  token: string | undefined,
-): Promise<{ userId: string; organizacaoId: string }> {
+export async function lerRefreshToken(token: string | undefined): Promise<RefreshLido> {
   if (!token) throw new AppError(401, 'SEM_SESSAO', 'Nenhuma sessão para renovar');
 
   let payload: RefreshPayload;
@@ -131,20 +153,27 @@ export async function consumeRefreshToken(
     throw unauthorized('Sessão expirada, faca login novamente');
   }
 
-  // GETDEL: le e apaga num passo. Ler e depois apagar abriria uma janela em que
-  // duas renovacoes simultaneas leriam o mesmo jti — token de uso unico usado
-  // duas vezes.
-  const valor = await redis.getdel(refreshKey(payload.jti));
-  if (!valor) throw unauthorized('Sessão expirada, faca login novamente');
-
-  // Valor no formato `<organizacao>:<usuario>`. Sessao gravada antes do
-  // isolamento nao tem organizacao e e recusada: um login a mais, uma vez.
-  const [organizacaoId, userId] = valor.split(':');
-  if (!organizacaoId || !userId || userId !== payload.sub) {
-    throw unauthorized('Sessão expirada, faca login novamente');
+  let valor: string | null;
+  try {
+    valor = await redis.get(refreshKey(payload.jti));
+  } catch (erro) {
+    throw redisIndisponivel(erro);
   }
+  const { organizacaoId, userId } = lerValorDaSessao(valor, payload);
+  return { userId, organizacaoId, jti: payload.jti, sv: payload.sv };
+}
 
-  return { userId, organizacaoId };
+/**
+ * Consome o jti (uso unico). `false` se outra renovacao chegou antes. O GETDEL e
+ * o arbitro: duas renovacoes simultaneas leem o mesmo registro em `lerRefreshToken`,
+ * mas so uma recebe o valor aqui.
+ */
+export async function consumirRefresh(jti: string): Promise<boolean> {
+  try {
+    return (await redis.getdel(refreshKey(jti))) !== null;
+  } catch (erro) {
+    throw redisIndisponivel(erro);
+  }
 }
 
 /** Revoga o refresh token sem erro caso ja esteja invalido (logout idempotente). */

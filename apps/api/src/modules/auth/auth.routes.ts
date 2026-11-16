@@ -8,7 +8,6 @@ import { prisma } from '../../lib/prisma';
 import { notFound } from '../../lib/errors';
 import {
   REFRESH_COOKIE,
-  consumeRefreshToken,
   refreshCookieOptions,
   revokeRefreshToken,
 } from '../../lib/tokens';
@@ -16,7 +15,7 @@ import { toPublicUser } from '../users/users.serializer';
 import { modulosPermitidos } from '../../lib/modulos';
 import { acessoDoUsuario } from '../esteira/acesso';
 import { alterarSenhaInicialSchema, loginSchema } from './auth.schemas';
-import { alterarSenhaInicial, login, marcarOffline, sessionForUserId } from './auth.service';
+import { alterarSenhaInicial, login, marcarOffline, renovarSessao } from './auth.service';
 
 export const authRoutes = Router();
 
@@ -73,12 +72,9 @@ authRoutes.post(
    */
   limitar({ nome: 'refresh', janelaSegundos: 300, maximo: 600 }),
   asyncHandler(async (req, res) => {
-    const { userId, organizacaoId } = await consumeRefreshToken(req.cookies?.[REFRESH_COOKIE]);
     // A organizacao vem do refresh guardado no Redis, nao do corpo nem de header:
     // renovar sessao nao pode ser um jeito de trocar de organizacao.
-    const { accessToken, refreshToken, usuario } = await comOrganizacao(organizacaoId, () =>
-      sessionForUserId(userId),
-    );
+    const { accessToken, refreshToken, usuario } = await renovarSessao(req.cookies?.[REFRESH_COOKIE]);
     res.cookie(REFRESH_COOKIE, refreshToken, refreshCookieOptions);
     res.json({ accessToken, usuario });
   }),

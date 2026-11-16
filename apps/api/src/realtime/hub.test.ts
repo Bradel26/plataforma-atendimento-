@@ -13,6 +13,7 @@ vi.mock('../lib/prisma', () => ({ prisma: { conversation: { findUnique: conversa
 
 import { comOrganizacao } from '../lib/tenant';
 import {
+  desconectarUsuario,
   notificarConversaNova,
   notificarMensagem,
   notificarPreviaAtualizada,
@@ -312,5 +313,22 @@ describe('hub — notificarPreviaAtualizada', () => {
       }),
     ).not.toThrow();
     expect(to).not.toHaveBeenCalled();
+  });
+});
+
+describe('desconectarUsuario', () => {
+  it('derruba so os sockets da sala do usuario, na organizacao certa', () => {
+    const disconnectSockets = vi.fn();
+    const alvo = vi.fn(() => ({ disconnectSockets }));
+    registrarIo({ in: alvo } as unknown as Server);
+
+    desconectarUsuario('org-1', 'u-9');
+
+    expect(alvo).toHaveBeenCalledWith(salas.usuario('org-1', 'u-9'));
+    expect(disconnectSockets).toHaveBeenCalledWith(true);
+  });
+
+  it('a sala inclui a organizacao: o mesmo id em outra organizacao nao e atingido', () => {
+    expect(salas.usuario('org-1', 'u-9')).not.toBe(salas.usuario('org-2', 'u-9'));
   });
 });

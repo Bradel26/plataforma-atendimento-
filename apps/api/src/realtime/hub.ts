@@ -16,6 +16,20 @@ export const registrarIo = (instancia: Server) => {
   io = instancia;
 };
 
+/**
+ * Derruba os sockets abertos de uma pessoa (mudanca de perfil, senha ou
+ * desativacao). As salas sao montadas no `connection` a partir do perfil: um
+ * admin rebaixado continuaria na sala `admin` ate desconectar. O cliente que
+ * reconectar passa de novo pelo handshake, que recusa a sessao revogada.
+ *
+ * Alcance: so os sockets DESTA instancia. Nao ha adapter entre instancias, entao
+ * com mais de uma instancia da API os sockets das demais continuam abertos ate
+ * reconectarem — risco residual documentado em docs/seguranca/sessao-versao.md.
+ */
+export function desconectarUsuario(org: string, usuarioId: string): void {
+  io?.in(salas.usuario(org, usuarioId)).disconnectSockets(true);
+}
+
 export type Destinos = {
   filaId?: string | null;
   agenteId?: string | null;

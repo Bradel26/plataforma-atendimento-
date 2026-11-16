@@ -17,6 +17,7 @@
     "worker": "tsx watch src/worker.ts",
     "start:worker": "node dist/src/worker.js",
     "admin:criar": "tsx src/cli/criar-admin.ts",
+    "test:integracao:preparar": "tsx src/cli/preparar-banco-teste.ts",
     "lgpd:reaplicar": "tsx src/cli/reaplicar-anonimizacao.ts",
     "lgpd:reaplicar:executar": "tsx src/cli/reaplicar-anonimizacao.ts --executar",
     "esteira:seed": "tsx src/cli/seed-esteira-bradel.ts",

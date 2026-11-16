@@ -61,9 +61,16 @@ async function main() {
 
   for (const u of usuarios) {
     const email = u.email.toLowerCase();
+    const where = { organizacaoId_email: { organizacaoId: ORGANIZACAO_INICIAL, email } };
+    // Conta que ja existe e muda de perfil: as sessoes abertas com o perfil antigo
+    // tem de cair (sessaoVersao). So nesse caso — rodar o seed sem mudar nada nao
+    // pode deslogar ninguem. (Reativar uma conta nao precisa: a desativacao ja
+    // havia encerrado as sessoes.)
+    const existente = await prisma.user.findUnique({ where, select: { perfil: true } });
+    const mudaPerfil = existente !== null && existente.perfil !== u.perfil;
     await prisma.user.upsert({
-      where: { organizacaoId_email: { organizacaoId: ORGANIZACAO_INICIAL, email } },
-      update: { nome: u.nome, perfil: u.perfil, ativo: true },
+      where,
+      update: { nome: u.nome, perfil: u.perfil, ativo: true, ...(mudaPerfil ? { sessaoVersao: { increment: 1 } } : {}) },
       create: { nome: u.nome, email, perfil: u.perfil, senhaHash: await bcrypt.hash(u.senha, 10) },
     });
   }
