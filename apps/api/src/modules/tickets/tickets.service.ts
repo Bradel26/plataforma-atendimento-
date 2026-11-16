@@ -266,6 +266,12 @@ export async function agendar(id: string, input: AgendamentoInput) {
 }
 
 export async function concluirAgendamento(id: string, agendamentoId: string) {
+  // Mesma politica das demais escritas do protocolo: fora do escopo de quem pede
+  // responde 404. Sem isto, bastava conhecer os dois ids para concluir o
+  // agendamento e receber o detalhe completo de um protocolo que a listagem
+  // esconde (`publicar` carrega sem escopo, de proposito).
+  await carregarVisivel(id);
+
   const agendamento = await prisma.ticketSchedule.findUnique({ where: { id: agendamentoId } });
   if (!agendamento || agendamento.ticketId !== id) throw notFound('Agendamento não encontrado');
 
