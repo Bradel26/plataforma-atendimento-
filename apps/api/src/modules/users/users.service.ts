@@ -116,9 +116,11 @@ export async function updateUser(id: string, input: UpdateUserInput) {
   const senhaHash = senha ? await hashPassword(senha) : undefined;
 
   const { user, revogou } = await emSecaoDeAdmins(async (tx) => {
+    // `findFirst` e nao `findUnique`: dentro de transacao a extensao de isolamento desvia o
+    // `findUnique` para fora dela (lib/prisma.transacao.test.ts).
     // Relido DENTRO da secao: o `atual` de cima pode ter mudado entre a leitura e
     // o bloqueio, e a decisao "e o ultimo ADMIN?" so vale sobre o estado atual.
-    const alvo = await tx.user.findUnique({ where: { id } });
+    const alvo = await tx.user.findFirst({ where: { id } });
     if (!alvo) throw notFound('Usuário não encontrado');
 
     const deixaDeSerAdminAtivo =
@@ -207,7 +209,7 @@ async function exigirOutroAdminAtivo(tx: ClienteDeEscrita, id: string, mensagem:
 /** Desativacao logica — preserva o historico de atendimento do agente. */
 export async function deactivateUser(id: string) {
   const user = await emSecaoDeAdmins(async (tx) => {
-    const atual = await tx.user.findUnique({ where: { id } });
+    const atual = await tx.user.findFirst({ where: { id } });
     if (!atual) throw notFound('Usuário não encontrado');
 
     if (atual.perfil === 'ADMIN' && atual.ativo) {
@@ -226,7 +228,7 @@ export async function deactivateUser(id: string) {
 /** Exclui definitivamente a conta selecionada; historicos com autoria opcional ficam preservados. */
 export async function deleteUserPermanently(id: string) {
   const atual = await emSecaoDeAdmins(async (tx) => {
-    const alvo = await tx.user.findUnique({ where: { id } });
+    const alvo = await tx.user.findFirst({ where: { id } });
     if (!alvo) throw notFound('Usuário não encontrado');
 
     if (alvo.perfil === 'ADMIN' && alvo.ativo) {

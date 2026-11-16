@@ -29,7 +29,7 @@ function aplicar(u: Linha, data: Record<string, unknown>) {
 const tx = {
   $executeRaw: async () => undefined,
   user: {
-    findUnique: async ({ where }: { where: { id: string } }) => usuarios.find((u) => u.id === where.id && u.organizacaoId === organizacao) ?? null,
+    findFirst: async ({ where }: { where: { id: string } }) => usuarios.find((u) => u.id === where.id && u.organizacaoId === organizacao) ?? null,
     count: async ({ where }: { where: { id: { not: string } } }) =>
       usuarios.filter((u) => u.organizacaoId === organizacao && u.perfil === 'ADMIN' && u.ativo && u.id !== where.id.not).length,
     update: async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {

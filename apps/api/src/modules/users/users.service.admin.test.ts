@@ -42,7 +42,7 @@ function clienteDaTransacao() {
       solta = await adquirir(chave);
     },
     user: {
-      findUnique: async ({ where }: { where: { id: string } }) => {
+      findFirst: async ({ where }: { where: { id: string } }) => {
         await ceder();
         return usuarios.find((u) => u.id === where.id && u.organizacaoId === organizacaoDoChamador) ?? null;
       },

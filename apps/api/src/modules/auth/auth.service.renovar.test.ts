@@ -70,6 +70,7 @@ vi.mock('./tentativas', () => ({
   limparFalhas: vi.fn(),
 }));
 vi.mock('../metrics/metrics.service', () => ({ registrarPresenca: vi.fn() }));
+vi.mock('../esteira/acesso', () => ({ acessoDoUsuario: async () => ({ TIM: 'EDICAO', STARLINK: 'EDICAO' }) }));
 vi.mock('../users/users.serializer', () => ({ toPublicUser: (u: { id: string; perfil: string }) => ({ id: u.id, perfil: u.perfil }) }));
 
 import { alterarSenhaInicial, login, renovarSessao } from './auth.service';
@@ -117,6 +118,13 @@ describe('renovarSessao — versao e privilegios', () => {
     expect(signAccessToken).toHaveBeenCalledWith(expect.objectContaining({ sub: 'u1', perfil: 'SUPERVISOR', org: 'org-1', sv: 3 }));
     expect(issueRefreshToken).toHaveBeenCalledWith('u1', 'org-1', 3);
     expect(r).toMatchObject({ accessToken: 'access-novo', refreshToken: 'refresh-novo', usuario: { perfil: 'SUPERVISOR' } });
+  });
+
+  it('a renovacao mantem o contrato da producao: devolve `operacoes` (menu da Esteira)', async () => {
+    usuarios.push(usuario({ sessaoVersao: 0 }));
+    cookie(0);
+    const r = await renovarSessao('cookie');
+    expect(r.usuario).toHaveProperty('operacoes', { TIM: 'EDICAO', STARLINK: 'EDICAO' });
   });
 
   it('PRIVILEGIO ANTIGO: perfil foi rebaixado (versao subiu) — o refresh antigo nao renova', async () => {

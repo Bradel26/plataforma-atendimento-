@@ -37,6 +37,7 @@ vi.mock('../../lib/tokens', () => ({
   issueRefreshToken: async () => 'refresh',
 }));
 vi.mock('../metrics/metrics.service', () => ({ registrarPresenca: vi.fn() }));
+vi.mock('../esteira/acesso', () => ({ acessoDoUsuario: async () => ({ TIM: 'EDICAO', STARLINK: 'EDICAO' }) }));
 vi.mock('../../lib/modulos', () => ({ modulosPermitidos: async () => new Set<string>() }));
 vi.mock('../../lib/tenant', () => ({
   comOrganizacao: async (_org: string, fn: () => unknown) => fn(),
