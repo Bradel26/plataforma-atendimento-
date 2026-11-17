@@ -70,3 +70,19 @@ describe('conversationsRoutes — guard da auditoria', () => {
     expect(erro).toBeUndefined();
   });
 });
+
+describe('conversationsRoutes — exclusao de conversa (so ADMIN)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  // O primeiro guard da rota e requireRole('ADMIN'): nem a tabela de modulos e consultada para quem nao e ADMIN.
+  it.each(['SUPERVISOR', 'GESTOR', 'COMERCIAL', 'SUPORTE', 'AGENTE'])('%s leva 403, mesmo com a linha "auditoria"', async (perfil) => {
+    findMany.mockResolvedValue([{ modulo: 'auditoria' }]);
+    const erro = await rodar(camadaDaRota('/:id/exclusao'), perfil);
+    expect(erro).toMatchObject({ status: 403 });
+  });
+
+  it('ADMIN passa pelo primeiro guard', async () => {
+    const erro = await rodar(camadaDaRota('/:id/exclusao'), 'ADMIN');
+    expect(erro).toBeUndefined();
+  });
+});

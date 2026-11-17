@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alerta, Button } from '../components/ui';
+import { Alerta, Button, Textarea } from '../components/ui';
+import { Modal } from '../components/ui/Modal';
 import { CabecalhoPagina } from '../components/ui/Pagina';
+import { useAuth } from '../features/auth/AuthProvider';
 import { SkeletonBloco } from '../components/ui/Skeleton';
 import { GavetaFiltros } from '../features/auditoria/GavetaFiltros';
 import { LABEL_SITUACAO, paraQuery, rotuloDoChip, type FiltroAplicado, type OpcoesAuditoria } from '../features/auditoria/filtros';
@@ -84,8 +86,18 @@ export function AuditoriaPage() {
   const [opcoes, setOpcoes] = useState<OpcoesAuditoria | null>(null);
   const [gaveta, setGaveta] = useState(false);
   const [vendo, setVendo] = useState<string | null>(null);
+  // Exclusao definitiva: so ADMIN. A API recusa os demais; aqui o botao simplesmente nao aparece.
+  const { temPerfil } = useAuth();
+  const podeApagar = temPerfil('ADMIN');
+  const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set());
+  const [paraApagar, setParaApagar] = useState<LinhaAuditoria[] | null>(null);
+  const [motivo, setMotivo] = useState('');
+  const [apagando, setApagando] = useState(false);
+  const [erroApagar, setErroApagar] = useState<string | null>(null);
 
   useEffect(() => { void api.get<OpcoesAuditoria>('/conversas/auditoria/opcoes').then(setOpcoes).catch(() => undefined); }, []);
+  // A selecao vale para a pagina que a pessoa esta vendo: trocar de pagina ou de filtro a limpa.
+  useEffect(() => { setSelecionadas(new Set()); }, [filtros, pagina]);
   const carregar = useCallback(async () => {
     setCarregando(true);
     try {
@@ -96,6 +108,48 @@ export function AuditoriaPage() {
     } finally { setCarregando(false); }
   }, [filtros, pagina]);
   useEffect(() => { void carregar(); }, [carregar]);
+
+  const alternar = (id: string) => setSelecionadas((atual) => {
+    const proximo = new Set(atual);
+    if (proximo.has(id)) proximo.delete(id); else proximo.add(id);
+    return proximo;
+  });
+  const itensDaPagina = dados?.itens ?? [];
+  const todasMarcadas = itensDaPagina.length > 0 && itensDaPagina.every((l) => selecionadas.has(l.id));
+  const alternarTodas = () => setSelecionadas(todasMarcadas ? new Set() : new Set(itensDaPagina.map((l) => l.id)));
+  const abrirExclusao = (linhas: LinhaAuditoria[]) => { setParaApagar(linhas); setMotivo(''); setErroApagar(null); };
+  const fecharExclusao = () => { if (!apagando) setParaApagar(null); };
+  const motivoValido = motivo.trim().length >= 8;
+
+  const confirmarExclusao = async () => {
+    if (!paraApagar || !motivoValido) return;
+    setApagando(true);
+    setErroApagar(null);
+    const falhas: string[] = [];
+    const quemFalhou: LinhaAuditoria[] = [];
+    // Uma por vez: cada exclusao e uma transacao propria e deixa o proprio registro de LGPD.
+    for (const linha of paraApagar) {
+      try {
+        await api.post(`/conversas/${linha.id}/exclusao`, { motivo: motivo.trim() });
+      } catch (e) {
+        quemFalhou.push(linha);
+        falhas.push(`${linha.protocolo ?? linha.contato.nome}: ${e instanceof ApiError ? e.message : 'falhou'}`);
+      }
+    }
+    setApagando(false);
+    setSelecionadas(new Set());
+    if (falhas.length > 0) {
+      // O dialogo continua aberto so com as que falharam, para tentar de novo ou desistir.
+      setParaApagar(quemFalhou);
+      setErroApagar(`${falhas.length} de ${paraApagar.length} não foram apagadas. ${falhas.slice(0, 3).join(' · ')}`);
+      void carregar();
+      return;
+    }
+    setParaApagar(null);
+    // Se a pagina ficou vazia, volta uma: senao a pessoa ve "Nenhuma conversa" no meio da lista.
+    if (pagina > 1 && paraApagar.length >= itensDaPagina.length) setPagina((p) => p - 1);
+    else void carregar();
+  };
   if (vendo) return <Visualizador id={vendo} aoVoltar={() => { setVendo(null); void carregar(); }} />;
   const totalPaginas = dados ? Math.max(1, Math.ceil(dados.total / dados.tamanho)) : 1;
   const primeiro = dados && dados.itens.length > 0 ? (pagina - 1) * dados.tamanho + 1 : 0;
@@ -127,17 +181,30 @@ export function AuditoriaPage() {
       </button>
     </div>}
     {erro && <Alerta>{erro}</Alerta>}
+    {podeApagar && selecionadas.size > 0 && <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-[13px]">
+      <span className="font-semibold text-slate-800"><span className="tabular-nums">{selecionadas.size}</span> selecionada(s)</span>
+      <Button tamanho="sm" variante="perigo" onClick={() => abrirExclusao(itensDaPagina.filter((l) => selecionadas.has(l.id)))}>Apagar selecionadas</Button>
+      <button type="button" onClick={() => setSelecionadas(new Set())} className="font-semibold text-blue-700 hover:underline">Limpar seleção</button>
+    </div>}
     <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white">
       <div className="overflow-x-auto">
         <table className="w-full min-w-[1100px] text-left text-[13px]">
           <thead className="border-b border-slate-200 bg-slate-50 text-[11.5px] text-slate-500"><tr>
+            {podeApagar && <th className="w-10 px-3.5 py-2.5">
+              <input type="checkbox" checked={todasMarcadas} onChange={alternarTodas} disabled={itensDaPagina.length === 0}
+                aria-label="Selecionar todas as conversas desta página" />
+            </th>}
             {['Contato', 'Protocolo', 'Canal', 'Equipe', 'Início', 'Fim', 'Atendente inicial', 'Origem', 'Status'].map((h) => <th key={h} className="whitespace-nowrap px-3.5 py-2.5 font-semibold">{h}</th>)}
             <th className="px-3.5 py-2.5"><span className="sr-only">Ações</span></th>
           </tr></thead>
           <tbody className="divide-y divide-slate-100 text-slate-700">
-            {carregando && !dados && <tr><td colSpan={10} className="p-4"><SkeletonBloco className="h-4 w-full" /></td></tr>}
-            {dados?.itens.length === 0 && <tr><td colSpan={10} className="p-8 text-center text-slate-500">Nenhuma conversa com estes filtros.</td></tr>}
+            {carregando && !dados && <tr><td colSpan={11} className="p-4"><SkeletonBloco className="h-4 w-full" /></td></tr>}
+            {dados?.itens.length === 0 && <tr><td colSpan={11} className="p-8 text-center text-slate-500">Nenhuma conversa com estes filtros.</td></tr>}
             {dados?.itens.map((linha) => <tr key={linha.id} className="hover:bg-slate-50">
+              {podeApagar && <td className="px-3.5 py-2.5">
+                <input type="checkbox" checked={selecionadas.has(linha.id)} onChange={() => alternar(linha.id)}
+                  aria-label={`Selecionar a conversa ${linha.protocolo ?? linha.contato.nome}`} />
+              </td>}
               <td className="px-3.5 py-2.5">
                 <span className="block font-bold text-slate-900">{linha.contato.nome}</span>
                 <span className="block text-xs tabular-nums text-slate-500">{linha.contato.telefone ? telefoneLegivel(linha.contato.telefone.replace(/\D/g, '')) : '—'}</span>
@@ -163,11 +230,15 @@ export function AuditoriaPage() {
               <td className="px-3.5 py-2.5">
                 <span className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold ${CLASSE_SITUACAO[linha.situacao]}`}>{LABEL_SITUACAO[linha.situacao]}</span>
               </td>
-              <td className="px-3.5 py-2.5 text-right">
+              <td className="whitespace-nowrap px-3.5 py-2.5 text-right">
                 <button type="button" aria-label={`Ver conversa de ${linha.contato.nome}`} onClick={() => setVendo(linha.id)}
                   className="inline-flex h-[30px] items-center gap-1.5 whitespace-nowrap rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
                   <IconeOlho />Ver conversa
                 </button>
+                {podeApagar && <button type="button" aria-label={`Apagar a conversa ${linha.protocolo ?? linha.contato.nome}`} onClick={() => abrirExclusao([linha])}
+                  className="ml-2 inline-flex h-[30px] items-center whitespace-nowrap rounded-lg border border-red-200 bg-white px-2.5 text-xs font-semibold text-red-600 hover:bg-red-50">
+                  Apagar
+                </button>}
               </td>
             </tr>)}
           </tbody>
@@ -186,5 +257,30 @@ export function AuditoriaPage() {
     </div>
     <GavetaFiltros aberta={gaveta} aoFechar={() => setGaveta(false)} aplicados={filtros} opcoes={opcoes}
       aoAplicar={(novos) => { setFiltros(novos); setPagina(1); }} />
+    {podeApagar && <Modal aberto={paraApagar !== null} titulo={paraApagar && paraApagar.length > 1 ? `Apagar ${paraApagar.length} conversas` : 'Apagar conversa'}
+      aoFechar={fecharExclusao}
+      rodape={<>
+        <Button variante="neutro" onClick={fecharExclusao} disabled={apagando}>Cancelar</Button>
+        <Button variante="perigo" onClick={() => void confirmarExclusao()} disabled={!motivoValido || apagando}>
+          {apagando ? 'Apagando...' : 'Apagar definitivamente'}
+        </Button>
+      </>}>
+      <div className="space-y-3 text-sm text-slate-700">
+        <p>
+          Isto apaga <strong>definitivamente</strong> {paraApagar && paraApagar.length > 1 ? 'estas conversas' : 'esta conversa'}, com todas as
+          mensagens e os arquivos anexados. <strong>Não dá para desfazer.</strong> A exclusão fica registrada na trilha de LGPD, com o seu nome e o motivo.
+        </p>
+        <ul className="max-h-32 space-y-0.5 overflow-y-auto rounded-lg bg-slate-50 px-3 py-2 text-[12.5px] text-slate-600">
+          {paraApagar?.slice(0, 8).map((l) => <li key={l.id}><span className="font-mono tabular-nums">{l.protocolo ?? 'sem protocolo'}</span> · {l.contato.nome} · {l.linha?.nome ?? 'Número da empresa'}</li>)}
+          {paraApagar && paraApagar.length > 8 && <li>e mais {paraApagar.length - 8}…</li>}
+        </ul>
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold text-slate-600">Motivo (obrigatório, mínimo de 8 caracteres)</span>
+          <Textarea rows={3} value={motivo} onChange={(e) => setMotivo(e.target.value)} maxLength={1000} disabled={apagando}
+            placeholder="Ex.: conversas pessoais de uma linha desconectada" />
+        </label>
+        {erroApagar && <Alerta>{erroApagar}</Alerta>}
+      </div>
+    </Modal>}
   </div>;
 }

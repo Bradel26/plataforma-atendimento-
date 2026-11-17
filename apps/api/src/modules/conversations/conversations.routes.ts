@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { asyncHandler } from '../../http/async-handler';
-import { requireAuth } from '../../http/middleware/auth';
+import { requireAuth, requireRole } from '../../http/middleware/auth';
 import { param } from '../../http/params';
 import { badRequest } from '../../lib/errors';
 import { requireModulo } from '../../lib/modulos';
@@ -17,6 +17,7 @@ import {
   transferirSchema,
 } from './conversations.schemas';
 import { auditoriaSchema, listarAuditoria, opcoesDaAuditoria } from './conversations.auditoria';
+import { excluirConversa, excluirConversaSchema } from './conversations.exclusao';
 import {
   arquivarConversa,
   assumirConversa,
@@ -151,6 +152,20 @@ conversationsRoutes.get(
   requireModulo('auditoria'),
   asyncHandler(async (_req, res) => {
     res.json(await opcoesDaAuditoria());
+  }),
+);
+
+/**
+ * Exclusao definitiva de uma conversa pela Auditoria. So ADMIN, com motivo obrigatorio; deixa registro na
+ * trilha de LGPD. Nao ha outra rota que apague conversa: a tela de Atendimento nao oferece isto.
+ */
+conversationsRoutes.post(
+  '/:id/exclusao',
+  requireRole('ADMIN'),
+  requireModulo('auditoria'),
+  validateBody(excluirConversaSchema),
+  asyncHandler(async (req, res) => {
+    res.json(await excluirConversa(param(req, 'id'), req.body.motivo, req.user!.sub));
   }),
 );
 
