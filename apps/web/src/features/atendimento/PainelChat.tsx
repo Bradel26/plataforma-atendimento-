@@ -23,9 +23,8 @@ import {
   IconeTelefone,
   IconeTransferir,
   IconeVoltar,
+  IconeWhatsapp,
 } from './icones';
-import { IconeTelefone } from '../../pages/telefonia/icones';
-import { IconeWhatsapp } from './icones';
 import { partesComLinks } from './links';
 import { useAtendimentosAnteriores, type BlocoAnterior } from './useAtendimentosAnteriores';
 
