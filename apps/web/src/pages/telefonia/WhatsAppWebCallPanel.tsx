@@ -385,14 +385,34 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste
     finally { setOcupado(false); }
   }
 
-  // "Ligar para o cliente" vindo do histórico.
+  // "Ligar para o cliente" vindo do histórico ou do botão Ligar do Atendimento.
+  // Ao chegar pelo redirecionamento o painel ainda esta "verificando conexao": o pedido fica pendente e disca UMA vez,
+  // quando o estado vira `conectado`. Estados de espera nao viram erro; qualquer outro estado cancela com aviso.
+  const ligarPendente = useRef<{ numero: string; id: number } | null>(null);
   useEffect(() => {
     if (!ligarPara) return;
+    ligarPendente.current = ligarPara;
     setDestino(ligarPara.numero);
-    if (chamadaRef.current) { setErro('Já existe uma ligação em andamento. Encerre-a antes de ligar para outro número.'); return; }
-    if (status !== 'conectado') { setErro('O WhatsApp desta linha não está conectado. Conecte pelo Atendimento e tente de novo.'); return; }
-    void iniciarLigacao(ligarPara.numero);
   }, [ligarPara?.id]);
+  useEffect(() => {
+    const pedido = ligarPendente.current;
+    if (!pedido) return;
+    if (chamadaRef.current) {
+      ligarPendente.current = null;
+      setErro('Já existe uma ligação em andamento. Encerre-a antes de ligar para outro número.');
+      return;
+    }
+    if (status === 'conectado') {
+      ligarPendente.current = null;
+      void iniciarLigacao(pedido.numero);
+      return;
+    }
+    const aguardando = status.startsWith('verificando') || status === 'conectando' || status === 'autenticado';
+    if (!aguardando) {
+      ligarPendente.current = null;
+      setErro('O WhatsApp desta linha não está conectado. Conecte pelo Atendimento e tente de novo.');
+    }
+  }, [ligarPara?.id, status]);
 
   // Rede de segurança: se o fim da chamada nunca chegar (queda da sessão), a que tocava e ninguém atendeu vira perdida.
   useEffect(() => {

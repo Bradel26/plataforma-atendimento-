@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Alerta } from '../components/ui';
 import { HistoricoDeChamadas } from './telefonia/HistoricoDeChamadas';
 import { PainelLigacoes, relogio, type PosLigacao } from './telefonia/PainelLigacoes';
@@ -366,6 +367,16 @@ export function TelefoniaPage() {
 
   // "Ligar para o cliente" no histórico: entrega o número ao painel da linha WhatsApp e leva a tela até ele.
   const [ligarPara, setLigarPara] = useState<{ numero: string; id: number } | null>(null);
+  // "Ligar" do Atendimento chega aqui como /telefonia?ligar=<numero>. O parametro e consumido uma vez e removido
+  // do endereco: recarregar a pagina ou voltar nunca pode discar de novo para o cliente.
+  const [parametros, setParametros] = useSearchParams();
+  useEffect(() => {
+    const pedido = parametros.get('ligar');
+    if (pedido === null) return;
+    const numero = pedido.replace(/\D/g, '');
+    setParametros((atuais) => { const proximos = new URLSearchParams(atuais); proximos.delete('ligar'); return proximos; }, { replace: true });
+    if (numero.length >= 8) setLigarPara({ numero, id: Date.now() });
+  }, [parametros, setParametros]);
   const criarContato = async (chamada: Chamada, nome: string) => {
     try {
       const r = await api.post<{ contato: { id: string; nome: string }; criado: boolean; vinculadas: number }>(`/voz/chamadas/${encodeURIComponent(chamada.id)}/contato`, { nome });

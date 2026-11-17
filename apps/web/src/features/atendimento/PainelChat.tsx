@@ -20,6 +20,7 @@ import {
   IconeMaisAcoes,
   IconeRaio,
   IconeRelogio,
+  IconeTelefone,
   IconeTransferir,
   IconeVoltar,
 } from './icones';
@@ -265,7 +266,11 @@ export function PainelChat({
   const fim = useRef<HTMLDivElement>(null);
   const topo = useRef<HTMLDivElement>(null);
   const mostrar = useToast();
-  const { usuario } = useAuth();
+  const { usuario, temModulo } = useAuth();
+  // "Ligar": leva para a Telefonia ja com o numero do cliente. So em conversa de WhatsApp com telefone e para
+  // quem tem o modulo Telefonia (sem ele a rota nem abriria).
+  const telefoneParaLigar = (conversa.contato.telefone ?? '').replace(/\D/g, '');
+  const podeLigar = conversa.canal === 'WHATSAPP' && telefoneParaLigar.length >= 8 && Boolean(temModulo?.('telefonia'));
   const atendimentosAnteriores = useAtendimentosAnteriores(conversa.id);
   const rascunhos = useRef<Map<string, { texto: string; textoPrivado: string }>>(new Map());
   const conversaIdAnterior = useRef(conversa.id);
@@ -561,6 +566,17 @@ export function PainelChat({
                   <Button disabled={ocupado} onClick={() => void executar(() => api.post(`/conversas/${conversa.id}/assumir`))}>
                     Aceitar
                   </Button>
+                )}
+                {podeLigar && (
+                  <Link
+                    to={`/telefonia?ligar=${telefoneParaLigar}`}
+                    aria-label="Ligar para o cliente"
+                    title={`Ligar para ${telefoneLegivel(telefoneParaLigar)} pela Telefonia`}
+                    className={BOTAO_SECUNDARIO}
+                  >
+                    <IconeTelefone tamanho={15} />
+                    <span className="hidden @[46rem]:inline">Ligar</span>
+                  </Link>
                 )}
                 {!finalizada && aoTransferir && (
                   <button type="button" disabled={ocupado} onClick={aoTransferir} aria-label="Transferir" title="Transferir" className={BOTAO_SECUNDARIO}>
