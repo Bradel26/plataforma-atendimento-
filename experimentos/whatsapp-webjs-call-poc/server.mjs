@@ -20,9 +20,21 @@ const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.WEBJS_DATA_DIR || ROOT;
 const AUTH_DIR = path.join(DATA_DIR, '.auth');
 const RECORDINGS_DIR = path.join(DATA_DIR, 'recordings');
-const WEB_VERSION = '2.3000.1051464192';
+/*
+ * Versao do WhatsApp Web. Padrao: a fixada abaixo (a unica com HTML em web-version-cache/).
+ * WEBJS_WEB_VERSION=live carrega a versao ATUAL do WhatsApp Web, como o conector local sem
+ * fixacao. Existe porque a Meta recusa o pareamento de versoes antigas: com a fixada de 23/10
+ * o QR era emitido, mas o celular nao conseguia conectar (LOGOUT sem `authenticated`).
+ * Para voltar ao comportamento anterior, remova a variavel.
+ */
+const WEB_VERSION_PADRAO = '2.3000.1051464192';
+const WEB_VERSION_PEDIDA = (process.env.WEBJS_WEB_VERSION || '').trim();
+const WEB_VERSION = WEB_VERSION_PEDIDA.toLowerCase() === 'live' ? null : (WEB_VERSION_PEDIDA || WEB_VERSION_PADRAO);
 const WEB_CACHE_DIR = path.join(DATA_DIR, '.wwebjs_cache');
-const WEB_CACHE_FILE = path.join(WEB_CACHE_DIR, `${WEB_VERSION}.html`);
+const WEB_CACHE_FILE = WEB_VERSION ? path.join(WEB_CACHE_DIR, `${WEB_VERSION}.html`) : null;
+const OPCOES_DE_VERSAO_WEB = WEB_VERSION
+  ? { webVersion: WEB_VERSION, webVersionCache: { type: 'local', path: WEB_CACHE_DIR } }
+  : { webVersionCache: { type: 'none' } };
 const LOCAL_ENV = path.resolve(ROOT, '../../apps/api/.env');
 let localEnv = {};
 try {
@@ -57,11 +69,14 @@ const LIMPAR_LOCKS_DE_OUTRA_INSTANCIA = process.env.WEBJS_SINGLE_INSTANCE !== 'f
 const API_WEBHOOK = process.env.WEBJS_INBOUND_WEBHOOK_URL?.trim() || localEnv.WEBJS_INBOUND_WEBHOOK_URL || `http://127.0.0.1:${API_PORT}/api/webhooks/wppconnect`;
 
 await mkdir(WEB_CACHE_DIR, { recursive: true });
-try {
-  await readFile(WEB_CACHE_FILE);
-} catch {
-  await copyFile(path.join(ROOT, 'web-version-cache', `${WEB_VERSION}.html`), WEB_CACHE_FILE);
+if (WEB_CACHE_FILE) {
+  try {
+    await readFile(WEB_CACHE_FILE);
+  } catch {
+    await copyFile(path.join(ROOT, 'web-version-cache', `${WEB_VERSION}.html`), WEB_CACHE_FILE);
+  }
 }
+console.info(`[whatsapp] versao do WhatsApp Web: ${WEB_VERSION || 'atual (live)'}`);
 
 async function avisarEstadoNaPlataforma(sessao, estado, detalhe = null) {
   if (!WEBHOOK_SECRET) return;
@@ -542,8 +557,7 @@ async function iniciarCliente(nomeSessao = 'teste-local') {
     await prepararPerfilChrome(profileDir, sessao.nome);
     const client = new Client({
       authStrategy: new LocalAuth({ clientId, dataPath: AUTH_DIR }),
-      webVersion: WEB_VERSION,
-      webVersionCache: { type: 'local', path: WEB_CACHE_DIR },
+      ...OPCOES_DE_VERSAO_WEB,
       authTimeoutMs: AUTENTICACAO_PAGINA_TIMEOUT_MS,
       // Em container não há placa de áudio nem câmera: sem dispositivos de mídia falsos o WhatsApp Web não liga a pilha
       // de chamadas (getVoipStackInterface() devolve nulo e nem ligar nem atender funciona). O áudio real da chamada
