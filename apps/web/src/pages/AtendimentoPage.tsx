@@ -188,7 +188,28 @@ export function AtendimentoPage() {
    */
   const [visao, setVisao] = useState<VisaoInbox>('MINHAS');
   /** ADMIN e SUPERVISOR acompanham outros numeros; a API recusa os demais. */
-  const podeAcompanhar = temPerfil('ADMIN', 'SUPERVISOR');
+  const perfilAcompanha = temPerfil('ADMIN', 'SUPERVISOR');
+  /**
+   * Preferencia por navegador: o ADMIN comeca SEM a aba Acompanhar (so o que e dele),
+   * para nao misturar a conversa da equipe com a propria. O SUPERVISOR segue com ela
+   * ligada. A permissao nao muda: so a aba some, a API continua igual.
+   */
+  const chaveVerEquipe = `atendimento:acompanhar:${usuario?.id ?? ''}`;
+  const [verEquipe, setVerEquipe] = useState<boolean>(() => {
+    try {
+      const salvo = localStorage.getItem(chaveVerEquipe);
+      if (salvo === '1') return true;
+      if (salvo === '0') return false;
+    } catch { /* sem armazenamento: usa o padrao */ }
+    return !temPerfil('ADMIN');
+  });
+  const alternarVerEquipe = () => {
+    const proximo = !verEquipe;
+    setVerEquipe(proximo);
+    if (!proximo) setVisao((v) => (v === 'ACOMPANHAR' ? 'MINHAS' : v));
+    try { localStorage.setItem(chaveVerEquipe, proximo ? '1' : '0'); } catch { /* preferencia so deste navegador */ }
+  };
+  const podeAcompanhar = perfilAcompanha && verEquipe;
   const [filtroAcompanhar, setFiltroAcompanhar] = useState<FiltroAcompanhar>(SEM_FILTRO_ACOMPANHAR);
   const [acompanhaveis, setAcompanhaveis] = useState<Acompanhaveis | null>(null);
   const [busca, setBusca] = useState('');
@@ -747,6 +768,16 @@ export function AtendimentoPage() {
                 );
               })}
             </div>
+            {perfilAcompanha && (
+              <button
+                type="button"
+                onClick={alternarVerEquipe}
+                aria-pressed={verEquipe}
+                className="text-xs font-medium text-slate-500 underline-offset-2 hover:text-slate-700 hover:underline"
+              >
+                {verEquipe ? 'Ocultar conversas da equipe' : 'Mostrar conversas da equipe (Acompanhar)'}
+              </button>
+            )}
 
             <div className="flex items-center gap-2">
               <label className="relative flex h-10 min-w-0 flex-1 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-slate-400 transition focus-within:border-[var(--brand-primary)]">
