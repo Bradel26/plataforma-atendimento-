@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Alerta } from '../components/ui';
 import { HistoricoDeChamadas } from './telefonia/HistoricoDeChamadas';
 import { PainelLigacoes, relogio, type PosLigacao } from './telefonia/PainelLigacoes';
 import { WhatsAppWebCallPanel } from './telefonia/WhatsAppWebCallPanel';
+import { IconeCheck, IconeCusto, IconeFechar, IconeRelogio, IconeTelefone } from './telefonia/icones';
 import { Selo, type Tom } from './dashboard/blocos';
 import { useAuth } from '../features/auth/AuthProvider';
 import { ApiError, api, getAccessToken } from '../lib/api';
@@ -411,49 +412,62 @@ export function TelefoniaPage() {
         : taxa < TAXA_ATENDIMENTO_ALVO ? { tom: 'atencao', texto: 'Abaixo do alvo' }
           : { tom: 'bom', texto: 'No alvo' };
 
-  const kpis: Array<{ rotulo: string; valor: string; detalhe: string; selo?: { tom: Tom; texto: string } | null; destaque?: string }> = [
+  const kpis: Array<{ rotulo: string; valor: string; detalhe: string; selo?: { tom: Tom; texto: string } | null; destaque?: string; icone: ReactNode; tomIcone: string }> = [
     {
       rotulo: 'Chamadas',
       valor: String(indicadores?.total ?? '—'),
       detalhe: `${indicadores?.entrantes ?? 0} recebidas · ${indicadores?.saintes ?? 0} feitas`,
+      icone: <IconeTelefone tamanho={20} />,
+      tomIcone: 'bg-blue-50 text-blue-600',
     },
     {
       rotulo: 'Atendidas',
       valor: taxa === null ? String(indicadores?.atendidas ?? '—') : `${taxa}%`,
       detalhe: `${indicadores?.atendidas ?? 0} de ${indicadores?.entrantes ?? 0} recebidas · alvo ${TAXA_ATENDIMENTO_ALVO}%`,
       selo: estadoTaxa,
+      icone: <IconeCheck tamanho={20} />,
+      tomIcone: 'bg-emerald-50 text-emerald-600',
     },
     {
       rotulo: 'Perdidas',
       valor: String(indicadores?.naoAtendidas ?? '—'),
       detalhe: 'não atendidas ou ocupadas',
       destaque: indicadores && indicadores.naoAtendidas > 0 ? 'text-red-700' : undefined,
+      icone: <IconeFechar tamanho={20} />,
+      tomIcone: 'bg-red-50 text-red-600',
     },
-    { rotulo: 'Tempo médio', valor: relogio(indicadores?.tma ?? null), detalhe: 'por ligação atendida' },
+    { rotulo: 'Tempo médio', valor: relogio(indicadores?.tma ?? null), detalhe: 'por ligação atendida', icone: <IconeRelogio tamanho={20} />, tomIcone: 'bg-slate-100 text-violet-500' },
     {
       rotulo: 'Custo',
       valor: indicadores?.custoTotal == null ? '—' : moeda(indicadores.custoTotal),
       detalhe: indicadores?.chamadasComCusto
         ? `média ${custoCurto(indicadores.custoMedio)} · ${indicadores.chamadasComCusto} com custo`
         : 'O provedor não informou custo',
+      icone: <IconeCusto tamanho={20} />,
+      tomIcone: 'bg-amber-50 text-amber-600',
     },
   ];
 
   return (
-    <div className="mx-auto flex max-w-[1360px] flex-col gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-[-0.02em] text-slate-900">Ligações</h1>
-          <p className="mt-1.5 text-[13px] text-slate-600">
-            Chamadas de WhatsApp atendidas e feitas no navegador, com gravação no histórico do contato.
-          </p>
+    <div className="mx-auto flex max-w-[1600px] flex-col gap-5">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5">
+          <span aria-hidden="true" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+            <IconeTelefone tamanho={24} />
+          </span>
+          <div>
+            <h1 className="text-2xl font-bold tracking-[-0.02em] text-slate-900">Ligações</h1>
+            <p className="mt-0.5 text-[13px] text-slate-600">
+              Chamadas de WhatsApp atendidas e feitas no navegador, com gravação no histórico do contato.
+            </p>
+          </div>
         </div>
         <span
           className={`inline-flex h-9 items-center gap-2 rounded-full px-3.5 text-[13px] font-semibold ${
-            linhaCloudAtiva ? 'bg-emerald-50 text-emerald-700' : linhaWebAtiva ? 'bg-sky-50 text-sky-700' : 'bg-amber-50 text-amber-700'
+            linhaCloudAtiva ? 'bg-emerald-50 text-emerald-700' : linhaWebAtiva ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'
           }`}
         >
-          <span className={`h-2 w-2 rounded-full ${linhaCloudAtiva ? 'bg-emerald-500' : linhaWebAtiva ? 'bg-sky-500' : 'bg-amber-500'}`} />
+          <span className={`h-2 w-2 rounded-full ${linhaCloudAtiva ? 'bg-emerald-500' : linhaWebAtiva ? 'bg-blue-500' : 'bg-amber-500'}`} />
           {linhaCloudAtiva
             ? 'WhatsApp Calling ativo na sua linha'
             : linhaWebAtiva
@@ -477,13 +491,16 @@ export function TelefoniaPage() {
 
       <section aria-label="Indicadores das últimas 24 horas" className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
         {kpis.map((k) => (
-          <div key={k.rotulo} className="flex flex-col gap-1 rounded-2xl border border-slate-200 bg-white px-[18px] py-4">
-            <div className="flex min-h-[22px] items-center justify-between gap-1.5">
-              <span className="text-[13px] font-semibold text-slate-700">{k.rotulo}</span>
-              {k.selo && <Selo tom={k.selo.tom}>{k.selo.texto}</Selo>}
+          <div key={k.rotulo} className="flex items-center gap-3.5 rounded-xl border border-slate-200 bg-white px-[18px] py-4 shadow-[0_1px_3px_rgba(15,23,42,0.05)]">
+            <span aria-hidden="true" className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${k.tomIcone}`}>{k.icone}</span>
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <div className="flex min-h-[20px] items-center justify-between gap-1.5">
+                <span className="text-[13px] font-semibold text-slate-700">{k.rotulo}</span>
+                {k.selo && <Selo tom={k.selo.tom}>{k.selo.texto}</Selo>}
+              </div>
+              <span className={`text-[28px] font-bold leading-tight tracking-[-0.02em] ${k.destaque ?? 'text-slate-900'}`}>{k.valor}</span>
+              <span className="text-[12.5px] leading-snug text-slate-500">{k.detalhe}</span>
             </div>
-            <span className={`text-[28px] font-bold leading-tight tracking-[-0.02em] ${k.destaque ?? 'text-slate-900'}`}>{k.valor}</span>
-            <span className="text-[12.5px] text-slate-500">{k.detalhe}</span>
           </div>
         ))}
       </section>

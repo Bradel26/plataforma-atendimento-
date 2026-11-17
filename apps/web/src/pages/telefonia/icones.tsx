@@ -43,6 +43,13 @@ export const IconeCheck = (p: P) => <Icone {...p}><path d="M20 6 9 17l-5-5" /></
 export const IconeEnviar = (p: P) => <Icone {...p}><path d="m22 2-7 20-4-9-9-4z" /><path d="M22 2 11 13" /></Icone>;
 export const IconeChevron = (p: P) => <Icone {...p}><path d="m6 9 6 6 6-6" /></Icone>;
 export const IconeTexto = (p: P) => <Icone {...p}><path d="M4 6h16M4 12h16M4 18h10" /></Icone>;
+export const IconeFechar = (p: P) => <Icone {...p}><path d="M18 6 6 18M6 6l12 12" /></Icone>;
+export const IconeRelogio = (p: P) => <Icone {...p}><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></Icone>;
+export const IconeCusto = (p: P) => (
+  <Icone {...p}><circle cx="12" cy="12" r="10" /><path d="M14.5 9a2.5 2.5 0 0 0-2.5-1.5c-1.4 0-2.5.8-2.5 2s1.1 1.7 2.5 2 2.5.8 2.5 2-1.1 2-2.5 2A2.5 2.5 0 0 1 9.5 15M12 6v1.5M12 16.5V18" /></Icone>
+);
+export const IconeInfo = (p: P) => <Icone {...p}><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></Icone>;
+export const IconeBusca = (p: P) => <Icone {...p}><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></Icone>;
 export const IconeCarregando = ({ className = '', ...p }: P) => (
   <Icone {...p} className={`animate-spin motion-reduce:animate-none ${className}`}><path d="M21 12a9 9 0 1 1-6.2-8.6" /></Icone>
 );

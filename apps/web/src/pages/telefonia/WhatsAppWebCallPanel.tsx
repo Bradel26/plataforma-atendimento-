@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../../lib/api';
-import { IconeCheck, IconeDesligar, IconeMicrofone, IconeMicrofoneMudo, IconeTelefone } from './icones';
+import { telefoneLegivel } from '../../lib/telefone';
+import { IconeCheck, IconeDesligar, IconeFechar, IconeMicrofone, IconeMicrofoneMudo, IconeTelefone } from './icones';
 
 type Evento = { type: string; data?: any };
 type ChamadaAtiva = { from: string; fromMe: boolean; conectado?: boolean };
@@ -488,17 +489,22 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste
   if (somenteRecebidas && !chamada) return null;
 
   return (
-    <aside className={`${somenteRecebidas ? 'fixed bottom-5 right-5 z-[100] w-[min(420px,calc(100vw-2.5rem))] shadow-2xl' : ''} flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5`} aria-label="Chamadas do WhatsApp Web">
+    <aside className={`${somenteRecebidas ? 'fixed bottom-5 right-5 z-[100] w-[min(420px,calc(100vw-2.5rem))] shadow-2xl' : ''} flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-[0_1px_3px_rgba(15,23,42,0.05)] md:p-6`} aria-label="Chamadas do WhatsApp Web">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold text-slate-900">
-            {chamada ? (conectada ? 'Chamada em andamento' : chamada.fromMe ? 'Chamada de saída' : 'Chamada recebida') : 'Fazer chamada pelo WhatsApp'}
-          </h2>
-          <p className="mt-1 text-xs text-slate-500">
-            {chamada ? 'Acompanhe a chamada e o áudio nesta tela.' : 'Digite o número do cliente com o código do país.'}
-          </p>
+        <div className="flex items-start gap-3.5">
+          <span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+            <IconeTelefone tamanho={22} />
+          </span>
+          <div>
+            <h2 className="text-lg font-semibold leading-tight text-slate-900">
+              {chamada ? (conectada ? 'Chamada em andamento' : chamada.fromMe ? 'Chamada de saída' : 'Chamada recebida') : 'Chamada de saída'}
+            </h2>
+            <p className="mt-1 text-[13px] text-slate-500">
+              {chamada ? 'Acompanhe a chamada e o áudio nesta tela.' : 'Faça uma ligação pelo WhatsApp diretamente no navegador.'}
+            </p>
+          </div>
         </div>
-        <span className={`inline-flex h-7 items-center gap-2 rounded-full px-3 text-xs font-semibold ${conectadoAoWhatsApp ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+        <span className={`inline-flex h-8 items-center gap-2 rounded-full px-3.5 text-xs font-semibold ${conectadoAoWhatsApp ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
           <span className={`h-2 w-2 rounded-full ${conectadoAoWhatsApp ? 'bg-emerald-500' : 'bg-amber-500'}`} />
           {conectadoAoWhatsApp ? 'WhatsApp Web conectado' : status}
         </span>
@@ -510,7 +516,7 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste
             const concluida = indice < etapaAtual;
             const ativa = indice === etapaAtual;
             return (
-              <li key={etapa} aria-current={ativa ? 'step' : undefined} className={`flex min-h-10 items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${ativa ? 'border-blue-200 bg-blue-50 text-blue-700' : concluida ? 'border-emerald-100 bg-emerald-50/70 text-emerald-700' : 'border-slate-100 bg-slate-50 text-slate-400'}`}>
+              <li key={etapa} aria-current={ativa ? 'step' : undefined} className={`flex min-h-11 items-center gap-2.5 rounded-xl border px-3.5 py-2 text-[13px] font-semibold transition ${ativa ? 'border-blue-200 bg-blue-50 text-blue-700 shadow-[0_1px_3px_rgba(37,99,235,0.15)]' : concluida ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-100 bg-slate-50 text-slate-400'}`}>
                 <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${concluida ? 'bg-emerald-500 text-white' : ativa ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-500'}`}>
                   {concluida ? <IconeCheck tamanho={12} /> : indice + 1}
                 </span>
@@ -531,7 +537,7 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste
       )}
 
       {chamada && chamadaPendente && (
-        <section aria-label={chamada.fromMe ? 'Chamada de saída' : 'Chamada recebida'} className="grid gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:px-6 md:py-5">
+        <section aria-label={chamada.fromMe ? 'Chamada de saída' : 'Chamada recebida'} className="grid gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:px-6 md:py-5">
           <div className="flex min-w-0 items-center gap-4">
             <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-blue-50 text-xl font-bold text-blue-700 ring-4 ring-white">{inicial}</span>
             <span className="min-w-0">
@@ -542,8 +548,8 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste
           </div>
           <div className="flex flex-wrap items-center gap-2 md:justify-end">
             {!chamada.fromMe && <button type="button" disabled={ocupado} onClick={() => void acao('/api/call/accept')} className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-700 px-4 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50"><IconeTelefone tamanho={16} />Atender no painel</button>}
-            <button type="button" disabled={ocupado} onClick={() => void acao(chamada.fromMe ? '/api/call/hangup' : '/api/call/reject')} className="h-10 rounded-xl border border-red-200 bg-white px-4 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50">{chamada.fromMe ? 'Cancelar chamada' : 'Recusar'}</button>
-            {!microfoneAtivo && <button type="button" onClick={() => void habilitarMicrofone()} className="h-10 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-100">Ativar microfone</button>}
+            <button type="button" disabled={ocupado} onClick={() => void acao(chamada.fromMe ? '/api/call/hangup' : '/api/call/reject')} className="inline-flex h-10 items-center gap-2 rounded-xl border border-red-200 bg-white px-4 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-50"><IconeFechar tamanho={16} />{chamada.fromMe ? 'Cancelar chamada' : 'Recusar'}</button>
+            {!microfoneAtivo && <button type="button" onClick={() => void habilitarMicrofone()} className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"><IconeMicrofone tamanho={16} />Ativar microfone</button>}
           </div>
         </section>
       )}
@@ -590,9 +596,13 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste
       {!somenteRecebidas && conectadoAoWhatsApp && !chamada && !resumo && (
         <form onSubmit={(e) => void ligar(e)} className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
           <label className="min-w-0 text-xs font-medium text-slate-600">Número do cliente
-            <input aria-label="Telefone para ligar" value={destino} onChange={(e) => setDestino(e.target.value)} inputMode="tel" autoComplete="tel" placeholder="+55 62 9 0000-0000" className="mt-1.5 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-blue-500" />
+            <span className="relative mt-1.5 block">
+              <IconeTelefone tamanho={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input aria-label="Telefone para ligar" value={destino} onChange={(e) => setDestino(e.target.value)} inputMode="tel" autoComplete="tel" placeholder="+55 62 9 0000-0000" className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-11 pr-3 text-[15px] text-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] outline-none transition focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(37,99,235,0.15)]" />
+            </span>
+            {destino.replace(/\D/g, '').length >= 10 && <span className="mt-1.5 block text-xs text-slate-500">Número: <span className="font-semibold tabular-nums text-slate-700">{telefoneLegivel(destino.replace(/\D/g, ''))}</span></span>}
           </label>
-          <button type="submit" disabled={ocupado || destino.replace(/\D/g, '').length < 10} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 text-sm font-bold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"><IconeTelefone tamanho={16} />{ocupado ? 'Chamando…' : 'Ligar pelo WhatsApp'}</button>
+          <button type="submit" disabled={ocupado || destino.replace(/\D/g, '').length < 10} className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-green-600 px-6 text-sm font-bold text-white shadow-[0_2px_6px_rgba(22,163,74,0.28)] transition hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500 disabled:shadow-none"><IconeTelefone tamanho={17} />{ocupado ? 'Chamando…' : 'Ligar pelo WhatsApp'}</button>
         </form>
       )}
 

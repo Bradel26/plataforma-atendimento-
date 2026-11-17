@@ -7,7 +7,7 @@ import {
   type Chamada,
 } from '../../lib/types';
 import { AssistenteDaLigacao } from './AssistenteDaLigacao';
-import { IconeFeita, IconeRecebida } from './icones';
+import { IconeBusca, IconeFeita, IconeRecebida } from './icones';
 import { relogio } from './PainelLigacoes';
 
 type Filtro = 'todas' | 'recebidas' | 'feitas' | 'perdidas';
@@ -82,28 +82,39 @@ export function HistoricoDeChamadas({
   const [excluindo, setExcluindo] = useState(false);
   const [filtro, setFiltro] = useState<Filtro>('todas');
   const [selecionadaId, setSelecionadaId] = useState<string | null>(null);
+  const [busca, setBusca] = useState('');
   const somenteDemo = import.meta.env.DEV && chamadas.length === 0;
   const registros = somenteDemo ? [CHAMADA_DEMO] : chamadas;
+  // A busca age so sobre as chamadas ja carregadas: nao altera a paginacao (cursor) existente.
+  const termo = busca.trim().toLowerCase();
+  const termoDigitos = termo.replace(/\D/g, '');
+  const bateBusca = (c: Chamada) => {
+    if (!termo) return true;
+    const numero = c.direcao === 'ENTRANTE' ? c.numeroOrigem : c.numeroDestino;
+    return (c.contato?.nome ?? '').toLowerCase().includes(termo) || (termoDigitos.length > 0 && numero.replace(/\D/g, '').includes(termoDigitos));
+  };
   const visiveis = registros.filter((c) =>
-    filtro === 'todas' ||
-    (filtro === 'recebidas' && c.direcao === 'ENTRANTE') ||
-    (filtro === 'feitas' && c.direcao === 'SAINTE') ||
-    (filtro === 'perdidas' && STATUS_PERDIDA.has(c.status)),
+    bateBusca(c) && (
+      filtro === 'todas' ||
+      (filtro === 'recebidas' && c.direcao === 'ENTRANTE') ||
+      (filtro === 'feitas' && c.direcao === 'SAINTE') ||
+      (filtro === 'perdidas' && STATUS_PERDIDA.has(c.status))
+    ),
   );
   const chamada = visiveis.find((c) => c.id === selecionadaId) ?? visiveis[0] ?? null;
 
   return (
-    <section aria-labelledby="titulo-historico" className="order-2 min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white xl:order-1">
-      <div className="grid min-h-[640px] grid-cols-1 xl:grid-cols-[300px_minmax(0,1fr)]">
+    <section aria-labelledby="titulo-historico" className="order-2 min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.05)] xl:order-1">
+      <div className="grid min-h-[600px] grid-cols-1 xl:grid-cols-[minmax(320px,30%)_minmax(0,1fr)]">
         <div className="min-w-0 border-b border-slate-200 xl:border-b-0 xl:border-r">
-          <div className="border-b border-slate-200 px-4 pb-3 pt-4">
+          <div className="border-b border-slate-200 px-5 pb-3 pt-5">
             <div className="flex items-center justify-between gap-2">
-              <h2 id="titulo-historico" className="text-sm font-semibold text-slate-900">Histórico de chamadas</h2>
-              <span className={`rounded-full px-2.5 py-1 text-[10px] font-medium ${somenteDemo ? 'bg-amber-50 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>
+              <h2 id="titulo-historico" className="text-base font-semibold text-slate-900">Histórico de chamadas</h2>
+              <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${somenteDemo ? 'bg-amber-50 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>
                 {somenteDemo ? '1 exemplo fictício' : cursor ? `${chamadas.length}+ chamadas` : `${chamadas.length} chamadas`}
               </span>
             </div>
-            <p className="mt-1 text-[11px] text-slate-500">Selecione uma ligação para ver os detalhes.</p>
+            <p className="mt-1 text-xs text-slate-500">Selecione uma ligação para ver os detalhes.</p>
             <div role="group" aria-label="Filtrar chamadas" className="mt-3 flex flex-wrap gap-1.5">
               {FILTROS.map((f) => {
                 const ativo = filtro === f.id;
@@ -117,7 +128,7 @@ export function HistoricoDeChamadas({
                     type="button"
                     aria-pressed={ativo}
                     onClick={() => setFiltro(f.id)}
-                    className={`inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-[11px] font-medium transition ${
+                    className={`inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition ${
                       ativo ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
                     }`}
                   >
@@ -126,6 +137,17 @@ export function HistoricoDeChamadas({
                 );
               })}
             </div>
+            <label className="relative mt-3 block">
+              <span className="sr-only">Buscar nas chamadas carregadas por nome ou telefone</span>
+              <IconeBusca tamanho={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="search"
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder="Buscar por nome ou telefone…"
+                className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-[var(--brand-primary)]"
+              />
+            </label>
           </div>
 
           {visiveis.length === 0 ? (
@@ -145,8 +167,8 @@ export function HistoricoDeChamadas({
                     type="button"
                     aria-pressed={selecionada}
                     onClick={() => setSelecionadaId(c.id)}
-                    className={`flex min-h-[88px] w-full items-start gap-3 border-b border-slate-100 px-4 py-3 text-left transition ${
-                      selecionada ? 'bg-blue-50' : 'hover:bg-slate-50'
+                    className={`flex min-h-[88px] w-full items-start gap-3 border-b border-slate-100 px-5 py-3.5 text-left transition ${
+                      selecionada ? 'bg-blue-50 shadow-[inset_3px_0_0_var(--brand-primary)]' : 'hover:bg-slate-50'
                     }`}
                   >
                     <span className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
@@ -156,15 +178,15 @@ export function HistoricoDeChamadas({
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="flex items-start justify-between gap-2">
-                        <span className="truncate text-[13px] font-semibold text-slate-900">{c.contato?.nome ?? numeroLegivel(numero)}</span>
-                        <span className="shrink-0 text-[10px] tabular-nums text-slate-500">{dataHora(c.iniciadoEm)}</span>
+                        <span className="truncate text-sm font-semibold text-slate-900">{c.contato?.nome ?? numeroLegivel(numero)}</span>
+                        <span className="shrink-0 text-[11px] tabular-nums text-slate-500">{dataHora(c.iniciadoEm)}</span>
                       </span>
-                      <span className="mt-1 block truncate text-[11px] text-slate-500">
+                      <span className="mt-1 block truncate text-xs text-slate-500">
                         {somenteDemo ? 'AMOSTRA FICTÍCIA · ' : `${recebida ? 'Recebida' : 'Feita'} · `}{numeroLegivel(numero)}
                       </span>
                       <span className="mt-2 flex items-center justify-between gap-2">
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${CLASSE_STATUS[c.status]}`}>{LABEL_CHAMADA_STATUS[c.status]}</span>
-                        <span className="text-[11px] tabular-nums text-slate-500">{relogio(c.duracao)}</span>
+                        <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${CLASSE_STATUS[c.status]}`}>{LABEL_CHAMADA_STATUS[c.status]}</span>
+                        <span className="text-xs tabular-nums text-slate-500">{relogio(c.duracao)}</span>
                       </span>
                     </span>
                   </button>
@@ -180,7 +202,7 @@ export function HistoricoDeChamadas({
           const numero = recebida ? chamada.numeroOrigem : chamada.numeroDestino;
           const audioInterno = Boolean(chamada.gravacaoUrl?.startsWith('/api/arquivos/'));
           return (
-            <div className="min-w-0 p-4 md:p-5">
+            <div className="min-w-0 p-5 md:p-6">
               <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-4">
                 <div className="flex min-w-0 items-center gap-3">
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-50 text-lg font-bold text-blue-700">
@@ -235,12 +257,26 @@ export function HistoricoDeChamadas({
                 </div>
               </div>
 
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+              <h3 className="mt-4 text-sm font-semibold text-slate-900">Informações da chamada</h3>
+              <dl className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-6">
+                {[
+                  ['Data e horário', dataHora(chamada.iniciadoEm)],
+                  ['Duração', relogio(chamada.duracao)],
+                  ['Direção', recebida ? 'Recebida' : 'Feita'],
+                  ['Status', LABEL_CHAMADA_STATUS[chamada.status]],
+                  ['Atendente', chamada.agente?.nome ?? '—'],
+                  ['Custo', custoCurto(chamada.custo)],
+                ].map(([rotulo, valor]) => (
+                  <div key={rotulo} className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <dt className="text-[11px] font-medium text-slate-500">{rotulo}</dt>
+                    <dd className="mt-0.5 truncate text-sm font-semibold tabular-nums text-slate-900">{valor}</dd>
+                  </div>
+                ))}
+              </dl>
+
+              <div className="mt-5 flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <h3 className="text-sm font-semibold text-slate-900">Gravação da chamada</h3>
-                  <p className="mt-1 text-[11px] text-slate-500">
-                    {dataHora(chamada.iniciadoEm)} · Duração {relogio(chamada.duracao)} · Custo {custoCurto(chamada.custo)}
-                  </p>
                 </div>
                 {audioInterno && <a href={chamada.gravacaoUrl!} download className="text-xs font-semibold text-blue-700 hover:underline">Baixar áudio ↓</a>}
               </div>
