@@ -1,4 +1,4 @@
-import type { CallStatus } from '@prisma/client';
+import { Prisma, type CallStatus } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { salvar } from '../../lib/storage';
 import { notificarChamada } from '../../realtime/hub';
@@ -78,9 +78,13 @@ export async function salvarRegistroChamadaWebJs(input: RegistroChamadaWebJs) {
     ...(input.analisadoPor ? { analisadoPor: input.analisadoPor, analisadoEm: new Date() } : {}),
   };
 
-  const chamada = existente
-    ? await prisma.call.update({ where: { id: existente.id }, data: dados })
-    : await prisma.call.create({
+  let gravacaoExistente = existente?.gravacaoUrl ?? null;
+  let chamada: { id: string };
+  if (existente) {
+    chamada = await prisma.call.update({ where: { id: existente.id }, data: dados });
+  } else {
+    try {
+      chamada = await prisma.call.create({
         data: {
           idExterno,
           direcao: input.direcao,
@@ -94,8 +98,21 @@ export async function salvarRegistroChamadaWebJs(input: RegistroChamadaWebJs) {
           ...dados,
         },
       });
+    } catch (erro) {
+      /*
+       * A tela registra a chamada em eventos seguidos (Chamando, Em ligacao). Duas requisicoes quase
+       * simultaneas veem "nao existe" e as duas criam: a segunda viola `id_externo`. Em vez de 500,
+       * relê o registro criado pela outra e so atualiza, que e o que a segunda queria dizer.
+       */
+      if (!(erro instanceof Prisma.PrismaClientKnownRequestError) || erro.code !== 'P2002') throw erro;
+      const criado = await prisma.call.findFirst({ where: { idExterno }, select: { id: true, gravacaoUrl: true } });
+      if (!criado) throw erro;
+      gravacaoExistente = criado.gravacaoUrl ?? null;
+      chamada = await prisma.call.update({ where: { id: criado.id }, data: dados });
+    }
+  }
 
-  let gravacaoUrl = existente?.gravacaoUrl ?? null;
+  let gravacaoUrl = gravacaoExistente;
   if (input.gravacao && !gravacaoUrl?.startsWith('/api/arquivos/')) {
     const arquivo = await salvar({ buffer: input.gravacao.buffer, nome: input.gravacao.nome, tipo: 'audio/wav', limiteBytesMaximo: 100 * 1024 * 1024 });
     gravacaoUrl = arquivo.url;
