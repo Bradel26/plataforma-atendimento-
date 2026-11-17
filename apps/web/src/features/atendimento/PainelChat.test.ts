@@ -1,5 +1,6 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { PainelChat } from './PainelChat';
 import type { ConversaDetalhe, Mensagem } from '../../lib/types';
@@ -75,14 +76,19 @@ function criarMensagemMock(overrides: Partial<Mensagem> = {}): Mensagem {
 
 function renderizar(props: Partial<Parameters<typeof PainelChat>[0]> = {}) {
   return renderToStaticMarkup(
+    // MemoryRouter: o botao "Ligar" do cabecalho e um <Link>.
     createElement(
-      ToastProvider,
+      MemoryRouter,
       null,
-      createElement(PainelChat, {
-        conversa: criarConversaDetalheMock(),
-        onMudou: () => {},
-        ...props,
-      }),
+      createElement(
+        ToastProvider,
+        null,
+        createElement(PainelChat, {
+          conversa: criarConversaDetalheMock(),
+          onMudou: () => {},
+          ...props,
+        }),
+      ),
     ),
   );
 }

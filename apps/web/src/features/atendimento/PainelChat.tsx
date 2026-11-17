@@ -23,6 +23,8 @@ import {
   IconeTransferir,
   IconeVoltar,
 } from './icones';
+import { IconeTelefone } from '../../pages/telefonia/icones';
+import { IconeWhatsapp } from './icones';
 import { partesComLinks } from './links';
 import { useAtendimentosAnteriores, type BlocoAnterior } from './useAtendimentosAnteriores';
 
@@ -35,9 +37,9 @@ const dataHora = (iso: string) =>
   });
 
 const BOTAO_SECUNDARIO =
-  'inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-[13px] font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50';
+  'inline-flex h-10 shrink-0 items-center gap-1.5 rounded-[10px] border border-slate-300 bg-white px-3 text-[13px] font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50';
 const BOTAO_FERRAMENTA =
-  'inline-flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50';
+  'inline-flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 text-[13px] font-medium text-slate-600 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50';
 
 function TextoComLinks({ texto }: { texto: string }) {
   return (
@@ -80,16 +82,18 @@ function SeparadorAnterior({ bloco }: { bloco: BlocoAnterior }) {
 
 function SeparadorDia({ iso }: { iso: string }) {
   return (
-    <li className="my-3 flex items-center gap-3" aria-hidden="true">
+    <li className="my-4 flex items-center gap-3" aria-hidden="true">
       <span className="h-px flex-1 bg-slate-200" />
-      <span className="text-xs font-medium text-slate-500">{rotuloDoDia(iso)}</span>
+      <span className="rounded-full border border-slate-200 bg-white px-3.5 py-1 text-[11.5px] font-semibold text-slate-500 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+        {rotuloDoDia(iso)}
+      </span>
       <span className="h-px flex-1 bg-slate-200" />
     </li>
   );
 }
 
 /** Mensagens com um separador sempre que o dia muda. */
-function MensagensComDias({ mensagens }: { mensagens: Mensagem[] }) {
+function MensagensComDias({ mensagens, nomeContato }: { mensagens: Mensagem[]; nomeContato?: string }) {
   return (
     <>
       {mensagens.map((m, i) => {
@@ -98,7 +102,7 @@ function MensagensComDias({ mensagens }: { mensagens: Mensagem[] }) {
         return (
           <Fragment key={m.id}>
             {novoDia && <SeparadorDia iso={m.criadoEm} />}
-            <Bolha mensagem={m} />
+            <Bolha mensagem={m} nomeContato={nomeContato} />
           </Fragment>
         );
       })}
@@ -178,7 +182,7 @@ function TiqueDeStatus({ status }: { status: Mensagem['status'] }) {
   );
 }
 
-function Bolha({ mensagem }: { mensagem: Mensagem }) {
+function Bolha({ mensagem, nomeContato }: { mensagem: Mensagem; nomeContato?: string }) {
   if (mensagem.autor === 'SISTEMA') {
     if (mensagem.evento) return <EventoConversa mensagem={mensagem} />;
     return (
@@ -191,8 +195,8 @@ function Bolha({ mensagem }: { mensagem: Mensagem }) {
   if (mensagem.interno) {
     return (
       <li className="flex justify-end">
-        <div className="max-w-[75%] rounded-2xl rounded-br-md border border-amber-200 bg-amber-50 px-3.5 py-2 text-sm text-slate-800">
-          <p className="mb-1 flex items-center gap-1 text-xs font-semibold text-amber-700">
+        <div className="max-w-[72%] rounded-[18px] rounded-br-md border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-sm text-slate-800">
+          <p className="mb-1 flex items-center gap-1 text-[11.5px] font-semibold text-amber-700">
             <IconeCadeado tamanho={12} />
             Nota interna{mensagem.autorNome ? ` · ${mensagem.autorNome}` : ''}
           </p>
@@ -207,15 +211,24 @@ function Bolha({ mensagem }: { mensagem: Mensagem }) {
   const daEmpresa = mensagem.autor !== 'CLIENTE';
   const doAgente = mensagem.autor === 'AGENTE' && !mensagem.enviadaPorDispositivo;
   const rotulo = rotuloDoAutor(mensagem);
-  const forma = daEmpresa ? 'rounded-2xl rounded-br-md' : 'rounded-2xl rounded-bl-md';
+  const forma = daEmpresa ? 'rounded-[18px] rounded-br-md' : 'rounded-[18px] rounded-bl-md';
+  // Agente: azul suave da marca; cliente: cartao branco com a inicial ao lado.
   const cores = doAgente
-    ? 'border border-[color-mix(in_srgb,var(--brand-primary)_22%,transparent)] bg-[var(--brand-primary-soft)]'
-    : 'border border-slate-200 bg-white shadow-[0_1px_1px_rgba(15,23,42,0.04)]';
+    ? 'border border-[color-mix(in_srgb,var(--brand-primary)_22%,transparent)] bg-[var(--brand-primary-soft)] shadow-[0_1px_2px_rgba(15,23,42,0.05)]'
+    : 'border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.05)]';
   return (
-    <li className={`flex ${daEmpresa ? 'justify-end' : 'justify-start'}`}>
-      <div className={`max-w-[75%] px-3.5 py-2 text-sm leading-relaxed text-slate-800 ${forma} ${cores}`}>
+    <li className={`flex items-end gap-2 ${daEmpresa ? 'justify-end' : 'justify-start'}`}>
+      {!daEmpresa && (
+        <span
+          aria-hidden="true"
+          className="mb-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--brand-primary-soft)] text-[11px] font-semibold text-[var(--brand-primary)]"
+        >
+          {(nomeContato ?? '?').charAt(0).toUpperCase()}
+        </span>
+      )}
+      <div className={`max-w-[72%] px-3.5 py-2.5 text-sm leading-relaxed text-slate-800 ${forma} ${cores}`}>
         {rotulo && (
-          <p className={`mb-0.5 text-xs font-semibold ${doAgente ? 'text-[var(--brand-primary)]' : 'text-slate-600'}`}>{rotulo}</p>
+          <p className={`mb-0.5 text-[11.5px] font-semibold ${doAgente ? 'text-[var(--brand-primary)]' : 'text-slate-500'}`}>{rotulo}</p>
         )}
         <Anexo mensagem={mensagem} />
         <TextoComLinks texto={mensagem.conteudo} />
@@ -493,8 +506,8 @@ export function PainelChat({
     // `@container`: os rotulos dos botoes do cabecalho somem quando o PAINEL fica
     // estreito (ficha aberta ao lado), nao quando a janela fica estreita.
     <div className="@container flex h-full min-h-0 flex-col">
-      <header className="border-b border-slate-200 bg-white px-5 py-3">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+      <header className="border-b border-slate-200 bg-white px-5 py-3.5 shadow-[0_1px_3px_rgba(15,23,42,0.06)]">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5">
           {/* So existe no passo mobile "chat" — no notebook/tablet/desktop a
               lista fica sempre visivel ao lado, sem precisar de volta. */}
           {aoVoltarParaLista && (
@@ -507,20 +520,28 @@ export function PainelChat({
               <IconeVoltar tamanho={18} />
             </button>
           )}
-          <AvatarConversa conversaId={conversa.id} nome={conversa.contato.nome} className="h-10 w-10 text-sm" avatarPath={`/contatos/${conversa.contato.id}/avatar`} />
+          <AvatarConversa conversaId={conversa.id} nome={conversa.contato.nome} className="h-12 w-12 text-base" avatarPath={`/contatos/${conversa.contato.id}/avatar`} />
           <div className="min-w-[14rem] flex-1">
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <h2 className="truncate text-[15px] font-semibold text-slate-800">{conversa.contato.nome}</h2>
-              <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${CLASSE_STATUS[conversa.status]}`}>
+            <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+              <h2 className="truncate text-[17px] font-semibold text-slate-900">{conversa.contato.nome}</h2>
+              <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-[3px] text-[11.5px] font-semibold ${CLASSE_STATUS[conversa.status]}`}>
+                <IconeRelogio tamanho={12} />
                 {LABEL_CONVERSA_STATUS[conversa.status]}
               </span>
               {conversa.arquivada && <Badge tom="neutro">Arquivada</Badge>}
             </div>
-            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500">
-              <span className="tabular-nums">{contatoLegivel}</span>
-              {conversa.linha?.nome && <span>· {conversa.linha.nome}</span>}
-              {conversa.fila && <span>· {conversa.fila.nome}</span>}
-              <span>· {conversa.origem === 'ATIVO' ? '↗ Ativo' : '↙ Receptivo'}</span>
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+              <span className="inline-flex items-center gap-1.5 font-medium tabular-nums text-slate-600">
+                {conversa.canal === 'WHATSAPP' && <IconeWhatsapp tamanho={14} className="text-emerald-500" />}
+                {contatoLegivel}
+              </span>
+              {conversa.linha?.nome && <><span aria-hidden="true" className="h-3.5 w-px bg-slate-200" /><span>{conversa.linha.nome}</span></>}
+              {conversa.fila && <><span aria-hidden="true" className="h-3.5 w-px bg-slate-200" /><span>{conversa.fila.nome}</span></>}
+              <span aria-hidden="true" className="h-3.5 w-px bg-slate-200" />
+              <span className="inline-flex items-center gap-1.5">
+                <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${conversa.origem === 'ATIVO' ? 'bg-emerald-500' : 'bg-blue-500'}`} />
+                {conversa.origem === 'ATIVO' ? 'Ativo' : 'Receptivo'}
+              </span>
               {conversa.protocolo && (
                 <button
                   type="button"
@@ -531,7 +552,7 @@ export function PainelChat({
                   }}
                   className="inline-flex items-center gap-1 rounded px-1 py-0.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
                 >
-                  · Protocolo <span className="font-mono text-slate-700">{conversa.protocolo}</span>
+                  Protocolo <span className="font-mono text-slate-700">{conversa.protocolo}</span>
                   <IconeCopiar tamanho={12} />
                 </button>
               )}
@@ -539,6 +560,17 @@ export function PainelChat({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {conversa.contato.telefone && !somenteLeitura && (
+              <Link
+                to={`/telefonia?destino=${encodeURIComponent(conversa.contato.telefone)}`}
+                title={`Ligar para ${contatoLegivel}`}
+                aria-label={`Ligar para ${conversa.contato.nome}`}
+                className="inline-flex h-10 shrink-0 items-center gap-2 rounded-[10px] bg-green-600 px-4 text-sm font-semibold texto-sobre-cor-fixa shadow-[0_2px_6px_rgba(22,163,74,0.28)] transition hover:bg-green-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600"
+              >
+                <IconeTelefone tamanho={16} />
+                Ligar
+              </Link>
+            )}
             {/* So existe fora do desktop: la a ficha e coluna fixa e sempre
                 visivel, entao um botao pra abrir o que ja esta aberto so
                 ocuparia espaco atoa. */}
@@ -573,7 +605,7 @@ export function PainelChat({
                     type="button"
                     disabled={ocupado}
                     onClick={encerrar}
-                    className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-slate-900 px-3 text-[13px] font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-[10px] bg-[var(--brand-secondary)] px-4 text-[13px] font-semibold texto-sobre-cor-fixa transition hover:brightness-125 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <IconeEncerrar tamanho={15} />
                     Encerrar
@@ -624,7 +656,7 @@ export function PainelChat({
         em telas largas, mas a linha de texto para de crescer alem do
         confortavel pra ler.
       */}
-      <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50 px-5 py-5">
+      <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50 px-5 py-6 @[40rem]:px-10">
         <div className="mx-auto max-w-3xl">
           <div ref={topo} aria-hidden="true" />
           {atendimentosAnteriores.carregando && (
@@ -641,11 +673,11 @@ export function PainelChat({
             </button>
           )}
 
-          <ul className="space-y-2">
+          <ul className="space-y-2.5">
             {atendimentosAnteriores.blocos.map((bloco) => (
               <Fragment key={bloco.id}>
                 <SeparadorAnterior bloco={bloco} />
-                {bloco.mensagens.map((m) => <Bolha key={m.id} mensagem={m} />)}
+                {bloco.mensagens.map((m) => <Bolha key={m.id} mensagem={m} nomeContato={conversa.contato.nome} />)}
               </Fragment>
             ))}
             {conversa.pesquisaManual && (
@@ -660,13 +692,13 @@ export function PainelChat({
                 </span>
               </li>
             )}
-            <MensagensComDias mensagens={[...anterioresDaConversa, ...conversa.mensagens]} />
+            <MensagensComDias mensagens={[...anterioresDaConversa, ...conversa.mensagens]} nomeContato={conversa.contato.nome} />
           </ul>
           <div ref={fim} />
         </div>
       </div>
 
-      {!somenteLeitura && <footer className="border-t border-slate-200 bg-white px-5 pb-4">
+      {!somenteLeitura && <footer className="border-t border-slate-200 bg-white px-5 pb-4 pt-3.5 @[40rem]:px-10">
         <div className="mx-auto max-w-3xl">
         {finalizada ? (
           <>
@@ -677,16 +709,16 @@ export function PainelChat({
           </>
         ) : (
           <>
-            <div role="tablist" className="mb-3 flex gap-5 border-b border-slate-100">
+            <div role="tablist" className="mb-3 flex gap-2">
               <button
                 type="button"
                 role="tab"
                 aria-selected={abaRodape === 'responder'}
                 onClick={() => setAbaRodape('responder')}
-                className={`-mb-px h-11 border-b-2 text-sm font-semibold transition ${
+                className={`h-9 rounded-[10px] border px-3.5 text-[13px] font-semibold transition ${
                   abaRodape === 'responder'
-                    ? 'border-[var(--brand-primary)] text-slate-800'
-                    : 'border-transparent text-slate-500 hover:text-slate-700'
+                    ? 'border-[color-mix(in_srgb,var(--brand-primary)_35%,transparent)] bg-[var(--brand-primary-soft)] text-[var(--brand-primary)]'
+                    : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
                 }`}
               >
                 Responder
@@ -696,8 +728,10 @@ export function PainelChat({
                 role="tab"
                 aria-selected={abaRodape === 'privada'}
                 onClick={() => setAbaRodape('privada')}
-                className={`-mb-px inline-flex h-11 items-center gap-1.5 border-b-2 text-sm font-semibold transition ${
-                  abaRodape === 'privada' ? 'border-amber-500 text-amber-700' : 'border-transparent text-slate-500 hover:text-slate-700'
+                className={`inline-flex h-9 items-center gap-1.5 rounded-[10px] border px-3.5 text-[13px] font-semibold transition ${
+                  abaRodape === 'privada'
+                    ? 'border-amber-200 bg-amber-50 text-amber-700'
+                    : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
                 }`}
               >
                 <IconeCadeado tamanho={14} />
@@ -730,7 +764,7 @@ export function PainelChat({
                     ) : <p className="px-3 py-2 text-sm text-slate-500">Nenhuma mensagem encontrada. Esc para fechar.</p>}
                   </div>
                 )}
-                <div className="rounded-xl border border-slate-300 bg-white shadow-sm transition focus-within:border-[var(--brand-primary)]">
+                <div className="rounded-2xl border border-slate-300 bg-white shadow-[0_4px_14px_rgba(15,23,42,0.07)] transition focus-within:border-[var(--brand-primary)] focus-within:shadow-[0_4px_16px_rgba(37,99,235,0.14)]">
                   <label htmlFor={`resposta-${conversa.id}`} className="sr-only">Resposta para o cliente</label>
                   <textarea
                     id={`resposta-${conversa.id}`}
@@ -759,7 +793,7 @@ export function PainelChat({
                     rows={2}
                     disabled={janelaFechada || ocupado}
                     placeholder={janelaFechada ? 'Janela fechada — texto livre indisponível' : 'Escreva sua resposta…  Digite / para mensagens rápidas'}
-                    className="block max-h-40 min-h-[52px] w-full resize-none rounded-t-xl bg-transparent px-3.5 pb-1 pt-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed"
+                    className="block max-h-40 min-h-[56px] w-full resize-none rounded-t-2xl bg-transparent px-4 pb-1 pt-3.5 text-sm text-slate-800 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed"
                   />
                   <div className="flex flex-wrap items-center gap-1 px-2 pb-2 pt-1">
                     <button
@@ -797,7 +831,7 @@ export function PainelChat({
                     <button
                       type="submit"
                       disabled={ocupado || janelaFechada || !texto.trim()}
-                      className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--brand-primary)] px-4 text-[13px] font-semibold texto-sobre-cor-fixa transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50 md:ml-0"
+                      className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-[10px] bg-[var(--brand-primary)] px-4 text-[13px] font-semibold shadow-[0_2px_6px_rgba(37,99,235,0.25)] texto-sobre-cor-fixa transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none md:ml-0"
                     >
                       Enviar
                       <IconeEnviar tamanho={14} />

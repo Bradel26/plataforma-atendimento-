@@ -100,7 +100,7 @@ export function ListaConversas({
   const agora = Date.now();
 
   return (
-    <ul className="divide-y divide-slate-100">
+    <ul className="space-y-1 px-2 py-2">
       {itens.map((item) => {
         if (item.tipo === 'previa') {
           const p = item.dado;
@@ -109,8 +109,7 @@ export function ListaConversas({
               <button
                 type="button"
                 onClick={() => onAbrirPrevia(p)}
-                className="flex w-full items-start gap-3 px-4 py-3.5 text-left transition hover:bg-slate-50"
-                style={{ borderLeft: '3px solid transparent' }}
+                className="flex w-full items-start gap-3 rounded-xl border border-transparent px-3.5 py-3 text-left transition hover:bg-slate-50"
               >
                 <span
                   className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold"
@@ -154,17 +153,18 @@ export function ListaConversas({
               aria-current={ativa || undefined}
               // `relative`: ancora o texto sr-only (absoluto) dentro do cartao; sem
               // isso ele escapa da lista rolavel e estica a altura da pagina.
-              className={`relative flex w-full items-start gap-3 px-4 py-3.5 text-left transition ${
-                ativa ? 'bg-[var(--brand-primary-soft)]' : 'hover:bg-slate-50'
+              className={`relative flex w-full items-start gap-3 rounded-xl border px-3.5 py-3 text-left transition ${
+                ativa
+                  ? 'border-[color-mix(in_srgb,var(--brand-primary)_25%,white)] border-l-[3px] border-l-[var(--brand-primary)] bg-[var(--brand-primary-soft)]'
+                  : 'border-transparent hover:bg-slate-50'
               }`}
-              style={{ borderLeft: `3px solid ${ativa ? 'var(--brand-primary)' : 'transparent'}` }}
             >
               <AvatarConversa
                 conversaId={c.id}
                 nome={c.contato.nome}
                 avatarPath={`/contatos/${c.contato.id}/avatar`}
                 // O avatar sem foto usa o mesmo tom suave do cartao selecionado; o anel o separa do fundo.
-                className={`h-10 w-10 text-sm ${ativa ? 'ring-2 ring-white' : ''}`}
+                className={`h-11 w-11 text-sm ${ativa ? 'ring-2 ring-white' : ''}`}
               />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-2">
@@ -177,7 +177,7 @@ export function ListaConversas({
                   {c.naoLidas > 0 && <ContadorNaoLidas n={c.naoLidas} />}
                 </div>
                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                  <span className="inline-flex max-w-[9rem] items-center gap-1 text-[11px] text-slate-500" title={c.linha?.nome ?? c.canal}>
+                  <span className="inline-flex max-w-[9rem] items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700" title={c.linha?.nome ?? c.canal}>
                     {c.canal === 'WHATSAPP' && <IconeWhatsapp tamanho={14} className="text-emerald-500" />}
                     <span className="truncate">{c.linha?.nome ?? c.canal}</span>
                   </span>

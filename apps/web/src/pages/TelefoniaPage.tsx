@@ -26,7 +26,8 @@ export function TelefoniaPage() {
   const [chamadas, setChamadas] = useState<Chamada[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [indicadores, setIndicadores] = useState<IndicadoresVoz | null>(null);
-  const [destino, setDestino] = useState('');
+  // O botao "Ligar" do chat do Atendimento chega aqui com ?destino=<telefone>.
+  const [destino, setDestino] = useState(() => new URLSearchParams(window.location.search).get('destino') ?? '');
   const [erro, setErro] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
