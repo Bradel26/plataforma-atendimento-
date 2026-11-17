@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Alerta } from '../components/ui';
 import { HistoricoDeChamadas } from './telefonia/HistoricoDeChamadas';
 import { PainelLigacoes, relogio, type PosLigacao } from './telefonia/PainelLigacoes';
@@ -26,8 +27,13 @@ export function TelefoniaPage() {
   const [chamadas, setChamadas] = useState<Chamada[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [indicadores, setIndicadores] = useState<IndicadoresVoz | null>(null);
-  // O botao "Ligar" do chat do Atendimento chega aqui com ?destino=<telefone>.
-  const [destino, setDestino] = useState(() => new URLSearchParams(window.location.search).get('destino') ?? '');
+  // O botao "Ligar" do chat do Atendimento chega aqui com o telefone no estado de navegacao.
+  // So preenche o campo (nunca liga sozinho) e so aceita algo que pareca telefone.
+  const location = useLocation();
+  const [destino, setDestino] = useState(() => {
+    const bruto = (location.state as { destino?: unknown } | null)?.destino;
+    return typeof bruto === 'string' && /^\+?\d{10,15}$/.test(bruto.replace(/[\s()-]/g, '')) ? bruto : '';
+  });
   const [erro, setErro] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
