@@ -367,15 +367,16 @@ export function TelefoniaPage() {
 
   // "Ligar para o cliente" no histórico: entrega o número ao painel da linha WhatsApp e leva a tela até ele.
   const [ligarPara, setLigarPara] = useState<{ numero: string; id: number } | null>(null);
-  // "Ligar" do Atendimento chega aqui como /telefonia?ligar=<numero>. O parametro e consumido uma vez e removido
-  // do endereco: recarregar a pagina ou voltar nunca pode discar de novo para o cliente.
+  // "Ligar" do Atendimento chega aqui como /telefonia?ligar=<numero>. So PREENCHE o numero no painel: quem decide
+  // ligar e a pessoa, no botao de sempre. O parametro e consumido uma vez e removido do endereco.
+  const [destinoSugerido, setDestinoSugerido] = useState<{ numero: string; id: number } | null>(null);
   const [parametros, setParametros] = useSearchParams();
   useEffect(() => {
     const pedido = parametros.get('ligar');
     if (pedido === null) return;
     const numero = pedido.replace(/\D/g, '');
     setParametros((atuais) => { const proximos = new URLSearchParams(atuais); proximos.delete('ligar'); return proximos; }, { replace: true });
-    if (numero.length >= 8) setLigarPara({ numero, id: Date.now() });
+    if (numero.length >= 8) setDestinoSugerido({ numero, id: Date.now() });
   }, [parametros, setParametros]);
   const criarContato = async (chamada: Chamada, nome: string) => {
     try {
@@ -489,7 +490,7 @@ export function TelefoniaPage() {
 
       <div className="flex flex-col gap-5">
         <div className="w-full">
-          {linhaWebAtiva && linhaWebId ? <WhatsAppWebCallPanel sessao={sessaoChamadasWeb} numeroId={linhaWebId} ligarPara={ligarPara} /> : linhaCloudAtiva || !import.meta.env.DEV ? <PainelLigacoes
+          {linhaWebAtiva && linhaWebId ? <WhatsAppWebCallPanel sessao={sessaoChamadasWeb} numeroId={linhaWebId} ligarPara={ligarPara} destinoSugerido={destinoSugerido} /> : linhaCloudAtiva || !import.meta.env.DEV ? <PainelLigacoes
             linhaCloudAtiva={linhaCloudAtiva}
             transcricaoAtiva={transcricaoAtiva}
             aba={abaPainel}

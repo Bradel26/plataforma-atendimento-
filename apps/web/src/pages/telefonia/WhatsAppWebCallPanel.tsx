@@ -55,7 +55,7 @@ function nomeCurto(valor: string) {
 }
 
 /** Painel integrado para o conector Web testado localmente. */
-export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste-local', numeroId = null, ligarPara = null }: { somenteRecebidas?: boolean; sessao?: string; numeroId?: string | null; ligarPara?: { numero: string; id: number } | null }) {
+export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste-local', numeroId = null, ligarPara = null, destinoSugerido = null }: { somenteRecebidas?: boolean; sessao?: string; numeroId?: string | null; ligarPara?: { numero: string; id: number } | null; destinoSugerido?: { numero: string; id: number } | null }) {
   const [status, setStatus] = useState('verificando conex?o');
   const [qr, setQr] = useState<string | null>(null);
   const [destino, setDestino] = useState('');
@@ -385,9 +385,14 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste
     finally { setOcupado(false); }
   }
 
-  // "Ligar para o cliente" vindo do histórico ou do botão Ligar do Atendimento.
-  // Ao chegar pelo redirecionamento o painel ainda esta "verificando conexao": o pedido fica pendente e disca UMA vez,
-  // quando o estado vira `conectado`. Estados de espera nao viram erro; qualquer outro estado cancela com aviso.
+  // Botao "Ligar" do Atendimento: so preenche o numero do cliente. Nao disca; a pessoa liga no botao de sempre.
+  useEffect(() => {
+    if (destinoSugerido) setDestino(destinoSugerido.numero);
+  }, [destinoSugerido?.id]);
+
+  // "Ligar para o cliente" vindo do histórico: disca.
+  // O painel pode ainda estar "verificando conexao": o pedido fica pendente e disca UMA vez, quando o estado
+  // vira `conectado`. Estados de espera nao viram erro; qualquer outro estado cancela com aviso.
   const ligarPendente = useRef<{ numero: string; id: number } | null>(null);
   useEffect(() => {
     if (!ligarPara) return;
