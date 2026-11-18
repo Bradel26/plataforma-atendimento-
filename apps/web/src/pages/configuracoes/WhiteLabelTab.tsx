@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Alerta, Button, Card, Field, Input } from '../../components/ui';
 import { useBranding } from '../../features/branding/BrandingProvider';
+import { FUNDOS_CHAT, fundoChatValido } from '../../features/branding/fundosChat';
 import { ApiError } from '../../lib/api';
 
 const CAMPOS_COR = [
@@ -19,6 +20,8 @@ export function WhiteLabelTab() {
 
   useEffect(() => setForm(branding), [branding]);
 
+  const fundoSelecionado = fundoChatValido(form.fundoChat);
+
   const submeter = async (e: React.FormEvent) => {
     e.preventDefault();
     setErro(null);
@@ -31,6 +34,7 @@ export function WhiteLabelTab() {
         corPrimaria: form.corPrimaria,
         corSecundaria: form.corSecundaria,
         corDestaque: form.corDestaque,
+        fundoChat: fundoSelecionado,
       });
       setOk(true);
     } catch (err) {
@@ -75,6 +79,44 @@ export function WhiteLabelTab() {
               </Field>
             ))}
           </div>
+
+          <fieldset>
+            <legend className="text-sm font-medium text-slate-700">Fundo das conversas</legend>
+            <p className="mb-3 mt-0.5 text-xs text-slate-500">
+              Aparece nas telas de conversa (Atendimento e Auditoria) para todos os usuários da instância.
+            </p>
+            <div role="radiogroup" aria-label="Fundo das conversas" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {FUNDOS_CHAT.map((fundo) => {
+                const selecionado = fundoSelecionado === fundo.id;
+                return (
+                  <button
+                    key={fundo.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={selecionado}
+                    onClick={() => setForm({ ...form, fundoChat: fundo.id })}
+                    className={`group overflow-hidden rounded-xl border bg-white text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-primary)] ${
+                      selecionado
+                        ? 'border-[var(--brand-primary)] ring-2 ring-[color-mix(in_srgb,var(--brand-primary)_30%,transparent)]'
+                        : 'border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <span className={`fundo-chat--${fundo.id} flex h-24 flex-col justify-center gap-1.5 p-2.5`} aria-hidden="true">
+                      <span className="w-3/5 rounded-lg rounded-bl-sm bg-white px-2 py-1 text-[10px] text-slate-700 shadow-sm">Boa tarde!</span>
+                      <span className="ml-auto w-3/5 rounded-lg rounded-br-sm bg-[var(--bolha-enviada)] px-2 py-1 text-[10px] text-slate-800 shadow-sm">Bom dia!</span>
+                    </span>
+                    <span className="block border-t border-slate-100 px-2.5 py-2">
+                      <span className="flex items-center justify-between gap-1 text-[13px] font-semibold text-slate-800">
+                        {fundo.nome}
+                        {selecionado && <span className="text-[11px] font-semibold text-[var(--brand-primary)]">Selecionado</span>}
+                      </span>
+                      <span className="block text-[11px] text-slate-500">{fundo.descricao}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
 
           <Button type="submit" disabled={enviando}>
             {enviando ? 'Salvando...' : 'Salvar tema'}

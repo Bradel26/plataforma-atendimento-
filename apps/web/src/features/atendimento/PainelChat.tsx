@@ -14,6 +14,7 @@ import {
   IconeCheck,
   IconeClipe,
   IconeCopiar,
+  IconeDocumento,
   IconeEncerrar,
   IconeEnviar,
   IconeFicha,
@@ -25,6 +26,7 @@ import {
   IconeVoltar,
   IconeWhatsapp,
 } from './icones';
+import { BOTAO_ICONE, BotaoEmoji, BotaoMais } from './FerramentasResposta';
 import { partesComLinks } from './links';
 import { useAtendimentosAnteriores, type BlocoAnterior } from './useAtendimentosAnteriores';
 
@@ -38,8 +40,6 @@ const dataHora = (iso: string) =>
 
 const BOTAO_SECUNDARIO =
   'inline-flex h-10 shrink-0 items-center gap-1.5 rounded-[10px] border border-slate-300 bg-white px-3 text-[13px] font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50';
-const BOTAO_FERRAMENTA =
-  'inline-flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 text-[13px] font-medium text-slate-600 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50';
 
 function TextoComLinks({ texto }: { texto: string }) {
   return (
@@ -82,12 +82,12 @@ function SeparadorAnterior({ bloco }: { bloco: BlocoAnterior }) {
 
 function SeparadorDia({ iso }: { iso: string }) {
   return (
-    <li className="my-4 flex items-center gap-3" aria-hidden="true">
-      <span className="h-px flex-1 bg-slate-200" />
+    <li className="my-4 flex items-center justify-center gap-3" aria-hidden="true">
+      <span className="h-px w-12 bg-slate-200" />
       <span className="rounded-full border border-slate-200 bg-white px-3.5 py-1 text-[11.5px] font-semibold text-slate-500 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
         {rotuloDoDia(iso)}
       </span>
-      <span className="h-px flex-1 bg-slate-200" />
+      <span className="h-px w-12 bg-slate-200" />
     </li>
   );
 }
@@ -195,7 +195,7 @@ function Bolha({ mensagem, nomeContato }: { mensagem: Mensagem; nomeContato?: st
   if (mensagem.interno) {
     return (
       <li className="flex justify-end">
-        <div className="max-w-[72%] rounded-[18px] rounded-br-md border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-sm text-slate-800">
+        <div className="max-w-[min(75%,42rem)] rounded-[18px] rounded-br-md border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-sm text-slate-800">
           <p className="mb-1 flex items-center gap-1 text-[11.5px] font-semibold text-amber-700">
             <IconeCadeado tamanho={12} />
             Nota interna{mensagem.autorNome ? ` · ${mensagem.autorNome}` : ''}
@@ -209,12 +209,12 @@ function Bolha({ mensagem, nomeContato }: { mensagem: Mensagem; nomeContato?: st
   }
 
   const daEmpresa = mensagem.autor !== 'CLIENTE';
-  const doAgente = mensagem.autor === 'AGENTE' && !mensagem.enviadaPorDispositivo;
   const rotulo = rotuloDoAutor(mensagem);
   const forma = daEmpresa ? 'rounded-[18px] rounded-br-md' : 'rounded-[18px] rounded-bl-md';
-  // Agente: azul suave da marca; cliente: cartao branco com a inicial ao lado.
-  const cores = doAgente
-    ? 'border border-[color-mix(in_srgb,var(--brand-primary)_22%,transparent)] bg-[var(--brand-primary-soft)] shadow-[0_1px_2px_rgba(15,23,42,0.05)]'
+  // Modelo WhatsApp: o que a empresa envia (agente, bot ou outro aparelho) e verde; o que o cliente
+  // manda e branco, com a inicial ao lado.
+  const cores = daEmpresa
+    ? 'bg-[var(--bolha-enviada)] shadow-[0_1px_1px_rgba(11,20,26,0.15)]'
     : 'border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.05)]';
   return (
     <li className={`flex items-end gap-2 ${daEmpresa ? 'justify-end' : 'justify-start'}`}>
@@ -226,9 +226,9 @@ function Bolha({ mensagem, nomeContato }: { mensagem: Mensagem; nomeContato?: st
           {(nomeContato ?? '?').charAt(0).toUpperCase()}
         </span>
       )}
-      <div className={`max-w-[72%] px-3.5 py-2.5 text-sm leading-relaxed text-slate-800 ${forma} ${cores}`}>
+      <div className={`max-w-[min(75%,42rem)] px-3.5 py-2.5 text-sm leading-relaxed text-slate-800 ${forma} ${cores}`}>
         {rotulo && (
-          <p className={`mb-0.5 text-[11.5px] font-semibold ${doAgente ? 'text-[var(--brand-primary)]' : 'text-slate-500'}`}>{rotulo}</p>
+          <p className={`mb-0.5 text-[11.5px] font-semibold ${daEmpresa ? 'text-emerald-700' : 'text-slate-500'}`}>{rotulo}</p>
         )}
         <Anexo mensagem={mensagem} />
         <TextoComLinks texto={mensagem.conteudo} />
@@ -272,6 +272,8 @@ export function PainelChat({
   const [janelaFechada, setJanelaFechada] = useState(false);
   const [seletorRapido, setSeletorRapido] = useState<{ inicio: number; fim: number; busca: string } | null>(null);
   const textareaResposta = useRef<HTMLTextAreaElement>(null);
+  const textareaNota = useRef<HTMLTextAreaElement>(null);
+  const inputArquivoResposta = useRef<HTMLInputElement>(null);
   const [anterioresDaConversa, setAnterioresDaConversa] = useState<Mensagem[]>([]);
   const [cursorHistorico, setCursorHistorico] = useState<string | null>(null);
   const [fimDoHistorico, setFimDoHistorico] = useState(false);
@@ -369,6 +371,34 @@ export function PainelChat({
     requestAnimationFrame(() => {
       textareaResposta.current?.focus();
       textareaResposta.current?.setSelectionRange(cursor, cursor);
+    });
+  };
+
+  /** Abre a lista de mensagens rapidas no ponto do cursor (o mesmo que digitar "/"). */
+  const abrirRapidas = () => {
+    const campo = textareaResposta.current;
+    const pos = campo?.selectionStart ?? texto.length;
+    const fim = campo?.selectionEnd ?? pos;
+    setSeletorRapido({ inicio: pos, fim, busca: '' });
+    campo?.focus();
+  };
+
+  /** Insere o emoji na posicao do cursor (ou no fim) da resposta ou da nota privada. */
+  const inserirEmoji = (emoji: string, privada = false) => {
+    const campo = privada ? textareaNota.current : textareaResposta.current;
+    const atual = privada ? textoPrivado : texto;
+    const ini = campo?.selectionStart ?? atual.length;
+    const fim = campo?.selectionEnd ?? ini;
+    const proximo = `${atual.slice(0, ini)}${emoji}${atual.slice(fim)}`;
+    if (privada) setTextoPrivado(proximo);
+    else {
+      setTexto(proximo);
+      if (chavesEnvioPendente.current.get(conversa.id)?.conteudo !== proximo.trim()) chavesEnvioPendente.current.delete(conversa.id);
+    }
+    const cursor = ini + emoji.length;
+    requestAnimationFrame(() => {
+      campo?.focus();
+      campo?.setSelectionRange(cursor, cursor);
     });
   };
 
@@ -656,12 +686,12 @@ export function PainelChat({
       )}
 
       {/*
-        Largura maxima no conteudo, nao no fundo: o painel continua esticando
-        em telas largas, mas a linha de texto para de crescer alem do
-        confortavel pra ler.
+        Padrao unico em todas as telas: a lista de mensagens ocupa a largura inteira do painel
+        (enviadas na borda direita, recebidas na esquerda). O que limita a leitura e a largura de
+        cada balao (max-w-[min(75%,42rem)] em Bolha), nao uma coluna central estreita.
       */}
-      <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50 px-5 py-6 @[40rem]:px-10">
-        <div className="mx-auto max-w-3xl">
+      <div className="fundo-chat min-h-0 flex-1 overflow-y-auto px-5 py-6 @[40rem]:px-8">
+        <div className="w-full">
           <div ref={topo} aria-hidden="true" />
           {atendimentosAnteriores.carregando && (
             <p className="mb-2 text-center text-xs text-slate-500">Carregando atendimento anterior...</p>
@@ -697,8 +727,8 @@ export function PainelChat({
         </div>
       </div>
 
-      {!somenteLeitura && <footer className="border-t border-slate-200 bg-white px-5 pb-4 pt-3.5 @[40rem]:px-10">
-        <div className="mx-auto max-w-3xl">
+      {!somenteLeitura && <footer className="border-t border-slate-200 bg-white px-5 pb-4 pt-3.5 @[40rem]:px-8">
+        <div className="w-full">
         {finalizada ? (
           <>
             {erro && <div className="pt-3"><Alerta>{erro}</Alerta></div>}
@@ -800,27 +830,23 @@ export function PainelChat({
                     className="block max-h-40 min-h-[56px] w-full resize-none rounded-t-2xl bg-transparent px-4 pb-1 pt-3.5 text-sm text-slate-800 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed"
                   />
                   <div className="flex flex-wrap items-center gap-1 px-2 pb-2 pt-1">
-                    <button
-                      type="button"
-                      className={BOTAO_FERRAMENTA}
-                      disabled={janelaFechada || ocupado || respostasRapidas.length === 0}
-                      title="Inserir mensagem rápida"
-                      onClick={() => {
-                        const campo = textareaResposta.current;
-                        const pos = campo?.selectionStart ?? texto.length;
-                        const fim = campo?.selectionEnd ?? pos;
-                        setSeletorRapido({ inicio: pos, fim, busca: '' });
-                        campo?.focus();
-                      }}
+                    <BotaoMais
+                      desabilitado={janelaFechada || ocupado}
+                      itens={[
+                        { chave: 'arquivo', rotulo: 'Anexar arquivo', icone: <IconeClipe tamanho={16} />, aoSelecionar: () => inputArquivoResposta.current?.click() },
+                        { chave: 'rapida', rotulo: 'Mensagem rápida', icone: <IconeRaio tamanho={16} />, desabilitado: respostasRapidas.length === 0, aoSelecionar: abrirRapidas },
+                        { chave: 'nota', rotulo: 'Nota interna', icone: <IconeCadeado tamanho={16} />, aoSelecionar: () => setAbaRodape('privada') },
+                      ]}
+                    />
+                    <BotaoEmoji desabilitado={janelaFechada || ocupado} aoEscolher={(emoji) => inserirEmoji(emoji)} />
+                    <label
+                      title="Anexar arquivo"
+                      aria-label="Anexar arquivo"
+                      className={`${BOTAO_ICONE} ${ocupado || janelaFechada ? 'pointer-events-none opacity-50' : ''}`}
                     >
-                      <IconeRaio tamanho={15} />
-                      Rápidas
-                      <kbd className="rounded border border-slate-300 px-1 font-mono text-[11px] text-slate-500">/</kbd>
-                    </button>
-                    <label title="Anexar arquivo" className={`${BOTAO_FERRAMENTA} ${ocupado || janelaFechada ? 'pointer-events-none opacity-50' : ''}`}>
-                      <IconeClipe tamanho={15} />
-                      Anexar
+                      <IconeClipe tamanho={19} />
                       <input
+                        ref={inputArquivoResposta}
                         type="file"
                         className="hidden"
                         disabled={ocupado || janelaFechada}
@@ -831,6 +857,16 @@ export function PainelChat({
                         }}
                       />
                     </label>
+                    <button
+                      type="button"
+                      className={BOTAO_ICONE}
+                      disabled={janelaFechada || ocupado || respostasRapidas.length === 0}
+                      aria-label="Mensagens rápidas"
+                      title="Mensagens rápidas (ou digite /)"
+                      onClick={abrirRapidas}
+                    >
+                      <IconeDocumento tamanho={19} />
+                    </button>
                     <span className="ml-auto hidden pr-1 text-xs text-slate-500 md:inline">Enter envia · Shift+Enter quebra linha</span>
                     <button
                       type="submit"
@@ -869,6 +905,7 @@ export function PainelChat({
                   <label htmlFor={`nota-${conversa.id}`} className="sr-only">Nota interna para a equipe</label>
                   <textarea
                     id={`nota-${conversa.id}`}
+                    ref={textareaNota}
                     value={textoPrivado}
                     onChange={(e) => setTextoPrivado(e.target.value)}
                     onKeyDown={(e) => {
@@ -882,6 +919,7 @@ export function PainelChat({
                     className="block max-h-40 min-h-[52px] w-full resize-none rounded-t-xl bg-transparent px-3.5 pb-1 pt-3 text-sm text-slate-800 outline-none placeholder:text-slate-500"
                   />
                   <div className="flex flex-wrap items-center gap-1 px-2 pb-2 pt-1">
+                    <BotaoEmoji desabilitado={ocupado} aoEscolher={(emoji) => inserirEmoji(emoji, true)} />
                     <span className="inline-flex items-center gap-1.5 px-1.5 text-xs text-amber-700">
                       <IconeCadeado tamanho={13} />
                       O cliente não vê esta nota

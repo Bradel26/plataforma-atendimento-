@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../../features/auth/AuthProvider';
 import { COR_STATUS, LABEL_PERFIL, LABEL_STATUS, type AgentStatus } from '../../lib/types';
 import { BotaoTema } from '../../features/tema/BotaoTema';
+import { SinoNotificacoes } from '../../features/notificacoes/SinoNotificacoes';
 import { IconSair } from './icons';
 
 const STATUS_DISPONIVEIS: AgentStatus[] = ['DISPONIVEL', 'EM_ATENDIMENTO', 'PAUSA', 'OFFLINE'];
@@ -23,8 +24,8 @@ export function Topbar({ titulo, aoAbrirMenu }: { titulo: string; aoAbrirMenu: (
   };
 
   return (
-    <header className="flex h-16 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-6">
-      <div className="flex min-w-0 items-center gap-3">
+    <header className="flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-x-2 gap-y-2 border-b border-slate-200 bg-white px-3 py-2 sm:px-4 lg:px-6">
+      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
         {/* So existe abaixo de `md` — dali pra cima a sidebar fica no fluxo,
             sempre visivel, sem precisar de um botao pra abrir o que ja
             esta aberto. */}
@@ -48,7 +49,7 @@ export function Topbar({ titulo, aoAbrirMenu }: { titulo: string; aoAbrirMenu: (
         <h1 className="min-w-0 flex-1 truncate text-lg font-semibold tracking-tight text-slate-900">{titulo}</h1>
       </div>
 
-      <div className="flex shrink-0 items-center gap-2 sm:gap-4">
+      <div className="flex min-w-0 flex-wrap items-center justify-end gap-1 sm:gap-3">
         <div className="flex items-center gap-2">
           {/* A bolinha duplica a cor que ja esta no proprio texto selecionado
               — some primeiro quando o espaco aperta, o select continua
@@ -59,7 +60,7 @@ export function Topbar({ titulo, aoAbrirMenu }: { titulo: string; aoAbrirMenu: (
             value={usuario.status}
             disabled={salvando}
             onChange={(e) => void trocarStatus(e.target.value as AgentStatus)}
-            className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-medium text-slate-700 outline-none transition hover:border-slate-300 focus:border-[var(--brand-primary)]"
+            className="max-w-[8.5rem] rounded-full border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs font-medium text-slate-700 outline-none transition hover:border-slate-300 focus:border-[var(--brand-primary)] sm:max-w-none sm:px-3 sm:text-sm"
           >
             {STATUS_DISPONIVEIS.map((s) => (
               <option key={s} value={s}>
@@ -69,8 +70,8 @@ export function Topbar({ titulo, aoAbrirMenu }: { titulo: string; aoAbrirMenu: (
           </select>
         </div>
 
-        <div className="hidden text-right sm:block">
-          <p className="text-sm font-medium text-slate-800">{usuario.nome}</p>
+        <div className="hidden max-w-40 text-right lg:block">
+          <p className="truncate text-sm font-medium text-slate-800">{usuario.nome}</p>
           <p className="text-xs text-slate-500">{LABEL_PERFIL[usuario.perfil]}</p>
         </div>
 
@@ -80,6 +81,8 @@ export function Topbar({ titulo, aoAbrirMenu }: { titulo: string; aoAbrirMenu: (
         >
           {usuario.nome.charAt(0).toUpperCase()}
         </span>
+
+        <SinoNotificacoes />
 
         <BotaoTema />
 

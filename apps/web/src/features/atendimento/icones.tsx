@@ -48,3 +48,9 @@ export const IconeEntrada = (p: P) => <Icone {...p}><path d="M22 12h-6l-2 3h-4l-
 export const IconeVoltar = (p: P) => <Icone {...p}><path d="M19 12H5M12 19l-7-7 7-7" /></Icone>;
 export const IconeFicha = (p: P) => <Icone {...p}><circle cx="12" cy="8" r="4" /><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1" /></Icone>;
 export const IconeBalao = (p: P) => <Icone {...p}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></Icone>;
+export const IconeSorriso = (p: P) => (
+  <Icone {...p}><circle cx="12" cy="12" r="9" /><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9.5h.01M15 9.5h.01" /></Icone>
+);
+export const IconeDocumento = (p: P) => (
+  <Icone {...p}><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5M9 13h6M9 17h4" /></Icone>
+);

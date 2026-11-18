@@ -30,7 +30,7 @@ export function AvisoLinhasDesconectadas() {
 
   if (!ve || linhas.length === 0) return null;
   const data = (iso: string) => new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
-  return <div role="alert" className="border-b border-red-200 bg-red-50 px-6 py-2 text-sm text-red-700">
+  return <div role="alert" className="max-h-[25dvh] shrink-0 overflow-y-auto break-words border-b border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 sm:px-4 sm:text-sm lg:px-6">
     <strong>{linhas.length === 1 ? 'WhatsApp desconectado:' : `${linhas.length} WhatsApps desconectados:`}</strong>{' '}
     {linhas.map((linha, index) => <Fragment key={linha.id}>
       {index > 0 ? ' · ' : ''}

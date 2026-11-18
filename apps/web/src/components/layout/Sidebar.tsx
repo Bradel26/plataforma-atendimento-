@@ -133,7 +133,7 @@ export function Sidebar({ aberta, aoFechar }: { aberta: boolean; aoFechar: () =>
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-60 flex-col text-slate-300 transition-transform duration-150 md:static md:z-auto md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex w-60 shrink-0 flex-col text-slate-300 transition-transform duration-150 md:static md:z-auto md:translate-x-0 ${
           aberta ? 'translate-x-0' : '-translate-x-full'
         } ${colapsada ? 'md:w-16' : ''}`}
         style={{ backgroundColor: 'var(--brand-secondary)' }}

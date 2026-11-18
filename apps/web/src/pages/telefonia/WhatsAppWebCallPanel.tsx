@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../../lib/api';
 import { telefoneLegivel } from '../../lib/telefone';
-import { IconeCheck, IconeDesligar, IconeFechar, IconeMicrofone, IconeMicrofoneMudo, IconeTelefone } from './icones';
+import { IconeCentralTelefonica, IconeCheck, IconeChevron, IconeDesligar, IconeFechar, IconeMicrofone, IconeMicrofoneMudo, IconeTelefone, IconeWhatsapp } from './icones';
 
 type Evento = { type: string; data?: any };
 type ChamadaAtiva = { from: string; fromMe: boolean; conectado?: boolean };
@@ -55,11 +55,90 @@ function nomeCurto(valor: string) {
   return limpo || valor;
 }
 
+const PAISES = [
+  { sigla: 'BR', nome: 'Brasil', ddi: '55' },
+  { sigla: 'PT', nome: 'Portugal', ddi: '351' },
+  { sigla: 'US', nome: 'EUA / Canadá', ddi: '1' },
+  { sigla: 'AR', nome: 'Argentina', ddi: '54' },
+  { sigla: 'PY', nome: 'Paraguai', ddi: '595' },
+  { sigla: 'UY', nome: 'Uruguai', ddi: '598' },
+  { sigla: 'CL', nome: 'Chile', ddi: '56' },
+  { sigla: 'CO', nome: 'Colômbia', ddi: '57' },
+  { sigla: 'MX', nome: 'México', ddi: '52' },
+  { sigla: 'ES', nome: 'Espanha', ddi: '34' },
+] as const;
+
+/** Codigos de pais do mais longo para o mais curto: "351" precisa ser testado antes de "3...". */
+const DDIS_POR_TAMANHO = PAISES.map((p) => p.ddi as string).sort((a, b) => b.length - a.length);
+
+/** Bandeira do Brasil desenhada (emoji de bandeira nao aparece no Windows); os demais mostram a sigla. */
+function Bandeira({ sigla }: { sigla: string }) {
+  if (sigla === 'BR') {
+    return (
+      <svg width="22" height="15" viewBox="0 0 24 16" aria-hidden="true" className="shrink-0 rounded-[3px]">
+        <rect width="24" height="16" fill="#009c3b" />
+        <path d="M12 2.2 21.6 8 12 13.8 2.4 8z" fill="#ffdf00" />
+        <circle cx="12" cy="8" r="3.3" fill="#002776" />
+      </svg>
+    );
+  }
+  return <span aria-hidden="true" className="flex h-[15px] w-[22px] shrink-0 items-center justify-center rounded-[3px] bg-slate-200 text-[9px] font-bold text-slate-600">{sigla}</span>;
+}
+
+/** Escolha do codigo do pais: botao com bandeira + "+55" e lista de paises. */
+function SeletorPais({ ddi, aoMudar }: { ddi: string; aoMudar: (ddi: string) => void }) {
+  const [aberto, setAberto] = useState(false);
+  const raiz = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!aberto) return;
+    const fora = (e: MouseEvent) => { if (raiz.current && !raiz.current.contains(e.target as Node)) setAberto(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setAberto(false); };
+    document.addEventListener('mousedown', fora);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', fora); document.removeEventListener('keydown', esc); };
+  }, [aberto]);
+  const atual = PAISES.find((p) => p.ddi === ddi) ?? PAISES[0];
+  return (
+    <div ref={raiz} className="relative">
+      <button
+        type="button"
+        onClick={() => setAberto((v) => !v)}
+        aria-label={`País: ${atual.nome}, código +${atual.ddi}`}
+        aria-haspopup="listbox"
+        aria-expanded={aberto}
+        className="flex h-12 w-full items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-[15px] tabular-nums text-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:bg-slate-50 sm:w-auto"
+      >
+        <Bandeira sigla={atual.sigla} />
+        <IconeChevron tamanho={14} className="text-slate-500" />
+        <span className="font-medium">+{atual.ddi}</span>
+      </button>
+      {aberto && (
+        <ul role="listbox" aria-label="Países" className="absolute left-0 top-full z-30 mt-1.5 max-h-64 w-56 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-xl">
+          {PAISES.map((p) => (
+            <li key={p.sigla} role="option" aria-selected={p.ddi === ddi}>
+              <button
+                type="button"
+                onClick={() => { aoMudar(p.ddi); setAberto(false); }}
+                className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition hover:bg-slate-50 ${p.ddi === ddi ? 'font-semibold text-slate-900' : 'text-slate-700'}`}
+              >
+                <Bandeira sigla={p.sigla} />
+                <span className="flex-1">{p.nome}</span>
+                <span className="tabular-nums text-slate-500">+{p.ddi}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 /** Painel integrado para o conector Web testado localmente. */
 export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste-local', numeroId = null, ligarPara = null, destinoSugerido = null }: { somenteRecebidas?: boolean; sessao?: string; numeroId?: string | null; ligarPara?: { numero: string; id: number } | null; destinoSugerido?: { numero: string; id: number } | null }) {
   const [status, setStatus] = useState('verificando conex?o');
   const [qr, setQr] = useState<string | null>(null);
   const [destino, setDestino] = useState('');
+  const [ddiEscolhido, setDdiEscolhido] = useState('55');
   const [chamada, setChamada] = useState<ChamadaAtiva | null>(null);
   const [conectada, setConectada] = useState(false);
   const [etapaLigacao, setEtapaLigacao] = useState(0);
@@ -486,28 +565,83 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste
   const contatoAtual = chamada ? nomeCurto(chamada.from) : resumo ? nomeCurto(resumo.from) : '';
   const inicial = (contatoAtual || 'W').replace(/\D/g, '').slice(-1) || (contatoAtual[0] || 'W').toUpperCase();
 
+  // `destino` continua sendo o numero COMPLETO (com codigo do pais) que o conector disca. O campo mostra so a parte
+  // local, e o seletor escolhe o codigo do pais; um numero que ja chega preenchido (do Atendimento) e reconhecido.
+  const digitosDestino = destino.replace(/\D/g, '');
+  const ddiAtual = digitosDestino ? (DDIS_POR_TAMANHO.find((d) => digitosDestino.startsWith(d)) ?? ddiEscolhido) : ddiEscolhido;
+  const numeroLocal = digitosDestino.startsWith(ddiAtual) ? digitosDestino.slice(ddiAtual.length) : digitosDestino;
+  const mudarDdi = (novo: string) => {
+    setDdiEscolhido(novo);
+    if (numeroLocal) setDestino(`${novo}${numeroLocal}`);
+  };
+  const mudarNumeroLocal = (valor: string) => {
+    const digitos = valor.replace(/\D/g, '');
+    setDestino(digitos ? `${ddiAtual}${digitos}` : '');
+  };
+
   if (somenteRecebidas && !chamada) return null;
 
   return (
-    <aside className={`${somenteRecebidas ? 'fixed bottom-5 right-5 z-[100] w-[min(420px,calc(100vw-2.5rem))] shadow-2xl' : ''} flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-[0_1px_3px_rgba(15,23,42,0.05)] md:p-6`} aria-label="Chamadas do WhatsApp Web">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-start gap-3.5">
-          <span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-            <IconeTelefone tamanho={22} />
-          </span>
-          <div>
-            <h2 className="text-lg font-semibold leading-tight text-slate-900">
-              {chamada ? (conectada ? 'Chamada em andamento' : chamada.fromMe ? 'Chamada de saída' : 'Chamada recebida') : 'Chamada de saída'}
-            </h2>
-            <p className="mt-1 text-[13px] text-slate-500">
-              {chamada ? 'Acompanhe a chamada e o áudio nesta tela.' : 'Faça uma ligação pelo WhatsApp diretamente no navegador.'}
-            </p>
+    <aside className={`${somenteRecebidas ? 'fixed bottom-5 right-5 z-[100] w-[min(420px,calc(100vw-2.5rem))] shadow-2xl' : ''} flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-[0_1px_3px_rgba(15,23,42,0.05)] md:p-5`} aria-label="Chamadas do WhatsApp Web">
+      {/* Campo separado para ligar: titulo + numero a esquerda, estado da conexao a direita. */}
+      <div className="telefonia-discar grid min-w-0 gap-5">
+        <div className="min-w-0 space-y-4">
+          <div className="flex items-start gap-3.5">
+            <span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl telefonia-icone telefonia-icone-azul">
+              <IconeCentralTelefonica tamanho={24} />
+            </span>
+            <div>
+              <h2 className="text-base font-semibold leading-tight text-slate-900">
+                {chamada ? (conectada ? 'Chamada em andamento' : chamada.fromMe ? 'Chamada de saída' : 'Chamada recebida') : 'Fazer chamada pelo WhatsApp'}
+              </h2>
+              <p className="mt-1 text-[13px] text-slate-500">
+                {chamada ? 'Acompanhe a chamada e o áudio nesta tela.' : 'Digite o número do cliente com o código do país.'}
+              </p>
+            </div>
           </div>
+
+          {!somenteRecebidas && !chamada && !resumo && (
+            <form onSubmit={(e) => void ligar(e)}>
+              <div className="telefonia-numero grid min-w-0 gap-3">
+                <SeletorPais ddi={ddiAtual} aoMudar={mudarDdi} />
+                <label className="min-w-0">
+                  <span className="sr-only">Telefone para ligar</span>
+                  <input
+                    aria-label="Telefone para ligar"
+                    value={numeroLocal}
+                    onChange={(e) => mudarNumeroLocal(e.target.value)}
+                    inputMode="tel"
+                    autoComplete="tel-national"
+                    placeholder="DDD + número"
+                    className="h-12 w-full rounded-xl border border-slate-300 bg-white px-3.5 text-[15px] tabular-nums text-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] outline-none transition focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(37,99,235,0.15)]"
+                  />
+                </label>
+                <button type="submit" disabled={!conectadoAoWhatsApp || ocupado || destino.replace(/\D/g, '').length < 10} className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-green-600 px-6 text-sm font-bold text-white shadow-[0_2px_6px_rgba(22,163,74,0.28)] transition hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500 disabled:shadow-none"><IconeWhatsapp tamanho={18} />{ocupado ? 'Chamando…' : 'Ligar pelo WhatsApp'}</button>
+              </div>
+              {destino.replace(/\D/g, '').length >= 10 && <p className="mt-1.5 text-xs text-slate-500">Número: <span className="font-semibold tabular-nums text-slate-700">{telefoneLegivel(destino.replace(/\D/g, ''))}</span></p>}
+            </form>
+          )}
         </div>
-        <span className={`inline-flex h-8 items-center gap-2 rounded-full px-3.5 text-xs font-semibold ${conectadoAoWhatsApp ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
-          <span className={`h-2 w-2 rounded-full ${conectadoAoWhatsApp ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-          {conectadoAoWhatsApp ? 'WhatsApp Web conectado' : status}
-        </span>
+
+        <div aria-hidden="true" className="telefonia-divisor hidden h-full w-px bg-slate-200" />
+
+        <div
+          role="status"
+          className={`flex items-center gap-3 rounded-xl border px-4 py-3 ${conectadoAoWhatsApp ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}
+        >
+          <span aria-hidden="true" className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white ${conectadoAoWhatsApp ? 'text-emerald-600' : 'text-amber-600'}`}>
+            <IconeWhatsapp tamanho={20} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className={`block text-sm font-semibold ${conectadoAoWhatsApp ? 'text-emerald-700' : 'text-amber-700'}`}>
+              {conectadoAoWhatsApp ? 'WhatsApp Web conectado' : status}
+            </span>
+            <span className={`block text-xs ${conectadoAoWhatsApp ? 'text-emerald-700' : 'text-amber-700'}`}>
+              {conectadoAoWhatsApp ? 'Conexão ativa e pronta para uso.' : 'Conecte a linha para fazer e receber chamadas.'}
+            </span>
+          </span>
+          <span aria-hidden="true" className={`h-2.5 w-2.5 shrink-0 rounded-full ${conectadoAoWhatsApp ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+        </div>
       </div>
 
       {etapaAtual >= 0 && (
@@ -528,8 +662,8 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste
       )}
 
       {!somenteRecebidas && !conectadoAoWhatsApp && !chamada && (
-        <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-slate-300 p-5 text-center">
-          {qr ? <img src={qr} alt="QR para conectar o WhatsApp" className="h-44 w-44" /> : <p className="text-sm text-slate-600">Conecte a mesma linha do Atendimento para fazer e receber chamadas.</p>}
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5">
+          {qr ? <img src={qr} alt="QR para conectar o WhatsApp" className="h-14 w-14 shrink-0 rounded bg-white p-1" /> : <p className="text-xs text-slate-600">Conecte a mesma linha do Atendimento para fazer e receber chamadas.</p>}
           <a href="/atendimento" className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
             {qr ? 'Escaneie o mesmo QR no Atendimento' : 'Ir ao Atendimento para conectar'}
           </a>
@@ -591,19 +725,6 @@ export function WhatsAppWebCallPanel({ somenteRecebidas = false, sessao = 'teste
           </div>
           {!somenteRecebidas && <button type="button" onClick={() => { setResumo(null); setGravacaoAtual(null); gravacaoRef.current = null; }} className="h-10 rounded-xl bg-slate-900 px-5 text-sm font-bold text-white hover:bg-slate-700">Nova chamada</button>}
         </section>
-      )}
-
-      {!somenteRecebidas && conectadoAoWhatsApp && !chamada && !resumo && (
-        <form onSubmit={(e) => void ligar(e)} className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-          <label className="min-w-0 text-xs font-medium text-slate-600">Número do cliente
-            <span className="relative mt-1.5 block">
-              <IconeTelefone tamanho={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input aria-label="Telefone para ligar" value={destino} onChange={(e) => setDestino(e.target.value)} inputMode="tel" autoComplete="tel" placeholder="+55 62 9 0000-0000" className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-11 pr-3 text-[15px] text-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] outline-none transition focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(37,99,235,0.15)]" />
-            </span>
-            {destino.replace(/\D/g, '').length >= 10 && <span className="mt-1.5 block text-xs text-slate-500">Número: <span className="font-semibold tabular-nums text-slate-700">{telefoneLegivel(destino.replace(/\D/g, ''))}</span></span>}
-          </label>
-          <button type="submit" disabled={ocupado || destino.replace(/\D/g, '').length < 10} className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-green-600 px-6 text-sm font-bold text-white shadow-[0_2px_6px_rgba(22,163,74,0.28)] transition hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500 disabled:shadow-none"><IconeTelefone tamanho={17} />{ocupado ? 'Chamando…' : 'Ligar pelo WhatsApp'}</button>
-        </form>
       )}
 
       {(resumo || analise || analisando || erroAnalise) && <section aria-label="Transcrição e resumo da chamada" className="overflow-hidden rounded-2xl border border-slate-200 bg-white">

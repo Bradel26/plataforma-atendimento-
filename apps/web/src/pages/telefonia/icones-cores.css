@@ -1,0 +1,30 @@
+.telefonia-icone {
+  background: linear-gradient(135deg, var(--icone-fundo), var(--icone-fundo-fim));
+  color: var(--icone-cor);
+}
+.telefonia-icone svg { stroke-width: 2.2; }
+.telefonia-icone-azul { --icone-cor: #0874ff; --icone-fundo: #edf5ff; --icone-fundo-fim: #dbe9ff; }
+.telefonia-icone-verde { --icone-cor: #00b55a; --icone-fundo: #edfcf5; --icone-fundo-fim: #d3f6e5; }
+.telefonia-icone-vermelho { --icone-cor: #ff183b; --icone-fundo: #fff1f3; --icone-fundo-fim: #ffe0e6; }
+.telefonia-icone-roxo { --icone-cor: #8b16ff; --icone-fundo: #f6edff; --icone-fundo-fim: #ead7ff; }
+.telefonia-icone-amarelo { --icone-cor: #ffad00; --icone-fundo: #fffcee; --icone-fundo-fim: #fff2cb; }
+html.tema-escuro .telefonia-icone {
+  color: color-mix(in srgb, var(--icone-cor) 65%, #fff);
+  background: color-mix(in srgb, var(--icone-cor) 18%, #151d2b);
+}
+
+/* A composição depende do espaço real após a navegação lateral. */
+.telefonia-pagina { container-type: inline-size; }
+.telefonia-numero { grid-template-columns: auto minmax(0, 1fr); }
+.telefonia-numero > button { grid-column: 1 / -1; }
+@container (min-width: 620px) {
+  .telefonia-numero { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .telefonia-numero > button { grid-column: auto; }
+}
+@container (min-width: 1050px) {
+  .telefonia-discar {
+    grid-template-columns: minmax(0, 1fr) auto minmax(250px, 300px);
+    align-items: center;
+  }
+  .telefonia-divisor { display: block; }
+}

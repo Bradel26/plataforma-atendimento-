@@ -104,6 +104,8 @@ export type Branding = {
   corPrimaria: string;
   corSecundaria: string;
   corDestaque: string;
+  /** Modelo de fundo das conversas (ver features/branding/fundosChat.ts). Ausente em API antiga. */
+  fundoChat?: string;
 };
 
 export const LABEL_PERFIL: Record<Perfil, string> = {

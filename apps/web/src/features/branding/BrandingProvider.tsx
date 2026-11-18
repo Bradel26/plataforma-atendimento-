@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api } from '../../lib/api';
 import type { Branding } from '../../lib/types';
+import { FUNDO_CHAT_PADRAO, fundoChatValido } from './fundosChat';
 
 const PADRAO: Branding = {
   id: 'default',
@@ -9,6 +10,7 @@ const PADRAO: Branding = {
   corPrimaria: '#2563eb',
   corSecundaria: '#0f172a',
   corDestaque: '#16a34a',
+  fundoChat: FUNDO_CHAT_PADRAO,
 };
 
 type BrandingContextValue = {
@@ -25,6 +27,8 @@ function aplicarTema(branding: Branding) {
   root.style.setProperty('--brand-primary', branding.corPrimaria);
   root.style.setProperty('--brand-secondary', branding.corSecundaria);
   root.style.setProperty('--brand-accent', branding.corDestaque);
+  // O fundo das conversas e escolhido por atributo: o CSS (index.css) decide o desenho de cada modelo.
+  root.dataset.fundoChat = fundoChatValido(branding.fundoChat);
   document.title = branding.appName;
 }
 

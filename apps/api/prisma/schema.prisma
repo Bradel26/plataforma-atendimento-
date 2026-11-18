@@ -295,6 +295,8 @@ model Branding {
   corPrimaria   String      @default("#2563eb") @map("cor_primaria")
   corSecundaria String      @default("#0f172a") @map("cor_secundaria")
   corDestaque   String      @default("#16a34a") @map("cor_destaque")
+  /// Modelo de fundo das conversas (id fixo, validado na API): liso, doodle, menta, azul, pontilhado, diagonal, ondas, grade.
+  fundoChat     String      @default("liso") @map("fundo_chat")
   atualizadoEm  DateTime    @updatedAt @map("atualizado_em")
   organizacao   Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 

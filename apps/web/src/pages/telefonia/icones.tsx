@@ -25,6 +25,9 @@ const CAMINHO_TELEFONE =
   'M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z';
 
 export const IconeTelefone = (p: P) => <Icone {...p}><path d={CAMINHO_TELEFONE} /></Icone>;
+export const IconeAtendida = (p: P) => <Icone {...p}><circle cx="12" cy="12" r="9" strokeWidth="2.2" /><path d="m7 12 3.2 3.2L18 7.5" strokeWidth="2.2" /></Icone>;
+export const IconeCamadas = (p: P) => <Icone {...p}><g strokeWidth="2.1"><path d="m12 3 9 4.5-9 4.5-9-4.5Z" /><path d="m3 12 9 4.5 9-4.5M3 16.5l9 4.5 9-4.5" /></g></Icone>;
+export const IconeCentralTelefonica = (p: P) => <Icone {...p}><g strokeWidth="2"><path d="M4 14h16v7H4zM7 14V9a5 5 0 0 1 10 0v5M9 17h6M10 19h4" /><path d="M3 8V5c5-3 13-3 18 0v3l-5-1V5M8 5v2L3 8" /></g></Icone>;
 export const IconeDesligar = ({ className = '', ...p }: P) => (
   <Icone {...p} className={`rotate-[135deg] ${className}`}><path d={CAMINHO_TELEFONE} /></Icone>
 );
@@ -49,7 +52,20 @@ export const IconeCusto = (p: P) => (
   <Icone {...p}><circle cx="12" cy="12" r="10" /><path d="M14.5 9a2.5 2.5 0 0 0-2.5-1.5c-1.4 0-2.5.8-2.5 2s1.1 1.7 2.5 2 2.5.8 2.5 2-1.1 2-2.5 2A2.5 2.5 0 0 1 9.5 15M12 6v1.5M12 16.5V18" /></Icone>
 );
 export const IconeInfo = (p: P) => <Icone {...p}><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></Icone>;
-export const IconeBusca = (p: P) => <Icone {...p}><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></Icone>;
+export const IconeWhatsapp = (p: P) => (
+  <Icone {...p}>
+    <path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l1.9-5.5A8.5 8.5 0 1 1 21 11.5z" />
+    <path d="M9 8.5c0 3.5 3 6.5 6.5 6.5l1-1.5-2-1-1 .8c-1-.5-1.8-1.3-2.3-2.3l.8-1-1-2z" />
+  </Icone>
+);
+export const IconeHistorico = (p: P) => (
+  <Icone {...p}>
+    <path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3" />
+    <path d="m8 6-2 2c-.8.8.3 4.3 3.5 7.5S16.2 19.8 17 19l2-2-4-3-2 2a12 12 0 0 1-5-5l2-2Z" />
+  </Icone>
+);
+export const IconeFiltro = (p: P) => <Icone {...p}><path strokeWidth="2.2" d="M4 4h16l-6.5 8v7l-3-1.5V12z" /></Icone>;
+export const IconeBusca = (p: P) => <Icone {...p}><g strokeWidth="2.2"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m20 20-5-5" /></g></Icone>;
 export const IconeCarregando = ({ className = '', ...p }: P) => (
   <Icone {...p} className={`animate-spin motion-reduce:animate-none ${className}`}><path d="M21 12a9 9 0 1 1-6.2-8.6" /></Icone>
 );
