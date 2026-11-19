@@ -69,3 +69,10 @@ backups/
 
 # Saida de `vitest run > test-output.txt` rodado manualmente na raiz.
 /test-output.txt
+
+# Caches e artefatos locais
+.wwebjs_cache/
+storage-teste/
+__pycache__/
+*.pyc
+*.mp4
