@@ -55,6 +55,7 @@ A aplicação define seis perfis: Administrador (`ADMIN`), Supervisor (`SUPERVIS
 
 ## Documentação
 
+- [Documentação funcional completa da plataforma](DOCUMENTACAO_PLATAFORMA.md)
 - [Manual de uso](MANUAL.md)
 - [Integração GOWA](GOWA.md)
 - [Integração WAHA](WAHA.md)
