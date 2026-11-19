@@ -59,7 +59,6 @@ const dataHora = (iso: string) => new Date(iso).toLocaleString('pt-BR', {
 });
 
 const numeroLegivel = (numero: string) => (/^\d+$/.test(numero) ? telefoneLegivel(numero) : numero);
-const custoCurto = (v: number | null | undefined) => v == null ? '—' : `R$ ${v.toFixed(4).replace('.', ',')}`;
 
 type Periodo = 'todos' | 'hoje' | '7d' | '30d';
 
@@ -365,7 +364,6 @@ export function HistoricoDeChamadas({
                   ['Direção', recebida ? 'Recebida' : 'Feita'],
                   ['Status', LABEL_CHAMADA_STATUS[chamada.status]],
                   ['Atendente', chamada.agente?.nome ?? '—'],
-                  ['Custo', custoCurto(chamada.custo)],
                 ].map(([rotulo, valor]) => (
                   <div key={rotulo} className="min-w-0 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
                     <dt className="text-[11px] font-medium text-slate-500">{rotulo}</dt>
