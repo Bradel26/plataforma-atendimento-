@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Alerta } from '../components/ui';
 import { HistoricoDeChamadas } from './telefonia/HistoricoDeChamadas';
 import { PainelLigacoes, relogio, type PosLigacao } from './telefonia/PainelLigacoes';
@@ -367,17 +367,18 @@ export function TelefoniaPage() {
 
   // "Ligar para o cliente" no histórico: entrega o número ao painel da linha WhatsApp e leva a tela até ele.
   const [ligarPara, setLigarPara] = useState<{ numero: string; id: number } | null>(null);
-  // "Ligar" do Atendimento chega aqui como /telefonia?ligar=<numero>. So PREENCHE o numero no painel: quem decide
-  // ligar e a pessoa, no botao de sempre. O parametro e consumido uma vez e removido do endereco.
+  // "Ligar" do Atendimento chega aqui com o numero no ESTADO de navegacao (nunca na URL). So PREENCHE o numero no
+  // painel: quem decide ligar e a pessoa, no botao de sempre. O estado e consumido uma vez e limpo.
   const [destinoSugerido, setDestinoSugerido] = useState<{ numero: string; id: number } | null>(null);
-  const [parametros, setParametros] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
   useEffect(() => {
-    const pedido = parametros.get('ligar');
-    if (pedido === null) return;
-    const numero = pedido.replace(/\D/g, '');
-    setParametros((atuais) => { const proximos = new URLSearchParams(atuais); proximos.delete('ligar'); return proximos; }, { replace: true });
-    if (numero.length >= 8) setDestinoSugerido({ numero, id: Date.now() });
-  }, [parametros, setParametros]);
+    const pedido = (location.state as { ligar?: unknown } | null)?.ligar;
+    if (pedido === undefined) return;
+    navigate(location.pathname + location.search, { replace: true, state: null });
+    const numero = typeof pedido === 'string' ? pedido.replace(/\D/g, '') : '';
+    if (numero.length >= 8 && numero.length <= 15) setDestinoSugerido({ numero, id: Date.now() });
+  }, [location, navigate]);
   const criarContato = async (chamada: Chamada, nome: string) => {
     try {
       const r = await api.post<{ contato: { id: string; nome: string }; criado: boolean; vinculadas: number }>(`/voz/chamadas/${encodeURIComponent(chamada.id)}/contato`, { nome });

@@ -619,7 +619,9 @@ export function PainelChat({
                 )}
                 {podeLigar && (
                   <Link
-                    to={`/telefonia?ligar=${telefoneParaLigar}`}
+                    // Telefone vai no estado de navegacao, nao na URL: fora do historico, de logs e do referrer.
+                    to="/telefonia"
+                    state={{ ligar: telefoneParaLigar }}
                     aria-label="Ligar para o cliente"
                     title={`Ligar para ${telefoneLegivel(telefoneParaLigar)} pela Telefonia`}
                     className="inline-flex h-10 shrink-0 items-center gap-2 rounded-[10px] bg-green-600 px-3.5 text-[13px] font-semibold texto-sobre-cor-fixa shadow-[0_2px_6px_rgba(22,163,74,0.28)] transition hover:bg-green-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600"

@@ -48,10 +48,11 @@ const html = (c: ConversaDetalhe, somenteLeitura = false) =>
 describe('PainelChat — botao Ligar', () => {
   beforeEach(() => { auth.temTelefonia = true; });
 
-  it('conversa de WhatsApp com telefone: link para /telefonia com so os digitos do numero', () => {
+  it('conversa de WhatsApp com telefone: link para /telefonia sem o telefone na URL', () => {
     const saida = html(conversa());
     expect(saida).toContain('aria-label="Ligar para o cliente"');
-    expect(saida).toContain('href="/telefonia?ligar=62992885001"');
+    expect(saida).toContain('href="/telefonia"');
+    expect(saida).not.toContain('href="/telefonia?');
   });
 
   it('sem o modulo Telefonia: nao aparece', () => {
