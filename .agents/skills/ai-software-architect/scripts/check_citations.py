@@ -19,7 +19,7 @@ Read-only. Exit code 1 if any citation is invalid.
 import argparse
 import re
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 TOLERANCIA = 3  # linhas de folga para o trecho citado
 
@@ -34,12 +34,25 @@ def normalizar(texto: str) -> str:
 
 def resolver(caminho: str, raizes: list[Path]) -> Path | None:
     candidato = caminho.replace('\\', '/')
+    # Rejeita ANTES de tocar o sistema de arquivos: caminho absoluto, UNC (//host/share,
+    # que no Windows faz resolve() acessar a rede e vazar credenciais NTLM), letra de
+    # unidade e qualquer '..'. O relatorio auditado e entrada nao confiavel.
+    partes = PurePosixPath(candidato)
+    if (
+        not candidato
+        or candidato.startswith('/')
+        or re.match(r'^[A-Za-z]:', candidato)
+        or '..' in partes.parts
+        or '\x00' in candidato
+    ):
+        return None
     for raiz in raizes:
-        alvo = (raiz / candidato).resolve()
+        raiz_real = raiz.resolve()
+        alvo = (raiz_real / candidato).resolve()
         try:
-            alvo.relative_to(raiz.resolve())
+            alvo.relative_to(raiz_real)
         except ValueError:
-            continue  # nunca sair da raiz
+            continue  # nunca sair da raiz (ex.: symlink que aponta para fora)
         if alvo.is_file():
             return alvo
     return None

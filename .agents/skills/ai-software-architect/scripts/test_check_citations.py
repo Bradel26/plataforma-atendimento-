@@ -56,6 +56,12 @@ class CheckCitations(unittest.TestCase):
     def test_nao_sai_da_raiz(self):
         self.assertEqual(self.status('../../etc/passwd.txt:1'), ['ARQUIVO_NAO_ENCONTRADO'])
 
+    def test_rejeita_unc_absoluto_e_unidade_sem_tocar_o_disco(self):
+        # UNC no Windows faria resolve() acessar a rede (vazamento de credencial NTLM)
+        for caminho in ['//host/share/f.py', '\\\\host\\share\\f.py', 'C:/Windows/win.ini', '/etc/passwd', '../x.py']:
+            self.assertIsNone(cc.resolver(caminho, [self.raiz]), caminho)
+        self.assertEqual(cc.resolver('src/a.ts', [self.raiz]), self.raiz / 'src' / 'a.ts')
+
     def test_ignora_url_e_hora(self):
         self.assertEqual(self.rodar('abra http://localhost:3000 as 12:30'), [])
 
