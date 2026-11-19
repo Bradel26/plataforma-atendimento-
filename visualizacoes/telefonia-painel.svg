@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
+  <defs>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#172554" flood-opacity=".08"/></filter>
+    <style>
+      .font{font-family:Inter,Arial,sans-serif}.nav{font-size:13px;fill:#cbd5e1}.small{font-size:11px;fill:#64748b}.label{font-size:12px;fill:#64748b}.body{font-size:13px;fill:#0f172a}.muted{fill:#64748b}.title{font-size:20px;font-weight:650;fill:#0f172a}.white{fill:#fff}.card{fill:#fff;stroke:#dbe4f0}.line{stroke:#e8edf5}.blue{fill:#2563eb}.green{fill:#059669}.red{fill:#dc2626}
+    </style>
+  </defs>
+  <rect width="1600" height="1000" fill="#f1f5f9"/>
+  <!-- Navegação -->
+  <rect width="216" height="1000" fill="#0f172a"/>
+  <rect x="18" y="18" width="34" height="34" rx="9" fill="#2563eb"/><text x="35" y="41" text-anchor="middle" class="font white" font-size="16" font-weight="700">B</text>
+  <text x="64" y="39" class="font white" font-size="13" font-weight="600">Plataforma Bradel</text>
+  <g class="font nav">
+    <text x="24" y="104">▦</text><text x="52" y="104">Dashboards</text>
+    <text x="24" y="151">◉</text><text x="52" y="151">Atendimento</text>
+    <rect x="10" y="169" width="196" height="38" rx="11" fill="#1e3a70"/><rect x="10" y="169" width="3" height="38" rx="2" fill="#3b82f6"/>
+    <text x="24" y="194" fill="#fff">☎</text><text x="52" y="194" fill="#fff" font-weight="600">Telefonia</text>
+    <text x="24" y="241">♧</text><text x="52" y="241">CRM</text>
+    <text x="24" y="288">⚙</text><text x="52" y="288">Configurações</text>
+  </g>
+  <!-- Barra superior -->
+  <rect x="216" width="1384" height="66" fill="#fff"/><line x1="216" y1="66" x2="1600" y2="66" stroke="#e2e8f0"/>
+  <text x="244" y="41" class="font title">Telefonia</text>
+  <circle cx="1281" cy="33" r="5" fill="#10b981"/><rect x="1294" y="17" width="137" height="32" rx="16" fill="#fff" stroke="#dbe4f0"/><text x="1311" y="38" class="font body">Disponível⌄</text>
+  <text x="1450" y="29" class="font body">Kauã Tavares</text><text x="1450" y="45" class="font small">Administrador</text><circle cx="1552" cy="33" r="17" fill="#2563eb"/><text x="1552" y="38" text-anchor="middle" class="font white" font-size="12" font-weight="700">K</text>
+
+  <!-- Área de conteúdo -->
+  <text x="244" y="105" class="font title">Chamadas</text><text x="244" y="126" class="font small">Atenda pelo navegador e mantenha o histórico no cadastro do cliente.</text>
+  <!-- Coluna principal -->
+  <g filter="url(#shadow)">
+    <rect x="236" y="150" width="930" height="110" rx="14" class="card"/>
+    <rect x="236" y="278" width="292" height="92" rx="14" class="card"/>
+    <rect x="546" y="278" width="292" height="92" rx="14" class="card"/>
+    <rect x="856" y="278" width="310" height="92" rx="14" class="card"/>
+    <rect x="236" y="388" width="930" height="540" rx="14" class="card"/>
+  </g>
+  <text x="258" y="180" class="font body" font-weight="650">Linha conectada</text>
+  <circle cx="266" cy="212" r="5" fill="#10b981"/><text x="280" y="216" class="font body">WhatsApp Business · conectado à Cloud API</text>
+  <text x="258" y="240" class="font small">A disponibilidade da linha e as chamadas do navegador aparecem aqui.</text>
+  <text x="258" y="311" class="font label">CHAMADAS HOJE</text><text x="258" y="345" class="font" font-size="24" font-weight="650" fill="#0f172a">2</text><text x="290" y="345" class="font small">recebidas</text>
+  <text x="568" y="311" class="font label">ATENDIDAS</text><text x="568" y="345" class="font" font-size="24" font-weight="650" fill="#0f172a">1</text><text x="590" y="345" class="font small">por você e sua equipe</text>
+  <text x="878" y="311" class="font label">TEMPO MÉDIO</text><text x="878" y="345" class="font" font-size="24" font-weight="650" fill="#0f172a">04:32</text><text x="960" y="345" class="font small">por ligação atendida</text>
+
+  <!-- Histórico -->
+  <text x="260" y="425" class="font" font-size="15" font-weight="650" fill="#0f172a">Histórico de chamadas</text><text x="260" y="447" class="font small">Registro vinculado ao contato e à linha do tempo do CRM.</text>
+  <line x1="258" y1="477" x2="1144" y2="477" class="line"/>
+  <g class="font small" font-weight="600"><text x="260" y="504">HORÁRIO</text><text x="414" y="504">CONTATO</text><text x="620" y="504">DIREÇÃO</text><text x="736" y="504">RESULTADO</text><text x="876" y="504">DURAÇÃO</text><text x="1000" y="504">GRAVAÇÃO</text></g>
+  <line x1="258" y1="519" x2="1144" y2="519" class="line"/>
+  <circle cx="276" cy="553" r="16" fill="#dbeafe"/><text x="276" y="558" text-anchor="middle" class="font blue" font-size="11" font-weight="700">M</text>
+  <text x="304" y="549" class="font body">Hoje, 16:31</text><text x="304" y="568" class="font small">WhatsApp</text>
+  <text x="414" y="557" class="font body">Mariana Oliveira</text><text x="620" y="557" class="font body">Recebida</text>
+  <rect x="728" y="539" width="94" height="25" rx="12" fill="#dcfce7"/><text x="775" y="556" text-anchor="middle" class="font green" font-size="11">Atendida</text>
+  <text x="876" y="557" class="font body">04:32</text><text x="1000" y="557" class="font blue" font-size="12">▶ Ouvir</text>
+  <line x1="258" y1="587" x2="1144" y2="587" class="line"/>
+  <circle cx="276" cy="621" r="16" fill="#f1f5f9"/><text x="276" y="626" text-anchor="middle" class="font muted" font-size="11" font-weight="700">R</text>
+  <text x="304" y="617" class="font body">Hoje, 16:22</text><text x="304" y="636" class="font small">WhatsApp</text>
+  <text x="414" y="625" class="font body">Rafael Costa</text><text x="620" y="625" class="font body">Recebida</text>
+  <rect x="728" y="607" width="94" height="25" rx="12" fill="#fef3c7"/><text x="775" y="624" text-anchor="middle" class="font" font-size="11" fill="#b45309">Não atendida</text>
+  <text x="876" y="625" class="font body">—</text><text x="1000" y="625" class="font small">—</text>
+  <line x1="258" y1="655" x2="1144" y2="655" class="line"/>
+  <text x="260" y="696" class="font small">Ao encerrar, o registro, duração e gravação ficam disponíveis no histórico do contato.</text>
+
+  <!-- Painel lateral de chamada -->
+  <g filter="url(#shadow)"><rect x="1184" y="150" width="392" height="778" rx="16" class="card"/></g>
+  <text x="1208" y="182" class="font" font-size="16" font-weight="650" fill="#0f172a">Painel de ligações</text><circle cx="1534" cy="176" r="4" fill="#10b981"/><text x="1547" y="180" text-anchor="end" class="font small">Pronto</text>
+  <line x1="1208" y1="201" x2="1552" y2="201" class="line"/>
+  <rect x="1208" y="216" width="164" height="34" rx="9" fill="#eff6ff"/><text x="1290" y="238" text-anchor="middle" class="font blue" font-size="12" font-weight="600">Receber chamadas</text>
+  <text x="1460" y="238" text-anchor="middle" class="font small">Fazer chamada</text>
+  <text x="1208" y="280" class="font label" font-weight="600">CHAMADA RECEBIDA</text>
+  <rect x="1208" y="296" width="344" height="190" rx="12" fill="#f8fafc" stroke="#dbe4f0"/>
+  <circle cx="1247" cy="337" r="22" fill="#dbeafe"/><text x="1247" y="342" text-anchor="middle" class="font blue" font-size="13" font-weight="700">MO</text>
+  <text x="1282" y="331" class="font body" font-weight="650">Mariana Oliveira</text><text x="1282" y="352" class="font small">WhatsApp · +55 (62) 9•••-••21</text>
+  <circle cx="1223" cy="383" r="4" fill="#f59e0b"/><text x="1235" y="387" class="font" font-size="12" fill="#b45309">Chamando você…</text>
+  <rect x="1224" y="414" width="132" height="46" rx="11" fill="#16a34a"/><text x="1290" y="442" text-anchor="middle" class="font white" font-size="13" font-weight="650">☎ Atender</text>
+  <rect x="1368" y="414" width="160" height="46" rx="11" fill="#fff" stroke="#fecaca"/><text x="1448" y="442" text-anchor="middle" class="font red" font-size="13" font-weight="600">Recusar</text>
+
+  <text x="1208" y="522" class="font label" font-weight="600">DURANTE A LIGAÇÃO</text>
+  <rect x="1208" y="538" width="344" height="122" rx="12" fill="#f8fafc" stroke="#dbe4f0"/>
+  <circle cx="1235" cy="568" r="5" fill="#10b981"/><text x="1250" y="572" class="font body" font-weight="600">Ligação em andamento</text><text x="1528" y="572" text-anchor="end" class="font" font-size="15" font-weight="650" fill="#0f172a">04:32</text>
+  <text x="1224" y="596" class="font small">Mariana Oliveira · WhatsApp</text>
+  <rect x="1224" y="612" width="89" height="31" rx="8" fill="#fff" stroke="#dbe4f0"/><text x="1268" y="632" text-anchor="middle" class="font small">◉ Silenciar</text>
+  <rect x="1322" y="612" width="89" height="31" rx="8" fill="#fff" stroke="#dbe4f0"/><text x="1366" y="632" text-anchor="middle" class="font small">▦ Teclado</text>
+  <rect x="1420" y="612" width="112" height="31" rx="8" fill="#fee2e2"/><text x="1476" y="632" text-anchor="middle" class="font red" font-size="11" font-weight="600">Desligar</text>
+
+  <text x="1208" y="694" class="font label" font-weight="600">FAZER CHAMADA</text>
+  <rect x="1208" y="710" width="344" height="45" rx="9" fill="#fff" stroke="#cbd5e1"/><text x="1224" y="738" class="font" font-size="15" fill="#94a3b8">Digite um número ou busque um contato</text>
+  <g class="font body" text-anchor="middle" font-size="14">
+    <rect x="1208" y="769" width="104" height="39" rx="8" fill="#f8fafc" stroke="#e2e8f0"/><text x="1260" y="794">1</text>
+    <rect x="1324" y="769" width="104" height="39" rx="8" fill="#f8fafc" stroke="#e2e8f0"/><text x="1376" y="794">2</text>
+    <rect x="1440" y="769" width="112" height="39" rx="8" fill="#f8fafc" stroke="#e2e8f0"/><text x="1496" y="794">3</text>
+    <rect x="1208" y="817" width="104" height="39" rx="8" fill="#f8fafc" stroke="#e2e8f0"/><text x="1260" y="842">4</text>
+    <rect x="1324" y="817" width="104" height="39" rx="8" fill="#f8fafc" stroke="#e2e8f0"/><text x="1376" y="842">5</text>
+    <rect x="1440" y="817" width="112" height="39" rx="8" fill="#f8fafc" stroke="#e2e8f0"/><text x="1496" y="842">6</text>
+    <rect x="1208" y="865" width="104" height="39" rx="8" fill="#f8fafc" stroke="#e2e8f0"/><text x="1260" y="890">7</text>
+    <rect x="1324" y="865" width="104" height="39" rx="8" fill="#f8fafc" stroke="#e2e8f0"/><text x="1376" y="890">8</text>
+    <rect x="1440" y="865" width="112" height="39" rx="8" fill="#f8fafc" stroke="#e2e8f0"/><text x="1496" y="890">9</text>
+  </g>
+  <text x="1390" y="918" text-anchor="middle" class="font small">PROPOSTA VISUAL · chamada ativa depende da integração Cloud API</text>
+</svg>
