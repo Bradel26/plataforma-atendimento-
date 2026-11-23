@@ -5,6 +5,13 @@
 -- Quem era AGENTE vira SUPORTE (o mais proximo: atende cliente, sem dados
 -- de import/export). Se alguem vendia, o admin ajusta para COMERCIAL depois.
 
+-- Registro de quem era AGENTE antes da troca. Nao da para saber, olhando so o
+-- banco depois, quem foi movido; com isso o admin reclassifica (ex.: para
+-- COMERCIAL) e, se preciso, desfaz. Pode ser apagada quando nao for mais util.
+CREATE TABLE "_backup_perfil_agente_20261123" AS
+  SELECT "id", "organizacao_id", "nome", "email", "perfil"::text AS "perfil_anterior", now() AS "registrado_em"
+  FROM "usuarios" WHERE "perfil" = 'AGENTE';
+
 UPDATE "usuarios" SET "perfil" = 'SUPORTE' WHERE "perfil" = 'AGENTE';
 DELETE FROM "module_permissions" WHERE "perfil" = 'AGENTE';
 

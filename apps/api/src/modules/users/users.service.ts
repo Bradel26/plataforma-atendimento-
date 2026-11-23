@@ -9,6 +9,7 @@ import { hashPassword } from '../../lib/password';
 import { desconectarUsuario, notificarStatusAgente } from '../../realtime/hub';
 import { invalidarSessaoLocal } from '../../lib/sessao';
 import { registrarPresenca } from '../metrics/metrics.service';
+import { exigirSemNumeroConectado } from './numeroConectado';
 import { toPublicUser } from './users.serializer';
 import type { CreateUserInput, ListUsersQuery, OperacoesUsuarioInput, UpdateUserInput } from './users.schemas';
 
@@ -110,6 +111,9 @@ export async function updateUser(id: string, input: UpdateUserInput) {
 
   if (input.filialId) await exigirFilialDaOrganizacao(input.filialId);
 
+  // Desativar pelo PATCH tem de seguir a mesma regra de `deactivateUser`.
+  if (input.ativo === false && atual.ativo) await exigirSemNumeroConectado(id);
+
   const { senha, ...resto } = input;
   // O hash e caro (bcrypt): calculado antes de abrir a secao, para nao segurar o
   // bloqueio da organizacao enquanto a CPU trabalha.
@@ -208,6 +212,8 @@ async function exigirOutroAdminAtivo(tx: ClienteDeEscrita, id: string, mensagem:
 
 /** Desativacao logica — preserva o historico de atendimento do agente. */
 export async function deactivateUser(id: string) {
+  await exigirSemNumeroConectado(id);
+
   const user = await emSecaoDeAdmins(async (tx) => {
     const atual = await tx.user.findFirst({ where: { id } });
     if (!atual) throw notFound('Usuário não encontrado');
@@ -227,6 +233,8 @@ export async function deactivateUser(id: string) {
 
 /** Exclui definitivamente a conta selecionada; historicos com autoria opcional ficam preservados. */
 export async function deleteUserPermanently(id: string) {
+  await exigirSemNumeroConectado(id);
+
   const atual = await emSecaoDeAdmins(async (tx) => {
     const alvo = await tx.user.findFirst({ where: { id } });
     if (!alvo) throw notFound('Usuário não encontrado');
