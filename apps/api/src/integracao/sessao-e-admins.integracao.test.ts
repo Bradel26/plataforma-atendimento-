@@ -23,7 +23,7 @@ import { comOrganizacao } from '../lib/tenant';
 import { invalidarSessaoLocal, validarSessao } from '../lib/sessao';
 import { deactivateUser, deleteUserPermanently, updateUser } from '../modules/users/users.service';
 
-type Perfil = 'ADMIN' | 'SUPERVISOR' | 'AGENTE';
+type Perfil = 'ADMIN' | 'SUPERVISOR' | 'SUPORTE';
 
 const EXECUCAO = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 const orgsCriadas: string[] = [];
@@ -91,7 +91,7 @@ describe('migration sessao_versao_usuario', () => {
     expect(col!.column_default).toBe('0');
 
     const org = await criarOrg('migration');
-    const u = await criarUsuario(org, 'AGENTE', 'novo');
+    const u = await criarUsuario(org, 'SUPORTE', 'novo');
     expect(u.sessaoVersao).toBe(0);
   });
 });
@@ -145,8 +145,8 @@ describe('ultimo ADMIN — concorrencia real', () => {
       const a2 = await criarUsuario(org, 'ADMIN', `a2-${rodada}`);
 
       const r = await Promise.allSettled([
-        como(org, () => updateUser(a1.id, { perfil: 'AGENTE' })),
-        como(org, () => updateUser(a2.id, { perfil: 'AGENTE' })),
+        como(org, () => updateUser(a1.id, { perfil: 'SUPORTE' })),
+        como(org, () => updateUser(a2.id, { perfil: 'SUPORTE' })),
       ]);
 
       expect(r.filter((x) => x.status === 'fulfilled'), `rodada ${rodada}`).toHaveLength(1);
@@ -178,7 +178,7 @@ describe('ultimo ADMIN — concorrencia real', () => {
 describe('sessaoVersao — incremento atomico', () => {
   it('40 incrementos concorrentes direto no SQL: nenhum se perde (versao final = 40)', async () => {
     const org = await criarOrg('atomico');
-    const u = await criarUsuario(org, 'AGENTE', 'contador');
+    const u = await criarUsuario(org, 'SUPORTE', 'contador');
 
     await Promise.all(
       Array.from({ length: 40 }, () =>
@@ -191,7 +191,7 @@ describe('sessaoVersao — incremento atomico', () => {
 
   it('10 trocas de senha concorrentes pelo servico: versao final = 10', async () => {
     const org = await criarOrg('senhas');
-    const u = await criarUsuario(org, 'AGENTE', 'trocas');
+    const u = await criarUsuario(org, 'SUPORTE', 'trocas');
 
     await Promise.all(
       Array.from({ length: 10 }, (_, i) => como(org, () => updateUser(u.id, { senha: `senha-numero-${i}-forte` }))),
@@ -202,7 +202,7 @@ describe('sessaoVersao — incremento atomico', () => {
 
   it('mudar so o nome NAO sobe a versao; mudar o perfil sobe exatamente 1', async () => {
     const org = await criarOrg('nome');
-    const u = await criarUsuario(org, 'AGENTE', 'nome-a');
+    const u = await criarUsuario(org, 'SUPORTE', 'nome-a');
 
     await como(org, () => updateUser(u.id, { nome: 'Outro Nome' }));
     expect(await versaoDe(u.id)).toBe(0);
@@ -220,8 +220,8 @@ describe('isolamento por organizacao — filtro real da extensao', () => {
     const adminB = await criarUsuario(orgB, 'ADMIN', 'unicoB');
 
     const r = await Promise.allSettled([
-      como(orgA, () => updateUser(adminA.id, { perfil: 'AGENTE' })),
-      como(orgB, () => updateUser(adminB.id, { perfil: 'AGENTE' })),
+      como(orgA, () => updateUser(adminA.id, { perfil: 'SUPORTE' })),
+      como(orgB, () => updateUser(adminB.id, { perfil: 'SUPORTE' })),
     ]);
 
     expect(r.map((x) => x.status)).toEqual(['rejected', 'rejected']);
@@ -232,19 +232,19 @@ describe('isolamento por organizacao — filtro real da extensao', () => {
   it('usuario de OUTRA organizacao nao e alcancado: 404, e a versao dele nao muda', async () => {
     const orgA = await criarOrg('alcanceA');
     const orgB = await criarOrg('alcanceB');
-    const emB = await criarUsuario(orgB, 'AGENTE', 'em-b');
+    const emB = await criarUsuario(orgB, 'SUPORTE', 'em-b');
 
     await expect(como(orgA, () => updateUser(emB.id, { perfil: 'SUPERVISOR' }))).rejects.toMatchObject({ status: 404 });
     expect(await versaoDe(emB.id)).toBe(0);
-    expect((await prismaSemIsolamento.user.findUniqueOrThrow({ where: { id: emB.id } })).perfil).toBe('AGENTE');
+    expect((await prismaSemIsolamento.user.findUniqueOrThrow({ where: { id: emB.id } })).perfil).toBe('SUPORTE');
   });
 
   it('mesmo e-mail em duas organizacoes: versoes independentes', async () => {
     const orgA = await criarOrg('emailA');
     const orgB = await criarOrg('emailB');
     const email = `repetido-${EXECUCAO}@x.teste`;
-    const a = await criarUsuario(orgA, 'AGENTE', 'rep-a', email);
-    const b = await criarUsuario(orgB, 'AGENTE', 'rep-b', email);
+    const a = await criarUsuario(orgA, 'SUPORTE', 'rep-a', email);
+    const b = await criarUsuario(orgB, 'SUPORTE', 'rep-b', email);
 
     await como(orgA, () => updateUser(a.id, { perfil: 'SUPERVISOR' }));
 
@@ -255,7 +255,7 @@ describe('isolamento por organizacao — filtro real da extensao', () => {
   it('a consulta REAL de validarSessao respeita a organizacao do token', async () => {
     const orgA = await criarOrg('valA');
     const orgB = await criarOrg('valB');
-    const u = await criarUsuario(orgA, 'AGENTE', 'validado');
+    const u = await criarUsuario(orgA, 'SUPORTE', 'validado');
 
     await expect(validarSessao({ sub: u.id, org: orgA, sv: 0 })).resolves.toBeUndefined();
     // Mesmo id, organizacao errada no token: o filtro devolve nulo -> 401.
@@ -272,7 +272,7 @@ describe('validarSessao contra o banco real, de ponta a ponta', () => {
     await expect(validarSessao({ sub: u.id, org, sv: 0 })).resolves.toBeUndefined();
     await expect(validarSessao({ sub: u.id, org })).resolves.toBeUndefined(); // legado = 0
 
-    await como(org, () => updateUser(u.id, { perfil: 'AGENTE' })); // sobe a versao e solta o cache local
+    await como(org, () => updateUser(u.id, { perfil: 'SUPORTE' })); // sobe a versao e solta o cache local
 
     await expect(validarSessao({ sub: u.id, org, sv: 0 })).rejects.toMatchObject({ status: 401 });
     await expect(validarSessao({ sub: u.id, org })).rejects.toMatchObject({ status: 401 });
@@ -282,8 +282,8 @@ describe('validarSessao contra o banco real, de ponta a ponta', () => {
   it('desativar e excluir: a sessao deixa de valer', async () => {
     const org = await criarOrg('desativa');
     const admin = await criarUsuario(org, 'ADMIN', 'admin-fica');
-    const a = await criarUsuario(org, 'AGENTE', 'sera-desativado');
-    const b = await criarUsuario(org, 'AGENTE', 'sera-excluido');
+    const a = await criarUsuario(org, 'SUPORTE', 'sera-desativado');
+    const b = await criarUsuario(org, 'SUPORTE', 'sera-excluido');
     expect(admin.id).toBeTruthy();
 
     await como(org, () => deactivateUser(a.id));

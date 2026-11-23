@@ -17,7 +17,7 @@ import { signAccessToken } from '../../lib/tokens';
 import { AppError } from '../../lib/errors';
 import { contextoAtual } from '../../lib/tenant';
 
-const payload = { sub: 'u1', nome: 'Ana', email: 'ana@x.com', perfil: 'AGENTE' as const, org: 'org-1' };
+const payload = { sub: 'u1', nome: 'Ana', email: 'ana@x.com', perfil: 'SUPORTE' as const, org: 'org-1' };
 const reqCom = (token?: string) =>
   ({ headers: token ? { authorization: `Bearer ${token}` } : {} }) as unknown as Request & { user?: unknown };
 
@@ -43,7 +43,7 @@ describe('requireAuth — versao de sessao', () => {
 
     expect(r.erro).toBeUndefined();
     expect(req.user).toMatchObject({ sub: 'u1', org: 'org-1', sv: 2 });
-    expect(r.contexto).toMatchObject({ organizacaoId: 'org-1', usuario: { id: 'u1', perfil: 'AGENTE' } });
+    expect(r.contexto).toMatchObject({ organizacaoId: 'org-1', usuario: { id: 'u1', perfil: 'SUPORTE' } });
     // A validacao recebeu o que vem do token — org e versao inclusive.
     expect(validarSessao).toHaveBeenCalledWith(expect.objectContaining({ sub: 'u1', org: 'org-1', sv: 2 }));
   });

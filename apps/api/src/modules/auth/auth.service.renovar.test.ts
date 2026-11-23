@@ -80,7 +80,7 @@ const usuario = (extra: Partial<Usuario> = {}): Usuario => ({
   organizacaoId: 'org-1',
   email: 'ana@bradel.com.br',
   nome: 'Ana',
-  perfil: 'AGENTE',
+  perfil: 'SUPORTE',
   status: 'OFFLINE',
   ativo: true,
   senhaPendente: false,
@@ -128,8 +128,8 @@ describe('renovarSessao — versao e privilegios', () => {
   });
 
   it('PRIVILEGIO ANTIGO: perfil foi rebaixado (versao subiu) — o refresh antigo nao renova', async () => {
-    // Era ADMIN com sv=0; o admin o rebaixou, a versao virou 1 e o perfil, AGENTE.
-    usuarios.push(usuario({ perfil: 'AGENTE', sessaoVersao: 1 }));
+    // Era ADMIN com sv=0; o admin o rebaixou, a versao virou 1 e o perfil, SUPORTE.
+    usuarios.push(usuario({ perfil: 'SUPORTE', sessaoVersao: 1 }));
     cookie(0);
 
     await expect(renovarSessao('cookie')).rejects.toMatchObject({ status: 401 });
@@ -265,12 +265,12 @@ describe('login e troca de senha inicial', () => {
 
   it('CORRIDA: reset de senha/perfil entre a conferencia da senha e o update — o token sai com a versao do SNAPSHOT, nao a da linha devolvida', async () => {
     // Senha conferida com o usuario em sv=0/ADMIN. Antes de o update rodar, um admin
-    // redefine a senha: a linha devolvida pelo update ja esta em sv=1 e AGENTE.
+    // redefine a senha: a linha devolvida pelo update ja esta em sv=1 e SUPORTE.
     usuarios.push(usuario({ sessaoVersao: 0, perfil: 'ADMIN' }));
     update.mockImplementationOnce(async ({ where }) => ({
       ...usuarios.find((x) => x.id === where.id)!,
       sessaoVersao: 1,
-      perfil: 'AGENTE',
+      perfil: 'SUPORTE',
     }));
 
     await login({ email: 'ana@bradel.com.br', senha: 'SenhaCorreta#1' });

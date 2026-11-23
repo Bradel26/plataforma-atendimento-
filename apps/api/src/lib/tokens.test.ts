@@ -30,7 +30,7 @@ import {
   verifyWebchatToken,
 } from './tokens';
 
-const base = { sub: 'u1', nome: 'Ana', email: 'ana@x.com', perfil: 'AGENTE' as const, org: 'org-1' };
+const base = { sub: 'u1', nome: 'Ana', email: 'ana@x.com', perfil: 'SUPORTE' as const, org: 'org-1' };
 
 beforeEach(() => armazenamento.clear());
 
@@ -44,7 +44,7 @@ async function lerEConsumir(token: string | undefined) {
 describe('access token', () => {
   it('round-trip devolve usuario e organizacao', () => {
     const v = verifyAccessToken(signAccessToken(base));
-    expect(v).toMatchObject({ sub: 'u1', perfil: 'AGENTE', org: 'org-1' });
+    expect(v).toMatchObject({ sub: 'u1', perfil: 'SUPORTE', org: 'org-1' });
   });
 
   it('recusa token sem assinatura (alg none)', () => {

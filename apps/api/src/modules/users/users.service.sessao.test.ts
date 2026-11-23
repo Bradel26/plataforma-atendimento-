@@ -50,6 +50,8 @@ vi.mock('../../lib/prisma', () => ({
       findUnique: async ({ where }: { where: { id: string } }) => usuarios.find((u) => u.id === where.id && u.organizacaoId === organizacao) ?? null,
       findFirst: async () => null,
     },
+    // Nenhum usuario dos testes tem numero de WhatsApp conectado (ver `numeroConectado.ts`).
+    channelConfig: { count: async () => 0 },
     $transaction: async (fn: (t: unknown) => Promise<unknown>) => fn(tx),
   },
 }));
@@ -81,7 +83,7 @@ const versao = (id: string) => usuarios.find((u) => u.id === id)?.sessaoVersao;
 
 beforeEach(() => {
   organizacao = 'org-a';
-  usuarios = [usuario('admin-1', 'ADMIN'), usuario('admin-2', 'ADMIN'), usuario('agente-1', 'AGENTE')];
+  usuarios = [usuario('admin-1', 'ADMIN'), usuario('admin-2', 'ADMIN'), usuario('agente-1', 'SUPORTE')];
   dados.length = 0;
   invalidarSessaoLocal.mockReset();
   desconectarUsuario.mockReset();
@@ -137,19 +139,19 @@ describe('o que NAO revoga', () => {
   });
 
   it('"mudar" o perfil para o MESMO valor nao derruba ninguem', async () => {
-    await updateUser('agente-1', { perfil: 'AGENTE' });
+    await updateUser('agente-1', { perfil: 'SUPORTE' });
     expect(versao('agente-1')).toBe(0);
     expect(desconectarUsuario).not.toHaveBeenCalled();
   });
 
   it('reativar (ativo:true) nao sobe a versao', async () => {
-    usuarios.push(usuario('inativo', 'AGENTE', { ativo: false }));
+    usuarios.push(usuario('inativo', 'SUPORTE', { ativo: false }));
     await updateUser('inativo', { ativo: true });
     expect(versao('inativo')).toBe(0);
   });
 
   it('desativar quem JA esta inativo nao sobe de novo pelo PATCH', async () => {
-    usuarios.push(usuario('inativo', 'AGENTE', { ativo: false }));
+    usuarios.push(usuario('inativo', 'SUPORTE', { ativo: false }));
     await updateUser('inativo', { ativo: false });
     expect(versao('inativo')).toBe(0);
   });
@@ -158,7 +160,7 @@ describe('o que NAO revoga', () => {
 describe('atomicidade e falhas', () => {
   it('operacao recusada (ultimo ADMIN, 409): nada sobe e nada e derrubado', async () => {
     usuarios = [usuario('admin-1', 'ADMIN')];
-    await expect(updateUser('admin-1', { perfil: 'AGENTE' })).rejects.toMatchObject({ status: 409 });
+    await expect(updateUser('admin-1', { perfil: 'SUPORTE' })).rejects.toMatchObject({ status: 409 });
     await expect(deactivateUser('admin-1')).rejects.toMatchObject({ status: 409 });
 
     expect(versao('admin-1')).toBe(0);
@@ -167,7 +169,7 @@ describe('atomicidade e falhas', () => {
   });
 
   it('usuario inexistente (404): nada e revogado', async () => {
-    await expect(updateUser('nao-existe', { perfil: 'AGENTE' })).rejects.toMatchObject({ status: 404 });
+    await expect(updateUser('nao-existe', { perfil: 'SUPORTE' })).rejects.toMatchObject({ status: 404 });
     expect(desconectarUsuario).not.toHaveBeenCalled();
   });
 
@@ -202,7 +204,7 @@ describe('atomicidade e falhas', () => {
 
 describe('isolamento entre organizacoes', () => {
   it('revogar na org-a nao toca o usuario de mesmo id em outra organizacao', async () => {
-    usuarios.push(usuario('agente-1', 'AGENTE', { organizacaoId: 'org-b' }));
+    usuarios.push(usuario('agente-1', 'SUPORTE', { organizacaoId: 'org-b' }));
 
     await updateUser('agente-1', { perfil: 'SUPERVISOR' }); // contexto: org-a
 

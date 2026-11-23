@@ -75,6 +75,8 @@ vi.mock('../../lib/prisma', () => ({
         usuarios.find((u) => u.id === where.id && u.organizacaoId === organizacaoDoChamador) ?? null,
       findFirst: async () => null,
     },
+    // Nenhum usuario dos testes tem numero de WhatsApp conectado (ver `numeroConectado.ts`).
+    channelConfig: { count: async () => 0 },
     $transaction: async (fn: (tx: unknown) => Promise<unknown>) => {
       const { tx, liberar } = clienteDaTransacao();
       try {
@@ -111,13 +113,13 @@ beforeEach(() => {
   filas.clear();
   lockTomado = vi.fn();
   organizacaoDoChamador = 'org-a';
-  usuarios = [usuario('admin-1', 'ADMIN'), usuario('admin-2', 'ADMIN'), usuario('agente-1', 'AGENTE')];
+  usuarios = [usuario('admin-1', 'ADMIN'), usuario('admin-2', 'ADMIN'), usuario('agente-1', 'SUPORTE')];
 });
 
 describe('ultimo ADMIN — operacao isolada', () => {
   it('PATCH recusa rebaixar o unico ADMIN ativo (409) e nada muda', async () => {
-    usuarios = [usuario('admin-1', 'ADMIN'), usuario('agente-1', 'AGENTE')];
-    await expect(updateUser('admin-1', { perfil: 'AGENTE' })).rejects.toMatchObject({ status: 409 });
+    usuarios = [usuario('admin-1', 'ADMIN'), usuario('agente-1', 'SUPORTE')];
+    await expect(updateUser('admin-1', { perfil: 'SUPORTE' })).rejects.toMatchObject({ status: 409 });
     expect(adminsAtivos()).toBe(1);
   });
 
@@ -147,11 +149,11 @@ describe('ultimo ADMIN — operacao isolada', () => {
 
   it('o outro ADMIN precisa estar ATIVO: um ADMIN inativo nao conta', async () => {
     usuarios = [usuario('admin-1', 'ADMIN'), usuario('admin-2', 'ADMIN', 'org-a', false)];
-    await expect(updateUser('admin-1', { perfil: 'AGENTE' })).rejects.toMatchObject({ status: 409 });
+    await expect(updateUser('admin-1', { perfil: 'SUPORTE' })).rejects.toMatchObject({ status: 409 });
   });
 
   it('mudancas que nao reduzem ADMIN passam sem consultar contagem: nome, senha, promover, reativar', async () => {
-    usuarios = [usuario('admin-1', 'ADMIN'), usuario('agente-1', 'AGENTE')];
+    usuarios = [usuario('admin-1', 'ADMIN'), usuario('agente-1', 'SUPORTE')];
     await expect(updateUser('admin-1', { nome: 'Novo Nome' })).resolves.toMatchObject({ nome: 'Novo Nome' });
     await expect(updateUser('admin-1', { senha: 'senha-nova-123' })).resolves.toBeTruthy();
     await expect(updateUser('agente-1', { perfil: 'ADMIN' })).resolves.toMatchObject({ perfil: 'ADMIN' });
@@ -170,8 +172,8 @@ describe('ultimo ADMIN — concorrencia (lock simulado)', () => {
     usuarios = [usuario('admin-1', 'ADMIN'), usuario('admin-2', 'ADMIN')];
 
     const resultados = await Promise.allSettled([
-      updateUser('admin-1', { perfil: 'AGENTE' }),
-      updateUser('admin-2', { perfil: 'AGENTE' }),
+      updateUser('admin-1', { perfil: 'SUPORTE' }),
+      updateUser('admin-2', { perfil: 'SUPORTE' }),
     ]);
 
     expect(resultados.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
@@ -205,7 +207,7 @@ describe('ultimo ADMIN — concorrencia (lock simulado)', () => {
   it('organizacoes diferentes usam locks diferentes (uma empresa nao espera a outra)', async () => {
     organizacaoDoChamador = 'org-a';
     await updateUser('agente-1', { nome: 'a' });
-    usuarios.push(usuario('agente-b', 'AGENTE', 'org-b'));
+    usuarios.push(usuario('agente-b', 'SUPORTE', 'org-b'));
     organizacaoDoChamador = 'org-b';
     await updateUser('agente-b', { nome: 'b' });
 
@@ -217,7 +219,7 @@ describe('ultimo ADMIN — concorrencia (lock simulado)', () => {
     organizacaoDoChamador = 'org-a';
 
     // admin-b existe, mas e de outra organizacao: nao conta como "outro ADMIN".
-    await expect(updateUser('admin-a', { perfil: 'AGENTE' })).rejects.toMatchObject({ status: 409 });
+    await expect(updateUser('admin-a', { perfil: 'SUPORTE' })).rejects.toMatchObject({ status: 409 });
     expect(adminsAtivos('org-a')).toBe(1);
   });
 });

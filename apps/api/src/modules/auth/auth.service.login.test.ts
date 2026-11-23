@@ -50,7 +50,7 @@ const criar = (id: string, organizacaoId: string, senha: string, extra: object =
   organizacaoId,
   email: 'ana@bradel.com.br',
   nome: 'Ana',
-  perfil: 'AGENTE',
+  perfil: 'SUPORTE',
   status: 'OFFLINE',
   ativo: true,
   senhaPendente: false,

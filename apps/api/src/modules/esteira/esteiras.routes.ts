@@ -159,7 +159,7 @@ esteirasRoutes.get(
 
 /**
  * Exportação: só os perfis que já exportam em `modules/dados` (ADMIN e
- * SUPERVISOR — nunca SUPORTE nem AGENTE), com LEITURA na operação. Mesma
+ * SUPERVISOR — nunca SUPORTE), com LEITURA na operação. Mesma
  * consulta da Lista (filtros na query string), sem paginação. `ids` (seleção)
  * entra em AND com os filtros: na query (GET) ou no corpo (POST — 1.000 uuids
  * passam do limite de tamanho da URL do Node).
