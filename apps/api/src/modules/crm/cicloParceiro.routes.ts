@@ -10,7 +10,7 @@ import { listarCiclos, marcarEtapa, mudarStatusManual, obterCiclo, recalcularTod
 export const cicloParceiroRoutes = Router();
 
 cicloParceiroRoutes.use(requireAuth);
-/** Mesmo corte da esteira: AGENTE nao participa do processo de credenciamento. */
+/** Mesmo corte da esteira: o acesso segue a permissao do modulo `esteira`. */
 cicloParceiroRoutes.use(requireRole('ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'));
 
 const listarSchema = z.object({

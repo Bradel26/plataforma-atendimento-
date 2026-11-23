@@ -51,7 +51,7 @@ npm run build
 
 ## Perfis
 
-A aplicação define seis perfis: Administrador (`ADMIN`), Supervisor (`SUPERVISOR`), Gestor (`GESTOR`), Comercial (`COMERCIAL`), Suporte (`SUPORTE`) e Agente (`AGENTE`). As telas e os dados disponíveis dependem das permissões de cada perfil.
+A aplicação define cinco perfis: Administrador (`ADMIN`), Supervisor (`SUPERVISOR`), Gestor (`GESTOR`), Comercial (`COMERCIAL`) e Suporte (`SUPORTE`). As telas e os dados disponíveis dependem das permissões de cada perfil.
 
 ## Documentação
 

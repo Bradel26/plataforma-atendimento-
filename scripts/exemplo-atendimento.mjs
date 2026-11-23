@@ -27,7 +27,7 @@ if (!org) throw new Error('organizacao de desenvolvimento nao encontrada — rod
 
 /* -- Usuarios: garante os dois perfis novos do 1.2 ------------------------- */
 
-const agente = await prisma.user.findFirst({ where: { organizacaoId: ORG, perfil: 'AGENTE' } });
+const agente = await prisma.user.findFirst({ where: { organizacaoId: ORG, perfil: 'SUPORTE' } });
 
 async function garantirUsuario(nome, email, senha, perfil, gestorId) {
   const existe = await prisma.user.findFirst({ where: { organizacaoId: ORG, email } });
@@ -393,6 +393,6 @@ console.log(`\nlogins para comparar o escopo do 1.2:`);
 console.log(`  comercial@plataforma.local / Comer@123   COMERCIAL, dono da carteira`);
 console.log(`  gestor@plataforma.local    / Gestor@123  GESTOR do comercial`);
 console.log(`  admin@plataforma.local                   ADMIN, ve tudo`);
-console.log(`  agente1@plataforma.local                 AGENTE, ve por vinculo operacional\n`);
+console.log(`  agente1@plataforma.local                 SUPORTE, atende pela propria carteira\n`);
 
 await prisma.$disconnect();

@@ -8,8 +8,8 @@ import { EnviarParaCredenciamento } from '../EnviarParaCredenciamento';
 
 /**
  * Credenciamentos da empresa: em que etapa da esteira cada contato dela esta, e o
- * atalho para enviar mais um. AGENTE nao participa da esteira (mesmo corte da
- * API), entao para ele o bloco nem aparece.
+ * atalho para enviar mais um. Quem nao tem o modulo esteira nao ve o bloco
+ * (mesmo corte da API).
  */
 export function CredenciamentosDaEmpresa({
   contaId,

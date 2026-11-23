@@ -124,9 +124,8 @@ enum Role {
   GESTOR
   /// Vendas: enxerga a propria carteira e o que esta sem responsavel.
   COMERCIAL
-  /// Suporte: mesmo escopo de atendimento do agente, sem acesso a dados (import/export).
+  /// Suporte: atende cliente pela propria carteira, sem acesso a dados (import/export).
   SUPORTE
-  AGENTE
 }
 
 /// Status de presenca do agente, exibido no cabecalho.
@@ -144,7 +143,9 @@ model User {
   email           String
   senhaHash       String      @map("senha_hash")
   senhaPendente   Boolean     @default(false) @map("senha_pendente")
-  perfil          Role        @default(AGENTE)
+  /// Sem padrao de proposito: quem cadastra escolhe o perfil, para ninguem
+  /// nascer com um acesso que o admin nao decidiu.
+  perfil          Role
   status          AgentStatus @default(OFFLINE)
   ativo           Boolean     @default(true)
   ultimoLogin     DateTime?   @map("ultimo_login")

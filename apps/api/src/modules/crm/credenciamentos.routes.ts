@@ -28,7 +28,7 @@ import { z } from 'zod';
 export const credenciamentosRoutes = Router();
 
 credenciamentosRoutes.use(requireAuth);
-/** Processo operacional de credenciamento: AGENTE fora, mesmo corte de Oportunidades. */
+/** Processo operacional de credenciamento: o acesso segue a permissao do modulo `esteira`. */
 credenciamentosRoutes.use(requireModulo('esteira'));
 
 /** Periodo padrao: ultimos 30 dias. */

@@ -177,7 +177,7 @@ test.describe('Rotas proprias do CRM', () => {
   });
 
   test('o perfil mais restrito com CRM entra pela rota de registro', async ({ page }) => {
-    // AGENTE e o perfil mais restrito que ve o CRM. Se a rota de registro nao
+    // SUPORTE e o perfil mais restrito que ve o CRM. Se a rota de registro nao
     // herdasse a permissao do modulo, ela cairia no redirecionamento de rota
     // desconhecida e ele acabaria em Atendimento.
     await entrar(page, 'agente', '/crm');
@@ -193,7 +193,7 @@ test.describe('Rotas proprias do CRM', () => {
  * Escopo de visibilidade no que a tela mostra (passo 1.2).
  *
  * O que so o navegador prova: que as abas do processo comercial nao aparecem
- * para o AGENTE, e que a rota de detalhe de oportunidade nao existe para ele.
+ * para o SUPORTE, e que a rota de detalhe de oportunidade nao existe para ele.
  * Esconder e melhor que deixar clicar e receber erro — uma aba que sempre falha
  * e uma aba que nao deveria estar la.
  *

@@ -10,7 +10,7 @@ import { exigirDonoOuAdmin } from './channels.routes';
  * Sem teste, o caminho 403 (vendedor tentando a linha de outro) nunca era
  * exercitado em lugar nenhum: nem aqui, nem no smoke, que so autentica ADMIN.
  */
-function fakeReq(sub: string, perfil: 'ADMIN' | 'GESTOR' | 'COMERCIAL' | 'AGENTE'): Request {
+function fakeReq(sub: string, perfil: 'ADMIN' | 'GESTOR' | 'COMERCIAL' | 'SUPORTE'): Request {
   return { user: { sub, perfil, nome: 'Fulano', email: 'f@x.com', org: 'org-1' } } as unknown as Request;
 }
 

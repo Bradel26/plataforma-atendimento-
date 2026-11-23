@@ -1047,7 +1047,7 @@ async function publicar(
 }
 
 /** Perfis que recebem atendimento por transferencia. ADMIN fica de fora (regra de `transferirConversa`). */
-export const PERFIS_QUE_ATENDEM: Role[] = ['SUPERVISOR', 'GESTOR', 'COMERCIAL', 'SUPORTE', 'AGENTE'];
+export const PERFIS_QUE_ATENDEM: Role[] = ['SUPERVISOR', 'GESTOR', 'COMERCIAL', 'SUPORTE'];
 
 /**
  * Para onde qualquer atendente pode transferir: pessoas e equipes (filas).

@@ -326,12 +326,12 @@ checar(Boolean(filaA), 'fila de A criada');
 // Mesmo e-mail nas duas: a mesma pessoa pode existir em duas organizacoes.
 const emailRepetido = `pessoa-${EXECUCAO}@exemplo.com`;
 await prisma.user.create({
-  data: { organizacaoId: A.id, nome: 'Pessoa', email: emailRepetido, senhaHash, perfil: 'AGENTE' },
+  data: { organizacaoId: A.id, nome: 'Pessoa', email: emailRepetido, senhaHash, perfil: 'SUPORTE' },
 });
 let emailBOk = false;
 try {
   await prisma.user.create({
-    data: { organizacaoId: B.id, nome: 'Pessoa', email: emailRepetido, senhaHash, perfil: 'AGENTE' },
+    data: { organizacaoId: B.id, nome: 'Pessoa', email: emailRepetido, senhaHash, perfil: 'SUPORTE' },
   });
   emailBOk = true;
 } catch {

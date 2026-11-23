@@ -57,8 +57,8 @@ const comoAgente = await req('GET', '/metricas/indicadores', { token: agente });
 const agentesComoAgente = await req('GET', '/metricas/agentes', { token: agente });
 const comoSupervisor = await req('GET', '/metricas/indicadores', { token: supervisor });
 checar(semToken.status === 401, '1. sem token devolve 401', `status ${semToken.status}`);
-checar(comoAgente.status === 403, '2. perfil AGENTE recebe 403 nos indicadores', `status ${comoAgente.status}`);
-checar(agentesComoAgente.status === 403, '3. perfil AGENTE recebe 403 no monitoramento', `status ${agentesComoAgente.status}`);
+checar(comoAgente.status === 403, '2. perfil SUPORTE recebe 403 nos indicadores', `status ${comoAgente.status}`);
+checar(agentesComoAgente.status === 403, '3. perfil SUPORTE recebe 403 no monitoramento', `status ${agentesComoAgente.status}`);
 checar(comoSupervisor.status === 200, '4. supervisor enxerga os indicadores', `status ${comoSupervisor.status}`);
 
 // 2. Formato: o painel quebra silenciosamente se um bloco sumir.
@@ -188,8 +188,8 @@ checar(
 // O painel e de quem atende: ADMIN fica fora de proposito, senao a media de
 // carga da equipe sai diluida por quem nao pega conversa.
 checar(
-  (painel.agentes ?? []).every((a) => a.perfil === 'AGENTE' || a.perfil === 'SUPERVISOR'),
-  '27. painel lista apenas quem atende (AGENTE e SUPERVISOR)',
+  (painel.agentes ?? []).every((a) => a.perfil === 'SUPORTE' || a.perfil === 'COMERCIAL' || a.perfil === 'SUPERVISOR'),
+  '27. painel lista apenas quem atende (SUPORTE, COMERCIAL e SUPERVISOR)',
   [...new Set((painel.agentes ?? []).map((a) => a.perfil))].join(', '),
 );
 

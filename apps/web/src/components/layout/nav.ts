@@ -120,7 +120,7 @@ export const NAV: NavItem[] = [
     subrotas: [
       { rota: '/contatos/:id' },
       { rota: '/clientes/:id' },
-      // Oportunidade e processo comercial: o AGENTE ve o CRM, mas nao esta rota.
+      // Oportunidade e processo comercial: o SUPORTE ve o CRM, mas nao esta rota.
       // Ele continua vendo informacao comercial resumida na ficha do cliente.
       { rota: '/jornadas/:id', perfis: ['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL'] },
       // Endereco antigo da mesma tela, mantido para nao quebrar link salvo.

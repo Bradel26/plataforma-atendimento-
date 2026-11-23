@@ -602,7 +602,7 @@ describe('WPPConnect — linha sem credenciais proprias de ponte', () => {
     const { conectarMinhaLinhaWhatsapp } = await import('./channels.service');
     const resultado = await comOrganizacao('org-1', () => conectarMinhaLinhaWhatsapp('user-9'), {
       id: 'user-9',
-      perfil: 'AGENTE',
+      perfil: 'SUPORTE',
     });
 
     const dados = channelConfigCreate.mock.calls[0]?.[0]?.data;
@@ -618,7 +618,7 @@ describe('WPPConnect — linha sem credenciais proprias de ponte', () => {
 
     const { conectarMinhaLinhaWhatsapp } = await import('./channels.service');
     await expect(
-      comOrganizacao('org-1', () => conectarMinhaLinhaWhatsapp('user-1'), { id: 'user-1', perfil: 'AGENTE' }),
+      comOrganizacao('org-1', () => conectarMinhaLinhaWhatsapp('user-1'), { id: 'user-1', perfil: 'SUPORTE' }),
     ).rejects.toMatchObject({ status: 503, code: 'CANAL_INDISPONIVEL' });
 
     expect(channelConfigFindFirst).toHaveBeenCalledTimes(1);

@@ -12,7 +12,7 @@ import { EnviarParaCredenciamento } from '../EnviarParaCredenciamento';
  * parceiro esta, em cada operacao. Conversa direto com a Esteira de
  * Credenciamento — e a mesma informacao, vista a partir do parceiro.
  *
- * AGENTE nao ve esteira (mesmo corte da API); para ele o bloco nem aparece.
+ * Quem nao tem o modulo esteira nao ve o bloco (mesmo corte da API).
  */
 export function CicloDoParceiro({ contatoId, segmentoParceiro }: { contatoId: string; segmentoParceiro?: 'TIM' | 'STARLINK' | null }) {
   const { temPerfil } = useAuth();

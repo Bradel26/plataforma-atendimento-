@@ -41,16 +41,6 @@ export type ContextoVisibilidade = {
   veTudo: boolean;
   /** GESTOR: enxerga a equipe direta. */
   veEquipe: boolean;
-  /**
-   * Enxerga registro sem responsavel como carteira aberta.
-   *
-   * Todos menos AGENTE. Para ele, `responsavelId = null` **nao** abre nada por
-   * si: contato sem dono so aparece se houver vinculo operacional (conversa ou
-   * protocolo que ele possa atender). Sem essa distincao, uma base onde ninguem
-   * atribuiu responsavel — que e a base real hoje — deixaria todo contato
-   * visivel para todo agente, e o escopo nao teria escopo nenhum.
-   */
-  carteiraAberta: boolean;
 };
 
 const VE_TUDO: Role[] = ['ADMIN', 'SUPERVISOR'];
@@ -78,7 +68,6 @@ export function contextoVisibilidade(): Promise<ContextoVisibilidade> {
         equipeIds: [],
         veTudo: true,
         veEquipe: false,
-        carteiraAberta: true,
       };
     }
 
@@ -99,7 +88,6 @@ export function contextoVisibilidade(): Promise<ContextoVisibilidade> {
       equipeIds: [usuarioId, ...equipe.map((u) => u.id)],
       veTudo: false,
       veEquipe: papel === 'GESTOR',
-      carteiraAberta: papel !== 'AGENTE',
     };
   });
 }
@@ -118,15 +106,10 @@ export const responsaveisNoEscopo = (ctx: ContextoVisibilidade): string[] =>
  * Filtro de carteira: proprios (ou da equipe) mais os sem responsavel.
  *
  * A forma de "sem responsavel" fica explicita — `responsavelId: null` —, e nao
- * implicita na ausencia de condicao. `carteiraAberta` falso remove esse termo em
- * vez de transformar o filtro inteiro em nada.
+ * implicita na ausencia de condicao.
  */
 export function filtroCarteira(ctx: ContextoVisibilidade): { OR: Array<Record<string, unknown>> } {
-  const alternativas: Array<Record<string, unknown>> = [
-    { responsavelId: { in: responsaveisNoEscopo(ctx) } },
-  ];
-  if (ctx.carteiraAberta) alternativas.push({ responsavelId: null });
-  return { OR: alternativas };
+  return { OR: [{ responsavelId: { in: responsaveisNoEscopo(ctx) } }, { responsavelId: null }] };
 }
 
 /**

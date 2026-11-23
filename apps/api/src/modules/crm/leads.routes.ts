@@ -18,7 +18,7 @@ export const leadsRoutes = Router();
 
 leadsRoutes.use(requireAuth);
 /**
- * Lead e processo comercial: AGENTE nao navega pela base de prospeccao.
+ * Lead e processo comercial.
  *
  * A trava e por **perfil**, e nao por escopo: um agente pedindo a lista nao deve
  * receber uma lista vazia (o que sugere "nao ha leads"), e sim 403 — a acao nao

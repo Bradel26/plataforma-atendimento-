@@ -48,7 +48,7 @@ const ABAS = [
    * Agenda | Contatos | Historico | Acompanhamentos (SUGESTOES.docx, CRM).
    *
    * Historico e a linha do tempo 360 do parceiro; Acompanhamentos lista quem
-   * precisa de acao. Acompanhamentos le a esteira, e a esteira nao e do AGENTE
+   * precisa de acao. Acompanhamentos le a esteira, e a esteira segue a permissao do modulo
    * (mesmo corte de `/credenciamentos`), entao a aba segue o mesmo perfil.
    */
   { id: 'historico', label: 'Histórico' },

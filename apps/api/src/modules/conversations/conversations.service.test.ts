@@ -504,7 +504,7 @@ describe('arquivarConversa / desarquivarConversa (Fase 11.9-B)', () => {
     expect(conversationUpdate).toHaveBeenCalledWith({ where: { id: 'conv-5' }, data: { arquivada: true } });
   });
 
-  it('permissoes: AGENTE (perfil sem privilegio de gestao) consegue arquivar uma conversa dentro do proprio escopo, sem checagem de perfil adicional', async () => {
+  it('permissoes: SUPORTE (perfil sem privilegio de gestao) consegue arquivar uma conversa dentro do proprio escopo, sem checagem de perfil adicional', async () => {
     // contextoVisibilidade para perfil nao-veTudo consulta queueAgent — sem
     // filas vinculadas, o que nao afeta este teste (o filtro so entra no
     // WHERE, que aqui e mockado).
@@ -513,11 +513,11 @@ describe('arquivarConversa / desarquivarConversa (Fase 11.9-B)', () => {
       .mockResolvedValueOnce({ id: 'conv-6', filaId: null, agenteId: 'agente-1', arquivada: false })
       .mockResolvedValueOnce({ id: 'conv-6', fila: null, agente: { id: 'agente-1' }, arquivada: true });
 
-    const solicitanteAgente: Solicitante = { sub: 'agente-1', perfil: 'AGENTE', nome: 'Agente Teste' };
+    const solicitanteAgente: Solicitante = { sub: 'agente-1', perfil: 'SUPORTE', nome: 'Suporte Teste' };
     await expect(
       comOrganizacao('org-1', () => arquivarConversa(solicitanteAgente, 'conv-6'), {
         id: 'agente-1',
-        perfil: 'AGENTE',
+        perfil: 'SUPORTE',
       }),
     ).resolves.toBeDefined();
 
@@ -1095,7 +1095,7 @@ describe('listarLinhasDeSaida e iniciarConversa com linha escolhida', () => {
 describe('listarDestinosTransferencia', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('lista usuarios ativos de todos os perfis que atendem (nao so AGENTE) e as filas ativas', async () => {
+  it('lista usuarios ativos de todos os perfis que atendem (nao so SUPORTE) e as filas ativas', async () => {
     userFindMany.mockResolvedValue([{ id: 'u-2', nome: 'Viviane', perfil: 'SUPORTE', status: 'DISPONIVEL' }]);
     queueFindMany.mockResolvedValue([{ id: 'f-1', nome: 'Suporte' }]);
 
@@ -1103,7 +1103,7 @@ describe('listarDestinosTransferencia', () => {
 
     expect(userFindMany.mock.calls[0]?.[0]?.where).toEqual({
       ativo: true,
-      perfil: { in: ['SUPERVISOR', 'GESTOR', 'COMERCIAL', 'SUPORTE', 'AGENTE'] },
+      perfil: { in: ['SUPERVISOR', 'GESTOR', 'COMERCIAL', 'SUPORTE'] },
     });
     expect(queueFindMany.mock.calls[0]?.[0]?.where).toEqual({ ativa: true });
     expect(r).toEqual({

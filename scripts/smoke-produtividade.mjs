@@ -3,7 +3,7 @@
  *
  * Cobre: "agendada" exige prazo (nota/registro sem prazo nao aparece na
  * matriz), celula sem nenhuma atividade agendada nao existe no JSON (nula, e
- * nao 0%), feitas/agendadas contam certo, e o corte de perfil (AGENTE nao
+ * nao 0%), feitas/agendadas contam certo, e o corte de perfil (SUPORTE nao
  * pode ver a matriz).
  *
  * Uso: npm run smoke:produtividade  (com a API de pe e o seed aplicado)
@@ -120,7 +120,7 @@ checar(mesInvalido.status === 400, 'mes invalido e recusado', `status ${mesInval
 /* ── corte de perfil ───────────────────────────────────────────────────── */
 
 const comoAgente = await req('GET', `/produtividade?mes=${mes}`, { token: agente });
-checar(comoAgente.status === 403, 'AGENTE nao acessa a matriz', `status ${comoAgente.status}`);
+checar(comoAgente.status === 403, 'SUPORTE nao acessa a matriz', `status ${comoAgente.status}`);
 
 /* ── limpeza ───────────────────────────────────────────────────────────── */
 

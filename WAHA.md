@@ -101,7 +101,7 @@ Com um **número descartável**. O modo não oficial viola os termos do WhatsApp
 bloqueado.
 
 - [ ] 1. WAHA de pé: o `ping` da seção 4 responde 200.
-- [ ] 2. **Criar sessão:** como AGENTE → **Atendimento** → **Conectar WhatsApp**. No log da API:
+- [ ] 2. **Criar sessão:** como SUPORTE → **Atendimento** → **Conectar WhatsApp**. No log da API:
       `"msg":"sessao criada no WAHA"`.
 - [ ] 3. **QR:** a imagem aparece na tela em poucos segundos e se renova sozinha.
 - [ ] 4. **Escanear:** celular → **WhatsApp → Aparelhos conectados → Conectar aparelho**.

@@ -178,7 +178,7 @@ export function CanaisTab() {
       // Linhas pessoais podem pertencer a quem atende conversas ou a um ADMIN.
       // Perfis de gestao sem atuacao direta em conversas continuam fora da lista.
       setUsuarios(u.usuarios.filter((x) =>
-        x.perfil === 'ADMIN' || x.perfil === 'COMERCIAL' || x.perfil === 'AGENTE'
+        x.perfil === 'ADMIN' || x.perfil === 'COMERCIAL' || x.perfil === 'SUPORTE'
       ));
 
       const zap = c.canais.find((x) => x.canal === 'WHATSAPP');

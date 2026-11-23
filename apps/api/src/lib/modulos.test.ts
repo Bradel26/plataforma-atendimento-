@@ -30,7 +30,7 @@ describe('modulosPermitidos', () => {
 
   it('perfil sem nenhuma linha devolve conjunto vazio, sem lancar', async () => {
     findMany.mockResolvedValue([]);
-    const r = await modulosPermitidos('AGENTE' as never);
+    const r = await modulosPermitidos('SUPORTE' as never);
     expect(r.size).toBe(0);
   });
 
@@ -57,13 +57,13 @@ describe('requireModulo', () => {
 
   it('perfil sem a linha do modulo leva 403', async () => {
     findMany.mockResolvedValue([]);
-    const erro = await rodar(requireModulo('crm'), fakeReq('AGENTE'));
+    const erro = await rodar(requireModulo('crm'), fakeReq('SUPORTE'));
     expect(erro).toMatchObject({ status: 403 });
   });
 
   it('perfil com a linha do modulo passa', async () => {
     findMany.mockResolvedValue([{ modulo: 'crm' }]);
-    const erro = await rodar(requireModulo('crm'), fakeReq('AGENTE'));
+    const erro = await rodar(requireModulo('crm'), fakeReq('SUPORTE'));
     expect(erro).toBeUndefined();
   });
 });

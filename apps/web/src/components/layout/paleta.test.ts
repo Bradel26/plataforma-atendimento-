@@ -10,14 +10,14 @@ const MODULOS_ADMIN = ['dashboards', 'atendimento', 'esteira', 'monitoramento', 
  */
 
 const MODULOS = MODULOS_ADMIN.filter((m) => m !== 'configuracoes');
-const MODULOS_AGENTE = ['atendimento', 'crm', 'chamado-ti'];
+const MODULOS_SUPORTE = ['atendimento', 'crm', 'chamado-ti'];
 const MODULOS_COMERCIAL = ['atendimento', 'crm', 'esteira', 'campanhas', 'chamado-ti'];
 describe('comandosDeNavegacao', () => {
-  it('o agente não recebe comando para tela que não e dele', () => {
-    const rotas = comandosDeNavegacao(MODULOS_AGENTE, '').map((c) => c.rota);
+  it('o suporte não recebe comando para tela que não e dele', () => {
+    const rotas = comandosDeNavegacao(MODULOS_SUPORTE, '').map((c) => c.rota);
     expect(rotas).toContain('/atendimento');
     expect(rotas).toContain('/crm');
-    // Gestao, campanhas e configuracoes recusam AGENTE por perfil.
+    // Gestao, campanhas e configuracoes recusam SUPORTE por perfil.
     expect(rotas).not.toContain('/gestao');
     expect(rotas).not.toContain('/campanhas');
     expect(rotas).not.toContain('/configuracoes');

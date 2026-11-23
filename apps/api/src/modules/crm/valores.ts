@@ -205,7 +205,7 @@ export function fracaoDeDesconto(totais: TotaisDaOportunidade): number | null {
  * Quem aprova nao pede aprovacao a si mesmo: ADMIN, SUPERVISOR e GESTOR passam
  * sem teto. Sobra COMERCIAL, que e quem negocia, e e para quem a regra existe.
  *
- * AGENTE nunca chega aqui — `requireRole` barra antes —, e por isso ele recebe o
+ * SUPORTE nunca chega aqui — `requireRole` barra antes —, e por isso ele recebe o
  * mesmo teto do comercial em vez de "sem teto": se um dia a rota mudar de perfil
  * por descuido, o padrao seguro e o restritivo.
  */

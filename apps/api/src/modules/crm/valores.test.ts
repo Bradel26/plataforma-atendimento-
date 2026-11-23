@@ -270,7 +270,7 @@ describe('alcada de desconto (2.3)', () => {
 
   it('perfil desconhecido cai no teto restritivo, nao no livre', () => {
     // Se a rota mudar de perfil por descuido, o padrao seguro e o restritivo.
-    expect(tetoDoPerfil('AGENTE', 10)).toBe(10);
+    expect(tetoDoPerfil('SUPORTE', 10)).toBe(10);
     expect(tetoDoPerfil('QUALQUER_COISA_NOVA', 10)).toBe(10);
   });
 

@@ -30,25 +30,23 @@ const COLEGA = 'u-colega';
 
 const ctx = (parcial: Partial<ContextoVisibilidade>): ContextoVisibilidade => ({
   usuarioId: EU,
-  perfil: 'AGENTE',
+  perfil: 'SUPORTE',
   filaIds: [],
   equipeIds: [EU],
   veTudo: false,
   veEquipe: false,
-  carteiraAberta: false,
   ...parcial,
 });
 
-const ADMIN = ctx({ perfil: 'ADMIN', veTudo: true, carteiraAberta: true });
-const SUPERVISOR = ctx({ perfil: 'SUPERVISOR', veTudo: true, carteiraAberta: true });
-const GESTOR = ctx({ perfil: 'GESTOR', veEquipe: true, carteiraAberta: true, equipeIds: [EU, COLEGA] });
-const COMERCIAL = ctx({ perfil: 'COMERCIAL', carteiraAberta: true });
-const AGENTE = ctx({ perfil: 'AGENTE', filaIds: ['f-1'] });
-const AGENTE_SEM_FILA = ctx({ perfil: 'AGENTE' });
+const ADMIN = ctx({ perfil: 'ADMIN', veTudo: true });
+const SUPERVISOR = ctx({ perfil: 'SUPERVISOR', veTudo: true });
+const GESTOR = ctx({ perfil: 'GESTOR', veEquipe: true, equipeIds: [EU, COLEGA] });
+const COMERCIAL = ctx({ perfil: 'COMERCIAL' });
+const SUPORTE = ctx({ perfil: 'SUPORTE', filaIds: ['f-1'] });
+const SUPORTE_SEM_FILA = ctx({ perfil: 'SUPORTE' });
 
 /** Conversa do Numero da empresa: sem linha, ou linha sem dono (2026-10-05). */
 const EMPRESA = { OR: [{ canalConfigId: null }, { canalConfig: { donoId: null } }] };
-const MEU_NUMERO = { canalConfig: { donoId: EU } };
 const ATRIBUIDA_A_MIM = { agenteId: EU };
 
 /**
@@ -76,7 +74,7 @@ describe('quem ve tudo', () => {
 describe('nada vira sem filtro', () => {
   it('nenhum perfil restrito recebe filtro vazio em dominio nenhum', () => {
     for (const politica of TODAS) {
-      for (const contexto of [GESTOR, COMERCIAL, AGENTE, AGENTE_SEM_FILA]) {
+      for (const contexto of [GESTOR, COMERCIAL, SUPORTE, SUPORTE_SEM_FILA]) {
         const filtro = politica.filtro(contexto);
         expect(
           Object.keys(filtro).length,
@@ -86,10 +84,10 @@ describe('nada vira sem filtro', () => {
     }
   });
 
-  it('agente sem fila nenhuma nao ve espera nenhuma, e nao vira sem filtro', () => {
+  it('suporte sem fila nenhuma nao ve espera nenhuma, e nao vira sem filtro', () => {
     // O termo da fila continua no filtro, com lista vazia: `in: []` nao casa
     // com nada. Omitir o termo seria "qualquer conversa em espera".
-    expect(politicaConversas.filtro(AGENTE_SEM_FILA)).toEqual({
+    expect(politicaConversas.filtro(SUPORTE_SEM_FILA)).toEqual({
       OR: [ATRIBUIDA_A_MIM, { status: 'EM_ESPERA', filaId: { in: [] } }],
     });
   });
@@ -99,17 +97,16 @@ describe('escopo por responsavel', () => {
   it('gestor alcanca a equipe; os demais, so a si', () => {
     expect(responsaveisNoEscopo(GESTOR)).toEqual([EU, COLEGA]);
     expect(responsaveisNoEscopo(COMERCIAL)).toEqual([EU]);
-    expect(responsaveisNoEscopo(AGENTE)).toEqual([EU]);
+    expect(responsaveisNoEscopo(SUPORTE)).toEqual([EU]);
     // O proprio gestor esta na equipe: sem isso, gestor sem subordinado nao
     // veria nem os proprios registros.
     expect(responsaveisNoEscopo(GESTOR)).toContain(EU);
   });
 
-  it('carteira aberta acrescenta "sem responsavel"; sem ela, o termo nao existe', () => {
-    expect(filtroCarteira(COMERCIAL)).toEqual({
-      OR: [{ responsavelId: { in: [EU] } }, { responsavelId: null }],
-    });
-    expect(filtroCarteira(AGENTE)).toEqual({ OR: [{ responsavelId: { in: [EU] } }] });
+  it('a carteira e os proprios registros mais os sem responsavel', () => {
+    const esperado = { OR: [{ responsavelId: { in: [EU] } }, { responsavelId: null }] };
+    expect(filtroCarteira(COMERCIAL)).toEqual(esperado);
+    expect(filtroCarteira(SUPORTE)).toEqual(esperado);
   });
 });
 
@@ -141,9 +138,9 @@ describe('conversas (organizadas por numero, 2026-10-05)', () => {
     });
   });
 
-  it('comercial/suporte/agente: atribuidas e espera das filas em que atuam', () => {
+  it('comercial/suporte: atribuidas e espera das filas em que atuam', () => {
     // A origem da linha nao mantem acesso depois que a conversa e transferida.
-    expect(politicaConversas.filtro(AGENTE)).toEqual({
+    expect(politicaConversas.filtro(SUPORTE)).toEqual({
       OR: [ATRIBUIDA_A_MIM, { status: 'EM_ESPERA', filaId: { in: ['f-1'] } }],
     });
   });
@@ -151,69 +148,25 @@ describe('conversas (organizadas por numero, 2026-10-05)', () => {
 
 describe('protocolos', () => {
   it('sem responsavel segue a fila, nao a carteira', () => {
-    // Mesmo para quem tem carteira aberta: protocolo sem dono numa fila que nao
-    // e sua nao e seu. `Ticket` nao tem status de espera — "espera" e
-    // responsavel nulo com fila.
+    // Protocolo sem dono numa fila que nao e sua nao e seu. `Ticket` nao tem
+    // status de espera — "espera" e responsavel nulo com fila.
     expect(politicaProtocolos.filtro(COMERCIAL)).toEqual({
       OR: [{ responsavelId: { in: [EU] } }, { responsavelId: null, filaId: { in: [] } }],
     });
-    expect(politicaProtocolos.filtro(AGENTE)).toEqual({
+    expect(politicaProtocolos.filtro(SUPORTE)).toEqual({
       OR: [{ responsavelId: { in: [EU] } }, { responsavelId: null, filaId: { in: ['f-1'] } }],
     });
   });
 });
 
-describe('contatos', () => {
-  it('gestao e comercial usam carteira', () => {
-    expect(politicaContatos.filtro(COMERCIAL)).toEqual(filtroCarteira(COMERCIAL));
-    expect(politicaContatos.filtro(GESTOR)).toEqual(filtroCarteira(GESTOR));
-  });
-
-  it('para o agente, contato sem responsavel NAO fica visivel por ser sem responsavel', () => {
-    const filtro = politicaContatos.filtro(AGENTE) as { OR: Array<Record<string, unknown>> };
-
-    /*
-     * A regra do agente e vinculo operacional: um termo `responsavelId: null`
-     * **solto no topo** abriria toda a base numa instalacao onde ninguem
-     * atribuiu responsavel — que e o caso hoje.
-     *
-     * A conferencia e nos termos do topo, e nao no JSON inteiro: dentro do
-     * filtro de protocolo o `responsavelId: null` aparece de forma legitima,
-     * pareado com `filaId` (protocolo sem dono numa fila que e dele). Foi o que
-     * a primeira versao deste teste acusou por engano.
-     */
-    expect(filtro.OR.some((t) => 'responsavelId' in t && t.responsavelId === null)).toBe(false);
-    expect(filtro).toEqual({
-      OR: [
-        { responsavelId: EU },
-        { conversas: { some: politicaConversas.filtro(AGENTE) } },
-        { protocolos: { some: politicaProtocolos.filtro(AGENTE) } },
-      ],
-    });
-  });
-});
-
-describe('contas', () => {
-  it('agente chega ao cliente pela tabela, nao por carteira', () => {
-    expect(politicaContas.filtro(AGENTE)).toEqual({
-      contatos: { some: politicaContatos.filtro(AGENTE) },
-    });
-  });
-});
-
-describe('leads e oportunidades', () => {
-  it('agente nao alcanca nenhum, e o filtro recusa em vez de nao filtrar', () => {
-    // O `requireRole` da rota e a primeira trava. Esta e a segunda: se alguem
-    // remover a primeira, o agente continua sem ver o funil.
-    for (const politica of [politicaLeads, politicaOportunidades]) {
-      expect(politica.filtro(AGENTE)).toEqual({ id: { in: [] } });
-      expect(politica.filtro(AGENTE_SEM_FILA)).toEqual({ id: { in: [] } });
+describe('contatos, contas, leads e oportunidades', () => {
+  it('todos os perfis restritos usam carteira', () => {
+    for (const contexto of [COMERCIAL, SUPORTE, GESTOR]) {
+      expect(politicaContatos.filtro(contexto)).toEqual(filtroCarteira(contexto));
+      expect(politicaContas.filtro(contexto)).toEqual(filtroCarteira(contexto));
+      expect(politicaLeads.filtro(contexto)).toEqual(filtroCarteira(contexto));
+      expect(politicaOportunidades.filtro(contexto)).toEqual(filtroCarteira(contexto));
     }
-  });
-
-  it('comercial e gestor usam carteira', () => {
-    expect(politicaOportunidades.filtro(COMERCIAL)).toEqual(filtroCarteira(COMERCIAL));
-    expect(politicaLeads.filtro(GESTOR)).toEqual(filtroCarteira(GESTOR));
   });
 });
 
