@@ -12,7 +12,10 @@ CREATE TABLE "_backup_perfil_agente_20261123" AS
   SELECT "id", "organizacao_id", "nome", "email", "perfil"::text AS "perfil_anterior", now() AS "registrado_em"
   FROM "usuarios" WHERE "perfil" = 'AGENTE';
 
-UPDATE "usuarios" SET "perfil" = 'SUPORTE' WHERE "perfil" = 'AGENTE';
+-- `sessao_versao` + 1 invalida os tokens ja emitidos (claim `sv`): quem era AGENTE tem
+-- JWT com o perfil antigo e, sem isso, receberia erro estranho em vez de entrar de
+-- novo com o perfil atual. Com a versao nova a API responde 401 e o front pede login.
+UPDATE "usuarios" SET "perfil" = 'SUPORTE', "sessao_versao" = "sessao_versao" + 1 WHERE "perfil" = 'AGENTE';
 DELETE FROM "module_permissions" WHERE "perfil" = 'AGENTE';
 
 -- O DEFAULT referencia o tipo antigo e precisa sair antes da troca.
