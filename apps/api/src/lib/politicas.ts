@@ -13,9 +13,9 @@ import {
  * Uma politica de visibilidade por dominio.
  *
  * Ficam todas neste arquivo de proposito, e nao uma em cada modulo: a politica
- * de contato do AGENTE **compoe** as de conversa e protocolo, e a de conta
- * compoe a de contato. Espalhadas por modulo, isso seria dependencia circular
- * entre dominios. Juntas, tem um efeito colateral bom — as sete regras que
+ * de conta compoe a de contato, e as de contato, conversa e protocolo partilham
+ * o mesmo contexto. Espalhadas por modulo, isso seria dependencia circular
+ * entre dominios. Juntas, tem um efeito colateral bom — as regras que
  * decidem quem ve o que cabem numa leitura, o que para codigo de acesso vale
  * mais do que a arrumacao por pasta.
  *
@@ -23,17 +23,6 @@ import {
  * do Prisma. Nenhuma delas decide o que a pessoa pode *fazer*: isso e perfil,
  * aplicado por `requireRole`.
  */
-
-/**
- * Filtro que nao casa com nada.
- *
- * Usado onde o perfil nao deveria nem ter chegado — AGENTE em lead e
- * oportunidade, barrados por `requireRole`. Devolver `{}` ali seria "sem
- * filtro", ou seja: se alguem um dia removesse o `requireRole` da rota, o agente
- * passaria a ver o funil inteiro. Duas travas para a mesma porta, porque a
- * consequencia de a primeira cair em silencio e grande.
- */
-const NADA = { id: { in: [] as string[] } };
 
 /**
  * Perfis dos donos de numero que o SUPERVISOR acompanha.
@@ -139,36 +128,23 @@ export const politicaProtocolos = {
 
 export const politicaContatos = {
   /**
-   * Gestao e comercial: carteira (proprios/equipe + sem responsavel).
-   *
-   * AGENTE: **vinculo operacional**. Contato sem responsavel nao fica visivel
-   * para ele por ser sem responsavel — fica visivel se houver conversa ou
-   * protocolo que ele possa atender. Sem essa distincao, numa base onde ninguem
-   * atribuiu responsavel (a base real hoje) todo contato apareceria para todo
-   * agente, e o escopo nao escoparia nada.
+   * Carteira: os proprios (ou da equipe, para o gestor) mais os sem responsavel.
+   * Cada pessoa trabalha os contatos que importou, cadastrou ou recebeu por
+   * transferencia.
    */
   filtro(ctx: ContextoVisibilidade): Prisma.ContactWhereInput {
     if (ctx.veTudo) return {};
-    if (ctx.carteiraAberta) return filtroCarteira(ctx) as Prisma.ContactWhereInput;
-    return {
-      OR: [
-        { responsavelId: ctx.usuarioId },
-        { conversas: { some: politicaConversas.filtro(ctx) } },
-        { protocolos: { some: politicaProtocolos.filtro(ctx) } },
-      ],
-    };
+    return filtroCarteira(ctx) as Prisma.ContactWhereInput;
   },
 };
 
 export const politicaContas = {
   /**
-   * Gestao e comercial: carteira. AGENTE: so pela tabela — cliente aparece se
-   * ele tiver acesso a algum contato dele. Agente nao tem carteira comercial.
+   * Carteira, como em contatos.
    */
   filtro(ctx: ContextoVisibilidade): Prisma.AccountWhereInput {
     if (ctx.veTudo) return {};
-    if (ctx.carteiraAberta) return filtroCarteira(ctx) as Prisma.AccountWhereInput;
-    return { contatos: { some: politicaContatos.filtro(ctx) } };
+    return filtroCarteira(ctx) as Prisma.AccountWhereInput;
   },
 };
 
@@ -185,28 +161,22 @@ export const politicaProdutosDoCliente = {
 };
 
 export const politicaLeads = {
-  /** Processo comercial: AGENTE nao participa. */
   filtro(ctx: ContextoVisibilidade): Prisma.LeadWhereInput {
     if (ctx.veTudo) return {};
-    if (!ctx.carteiraAberta) return NADA;
     return filtroCarteira(ctx) as Prisma.LeadWhereInput;
   },
 };
 
 export const politicaOportunidades = {
-  /** Processo comercial: AGENTE nao participa. */
   filtro(ctx: ContextoVisibilidade): Prisma.OpportunityWhereInput {
     if (ctx.veTudo) return {};
-    if (!ctx.carteiraAberta) return NADA;
     return filtroCarteira(ctx) as Prisma.OpportunityWhereInput;
   },
 };
 
 export const politicaCredenciamentos = {
-  /** Processo operacional: AGENTE nao participa, mesmo corte de Oportunidades. */
   filtro(ctx: ContextoVisibilidade): Prisma.CredenciamentoWhereInput {
     if (ctx.veTudo) return {};
-    if (!ctx.carteiraAberta) return NADA;
     return filtroCarteira(ctx) as Prisma.CredenciamentoWhereInput;
   },
 };

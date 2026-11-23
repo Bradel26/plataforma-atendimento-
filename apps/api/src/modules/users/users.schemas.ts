@@ -1,13 +1,14 @@
 import { z } from 'zod';
 
-const perfil = z.enum(['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL', 'SUPORTE', 'AGENTE']);
+const perfil = z.enum(['ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL', 'SUPORTE']);
 const status = z.enum(['OFFLINE', 'DISPONIVEL', 'EM_ATENDIMENTO', 'PAUSA']);
 
 export const createUserSchema = z.object({
   nome: z.string().min(2, 'Nome muito curto').max(120),
   email: z.string().email('Informe um email válido').transform((v) => v.toLowerCase()),
   senha: z.string().min(8, 'A senha deve ter ao menos 8 caracteres'),
-  perfil: perfil.default('AGENTE'),
+  // Sem padrao: quem cadastra escolhe o perfil, para ninguem nascer com acesso nao decidido.
+  perfil,
 });
 
 export const updateUserSchema = z

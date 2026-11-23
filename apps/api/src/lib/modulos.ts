@@ -27,7 +27,7 @@ export const MODULOS_EDITAVEIS = [
 ] as const;
 
 /** Perfis que o painel deixa o ADMIN configurar — ADMIN de fora, sempre tem tudo. */
-export const PERFIS_EDITAVEIS: Role[] = ['SUPERVISOR', 'GESTOR', 'COMERCIAL', 'SUPORTE', 'AGENTE'];
+export const PERFIS_EDITAVEIS: Role[] = ['SUPERVISOR', 'GESTOR', 'COMERCIAL', 'SUPORTE'];
 
 /**
  * Modulos que este perfil ve, na organizacao do contexto atual.

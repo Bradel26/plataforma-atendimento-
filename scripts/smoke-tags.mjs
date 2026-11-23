@@ -83,7 +83,7 @@ const criarUsuario = (perfil, apelido = perfil.toLowerCase()) =>
 
 const admin = await criarUsuario('ADMIN');
 const comercial = await criarUsuario('COMERCIAL');
-const agente = await criarUsuario('AGENTE');
+const agente = await criarUsuario('SUPORTE');
 
 async function entrar(usuario) {
   const r = await req('POST', '/auth/login', { corpo: { email: usuario.email, senha: SENHA } });

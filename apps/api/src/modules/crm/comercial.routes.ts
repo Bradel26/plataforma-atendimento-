@@ -19,7 +19,7 @@ import {
  * CSAT, fila, agente) e este mede **venda**. Juntar os dois num modulo faria a
  * proxima pessoa procurar conversao de funil entre indicadores de fila.
  *
- * Todas as rotas sao de gestao: `AGENTE` e `COMERCIAL` nao entram. A politica de
+ * Todas as rotas sao de gestao: `COMERCIAL` e `SUPORTE` nao entram. A politica de
  * visibilidade ainda se aplica por dentro — GESTOR ve a equipe, nao a
  * organizacao —, entao o perfil diz *se* pode abrir e a politica diz *o que* ve.
  */

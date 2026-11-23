@@ -244,7 +244,7 @@ await json(`/bots/${botWhats.corpo.bot.id}`, { method: 'DELETE', headers: admin 
  * e nao ATRIBUIDO ao responsavel do contato, que e o comportamento antigo
  * (anterior a 9e4062d) que este teste chegou a esperar.
  */
-const { corpo: agentesResp } = await json('/usuarios?perfil=AGENTE', { headers: admin });
+const { corpo: agentesResp } = await json('/usuarios?perfil=SUPORTE', { headers: admin });
 const agente = agentesResp.usuarios[0];
 
 const { status: statusNumero } = await json('/canais/whatsapp/numeros', {

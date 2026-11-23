@@ -46,7 +46,7 @@ opportunitiesRoutes.use(requireAuth);
 funnelsRoutes.use(requireAuth);
 
 /**
- * Oportunidade e funil sao processo comercial: AGENTE fora.
+ * Oportunidade e funil sao processo comercial.
  *
  * Ele continua vendo informacao comercial **resumida** dentro da ficha do
  * cliente, que e outra rota (`/contas/:id`) e outra porta de entrada — o que

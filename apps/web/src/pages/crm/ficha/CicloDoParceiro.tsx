@@ -21,7 +21,7 @@ type DaOperacao = { vinculos: VinculoLinha[]; estrutura: EstruturaEsteira };
  * (`/esteiras/:operacao/lista?contatoId=` + `estrutura` para o trilho com os
  * nomes atuais das etapas) — é a mesma informação, vista a partir do parceiro.
  *
- * AGENTE não vê esteira (mesmo corte da API); para ele o bloco nem aparece.
+ * Quem nao tem o modulo esteira nao ve o bloco (mesmo corte da API).
  */
 export function CicloDoParceiro({ contatoId }: { contatoId: string }) {
   const { temPerfil, operacoes: acesso, temModulo } = useAuth();

@@ -1,4 +1,10 @@
 /**
+ * ATENCAO (2026-11-23): o perfil AGENTE foi removido (migration 20261123120000).
+ * A secao 4 e os usuarios criados com `criarUsuario('AGENTE')` testam o escopo por
+ * vinculo operacional, que deixou de existir: todo perfil restrito agora usa carteira.
+ * Esta suite precisa ser reescrita com SUPORTE antes de voltar a rodar.
+ */
+/**
  * Escopo de visibilidade dentro de UMA organizacao.
  *
  * A suite irma do `smoke:tenant`, e a diferenca entre as duas e o ponto todo do

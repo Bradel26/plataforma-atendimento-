@@ -5,7 +5,7 @@ import { LABEL_PERFIL, type Perfil } from '../../lib/types';
 import { NAV } from '../../components/layout/nav';
 
 type LinhaMatriz = { perfil: Perfil; modulos: string[] };
-const PERFIS: Perfil[] = ['SUPERVISOR', 'GESTOR', 'COMERCIAL', 'SUPORTE', 'AGENTE'];
+const PERFIS: Perfil[] = ['SUPERVISOR', 'GESTOR', 'COMERCIAL', 'SUPORTE'];
 const MODULOS = NAV.filter((item) => item.rota !== '/configuracoes').map((item) => ({ chave: item.rota.slice(1), label: item.label }));
 
 export function PermissoesModuloPanel() {

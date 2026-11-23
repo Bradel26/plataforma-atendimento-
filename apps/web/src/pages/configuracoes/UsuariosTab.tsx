@@ -6,7 +6,8 @@ import { COR_STATUS, LABEL_PERFIL, LABEL_STATUS, type Filial, type Perfil, type 
 import { OperacoesUsuarioPanel } from './OperacoesUsuarioPanel';
 import { PermissoesModuloPanel } from './PermissoesModuloPanel';
 
-const FORM_VAZIO = { nome: '', email: '', senha: '', perfil: 'AGENTE' as Perfil };
+// Sem perfil padrao: quem cadastra escolhe, para ninguem nascer com acesso nao decidido.
+const FORM_VAZIO = { nome: '', email: '', senha: '', perfil: '' as Perfil | '' };
 
 export function UsuariosTab() {
   const confirmar = useConfirm();
@@ -204,15 +205,15 @@ export function UsuariosTab() {
             />
           </Field>
           <Field label="Perfil">
-            <Select value={form.perfil} onChange={(e) => setForm({ ...form, perfil: e.target.value as Perfil })}>
-              <option value="AGENTE">{LABEL_PERFIL.AGENTE}</option>
+            <Select required value={form.perfil} onChange={(e) => setForm({ ...form, perfil: e.target.value as Perfil })}>
+              <option value="" disabled>Selecione o perfil</option>
               <option value="SUPORTE">{LABEL_PERFIL.SUPORTE}</option>
               <option value="COMERCIAL">{LABEL_PERFIL.COMERCIAL}</option>
               <option value="SUPERVISOR">{LABEL_PERFIL.SUPERVISOR}</option>
               <option value="ADMIN">{LABEL_PERFIL.ADMIN}</option>
             </Select>
           </Field>
-          <Button type="submit" disabled={enviando} className="w-full">
+          <Button type="submit" disabled={enviando || !form.perfil} className="w-full">
             {enviando ? 'Salvando...' : 'Criar usuário'}
           </Button>
         </form>

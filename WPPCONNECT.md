@@ -7,7 +7,7 @@ Com isso funcionam os dois fluxos de conexão por QR Code:
 
 | Fluxo | Quem conecta | Onde | Para onde vão as conversas |
 |---|---|---|---|
-| **A — linha pessoal** | qualquer usuário logado (AGENTE, SUPERVISOR, ADMIN, COMERCIAL) | **Atendimento → Conectar WhatsApp** | para o próprio dono da linha |
+| **A — linha pessoal** | qualquer usuário logado (SUPORTE, SUPERVISOR, ADMIN, COMERCIAL) | **Atendimento → Conectar WhatsApp** | para o próprio dono da linha |
 | **B — linha compartilhada** | ADMIN | **Configurações → Canais → WhatsApp**, modo *Sem API oficial* | para a fila escolhida no canal |
 
 > ⚠️ O modo não oficial **viola os termos de uso do WhatsApp**: o número pode ser bloqueado sem
@@ -132,12 +132,12 @@ mostrar *"a sessao esta INITIALIZING"* por até ~30 s antes do QR. Ela atualiza 
 
 ---
 
-## Checklist A — linha pessoal de um AGENTE comum
+## Checklist A — linha pessoal de um SUPORTE comum
 
-Use um usuário com perfil **AGENTE** (não ADMIN): é o caso que prova que o self-service não depende
+Use um usuário com perfil **SUPORTE** (não ADMIN): é o caso que prova que o self-service não depende
 de administrador.
 
-- [ ] Entrar como o AGENTE → **Atendimento** → **Conectar WhatsApp**.
+- [ ] Entrar como o SUPORTE → **Atendimento** → **Conectar WhatsApp**.
 - [ ] O QR aparece na tela (pode levar até ~30 s na primeira vez).
 - [ ] No celular do agente: **WhatsApp → Aparelhos conectados → Conectar aparelho** → escanear.
 - [ ] A tela passa a mostrar a linha como conectada.
@@ -148,7 +148,7 @@ de administrador.
 - [ ] Mandar um arquivo (foto ou PDF) nos dois sentidos.
 - [ ] **Persistência:** redeploy do WPPConnect no Coolify. Depois de subir, mandar outra mensagem:
       ela entra **sem pedir QR de novo** (prova dos volumes da seção 3).
-- [ ] Outro AGENTE não consegue ver o QR nem desconectar esta linha (a API responde 403).
+- [ ] Outro SUPORTE não consegue ver o QR nem desconectar esta linha (a API responde 403).
 
 ## Checklist B — linha compartilhada conectada pelo ADMIN
 

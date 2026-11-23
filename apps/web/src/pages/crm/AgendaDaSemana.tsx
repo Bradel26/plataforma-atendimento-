@@ -77,7 +77,7 @@ export function AgendaDaSemana() {
   const [erro, setErro] = useState<string | null>(null);
   const [concluindo, setConcluindo] = useState<string | null>(null);
   const { temPerfil } = useAuth();
-  /** `/oportunidades/:id` e subrota restrita (nav.ts) — o AGENTE ve a Agenda mas nao essa rota. */
+  /** `/oportunidades/:id` e subrota restrita (nav.ts) — o SUPORTE ve a Agenda mas nao essa rota. */
   const podeAbrirOportunidade = temPerfil('ADMIN', 'SUPERVISOR', 'GESTOR', 'COMERCIAL');
 
   const carregar = useCallback(async () => {

@@ -14,8 +14,7 @@ const TAMANHO = 50;
 /**
  * Credenciamento da empresa (spec 6.4): em que etapa ela está em cada operação
  * que o usuário vê, e "Adicionar à TIM/Starlink" onde ainda não está (só com
- * EDICAO). AGENTE não participa da esteira (mesmo corte da API), então para ele
- * o bloco nem aparece.
+ * EDICAO). Quem não tem o módulo esteira não vê o bloco (mesmo corte da API).
  */
 export function CredenciamentosDaEmpresa({
   contaId,

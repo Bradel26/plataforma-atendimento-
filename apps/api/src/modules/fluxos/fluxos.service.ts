@@ -34,7 +34,7 @@ export async function recursosDosFluxos() {
     }),
     prisma.queue.findMany({ where: { ativa: true }, select: { id: true, nome: true }, orderBy: { nome: 'asc' } }),
     prisma.user.findMany({
-      where: { ativo: true, perfil: { in: ['AGENTE', 'SUPORTE', 'COMERCIAL'] } },
+      where: { ativo: true, perfil: { in: ['SUPORTE', 'COMERCIAL'] } },
       select: { id: true, nome: true, perfil: true }, orderBy: { nome: 'asc' },
     }),
   ]);
@@ -110,7 +110,7 @@ async function validarDestinos(grafo: GrafoFluxo) {
     if (node.type === 'usuario') {
       const usuarioId = texto(node.data.usuarioId);
       const usuario = usuarioId
-        ? await prisma.user.findFirst({ where: { id: usuarioId, ativo: true, perfil: { in: ['AGENTE', 'SUPORTE', 'COMERCIAL'] } } })
+        ? await prisma.user.findFirst({ where: { id: usuarioId, ativo: true, perfil: { in: ['SUPORTE', 'COMERCIAL'] } } })
         : null;
       if (!usuario) throw badRequest(`Escolha um atendente ativo no bloco ${node.data.nome || node.id}`);
     }
@@ -314,7 +314,7 @@ async function executarAteParada(run: { id: string; fluxoId: string | null; vers
     }
     if (node.type === 'usuario') {
       const usuarioId = texto(node.data.usuarioId);
-      const usuario = await prisma.user.findFirst({ where: { id: usuarioId, ativo: true, perfil: { in: ['AGENTE', 'SUPORTE', 'COMERCIAL'] } } });
+      const usuario = await prisma.user.findFirst({ where: { id: usuarioId, ativo: true, perfil: { in: ['SUPORTE', 'COMERCIAL'] } } });
       if (!usuario) { await encerrarExecucao(run.id); return; }
       const atualizada = await prisma.conversation.update({
         where: { id: conversaId },

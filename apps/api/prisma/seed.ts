@@ -51,8 +51,8 @@ const usuarios: Array<{ nome: string; email: string; senha: string; perfil: Role
         { nome: 'Vendedor 1', email: 'vendedor1@plataforma.local', senha: 'Vendedor@123', perfil: 'COMERCIAL' as Role },
         { nome: 'Vendedor 2', email: 'vendedor2@plataforma.local', senha: 'Vendedor@123', perfil: 'COMERCIAL' as Role },
         { nome: 'Vendedor 3', email: 'vendedor3@plataforma.local', senha: 'Vendedor@123', perfil: 'COMERCIAL' as Role },
-        { nome: 'Agente Um', email: 'agente1@plataforma.local', senha: 'Agente@123', perfil: 'AGENTE' as Role },
-        { nome: 'Agente Dois', email: 'agente2@plataforma.local', senha: 'Agente@123', perfil: 'AGENTE' as Role },
+        { nome: 'Suporte Um', email: 'agente1@plataforma.local', senha: 'Agente@123', perfil: 'SUPORTE' as Role },
+        { nome: 'Suporte Dois', email: 'agente2@plataforma.local', senha: 'Agente@123', perfil: 'SUPORTE' as Role },
       ]),
 ];
 
@@ -97,7 +97,7 @@ async function main() {
     { nome: 'Suporte Tecnico', descricao: 'Chamados tecnicos', canalPadrao: 'WEBCHAT' as const },
   ];
 
-  const agentes = await prisma.user.findMany({ where: { perfil: 'AGENTE' } });
+  const agentes = await prisma.user.findMany({ where: { perfil: 'SUPORTE' } });
 
   for (const f of filas) {
     const fila = await prisma.queue.upsert({ where: { organizacaoId_nome: { organizacaoId: ORGANIZACAO_INICIAL, nome: f.nome } }, update: f, create: f });
@@ -112,7 +112,7 @@ async function main() {
 
   /*
    * Fila de Vendas: leads novos caem aqui, e quem atende e o COMERCIAL, nao o
-   * AGENTE. Politica de escopo ja trata COMERCIAL como participante de conversa
+   * SUPORTE. Politica de escopo ja trata COMERCIAL como participante de conversa
    * (ver `politicaConversas` em lib/politicas.ts) — faltava so ele estar numa
    * fila para a conversa em espera aparecer para ele.
    */
@@ -140,7 +140,7 @@ async function main() {
   } else {
     console.log(`  admin:      ${ADMIN_EMAIL} / ${ADMIN_SENHA}`);
     console.log('  supervisor: supervisor@plataforma.local / Super@123');
-    console.log('  agente:     agente1@plataforma.local / Agente@123');
+    console.log('  suporte:    agente1@plataforma.local / Agente@123  (perfil SUPORTE; e-mail mantido por compatibilidade com os scripts)');
   }
 }
 

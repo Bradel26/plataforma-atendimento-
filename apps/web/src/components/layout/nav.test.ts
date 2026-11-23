@@ -34,7 +34,7 @@ describe('navegacao', () => {
      * A regra que sustenta a permissao das rotas de registro.
      *
      * Restringir e legitimo: `/oportunidades/:id` e um subconjunto de quem ve o
-     * CRM, porque o AGENTE ve o CRM e nao ve oportunidade. **Ampliar** seria
+     * CRM, porque o SUPORTE ve o CRM e nao ve oportunidade. **Ampliar** seria
      * criar permissao nova por uma porta lateral — a rota de detalhe e o caminho
      * que nao passa pelo menu, e quem digita a URL nunca viu a barra lateral.
      */
@@ -45,10 +45,10 @@ describe('navegacao', () => {
     }
   });
 
-  it('a oportunidade e a subrota restrita: sem AGENTE', () => {
+  it('a oportunidade e a subrota restrita: sem SUPORTE', () => {
     const crm = NAV.find((i) => i.rota === '/crm')!;
     const sub = crm.subrotas!.find((s) => s.rota === '/oportunidades/:id')!;
-    expect(perfisDaSubrota(crm, sub)).not.toContain('AGENTE');
+    expect(perfisDaSubrota(crm, sub)).not.toContain('SUPORTE');
   });
 
   it('toda subrota declarada resolve de volta para quem a declarou', () => {

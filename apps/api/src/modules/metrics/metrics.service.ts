@@ -399,7 +399,7 @@ function calcularNps(notas: number[]) {
  */
 export async function monitoramentoAgentes() {
   const agentes = await prisma.user.findMany({
-    where: { ativo: true, perfil: { in: ['AGENTE', 'SUPERVISOR', 'COMERCIAL'] } },
+    where: { ativo: true, perfil: { in: ['SUPERVISOR', 'COMERCIAL', 'SUPORTE'] } },
     orderBy: { nome: 'asc' },
     include: {
       filas: { include: { fila: { select: { id: true, nome: true } } } },
