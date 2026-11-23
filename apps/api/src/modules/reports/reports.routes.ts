@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../../http/async-handler';
 import { requireAuth, requireRole } from '../../http/middleware/auth';
+import { requireModulo } from '../../lib/modulos';
 import { validateQuery } from '../../http/middleware/validate';
 import { param } from '../../http/params';
 import { notFound } from '../../lib/errors';
@@ -12,7 +13,8 @@ import { RELATORIOS, type NomeRelatorio } from './reports.service';
 
 export const relatoriosRoutes = Router();
 
-relatoriosRoutes.use(requireAuth, requireRole('ADMIN', 'SUPERVISOR', 'GESTOR'));
+// Modulo (matriz de Configuracoes) E perfil: o modulo decide quem entra, o perfil limita o que cada um faz.
+relatoriosRoutes.use(requireAuth, requireModulo('relatorios'), requireRole('ADMIN', 'SUPERVISOR', 'GESTOR'));
 
 const periodoSchema = z.object({
   desde: z.coerce.date().optional(),

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../../http/async-handler';
 import { requireAuth, requireRole } from '../../http/middleware/auth';
+import { requireModulo } from '../../lib/modulos';
 import { validateBody } from '../../http/middleware/validate';
 import { param } from '../../http/params';
 import {
@@ -25,7 +26,8 @@ import { limiteBytes, remover, salvar, urlAssinada } from '../../lib/storage';
 
 export const campanhasRoutes = Router();
 
-campanhasRoutes.use(requireAuth, requireRole('ADMIN', 'SUPERVISOR'));
+// Modulo (matriz de Configuracoes) E perfil: o modulo decide quem entra, o perfil limita o que cada um faz.
+campanhasRoutes.use(requireAuth, requireModulo('campanhas'), requireRole('ADMIN', 'SUPERVISOR'));
 
 const campanhaParceiroBaseSchema = z.object({
   nome: z.string().trim().min(3).max(120),

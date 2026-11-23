@@ -6,6 +6,7 @@ import { conflict, notFound } from '../../lib/errors';
 import { hashPassword } from '../../lib/password';
 import { notificarStatusAgente } from '../../realtime/hub';
 import { registrarPresenca } from '../metrics/metrics.service';
+import { exigirSemNumeroConectado } from './numeroConectado';
 import { toPublicUser } from './users.serializer';
 import type { CreateUserInput, ListUsersQuery, UpdateUserInput } from './users.schemas';
 
@@ -73,6 +74,9 @@ export async function updateUser(id: string, input: UpdateUserInput) {
 
   if (input.filialId) await exigirFilialDaOrganizacao(input.filialId);
 
+  // Desativar pelo PATCH tem de seguir a mesma regra de `deactivateUser`.
+  if (input.ativo === false && atual.ativo) await exigirSemNumeroConectado(id);
+
   const { senha, ...resto } = input;
   const user = await prisma.user.update({
     where: { id },
@@ -85,6 +89,8 @@ export async function updateUser(id: string, input: UpdateUserInput) {
 export async function deactivateUser(id: string) {
   const atual = await prisma.user.findUnique({ where: { id } });
   if (!atual) throw notFound('Usuário não encontrado');
+
+  await exigirSemNumeroConectado(id);
 
   const user = await prisma.user.update({
     where: { id },
@@ -104,6 +110,8 @@ export async function deleteUserPermanently(id: string) {
     });
     if (outrosAdministradores === 0) throw conflict('Não é possível excluir o último administrador ativo');
   }
+
+  await exigirSemNumeroConectado(id);
 
   await prisma.user.delete({ where: { id } });
   return toPublicUser(atual);
