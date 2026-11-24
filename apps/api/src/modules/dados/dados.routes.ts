@@ -1,7 +1,8 @@
-import { Router } from 'express';
+import { Router, type RequestHandler } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../../http/async-handler';
 import { requireAuth, requireRole } from '../../http/middleware/auth';
+import { requireModulo } from '../../lib/modulos';
 import { validateBody } from '../../http/middleware/validate';
 import { badRequest, notFound } from '../../lib/errors';
 import { prisma } from '../../lib/prisma';
@@ -25,6 +26,22 @@ import {
 export const dadosRoutes = Router();
 
 dadosRoutes.use(requireAuth);
+
+/** Modulo que a matriz de permissoes exige para exportar/importar cada recurso. */
+const MODULO_DO_RECURSO: Record<string, string> = {
+  leads: 'crm',
+  contatos: 'crm',
+  contas: 'crm',
+  oportunidades: 'crm',
+  protocolos: 'relatorios',
+  conversas: 'relatorios',
+};
+
+export const exigirModuloDoRecurso: RequestHandler = (req, res, next) => {
+  const modulo = MODULO_DO_RECURSO[(req.params.recurso ?? '').replace(/\.csv$/, '')];
+  if (!modulo) return next(); // recurso desconhecido: a rota responde 404
+  return requireModulo(modulo)(req, res, next);
+};
 
 const EXPORTACOES: Record<string, () => Promise<string>> = {
   leads: exportarLeads,
@@ -83,6 +100,7 @@ dadosRoutes.get('/modelos/:recurso.csv', (req, res) => {
 dadosRoutes.get(
   '/exportar/:recurso.csv',
   requireRole('ADMIN', 'SUPERVISOR'),
+  exigirModuloDoRecurso,
   asyncHandler(async (req, res) => {
     const recurso = req.params.recurso ?? '';
     const exportar = EXPORTACOES[recurso];
@@ -93,6 +111,8 @@ dadosRoutes.get(
     const data = new Date().toISOString().slice(0, 10);
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${recurso}-${data}.csv"`);
+    // Trilha: quem exportou, o que e quando (sem o conteudo).
+    console.info('[dados][exportacao]', JSON.stringify({ recurso, usuarioId: req.user?.sub ?? null, perfil: req.user?.perfil ?? null, em: new Date().toISOString() }));
     res.send(await exportar());
   }),
 );
@@ -100,6 +120,7 @@ dadosRoutes.get(
 dadosRoutes.post(
   '/importar/:recurso',
   requireRole('ADMIN', 'SUPERVISOR'),
+  exigirModuloDoRecurso,
   validateBody(importarSchema),
   asyncHandler(async (req, res) => {
     const recurso = req.params.recurso ?? '';

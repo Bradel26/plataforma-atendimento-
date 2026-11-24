@@ -1,4 +1,5 @@
 import { AgentStatus, ConversationStatus } from '@prisma/client';
+import { PERFIS_NA_OPERACAO } from '../users/presenca.perfis';
 import { prisma } from '../../lib/prisma';
 import { indicadoresVoz } from '../voice/voice.service';
 import { organizacaoAtual } from '../../lib/tenant';
@@ -104,14 +105,15 @@ export async function mediaSegundos(
 export type Periodo = { desde: Date; ate: Date };
 
 /**
- * Card "Em atendimento" do dashboard: soma ATRIBUIDO + AGUARDANDO_CLIENTE,
- * nao so um dos dois. AGUARDANDO_CLIENTE e tao "ativo" quanto EM_ATENDIMENTO
+ * Card "Em atendimento" do dashboard: soma EM_ATENDIMENTO + AGUARDANDO_CLIENTE
+ * (ATRIBUIDO aparece a parte, em `atribuidas`), nao so um dos dois. AGUARDANDO_CLIENTE e tao "ativo" quanto EM_ATENDIMENTO
  * do ponto de vista de carga do agente -- so muda quem fala a seguir. Sem
  * isto, toda conversa que vira AGUARDANDO_CLIENTE some do card assim que o
  * agente responde, subnotificando quantas conversas estao de fato em curso.
  */
 export function resumoConversasPorStatus(conversas: Record<string, number>) {
   return {
+    // Snapshot de AGORA (sem janela): estado atual de todas as conversas.
     emEspera: conversas.EM_ESPERA ?? 0,
     atribuidas: conversas.ATRIBUIDO ?? 0,
     emAtendimento: (conversas.EM_ATENDIMENTO ?? 0) + (conversas.AGUARDANDO_CLIENTE ?? 0),
@@ -135,6 +137,7 @@ export async function indicadores(periodo: Periodo) {
     pesquisas,
     novasConversas,
     mensagens,
+    finalizadasNoPeriodo,
     voz,
   ] = await Promise.all([
     prisma.conversation.groupBy({ by: ['status'], _count: { _all: true } }),
@@ -143,7 +146,7 @@ export async function indicadores(periodo: Periodo) {
       _count: { _all: true },
       where: { criadoEm: { gte: periodo.desde, lte: periodo.ate } },
     }),
-    prisma.user.groupBy({ by: ['status'], _count: { _all: true }, where: { ativo: true } }),
+    prisma.user.groupBy({ by: ['status'], _count: { _all: true }, where: { ativo: true, perfil: { in: PERFIS_NA_OPERACAO } } }),
     mediaSegundos('criado_em', 'atribuido_em', 'conversas', periodo.desde),
     mediaSegundos('atribuido_em', 'finalizado_em', 'conversas', periodo.desde),
     prisma.ticket.groupBy({ by: ['status'], _count: { _all: true } }),
@@ -156,6 +159,7 @@ export async function indicadores(periodo: Periodo) {
     }),
     prisma.conversation.count({ where: { criadoEm: { gte: periodo.desde, lte: periodo.ate } } }),
     prisma.message.count({ where: { criadoEm: { gte: periodo.desde, lte: periodo.ate } } }),
+    prisma.conversation.count({ where: { status: 'FINALIZADO', finalizadoEm: { gte: periodo.desde, lte: periodo.ate } } }),
     indicadoresVoz(periodo.desde, periodo.ate),
   ]);
 
@@ -177,6 +181,8 @@ export async function indicadores(periodo: Periodo) {
     conversas: {
       ...resumoConversasPorStatus(conversas),
       novasNoPeriodo: novasConversas,
+      /** FINALIZADO com `finalizadoEm` dentro da janela. `finalizadas` (acima) e o acumulado de sempre. */
+      finalizadasNoPeriodo,
       mensagensNoPeriodo: mensagens,
       porCanal: contar(porCanal, 'canal'),
     },
@@ -399,7 +405,7 @@ function calcularNps(notas: number[]) {
  */
 export async function monitoramentoAgentes() {
   const agentes = await prisma.user.findMany({
-    where: { ativo: true, perfil: { in: ['SUPERVISOR', 'COMERCIAL', 'SUPORTE'] } },
+    where: { ativo: true, perfil: { in: PERFIS_NA_OPERACAO } },
     orderBy: { nome: 'asc' },
     include: {
       filas: { include: { fila: { select: { id: true, nome: true } } } },

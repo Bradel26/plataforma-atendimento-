@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alerta, Input, Select } from '../components/ui';
 import { CabecalhoPagina } from '../components/ui/Pagina';
+import { SemDadosAinda } from '../components/ui/EstadoDeCarga';
 import { ApiError, api } from '../lib/api';
 import { ESTADO, SERIES, duracao } from '../lib/viz';
 import type { AgenteMonitorado, DesempenhoOperacional, OperacaoEsteira } from '../lib/types';
@@ -132,7 +133,7 @@ export function DesempenhoPage() {
         </Filtro>
       </div>
 
-      {erro && <Alerta>{erro}</Alerta>}
+      {erro && dados && <Alerta>{erro}</Alerta>}
 
       <section aria-label="Indicadores" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Indicador rotulo="1ª resposta" valor={duracao(i?.primeiraRespostaSegundos ?? null)} detalhe="média até o 1º retorno" />
@@ -158,7 +159,9 @@ export function DesempenhoPage() {
           <h2 id="desempenho-consultores" className="text-[15px] font-semibold text-slate-800">Performance por consultor</h2>
           <p className="mt-0.5 text-[12.5px] text-slate-500">Quem está sendo mais ágil e quem está demorando mais</p>
         </div>
-        {!dados || dados.consultores.length === 0 ? (
+        {!dados ? (
+          <div className="px-5 pb-5"><SemDadosAinda erro={erro} aoTentar={() => void carregar()} rotulo="Carregando consultores" /></div>
+        ) : dados.consultores.length === 0 ? (
           <p className="px-5 pb-5 text-sm text-slate-500">Nenhum atendimento no período.</p>
         ) : (
           <div className="overflow-x-auto">
@@ -216,7 +219,7 @@ export function DesempenhoPage() {
 
         <Painel titulo="Evolução do tempo de credenciamento" descricao="Período atual comparado aos três anteriores de mesmo tamanho">
           {!dados ? (
-            <p className="text-sm text-slate-500">Carregando...</p>
+            <SemDadosAinda erro={erro} aoTentar={() => void carregar()} rotulo="Carregando evolução" />
           ) : (
             <ol className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {dados.evolucao.map((e, idx) => {

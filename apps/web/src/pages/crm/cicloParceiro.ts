@@ -94,11 +94,13 @@ export type ItemCiclo = {
   funil: Ref;
   responsavel: Ref | null;
   situacaoExcecao: string | null;
+  semResponsavel?: boolean;
+  proximaAcao?: { codigo: string; texto: string; urgencia: 'ALTA' | 'MEDIA' | 'BAIXA' };
 };
 
 export type ListaCiclos = {
   itens: ItemCiclo[];
-  resumo: { total: number; porStatus: Record<StatusCiclo, number>; implantacaoAtrasada: number };
+  resumo: { total: number; porStatus: Record<StatusCiclo, number>; implantacaoAtrasada: number; semResponsavel?: number };
   atencao: ItemCiclo[];
 };
 

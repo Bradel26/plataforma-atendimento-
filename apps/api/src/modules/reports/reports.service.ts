@@ -1,4 +1,6 @@
 import { prisma } from '../../lib/prisma';
+import { filtroDe, politicaConversas, politicaLeads, politicaProtocolos } from '../../lib/politicas';
+import { contextoVisibilidade } from '../../lib/visibilidade';
 import { jornada, type Periodo } from '../metrics/metrics.service';
 
 export type Relatorio = {
@@ -23,7 +25,7 @@ const mediaSeg = (valores: number[]) =>
 /** Atendimentos por agente, com TME, TMA e satisfacao — o relatorio mais pedido. */
 export async function relatorioAtendimentos(periodo: Periodo): Promise<Relatorio> {
   const conversas = await prisma.conversation.findMany({
-    where: { criadoEm: { gte: periodo.desde, lte: periodo.ate } },
+    where: { AND: [await filtroDe(politicaConversas), { criadoEm: { gte: periodo.desde, lte: periodo.ate } }] },
     include: {
       agente: { select: { id: true, nome: true } },
       pesquisa: { select: { nota: true, tipo: true, respondidoEm: true } },
@@ -111,7 +113,7 @@ export async function relatorioAtendimentos(periodo: Periodo): Promise<Relatorio
 /** Volume e desempenho por fila. */
 export async function relatorioFilas(periodo: Periodo): Promise<Relatorio> {
   const conversas = await prisma.conversation.findMany({
-    where: { criadoEm: { gte: periodo.desde, lte: periodo.ate } },
+    where: { AND: [await filtroDe(politicaConversas), { criadoEm: { gte: periodo.desde, lte: periodo.ate } }] },
     include: { fila: { select: { id: true, nome: true } } },
   });
 
@@ -147,7 +149,7 @@ export async function relatorioFilas(periodo: Periodo): Promise<Relatorio> {
 /** Chamados por status e prioridade, com SLA. */
 export async function relatorioProtocolos(periodo: Periodo): Promise<Relatorio> {
   const tickets = await prisma.ticket.findMany({
-    where: { criadoEm: { gte: periodo.desde, lte: periodo.ate } },
+    where: { AND: [await filtroDe(politicaProtocolos), { criadoEm: { gte: periodo.desde, lte: periodo.ate } }] },
     include: { responsavel: { select: { nome: true } } },
   });
 
@@ -195,7 +197,10 @@ export async function relatorioProtocolos(periodo: Periodo): Promise<Relatorio> 
 
 /** Jornada de trabalho por agente, a partir do log de presenca. */
 export async function relatorioJornada(periodo: Periodo): Promise<Relatorio> {
-  const dados = await jornada(periodo);
+  // GESTOR so ve a jornada da propria equipe; ADMIN e SUPERVISOR veem todos.
+  const ctx = await contextoVisibilidade();
+  const todos = await jornada(periodo);
+  const dados = ctx.veTudo ? todos : todos.filter((d) => ctx.equipeIds.includes(d.id));
 
   return {
     titulo: 'Jornada de trabalho',
@@ -228,7 +233,7 @@ export async function relatorioJornada(periodo: Periodo): Promise<Relatorio> {
 export async function relatorioFunil(periodo: Periodo): Promise<Relatorio> {
   const grupos = await prisma.lead.groupBy({
     by: ['fase'],
-    where: { criadoEm: { gte: periodo.desde, lte: periodo.ate } },
+    where: { AND: [await filtroDe(politicaLeads), { criadoEm: { gte: periodo.desde, lte: periodo.ate } }] },
     _count: { _all: true },
     _sum: { valorEstimado: true },
   });

@@ -438,6 +438,12 @@ atividadesRoutes.post('/:id/cancelar-serie', asyncHandler(async (req, res) => {
   const serieId = param(req, 'id');
   const serie = await prisma.activitySeries.findFirst({ where: { id: serieId } });
   if (!serie) throw notFound('Série de atividades não encontrada');
+  // Mesma regra de editar a serie: so quem enxerga alguma ocorrencia dela cancela.
+  const visivel = await prisma.activity.findFirst({
+    where: { serieId, AND: [await filtroDe(politicaAtividades)] },
+    select: { id: true },
+  });
+  if (!visivel) throw notFound('Série de atividades não encontrada');
   const agora = new Date();
   await prisma.$transaction([
     prisma.activitySeries.update({ where: { id: serieId }, data: { canceladoEm: agora } }),

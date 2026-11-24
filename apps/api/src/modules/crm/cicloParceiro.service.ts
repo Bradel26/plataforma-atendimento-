@@ -12,6 +12,7 @@ import {
   STATUS_CICLO,
   decidirAutomatico,
   diasEntre,
+  proximaAcaoDoCiclo,
   validarMudancaManual,
   type StatusCiclo,
 } from './cicloParceiro';
@@ -207,6 +208,13 @@ function serializar(c: CicloDb, interacoes: Map<string, Date>, agora = new Date(
     funil: c.credenciamento.funil,
     responsavel: c.credenciamento.responsavel,
     situacaoExcecao: c.credenciamento.situacaoExcecao,
+    semResponsavel: c.credenciamento.responsavel === null,
+    proximaAcao: proximaAcaoDoCiclo({
+      status: c.status,
+      semResponsavel: c.credenciamento.responsavel === null,
+      etapasConcluidas: c.etapas.map((e) => e.chave),
+      implantacaoAtrasada: c.status === 'NOVO_PARCEIRO' && diasComoParceiro > 30,
+    }),
   };
 }
 
@@ -236,7 +244,7 @@ export async function listarCiclos(query: { status?: StatusCiclo; busca?: string
 
   /** Quem precisa de acao do consultor, mais urgente primeiro. */
   const atencao = itens
-    .filter((i) => PRIORIDADE_ATENCAO[i.status] !== undefined || i.implantacaoAtrasada)
+    .filter((i) => PRIORIDADE_ATENCAO[i.status] !== undefined || i.implantacaoAtrasada || i.semResponsavel)
     .filter((i) => i.status !== 'REATIVADO' || i.diasNoStatus <= 30)
     .sort(
       (a, b) =>
@@ -245,7 +253,12 @@ export async function listarCiclos(query: { status?: StatusCiclo; busca?: string
 
   return {
     itens: query.status ? itens.filter((i) => i.status === query.status) : itens,
-    resumo: { total: itens.length, porStatus, implantacaoAtrasada: itens.filter((i) => i.implantacaoAtrasada).length },
+    resumo: {
+      total: itens.length,
+      porStatus,
+      implantacaoAtrasada: itens.filter((i) => i.implantacaoAtrasada).length,
+      semResponsavel: itens.filter((i) => i.semResponsavel).length,
+    },
     atencao,
   };
 }

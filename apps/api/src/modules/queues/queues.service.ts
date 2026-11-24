@@ -1,6 +1,8 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { badRequest, conflict, notFound } from '../../lib/errors';
+import { EM_ATENDIMENTO_ATIVO } from '../conversations/conversations.estados';
+import { CAPACIDADE_PADRAO, escolherAgenteDaFila } from './roteamento';
 import { toPublicUser } from '../users/users.serializer';
 import type { z } from 'zod';
 import type { createQueueSchema, updateQueueSchema } from './queues.schemas';
@@ -81,4 +83,48 @@ export async function desvincularAgente(filaId: string, usuarioId: string) {
 
   await prisma.queueAgent.delete({ where: { id: vinculo.id } });
   return getQueue(filaId);
+}
+
+/**
+ * Sugestao do proximo agente (ver `escolherAgenteDaFila`). Le presenca e carga
+ * do banco; nao atribui nada. Sem limite de conversas por
+ * agente (decisao do negocio); `capacidadeMaxima` volta nulo.
+ */
+export async function sugerirAgenteDaFila(filaId: string) {
+  const r = await calcularSugestaoDaFila(filaId);
+  if (!r) throw notFound('Fila não encontrada');
+  console.info('[fila][proximo-agente]', JSON.stringify({ filaId, sugerido: r.sugerido?.id ?? null, elegiveis: r.elegiveis.length, excluidos: r.excluidos }));
+  return { filaId, capacidadeMaxima: Number.isFinite(CAPACIDADE_PADRAO) ? CAPACIDADE_PADRAO : null, ...r };
+}
+
+/** Calculo puro de leitura (sem log), compartilhado com a atribuicao automatica. Nulo se a fila nao existe. */
+export async function calcularSugestaoDaFila(filaId: string) {
+  const fila = await prisma.queue.findUnique({
+    where: { id: filaId },
+    include: { agentes: { include: { usuario: { select: { id: true, nome: true, status: true, ativo: true } } } } },
+  });
+  if (!fila) return null;
+  const membros = fila.agentes.map((v) => v.usuario).filter((u) => u.ativo);
+  const ids = membros.map((u) => u.id);
+  const [cargas, ultimas] = await Promise.all([
+    prisma.conversation.groupBy({
+      by: ['agenteId'],
+      where: { agenteId: { in: ids }, status: { in: [...EM_ATENDIMENTO_ATIVO] } },
+      _count: { _all: true },
+    }),
+    prisma.conversation.groupBy({ by: ['agenteId'], where: { agenteId: { in: ids } }, _max: { atribuidoEm: true } }),
+  ]);
+  const carga = new Map(cargas.map((g) => [g.agenteId, g._count._all]));
+  const ultima = new Map(ultimas.map((g) => [g.agenteId, g._max.atribuidoEm]));
+  const r = escolherAgenteDaFila(
+    membros.map((u) => ({
+      id: u.id,
+      nome: u.nome,
+      status: u.status,
+      conversasAtivas: carga.get(u.id) ?? 0,
+      ultimaAtribuicaoEm: ultima.get(u.id) ?? null,
+    })),
+    CAPACIDADE_PADRAO,
+  );
+  return r;
 }

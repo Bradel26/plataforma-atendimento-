@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
+import { SemDadosAinda } from '../../components/ui/EstadoDeCarga';
 import { Link } from 'react-router-dom';
-import { Alerta, Badge, Card, Field, Input } from '../../components/ui';
+import { Badge, Card, Field, Input } from '../../components/ui';
 import { ApiError, api } from '../../lib/api';
 import { LABEL_TIPO_ATIVIDADE, type TipoAtividade } from '../../lib/types';
+import { useAuth } from '../../features/auth/AuthProvider';
+import { AtribuirEmLote } from './AtribuirEmLote';
+import { RetomadaEmLote } from './RetomadaEmLote';
 
 type Ref = { id: string; nome: string };
 
@@ -31,6 +35,7 @@ type Resposta = {
   }>;
   aguardandoDocumentacao: ItemParceiro[];
   precisamDeContato: ItemParceiro[];
+  resumoPrecisamDeContato?: { total: number; semResponsavel: number; semConversa: number; somenteSemResponsavel: number; somenteSemConversa: number; semResponsavelENemConversa: number };
   semInteracao: ItemParceiro[];
   reativacao: ItemParceiro[];
 };
@@ -63,7 +68,7 @@ function ListaDeParceiros({ itens, vazio }: { itens: ItemParceiro[]; vazio: stri
           <p className="text-xs text-slate-500">
             {p.etapa} há {p.diasNaEtapa}d · última interação {data(p.ultimaInteracaoEm)} ·{' '}
             {p.responsavel?.nome ?? 'sem responsável'}
-            {p.motivo ? ` · ${p.motivo}` : ''}
+            {p.motivo && !(p.responsavel === null && p.motivo === 'sem responsável') ? ` · ${p.motivo}` : ''}
             {p.contato.telefone ? ` · ${p.contato.telefone}` : ''}
           </p>
         </li>
@@ -78,6 +83,7 @@ function ListaDeParceiros({ itens, vazio }: { itens: ItemParceiro[]; vazio: stri
  * ou retorno, separados pelo motivo.
  */
 export function AcompanhamentosTab() {
+  const { temPerfil } = useAuth();
   const [dados, setDados] = useState<Resposta | null>(null);
   const [dias, setDias] = useState(7);
   const [erro, setErro] = useState<string | null>(null);
@@ -96,8 +102,7 @@ export function AcompanhamentosTab() {
     void carregar();
   }, [carregar]);
 
-  if (erro) return <Alerta>{erro}</Alerta>;
-  if (!dados) return <p className="text-sm text-slate-500">Carregando...</p>;
+  if (!dados) return <SemDadosAinda erro={erro} aoTentar={() => void carregar()} rotulo="Carregando acompanhamentos" />;
 
   return (
     <div className="space-y-5">
@@ -153,12 +158,19 @@ export function AcompanhamentosTab() {
 
         <Card titulo="Precisam de contato" descricao="Na esteira sem responsável ou sem nenhuma conversa">
           <Regra>Parceiros em credenciamento que ainda não tem responsável ou nunca conversaram com a equipe. Defina um responsável e inicie a conversa.</Regra>
+          {dados.resumoPrecisamDeContato && (
+            <p className="mb-2 text-xs text-slate-500">
+              Total {dados.resumoPrecisamDeContato.total} = {dados.resumoPrecisamDeContato.somenteSemResponsavel} só sem responsável + {dados.resumoPrecisamDeContato.somenteSemConversa} só sem conversa + {dados.resumoPrecisamDeContato.semResponsavelENemConversa} sem os dois. Só conversa com o cliente conta como interação; tarefas e notas do CRM não contam.
+            </p>
+          )}
           <ListaDeParceiros itens={dados.precisamDeContato} vazio="Todos já tem responsável e conversa." />
+          {temPerfil('ADMIN', 'SUPERVISOR') && <AtribuirEmLote itens={dados.precisamDeContato} aoConcluir={() => void carregar()} />}
         </Card>
 
         <Card titulo={`Sem interação há ${dados.diasSemInteracao}+ dias`} descricao="Última mensagem antiga, ainda na esteira">
           <Regra>Parceiros em credenciamento que pararam de responder. O prazo e o número de dias no campo acima.</Regra>
           <ListaDeParceiros itens={dados.semInteracao} vazio="Nenhum parceiro esquecido." />
+          {temPerfil('ADMIN', 'SUPERVISOR') && <RetomadaEmLote itens={dados.semInteracao} aoConcluir={() => void carregar()} />}
         </Card>
 
         <Card titulo="Precisam de reativação" descricao="Parceiros inativados">

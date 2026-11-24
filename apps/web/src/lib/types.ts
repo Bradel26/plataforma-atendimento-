@@ -884,6 +884,7 @@ export type Indicadores = {
     emAtendimento: number;
     finalizadas: number;
     novasNoPeriodo: number;
+    finalizadasNoPeriodo?: number;
     mensagensNoPeriodo: number;
     porCanal: Record<string, number>;
   };

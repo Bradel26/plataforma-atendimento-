@@ -155,3 +155,46 @@ export const PRIORIDADE_ATENCAO: Partial<Record<StatusCiclo, number>> = {
   INATIVO: 3,
   REATIVADO: 4,
 };
+
+export type ProximaAcao = {
+  codigo: 'DEFINIR_RESPONSAVEL' | 'PLANO_DE_RECUPERACAO' | 'RETOMAR_CONTATO' | 'AVALIAR_REATIVACAO' | 'INICIAR_IMPLANTACAO' | 'CONCLUIR_ETAPA' | 'ACOMPANHAR_OBSERVACAO' | 'MANTER_RELACIONAMENTO';
+  texto: string;
+  urgencia: 'ALTA' | 'MEDIA' | 'BAIXA';
+};
+
+/**
+ * Proxima acao SUGERIDA para o consultor, so com o que o CRM comprova (status,
+ * etapas, responsavel). E texto para uma pessoa decidir: nada aqui contata o
+ * parceiro nem cria tarefa sozinho (a tarefa so nasce quando alguem clica).
+ */
+export function proximaAcaoDoCiclo(f: {
+  status: StatusCiclo;
+  semResponsavel: boolean;
+  etapasConcluidas: string[];
+  implantacaoAtrasada: boolean;
+}): ProximaAcao {
+  if (f.semResponsavel) {
+    return { codigo: 'DEFINIR_RESPONSAVEL', texto: 'Definir quem é o responsável por este parceiro', urgencia: 'ALTA' };
+  }
+  const pendente = ETAPAS_IMPLANTACAO.find((e) => !f.etapasConcluidas.includes(e.chave));
+  switch (f.status) {
+    case 'EM_RISCO':
+      return { codigo: 'PLANO_DE_RECUPERACAO', texto: 'Combinar com o parceiro um plano de recuperação', urgencia: 'ALTA' };
+    case 'SEM_ACOMPANHAMENTO':
+      return { codigo: 'RETOMAR_CONTATO', texto: 'Retomar o contato com o parceiro (feito por uma pessoa)', urgencia: 'MEDIA' };
+    case 'INATIVO':
+      return { codigo: 'AVALIAR_REATIVACAO', texto: 'Avaliar se vale tentar a reativação', urgencia: 'BAIXA' };
+    case 'NOVO_PARCEIRO':
+      return {
+        codigo: 'INICIAR_IMPLANTACAO',
+        texto: `Iniciar a implantação${pendente ? `: ${pendente.rotulo}` : ''}`,
+        urgencia: f.implantacaoAtrasada ? 'ALTA' : 'MEDIA',
+      };
+    case 'EM_IMPLANTACAO':
+      return { codigo: 'CONCLUIR_ETAPA', texto: `Concluir a etapa${pendente ? `: ${pendente.rotulo}` : ' pendente'}`, urgencia: 'MEDIA' };
+    case 'REATIVADO':
+      return { codigo: 'ACOMPANHAR_OBSERVACAO', texto: 'Acompanhar o parceiro durante o período de observação', urgencia: 'BAIXA' };
+    default:
+      return { codigo: 'MANTER_RELACIONAMENTO', texto: 'Manter o relacionamento com o parceiro', urgencia: 'BAIXA' };
+  }
+}

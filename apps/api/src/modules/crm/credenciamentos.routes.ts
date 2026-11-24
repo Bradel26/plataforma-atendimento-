@@ -19,6 +19,8 @@ import {
   esteiraKanban,
   funisDaEsteira,
   importarContatosClassificados,
+  atribuirResponsavelEmLote,
+  criarTarefasDeRetomadaEmLote,
   listarCredenciamentos,
   obterCredenciamento,
 } from './credenciamentos.service';
@@ -143,6 +145,39 @@ credenciamentosRoutes.post(
   validateBody(criarCredenciamentoSchema),
   asyncHandler(async (req, res) => {
     res.status(201).json({ credenciamento: await criarCredenciamento(req.body) });
+  }),
+);
+
+const atribuicaoEmLoteSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(200),
+  responsavelId: z.string().uuid(),
+  /** Padrao true: so mostra o que mudaria. A tela manda false depois da revisao. */
+  previa: z.boolean().default(true),
+});
+
+/** Carteira: atribui responsavel a parceiros sem dono. Revisao humana (previa) antes de gravar; nao contata ninguem. */
+credenciamentosRoutes.post(
+  '/atribuicao-em-lote',
+  requireRole('ADMIN', 'SUPERVISOR'),
+  validateBody(atribuicaoEmLoteSchema),
+  asyncHandler(async (req, res) => {
+    res.json(await atribuirResponsavelEmLote(req.body));
+  }),
+);
+
+const retomadaEmLoteSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(200),
+  prazoDias: z.number().int().min(1).max(30).default(3),
+  previa: z.boolean().default(true),
+});
+
+/** Cria tarefas INTERNAS de retomada para os responsaveis. Previa por padrao; nao contata o parceiro. */
+credenciamentosRoutes.post(
+  '/tarefas-de-retomada-em-lote',
+  requireRole('ADMIN', 'SUPERVISOR'),
+  validateBody(retomadaEmLoteSchema),
+  asyncHandler(async (req, res) => {
+    res.json(await criarTarefasDeRetomadaEmLote(req.body));
   }),
 );
 

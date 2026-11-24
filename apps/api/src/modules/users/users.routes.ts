@@ -42,8 +42,8 @@ usersRoutes.patch(
 usersRoutes.post(
   '/me/heartbeat',
   asyncHandler(async (req, res) => {
-    await registrarHeartbeat(req.user!.sub);
-    res.status(204).end();
+    const status = await registrarHeartbeat(req.user!.sub);
+    res.json({ status });
   }),
 );
 

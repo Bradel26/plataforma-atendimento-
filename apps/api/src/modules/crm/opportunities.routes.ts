@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../../http/async-handler';
+import { requireAlgumModulo } from '../../lib/modulos';
 import { requireAuth, requireRole } from '../../http/middleware/auth';
 import { validateBody, validateQuery } from '../../http/middleware/validate';
 import { param } from '../../http/params';
@@ -42,8 +43,8 @@ import {
 export const opportunitiesRoutes = Router();
 export const funnelsRoutes = Router();
 
-opportunitiesRoutes.use(requireAuth);
-funnelsRoutes.use(requireAuth);
+opportunitiesRoutes.use(requireAuth, requireAlgumModulo('crm', 'gestao'));
+funnelsRoutes.use(requireAuth, requireAlgumModulo('crm', 'gestao'));
 
 /**
  * Oportunidade e funil sao processo comercial.

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { SemDadosAinda } from '../../components/ui/EstadoDeCarga';
 import { Link } from 'react-router-dom';
 import { Alerta, Badge, Button, Card } from '../../components/ui';
 import { useAuth } from '../../features/auth/AuthProvider';
@@ -145,11 +146,10 @@ export function AgendaDaSemana() {
     }
   };
 
-  if (erro) return <Alerta>{erro}</Alerta>;
   if (!dados) {
     return (
       <Card titulo="Agenda da semana">
-        <p className="text-sm text-slate-500">Carregando...</p>
+        <SemDadosAinda erro={erro} aoTentar={() => void carregar()} rotulo="Carregando agenda" />
       </Card>
     );
   }
@@ -226,6 +226,7 @@ export function AgendaDaSemana() {
 
   return (
     <div className="space-y-5">
+      {erro && <Alerta>{erro}</Alerta>}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile rotulo="Retornos de hoje" valor={deHoje.length} estado={deHoje.length ? ESTADO.info : undefined} />
         <StatTile rotulo="Retornos atrasados" valor={atrasadas} estado={atrasadas ? ESTADO.grave : undefined} />

@@ -51,6 +51,10 @@ type ResumoEmpresas = {
   empresasSemContatos: number;
   porOperacao: { tim: number; starlink: number; ambas: number; somenteTim: number; somenteStarlink: number };
   contatos: { total: number; tim: number; starlink: number };
+  contatosConciliacao?: {
+    somenteTim: number; somenteStarlink: number; ambas: number; semOperacao: number;
+    somaFaixas: number; consistente: boolean; geradoEm: string; fonte: string; definicao: string;
+  };
 };
 
 const mascararCnpj = (cnpj: string | null) =>
@@ -496,7 +500,21 @@ export function ContasTab({ selecionadoId, aoAbrir, aoFechar }: Props) {
         <StatTile rotulo="Contatos (total)" valor={resumoEmpresas.contatos.total} />
         <StatTile rotulo="Contatos TIM" valor={resumoEmpresas.contatos.tim} />
         <StatTile rotulo="Contatos Starlink" valor={resumoEmpresas.contatos.starlink} />
+        {resumoEmpresas.contatosConciliacao && (
+          <>
+            <StatTile rotulo="Contatos só TIM" valor={resumoEmpresas.contatosConciliacao.somenteTim} />
+            <StatTile rotulo="Contatos só Starlink" valor={resumoEmpresas.contatosConciliacao.somenteStarlink} />
+            <StatTile rotulo="Contatos nas duas operações" valor={resumoEmpresas.contatosConciliacao.ambas} />
+            <StatTile rotulo="Contatos sem operação" valor={resumoEmpresas.contatosConciliacao.semOperacao} />
+          </>
+        )}
       </div>}
+      {resumoEmpresas?.contatosConciliacao && (
+        <p className="mb-3 text-xs text-slate-500">
+          {resumoEmpresas.contatosConciliacao.definicao} Soma das faixas: {resumoEmpresas.contatosConciliacao.somaFaixas} de {resumoEmpresas.contatos.total}
+          {resumoEmpresas.contatosConciliacao.consistente ? '' : ' — atenção: não fecha, avise o suporte'}. Fonte: {resumoEmpresas.contatosConciliacao.fonte}. Atualizado em {new Date(resumoEmpresas.contatosConciliacao.geradoEm).toLocaleString('pt-BR')}.
+        </p>
+      )}
       <div className="mb-3">
         <VisoesSalvas<FiltroContaSalvo>
           entidade="CONTA"

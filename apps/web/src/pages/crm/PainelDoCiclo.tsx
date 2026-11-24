@@ -155,6 +155,8 @@ export function PainelDoCiclo({ credenciamentoId, aoMudar }: { credenciamentoId:
       <div className="space-y-5">
         {erro && <Alerta>{erro}</Alerta>}
 
+        {ciclo.proximaAcao && <ProximaAcaoDoParceiro ciclo={ciclo} />}
+
         {ciclo.status === 'SEM_ACOMPANHAMENTO' && (
           <Alerta tipo="aviso">Parceiro há {ciclo.diasSemInteracao} dias sem acompanhamento.</Alerta>
         )}
@@ -338,5 +340,54 @@ export function PainelDoCiclo({ credenciamentoId, aoMudar }: { credenciamentoId:
         </section>
       </div>
     </Card>
+  );
+}
+
+const PRAZO_PADRAO_DIAS = 3;
+
+/**
+ * Sugestao de proxima acao, com um botao que cria UMA tarefa interna (prazo de
+ * 3 dias, para o responsavel do parceiro ou para quem clicou). So uma pessoa
+ * cria, ao clicar; nada e enviado ao parceiro.
+ */
+function ProximaAcaoDoParceiro({ ciclo }: { ciclo: CicloDetalhado }) {
+  const mostrarToast = useToast();
+  const [criando, setCriando] = useState(false);
+  const [criada, setCriada] = useState(false);
+  const acao = ciclo.proximaAcao!;
+  const cor = acao.urgencia === 'ALTA' ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-slate-50';
+
+  const criarTarefa = async () => {
+    setCriando(true);
+    try {
+      const prazo = new Date(Date.now() + PRAZO_PADRAO_DIAS * 86_400_000).toISOString();
+      await api.post('/atividades', {
+        tipo: 'ACOMPANHAMENTO',
+        titulo: acao.texto,
+        prazo,
+        responsavelId: ciclo.responsavel?.id ?? null,
+        contatoId: ciclo.contato.id,
+      });
+      setCriada(true);
+      mostrarToast('sucesso', 'Tarefa criada na agenda. Nada foi enviado ao parceiro.');
+    } catch (e) {
+      mostrarToast('erro', e instanceof ApiError ? e.message : 'Não foi possível criar a tarefa');
+    } finally {
+      setCriando(false);
+    }
+  };
+
+  return (
+    <div className={`rounded-lg border p-3 ${cor}`}>
+      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Próxima ação sugerida</p>
+      <p className="mt-0.5 text-sm text-slate-800">{acao.texto}</p>
+      {acao.codigo !== 'DEFINIR_RESPONSAVEL' && (
+        <div className="mt-2">
+          <Button variante="neutro" tamanho="sm" onClick={() => void criarTarefa()} disabled={criando || criada}>
+            {criada ? 'Tarefa criada' : criando ? 'Criando...' : `Criar tarefa (${PRAZO_PADRAO_DIAS} dias)`}
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }

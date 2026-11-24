@@ -135,7 +135,10 @@ export async function updateStatus(id: string, status: AgentStatus) {
  * abriria um PresenceLog novo a cada minuto.
  */
 export async function registrarHeartbeat(id: string) {
-  await prisma.user.update({ where: { id }, data: { ultimoHeartbeat: new Date() } });
+  // Devolve o status gravado: o front sincroniza o cabecalho com o banco (o job de
+  // inatividade pode ter posto OFFLINE sem a aba saber).
+  const u = await prisma.user.update({ where: { id }, data: { ultimoHeartbeat: new Date() }, select: { status: true } });
+  return u.status;
 }
 
 /** Depois de quanto tempo sem heartbeat um agente e considerado inativo. */

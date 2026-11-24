@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../../http/async-handler';
+import { requireAlgumModulo } from '../../lib/modulos';
 import { requireAuth, requireRole } from '../../http/middleware/auth';
 import { validateQuery } from '../../http/middleware/validate';
 import { filtroDe, politicaAtividades } from '../../lib/politicas';
@@ -15,7 +16,7 @@ import { matrizProdutividade } from './produtividade';
  */
 export const produtividadeRoutes = Router();
 
-produtividadeRoutes.use(requireAuth, requireRole('ADMIN', 'SUPERVISOR', 'GESTOR'));
+produtividadeRoutes.use(requireAuth, requireAlgumModulo('crm', 'gestao'), requireRole('ADMIN', 'SUPERVISOR', 'GESTOR'));
 
 /**
  * O mes vem como `AAAA-MM`, no mesmo formato de metas — sem hora, nao existe

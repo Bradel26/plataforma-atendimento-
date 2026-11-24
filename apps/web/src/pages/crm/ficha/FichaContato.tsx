@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { SemDadosAinda } from '../../../components/ui/EstadoDeCarga';
 import { useNavigate } from 'react-router-dom';
 import { Alerta, Badge, Button, Card, EmptyState, Field, Input, Select, Textarea } from '../../../components/ui';
 import { ApiError, api } from '../../../lib/api';
@@ -256,8 +257,7 @@ export function FichaContato({ contatoId, aoMudarEtiquetas, aoVoltar }: FichaPro
       </Card>
     );
   }
-  if (erro && !ficha) return <Alerta>{erro}</Alerta>;
-  if (!ficha) return <Card titulo="Ficha do contato"><p className="text-sm text-slate-500">Carregando ficha...</p></Card>;
+  if (!ficha) return <Card titulo="Ficha do contato"><SemDadosAinda erro={erro} aoTentar={() => void carregar()} rotulo="Carregando ficha" /></Card>;
 
   const { contato, indicadores: i, atividadesAbertas } = ficha;
   const agora = Date.now();

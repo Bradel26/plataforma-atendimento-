@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
-import { Alerta, Badge, Card } from '../../components/ui';
+import { useCallback, useEffect, useState } from 'react';
+import { SemDadosAinda } from '../../components/ui/EstadoDeCarga';
+import { Badge, Card } from '../../components/ui';
 import { ApiError, api } from '../../lib/api';
 import {
   AJUDA_CICLO_DE_VIDA,
@@ -43,18 +44,22 @@ export function FunilDeCicloDeVida({
   const [funil, setFunil] = useState<Funil | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
-  useEffect(() => {
+  const carregar = useCallback(() => {
+    setErro(null);
     void api
       .get<{ funil: Funil }>('/contatos/ciclo-de-vida')
       .then((r) => setFunil(r.funil))
       .catch((e) => setErro(e instanceof ApiError ? e.message : 'Falha ao carregar o ciclo de vida'));
   }, []);
 
-  if (erro) return <Alerta>{erro}</Alerta>;
+  useEffect(() => {
+    carregar();
+  }, [carregar]);
+
   if (!funil) {
     return (
       <Card titulo="Ciclo de vida">
-        <p className="text-sm text-slate-500">Carregando...</p>
+        <SemDadosAinda erro={erro} aoTentar={carregar} rotulo="Carregando ciclo de vida" />
       </Card>
     );
   }

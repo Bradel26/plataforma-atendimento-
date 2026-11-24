@@ -1,7 +1,15 @@
 import { prisma } from '../../lib/prisma';
 import { badRequest } from '../../lib/errors';
 import { ufDoTelefone } from '../../lib/ddd';
-import { filtroDe, politicaContas } from '../../lib/politicas';
+import {
+  filtroDe,
+  politicaContas,
+  politicaContatos,
+  politicaConversas,
+  politicaLeads,
+  politicaOportunidades,
+  politicaProtocolos,
+} from '../../lib/politicas';
 import { gerarCsv, lerCsv, type LinhaCsv } from './csv';
 import { FASES, MOTIVOS_PERDA, TIPOS } from '../crm/leads.schemas';
 import { identificarSegmentoParceiro } from '../crm/segmentoParceiro';
@@ -430,6 +438,7 @@ const dataBr = (valor: Date | null) => (valor ? valor.toLocaleString('pt-BR') : 
 /** Exportacao de leads com os campos que interessam ao acompanhamento comercial. */
 export async function exportarLeads() {
   const leads = await prisma.lead.findMany({
+    where: await filtroDe(politicaLeads),
     include: {
       contato: true,
       conta: { select: { nome: true } },
@@ -478,6 +487,7 @@ export async function exportarLeads() {
 
 export async function exportarContatos() {
   const contatos = await prisma.contact.findMany({
+    where: { AND: [await filtroDe(politicaContatos), { excluidoEm: null }] },
     include: { conta: { select: { nome: true } }, _count: { select: { conversas: true } } },
     orderBy: { nome: 'asc' },
   });
@@ -499,12 +509,8 @@ export async function exportarContatos() {
 }
 
 /**
- * Exportacao de contas. E a unica exportacao deste modulo que passa por
- * politica de visibilidade — as demais (leads, contatos, oportunidades,
- * protocolos, conversas) sao anteriores a este item e exportam tudo dentro da
- * organizacao, sem filtro de carteira; nao mexi nelas para nao mudar
- * comportamento existente por fora do que foi pedido, mas fica registrado
- * como inconsistencia a revisar.
+ * Exportacoes: todas passam pela politica de visibilidade do dominio
+ * (mesma regra das listas), para o CSV nunca ser mais aberto que a tela.
  */
 export async function exportarContas() {
   const contas = await prisma.account.findMany({
@@ -532,6 +538,7 @@ export async function exportarContas() {
 
 export async function exportarOportunidades() {
   const oportunidades = await prisma.opportunity.findMany({
+    where: await filtroDe(politicaOportunidades),
     include: {
       conta: { select: { nome: true } },
       funil: { select: { nome: true } },
@@ -561,6 +568,7 @@ export async function exportarOportunidades() {
 
 export async function exportarProtocolos() {
   const tickets = await prisma.ticket.findMany({
+    where: await filtroDe(politicaProtocolos),
     include: {
       contato: { select: { nome: true } },
       conta: { select: { nome: true } },
@@ -594,6 +602,7 @@ export async function exportarProtocolos() {
 
 export async function exportarConversas() {
   const conversas = await prisma.conversation.findMany({
+    where: await filtroDe(politicaConversas),
     include: {
       contato: { select: { nome: true, email: true } },
       agente: { select: { nome: true } },
