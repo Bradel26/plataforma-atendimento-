@@ -86,6 +86,8 @@ export type Fila = {
   descricao: string | null;
   canalPadrao: Canal;
   ativa: boolean;
+  /** Distribuicao automatica de conversas em espera (desligada por padrao). */
+  atribuicaoAutomatica?: boolean;
   criadoEm: string;
   agentes: Usuario[];
 };

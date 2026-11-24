@@ -18,6 +18,7 @@ function serialize(fila: QueueWithAgents) {
     descricao: fila.descricao,
     canalPadrao: fila.canalPadrao,
     ativa: fila.ativa,
+    atribuicaoAutomatica: fila.atribuicaoAutomatica,
     criadoEm: fila.criadoEm,
     agentes: fila.agentes.map((v) => toPublicUser(v.usuario)),
   };

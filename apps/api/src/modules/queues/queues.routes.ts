@@ -3,6 +3,7 @@ import { asyncHandler } from '../../http/async-handler';
 import { param } from '../../http/params';
 import { requireAuth, requireRole } from '../../http/middleware/auth';
 import { validateBody } from '../../http/middleware/validate';
+import { atribuirEsperaDaFila } from './atribuicaoAutomatica';
 import { createQueueSchema, updateQueueSchema, vincularAgenteSchema } from './queues.schemas';
 import {
   createQueue,
@@ -56,7 +57,10 @@ queuesRoutes.patch(
   requireRole('ADMIN'),
   validateBody(updateQueueSchema),
   asyncHandler(async (req, res) => {
-    res.json({ fila: await updateQueue(param(req, 'id'), req.body) });
+    const fila = await updateQueue(param(req, 'id'), req.body);
+    // Ligou a atribuicao automatica: distribui a espera que ja existia (so cria atribuicao interna, nao contata cliente).
+    if (req.body.atribuicaoAutomatica === true) void atribuirEsperaDaFila(fila.id);
+    res.json({ fila });
   }),
 );
 

@@ -244,6 +244,8 @@ model Queue {
   descricao     String?
   canalPadrao   Channel  @default(WEBCHAT) @map("canal_padrao")
   ativa         Boolean  @default(true)
+  /// Quando ligada, conversa em espera vai sozinha ao agente disponivel com menos carga.
+  atribuicaoAutomatica Boolean @default(false) @map("atribuicao_automatica")
   criadoEm      DateTime @default(now()) @map("criado_em")
   atualizadoEm  DateTime @updatedAt @map("atualizado_em")
 

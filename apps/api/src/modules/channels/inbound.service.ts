@@ -12,6 +12,7 @@ import { entregarParaIa } from '../bots/ia.service';
 import { processarMensagemDeFluxo } from '../fluxos/fluxos.service';
 import { inclusaoDetalhe, toConversaDetalhe, toMensagem } from '../conversations/conversations.serializer';
 import { reservarProtocolo } from '../conversations/protocolo';
+import { atribuirAutomaticamente } from '../queues/atribuicaoAutomatica';
 import type { MensagemNormalizada } from './meta.types';
 import { numeroNormalizado } from './whatsapp.modo';
 
@@ -209,6 +210,9 @@ export async function registrarMensagemEntrante(dados: MensagemNormalizada) {
   notificarMensagem({ conversaId: conversa.id, mensagem: toMensagem(mensagem) }, destinos);
   if (nova) notificarConversaNova(detalhe, destinos);
   else notificarConversaAtualizada(detalhe, destinos);
+
+  // Fila com atribuicao automatica ligada: distribui a conversa nova (nunca falha o recebimento).
+  if (nova && !destino.agenteId && destino.filaId) void atribuirAutomaticamente(conversa.id);
 
   // Motor de IA externo tem precedencia sobre o bot de arvore local: dois bots
   // respondendo a mesma mensagem e pior que nenhum. Entregar nao lanca — canal

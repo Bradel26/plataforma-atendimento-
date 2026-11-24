@@ -45,6 +45,19 @@ export function FilasTab() {
     }
   }, []);
 
+  const alterarAtribuicaoAutomatica = async (fila: Fila, ligar: boolean) => {
+    setErro(null);
+    setAlterandoMembro(`${fila.id}:auto`);
+    try {
+      await api.patch(`/filas/${fila.id}`, { atribuicaoAutomatica: ligar });
+      await carregar();
+    } catch (e) {
+      setErro(e instanceof ApiError ? e.message : 'Falha ao alterar a atribuição automática');
+    } finally {
+      setAlterandoMembro(null);
+    }
+  };
+
   const alterarMembro = async (fila: Fila, usuarioId: string, adicionar: boolean) => {
     setErro(null);
     setAlterandoMembro(`${fila.id}:${usuarioId}`);
@@ -99,6 +112,25 @@ export function FilasTab() {
                     {fila.ativa ? <Badge tom="sucesso">Ativa</Badge> : <Badge>Inativa</Badge>}
                   </div>
                 </div>
+                {podeCriarFila && (
+                  <label className="mt-3 flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-700">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={Boolean(fila.atribuicaoAutomatica)}
+                      disabled={alterandoMembro === `${fila.id}:auto`}
+                      onChange={(e) => void alterarAtribuicaoAutomatica(fila, e.target.checked)}
+                    />
+                    <span>
+                      <span className="font-medium">Atribuição automática</span>
+                      <span className="block text-slate-500">
+                        A conversa em espera vai para quem está Disponível e tem menos conversas abertas (sem limite). Se ninguém estiver
+                        disponível, ela continua em espera. Linhas pessoais não são afetadas.
+                      </span>
+                    </span>
+                  </label>
+                )}
+                {!podeCriarFila && fila.atribuicaoAutomatica && <p className="mt-2 text-xs text-slate-500">Atribuição automática ligada.</p>}
                 <p className="mt-2 text-xs font-medium text-slate-600">Pessoas na fila</p>
                 {fila.agentes.length === 0 ? (
                   <p className="mt-1 text-xs text-slate-500">Ninguem foi incluido ainda.</p>

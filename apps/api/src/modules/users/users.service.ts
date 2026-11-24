@@ -1,4 +1,5 @@
 import type { AgentStatus, Prisma } from '@prisma/client';
+import { atribuirEsperaDasFilasDoAgente } from '../queues/atribuicaoAutomatica';
 import { prisma } from '../../lib/prisma';
 import { exigirUsuarioDaOrganizacao } from '../../lib/politicas';
 import { exigirFilialDaOrganizacao } from '../filiais/filiais.service';
@@ -124,6 +125,8 @@ export async function updateStatus(id: string, status: AgentStatus) {
   const publico = toPublicUser(user);
   // A gestao acompanha presenca em tempo real (base do Monitoramento, Fase 3).
   notificarStatusAgente(publico);
+  // Ficou disponivel: distribui a espera das filas dele (so as com atribuicao automatica ligada).
+  if (status === 'DISPONIVEL') void atribuirEsperaDasFilasDoAgente(id);
   return publico;
 }
 

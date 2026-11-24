@@ -14,6 +14,8 @@ export const updateQueueSchema = z
     descricao: z.string().max(280).nullable().optional(),
     canalPadrao: canal.optional(),
     ativa: z.boolean().optional(),
+    /** Liga/desliga a distribuicao automatica de conversas em espera desta fila. */
+    atribuicaoAutomatica: z.boolean().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, { message: 'Informe ao menos um campo' });
 
