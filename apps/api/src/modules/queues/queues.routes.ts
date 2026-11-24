@@ -9,6 +9,7 @@ import {
   deleteQueue,
   desvincularAgente,
   getQueue,
+  sugerirAgenteDaFila,
   listQueues,
   updateQueue,
   vincularAgente,
@@ -22,6 +23,15 @@ queuesRoutes.get(
   '/',
   asyncHandler(async (_req, res) => {
     res.json({ filas: await listQueues() });
+  }),
+);
+
+/** Sugere o proximo agente da fila (so sugestao: nada e atribuido nem enviado a cliente). */
+queuesRoutes.get(
+  '/:id/proximo-agente',
+  requireRole('ADMIN', 'SUPERVISOR'),
+  asyncHandler(async (req, res) => {
+    res.json(await sugerirAgenteDaFila(param(req, 'id')));
   }),
 );
 

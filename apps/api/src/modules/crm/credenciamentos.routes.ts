@@ -2,9 +2,14 @@ import { Router } from 'express';
 import { asyncHandler } from '../../http/async-handler';
 import { requireAuth, requireRole } from '../../http/middleware/auth';
 import { requireModulo } from '../../lib/modulos';
-import { validateQuery } from '../../http/middleware/validate';
+import { validateBody, validateQuery } from '../../http/middleware/validate';
 import { desempenhoSchema, gestaoSchema, painelSchema } from './credenciamentos.schemas';
-import { exigirFunilPermitido, funisPermitidos } from './credenciamentos.service';
+import {
+  atribuirResponsavelEmLote,
+  criarTarefasDeRetomadaEmLote,
+  exigirFunilPermitido,
+  funisPermitidos,
+} from './credenciamentos.service';
 import { acompanhamentos, desempenhoOperacional, gestaoOperacao, painelOperacoes } from './credenciamentos.indicadores';
 import { z } from 'zod';
 
@@ -105,5 +110,38 @@ credenciamentosRoutes.get(
   validateQuery(z.object({ dias: z.coerce.number().int().min(1).max(180).default(7) })),
   asyncHandler(async (_req, res) => {
     res.json({ acompanhamentos: await acompanhamentos(res.locals.query.dias) });
+  }),
+);
+
+const atribuicaoEmLoteSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(200),
+  responsavelId: z.string().uuid(),
+  /** Padrao true: so mostra o que mudaria. A tela manda false depois da revisao. */
+  previa: z.boolean().default(true),
+});
+
+/** Carteira: atribui responsavel a parceiros sem dono. Revisao humana (previa) antes de gravar; nao contata ninguem. */
+credenciamentosRoutes.post(
+  '/atribuicao-em-lote',
+  requireRole('ADMIN', 'SUPERVISOR'),
+  validateBody(atribuicaoEmLoteSchema),
+  asyncHandler(async (req, res) => {
+    res.json(await atribuirResponsavelEmLote(req.body));
+  }),
+);
+
+const retomadaEmLoteSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(200),
+  prazoDias: z.number().int().min(1).max(30).default(3),
+  previa: z.boolean().default(true),
+});
+
+/** Cria tarefas INTERNAS de retomada para os responsaveis. Previa por padrao; nao contata o parceiro. */
+credenciamentosRoutes.post(
+  '/tarefas-de-retomada-em-lote',
+  requireRole('ADMIN', 'SUPERVISOR'),
+  validateBody(retomadaEmLoteSchema),
+  asyncHandler(async (req, res) => {
+    res.json(await criarTarefasDeRetomadaEmLote(req.body));
   }),
 );

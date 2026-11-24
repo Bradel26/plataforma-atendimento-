@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { ErroComTentarDeNovo } from '../../components/ui/EstadoDeCarga';
 import { Alerta, Card, Field, Select } from '../../components/ui';
 import { BarList } from '../../components/viz/BarList';
 import { StatTile } from '../../components/viz/StatTile';
@@ -166,7 +167,7 @@ export function ComercialTab() {
 
   return (
     <div className="space-y-4">
-      <Card titulo="Leitura do Credenciamento" descricao={funil ? funil.funil.nome : 'Carregando...'}>
+      <Card titulo="Funil comercial (oportunidades)" descricao={funil ? funil.funil.nome : erro ? 'Não foi possível carregar' : 'Carregando...'}>
         <div className="grid gap-3 sm:grid-cols-2 sm:items-end">
           <Field label="Funil">
             <Select value={funilId} onChange={(e) => setFunilId(e.target.value)}>
@@ -186,7 +187,7 @@ export function ComercialTab() {
         </div>
       </Card>
 
-      {erro && <Alerta>{erro}</Alerta>}
+      {erro && (funil ? <Alerta>{erro}</Alerta> : <ErroComTentarDeNovo mensagem={erro} aoTentar={() => void carregar()} />)}
 
       {/* 1.3 — risco. Primeiro na tela de proposito: e o unico bloco acionavel
           hoje; o resto e leitura. Os baldes se sobrepoem, e o texto diz isso. */}
@@ -243,7 +244,7 @@ export function ComercialTab() {
         <Card titulo="Indicadores do período" descricao={`Comparados com os ${dias} dias anteriores`}>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <div>
-              <StatTile rotulo="Credenciamentos concluídos" valor={ind.atual.ganhas} />
+              <StatTile rotulo="Oportunidades ganhas" valor={ind.atual.ganhas} />
               <div className="mt-1 px-4"><Variacao valor={ind.variacao.ganhas} /></div>
             </div>
             <div>

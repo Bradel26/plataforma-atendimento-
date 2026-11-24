@@ -55,3 +55,18 @@ export function requireModulo(modulo: string): RequestHandler {
     next();
   });
 }
+
+/**
+ * Como `requireModulo`, mas passa se o perfil tem QUALQUER um dos modulos.
+ * Para rotas compartilhadas por mais de uma tela (ex.: CRM e Gestao leem o
+ * mesmo funil comercial): exigir so um deles esconderia dados de quem usa o
+ * outro legitimamente.
+ */
+export function requireAlgumModulo(...modulos: string[]): RequestHandler {
+  return asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {
+    if (!req.user) return next(unauthorized());
+    const permitidos = await modulosPermitidos(req.user.perfil);
+    if (!modulos.some((m) => permitidos.has(m))) return next(forbidden());
+    next();
+  });
+}

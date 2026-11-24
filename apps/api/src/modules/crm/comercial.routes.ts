@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../../http/async-handler';
+import { requireAlgumModulo } from '../../lib/modulos';
 import { requireAuth, requireRole } from '../../http/middleware/auth';
 import { validateBody, validateQuery } from '../../http/middleware/validate';
 import {
@@ -25,7 +26,7 @@ import {
  */
 export const comercialRoutes = Router();
 
-comercialRoutes.use(requireAuth);
+comercialRoutes.use(requireAuth, requireAlgumModulo('crm', 'gestao'));
 
 const DIA = 24 * 60 * 60 * 1000;
 

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../../http/async-handler';
+import { requireAlgumModulo } from '../../lib/modulos';
 import { requireAuth, requireRole } from '../../http/middleware/auth';
 import { validateBody, validateQuery } from '../../http/middleware/validate';
 import { apagarMeta, gravarRampa, lerRampa, listarMetas, minhaMeta } from './metas.service';
@@ -18,7 +19,7 @@ import { equipeDoGestor, gravarAlvos, lerAlvos, minhasMetasOperacionais, painelO
  */
 export const metasRoutes = Router();
 
-metasRoutes.use(requireAuth);
+metasRoutes.use(requireAuth, requireAlgumModulo('crm', 'gestao'));
 
 const LEITURA = requireRole('ADMIN', 'SUPERVISOR', 'GESTOR');
 const ESCRITA = requireRole('ADMIN', 'SUPERVISOR');

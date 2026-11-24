@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { SemDadosAinda } from '../../components/ui/EstadoDeCarga';
 import { Alerta, Badge, Button, Card, Field, Input } from '../../components/ui';
 import { ApiError, api } from '../../lib/api';
 import { ESTADO } from '../../lib/viz';
@@ -80,11 +81,10 @@ export function ConsumoDeIaCard() {
     }
   };
 
-  if (erro) return <Alerta>{erro}</Alerta>;
   if (!dados) {
     return (
       <Card titulo="Consumo de IA">
-        <p className="text-sm text-slate-500">Carregando...</p>
+        <SemDadosAinda erro={erro} aoTentar={() => void carregar()} rotulo="Carregando consumo de IA" />
       </Card>
     );
   }
@@ -117,6 +117,7 @@ export function ConsumoDeIaCard() {
       descricao={`${dados.usos} uso(s) no mês · dia ${dados.diasDecorridos} de ${dados.diasNoMes}`}
       acao={<Badge tom={TOM[dados.situacao]}>{FRASE[dados.situacao]}</Badge>}
     >
+      {erro && <div className="mb-3"><Alerta>{erro}</Alerta></div>}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Indicador
           rotulo="Gasto no ciclo"

@@ -5,6 +5,7 @@ import { ApiError, api, getAccessToken } from '../lib/api';
 import { EVENTOS, conectar } from '../lib/realtime';
 import { COR_STATUS_AGENTE, duracao } from '../lib/viz';
 import { LABEL_PERFIL, LABEL_STATUS, type AgenteMonitorado } from '../lib/types';
+import { ErroComTentarDeNovo } from '../components/ui/EstadoDeCarga';
 import { PainelEquipes } from '../features/monitor/PainelEquipes';
 import { AlertasResposta } from '../features/monitor/AlertasResposta';
 import { useAuth } from '../features/auth/AuthProvider';
@@ -79,7 +80,7 @@ export function MonitoramentoPage() {
             style={{ backgroundColor: atualizadoEm ? COR_STATUS_AGENTE.DISPONIVEL : COR_STATUS_AGENTE.OFFLINE }}
             aria-hidden="true"
           />
-          {atualizadoEm ? `Ao vivo · atualizado às ${atualizadoEm.toLocaleTimeString('pt-BR')}` : 'Carregando...'}
+          {atualizadoEm ? `Ao vivo · atualizado às ${atualizadoEm.toLocaleTimeString('pt-BR')}` : erro ? 'Sem conexão com os dados' : 'Carregando...'}
         </span>
       </CabecalhoPagina>
 
@@ -89,7 +90,7 @@ export function MonitoramentoPage() {
         <div className="flex min-w-0 flex-col gap-2.5 rounded-2xl border border-slate-200 bg-white px-5 py-4 sm:col-span-2 xl:col-span-1">
           <span className="text-[13px] font-semibold text-slate-700">Capacidade da equipe</span>
           <span className="text-[30px] font-bold leading-none tracking-[-0.03em] text-slate-900 [font-variant-numeric:proportional-nums]">
-            {online} <span className="text-[15px] font-medium tracking-normal text-slate-500">de {agentes.length} online</span>
+            {atualizadoEm ? online : '—'} <span className="text-[15px] font-medium tracking-normal text-slate-500">{atualizadoEm ? `de ${agentes.length} online` : 'online (sem dados ainda)'}</span>
           </span>
           <div role="img" aria-label={STATUS_RESUMO.map((s) => `${s.rotulo}: ${porStatus(s.status)}`).join(', ')} className="flex h-2 gap-0.5">
             {agentes.length === 0 ? (
@@ -114,7 +115,7 @@ export function MonitoramentoPage() {
               <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: COR_STATUS_AGENTE[s.status] }} aria-hidden="true" />
               {s.rotulo}
             </span>
-            <span className="text-[28px] font-bold leading-tight tracking-[-0.02em] text-slate-900 tabular-nums">{porStatus(s.status)}</span>
+            <span className="text-[28px] font-bold leading-tight tracking-[-0.02em] text-slate-900 tabular-nums">{atualizadoEm ? porStatus(s.status) : '—'}</span>
             <span className="text-xs text-slate-500">{detalheDo(s.status)}</span>
           </div>
         ))}
@@ -125,14 +126,16 @@ export function MonitoramentoPage() {
         {verAlertas && <AlertasResposta />}
       </div>
 
-      {erro && <Alerta>{erro}</Alerta>}
+      {erro && (atualizadoEm ? <Alerta>{erro}</Alerta> : <ErroComTentarDeNovo mensagem={erro} aoTentar={() => void carregar()} />)}
 
       <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white" aria-labelledby="monitor-consultores">
         <div className="flex flex-wrap items-baseline gap-2.5 px-5 py-4">
           <h2 id="monitor-consultores" className="text-[15px] font-bold text-slate-900">Consultores em tempo real</h2>
           <span className="text-[12.5px] text-slate-500">{agentes.length} pessoa(s)</span>
         </div>
-        {agentes.length === 0 ? (
+        {!atualizadoEm ? (
+          <p className="px-5 pb-5 text-sm text-slate-500">{erro ? 'Não foi possível carregar os agentes.' : 'Carregando agentes...'}</p>
+        ) : agentes.length === 0 ? (
           <p className="px-5 pb-5 text-sm text-slate-500">Nenhum agente ativo cadastrado.</p>
         ) : (
           <div className="overflow-x-auto">

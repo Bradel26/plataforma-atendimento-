@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client';
+import { resumirPrecisamDeContato } from './precisamDeContato';
 import { prisma } from '../../lib/prisma';
 import { filtroDe, politicaConversas, politicaCredenciamentos, politicaProtocolos } from '../../lib/politicas';
 import { organizacaoAtual } from '../../lib/tenant';
@@ -581,8 +582,14 @@ export async function acompanhamentos(diasSemInteracao: number) {
     c.estagio.chave ? saidaReativavel(c.estagio.chave) : c.situacaoExcecao === 'INATIVADO',
   );
 
+  const resumoPrecisamDeContato = resumirPrecisamDeContato(
+    pendentesDeAcao.map((c) => ({ semResponsavel: c.responsavel === null, semConversa: c.contato.conversas.length === 0 })),
+  );
+  console.info('[crm][acompanhamentos] precisam-de-contato', JSON.stringify({ pendentesDeAcao: pendentesDeAcao.length, ...resumoPrecisamDeContato }));
+
   return {
     diasSemInteracao,
+    resumoPrecisamDeContato,
     aguardandoRetorno: retornos.map((r) => ({
       id: r.id,
       titulo: r.titulo,

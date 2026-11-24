@@ -270,8 +270,8 @@ export function DashboardsPage() {
               {[
                 { rotulo: 'Novas conversas', valor: dados?.conversas.novasNoPeriodo },
                 { rotulo: 'Mensagens trocadas', valor: dados?.conversas.mensagensNoPeriodo },
-                { rotulo: 'Atribuídas', valor: dados?.conversas.atribuidas },
-                { rotulo: 'Finalizadas', valor: dados?.conversas.finalizadas },
+                { rotulo: 'Atribuídas agora', valor: dados?.conversas.atribuidas },
+                { rotulo: `Finalizadas (${janela.curto})`, valor: dados?.conversas.finalizadasNoPeriodo ?? dados?.conversas.finalizadas },
               ].map((v, i) => (
                 <div key={v.rotulo} className={`flex flex-col gap-0.5 px-5 ${i % 2 === 1 ? 'border-l border-slate-200' : ''} ${i === 2 ? 'lg:border-l lg:border-slate-200' : ''}`}>
                   <dt className="text-[12.5px] text-slate-500">{v.rotulo}</dt>

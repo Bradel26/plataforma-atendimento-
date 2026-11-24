@@ -7,7 +7,7 @@ vi.mock('./prisma', () => ({
   prisma: { modulePermission: { findMany } },
 }));
 
-import { modulosPermitidos, requireModulo, MODULOS_EDITAVEIS } from './modulos';
+import { modulosPermitidos, requireModulo, requireAlgumModulo, MODULOS_EDITAVEIS } from './modulos';
 
 function fakeReq(perfil?: string): Request {
   return (perfil ? { user: { sub: 'u-1', perfil, nome: 'Fulano', email: 'f@x.com', org: 'org-1' } } : {}) as Request;
@@ -65,5 +65,26 @@ describe('requireModulo', () => {
     findMany.mockResolvedValue([{ modulo: 'crm' }]);
     const erro = await rodar(requireModulo('crm'), fakeReq('SUPORTE'));
     expect(erro).toBeUndefined();
+  });
+});
+
+describe('requireAlgumModulo', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('passa se o perfil tem qualquer um dos modulos', async () => {
+    findMany.mockResolvedValue([{ modulo: 'gestao' }]);
+    expect(await rodar(requireAlgumModulo('crm', 'gestao'), fakeReq('GESTOR'))).toBeUndefined();
+  });
+
+  it('barra (403) se o perfil nao tem nenhum dos modulos', async () => {
+    findMany.mockResolvedValue([{ modulo: 'atendimento' }]);
+    const erro = (await rodar(requireAlgumModulo('crm', 'gestao'), fakeReq('SUPORTE'))) as { status?: number; statusCode?: number };
+    expect(erro).toBeTruthy();
+    expect(erro.status ?? erro.statusCode).toBe(403);
+  });
+
+  it('sem usuario autenticado, 401', async () => {
+    const erro = (await rodar(requireAlgumModulo('crm'), fakeReq())) as { status?: number; statusCode?: number };
+    expect(erro.status ?? erro.statusCode).toBe(401);
   });
 });

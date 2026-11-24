@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { ErroComTentarDeNovo } from '../components/ui/EstadoDeCarga';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Alerta, Input, Select } from '../components/ui';
 import { CabecalhoPagina, Segmentado } from '../components/ui/Pagina';
@@ -175,7 +176,7 @@ export function GestaoPage() {
             </p>
           </div>
 
-          {erro && <Alerta>{erro}</Alerta>}
+          {erro && (dados ? <Alerta>{erro}</Alerta> : <ErroComTentarDeNovo mensagem={erro} aoTentar={() => void carregar()} />)}
 
           <p className="-mb-2 text-xs font-semibold text-slate-500">Indicadores · {rotuloSelecionado}</p>
           <section aria-label={`Indicadores · ${rotuloSelecionado}`} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">

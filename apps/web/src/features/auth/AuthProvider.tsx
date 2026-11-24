@@ -115,7 +115,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!usuario) return;
 
     const pingar = () => {
-      if (document.visibilityState === 'visible') void api.post('/usuarios/me/heartbeat').catch(() => undefined);
+      if (document.visibilityState !== 'visible') return;
+      // O servidor devolve o status gravado: se o job de inatividade marcou OFFLINE, o cabecalho acompanha.
+      void api
+        .post<{ status?: AgentStatus }>('/usuarios/me/heartbeat')
+        .then((r) => {
+          if (r?.status) setUsuario((atual) => (atual && atual.status !== r.status ? { ...atual, status: r.status as AgentStatus } : atual));
+        })
+        .catch(() => undefined);
     };
 
     pingar();

@@ -10,6 +10,7 @@ import { validateBody, validateQuery } from '../../http/middleware/validate';
 import { param } from '../../http/params';
 import { badRequest, conflict, notFound } from '../../lib/errors';
 import { prisma } from '../../lib/prisma';
+import { conciliarContatos } from './conciliacaoContatos';
 import { exigirFilialDaOrganizacao } from '../filiais/filiais.service';
 import {
   inclusaoLead,
@@ -185,7 +186,7 @@ accountsRoutes.get(
 accountsRoutes.get('/resumo', asyncHandler(async (_req, res) => {
   const contas = await filtroDe(politicaContas);
   const contatos = await filtroDe(politicaContatos);
-  const [empresas, empresasComContatos, empresasSemContatos, tim, starlink, ambas, totalContatos, contatosTim, contatosStarlink] = await Promise.all([
+  const [empresas, empresasComContatos, empresasSemContatos, tim, starlink, ambas, totalContatos, contatosTim, contatosStarlink, contatosAmbas] = await Promise.all([
     prisma.account.count({ where: contas }),
     prisma.account.count({ where: { AND: [contas, { contatos: { some: { excluidoEm: null } } }] } }),
     prisma.account.count({ where: { AND: [contas, { contatos: { none: { excluidoEm: null } } }] } }),
@@ -195,11 +196,31 @@ accountsRoutes.get('/resumo', asyncHandler(async (_req, res) => {
     prisma.contact.count({ where: { AND: [contatos, { excluidoEm: null }] } }),
     prisma.contact.count({ where: { AND: [contatos, { excluidoEm: null }, { OR: [{ operacoes: { some: { operacao: 'TIM' } } }, { segmentoParceiro: 'TIM' }] }] } }),
     prisma.contact.count({ where: { AND: [contatos, { excluidoEm: null }, { OR: [{ operacoes: { some: { operacao: 'STARLINK' } } }, { segmentoParceiro: 'STARLINK' }] }] } }),
+    prisma.contact.count({
+      where: {
+        AND: [
+          contatos,
+          { excluidoEm: null },
+          { OR: [{ operacoes: { some: { operacao: 'TIM' } } }, { segmentoParceiro: 'TIM' }] },
+          { OR: [{ operacoes: { some: { operacao: 'STARLINK' } } }, { segmentoParceiro: 'STARLINK' }] },
+        ],
+      },
+    }),
   ]);
+  const conciliacao = conciliarContatos({ total: totalContatos, tim: contatosTim, starlink: contatosStarlink, ambas: contatosAmbas });
+  // Evidencia para conferencia: toda chamada registra a decomposicao; se nao fechar, avisa.
+  console[conciliacao.consistente ? 'info' : 'warn']('[crm][resumo-contatos] conciliacao', JSON.stringify(conciliacao));
   res.json({
     empresas, empresasComContatos, empresasSemContatos,
     porOperacao: { tim, starlink, ambas, somenteTim: tim - ambas, somenteStarlink: starlink - ambas },
     contatos: { total: totalContatos, tim: contatosTim, starlink: contatosStarlink },
+    contatosConciliacao: {
+      ...conciliacao,
+      geradoEm: new Date().toISOString(),
+      fonte: 'Contact (excluidoEm nulo) + ContactOperation + segmentoParceiro',
+      definicao:
+        'Faixas exclusivas: somente TIM, somente Starlink, ambas e sem operação. A soma das faixas é o total de contatos.',
+    },
   });
 }));
 

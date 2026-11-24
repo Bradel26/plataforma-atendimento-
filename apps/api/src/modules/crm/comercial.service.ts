@@ -37,7 +37,7 @@ async function funilComEstagios(funilId?: string) {
   const f = funilId
     ? await prisma.funnel.findUnique({ where: { id: funilId }, include: { estagios: { orderBy: { ordem: 'asc' } } } })
     : await prisma.funnel.findFirst({
-        where: { ativo: true },
+        where: { ativo: true, tipo: 'COMERCIAL' },
         orderBy: { criadoEm: 'asc' },
         include: { estagios: { orderBy: { ordem: 'asc' } } },
       });

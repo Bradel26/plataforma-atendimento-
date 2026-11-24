@@ -138,6 +138,12 @@ export function CicloParceiroTab() {
         )}
       </Card>
 
+      {resumo.total > 0 && (resumo.semResponsavel ?? 0) > 0 && (
+        <Alerta tipo="aviso">
+          {resumo.semResponsavel} parceiro(s) do ciclo ainda estão sem responsável. Defina o responsável em CRM &gt; Acompanhamentos &gt; Precisam de contato.
+        </Alerta>
+      )}
+
       {resumo.total > 0 && (
         <div className="grid gap-5 xl:grid-cols-[1fr_440px]">
           <div className="space-y-5">
@@ -238,6 +244,7 @@ function LinhaDeParceiro({
             {item.funil.nome} · parceiro desde {dataBr(item.credenciadoEm)} · {item.responsavel?.nome ?? 'sem responsável'}
           </span>
           {alerta && <span className="block text-xs text-amber-700">{alerta}</span>}
+          {item.proximaAcao && <span className="block truncate text-xs text-slate-600">Próxima ação: {item.proximaAcao.texto}</span>}
         </span>
         <span className="shrink-0">
           <SeloCiclo status={item.status} />
