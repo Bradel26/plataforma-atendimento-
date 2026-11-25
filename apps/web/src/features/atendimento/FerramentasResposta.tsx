@@ -6,7 +6,7 @@ export const BOTAO_ICONE =
   'inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50';
 
 /** Abre/fecha um painel flutuante; fecha ao clicar fora e com Esc. */
-function usePopover() {
+export function usePopover() {
   const [aberto, setAberto] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {

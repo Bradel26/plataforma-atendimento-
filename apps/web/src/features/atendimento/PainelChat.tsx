@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Alerta, Badge, Button } from '../../components/ui';
 import { Dropdown } from '../../components/ui/Dropdown';
@@ -12,23 +12,26 @@ import { CLASSE_STATUS, clienteAguardandoDesde, esperaPorExtenso, rotuloDoDia } 
 import {
   IconeCadeado,
   IconeCheck,
-  IconeClipe,
   IconeCopiar,
-  IconeDocumento,
   IconeEncerrar,
   IconeEnviar,
+  IconeMicrofone,
   IconeFicha,
   IconeMaisAcoes,
-  IconeRaio,
   IconeRelogio,
   IconeTelefone,
   IconeTransferir,
   IconeVoltar,
   IconeWhatsapp,
 } from './icones';
-import { BOTAO_ICONE, BotaoEmoji, BotaoMais } from './FerramentasResposta';
+import { BarraDeGravacao, MenuAnexos, ModalCamera, useGravadorDeVoz } from './AnexosEGravacao';
+import { BOTAO_ICONE, BotaoEmoji } from './FerramentasResposta';
 import { partesComLinks } from './links';
 import { useAtendimentosAnteriores, type BlocoAnterior } from './useAtendimentosAnteriores';
+
+/** Botao redondo de enviar, como o do WhatsApp. */
+const BOTAO_ENVIAR =
+  'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--brand-primary)] texto-sobre-cor-fixa transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50';
 
 const hora = (iso: string) =>
   new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -273,7 +276,7 @@ export function PainelChat({
   const [seletorRapido, setSeletorRapido] = useState<{ inicio: number; fim: number; busca: string } | null>(null);
   const textareaResposta = useRef<HTMLTextAreaElement>(null);
   const textareaNota = useRef<HTMLTextAreaElement>(null);
-  const inputArquivoResposta = useRef<HTMLInputElement>(null);
+  const [cameraAberta, setCameraAberta] = useState(false);
   const [anterioresDaConversa, setAnterioresDaConversa] = useState<Mensagem[]>([]);
   const [cursorHistorico, setCursorHistorico] = useState<string | null>(null);
   const [fimDoHistorico, setFimDoHistorico] = useState(false);
@@ -532,6 +535,18 @@ export function PainelChat({
     }
   };
 
+  // Microfone do campo de resposta: grava no navegador e manda pelo mesmo caminho dos anexos.
+  const gravador = useGravadorDeVoz((arquivo) => void anexar(arquivo));
+
+  // Campo de uma linha que cresce com o texto (ate ~5 linhas), como o do WhatsApp.
+  useLayoutEffect(() => {
+    for (const campo of [textareaResposta.current, textareaNota.current]) {
+      if (!campo) continue;
+      campo.style.height = 'auto';
+      campo.style.height = `${Math.min(campo.scrollHeight, 128)}px`;
+    }
+  }, [texto, textoPrivado, abaRodape, gravador.gravando]);
+
   const contatoLegivel = conversa.contato.telefone
     ? telefoneLegivel(conversa.contato.telefone)
     : (conversa.contato.email ?? 'Sem contato informado');
@@ -729,7 +744,7 @@ export function PainelChat({
         </div>
       </div>
 
-      {!somenteLeitura && <footer className="border-t border-slate-200 bg-white px-5 pb-4 pt-3.5 @[40rem]:px-8">
+      {!somenteLeitura && <footer className="border-t border-slate-200 bg-white px-3 pb-3 pt-2.5 @[40rem]:px-8">
         <div className="w-full">
         {finalizada ? (
           <>
@@ -745,37 +760,8 @@ export function PainelChat({
           </>
         ) : (
           <>
-            <div role="tablist" className="mb-3 flex gap-2">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={abaRodape === 'responder'}
-                onClick={() => setAbaRodape('responder')}
-                className={`h-9 rounded-[10px] border px-3.5 text-[13px] font-semibold transition ${
-                  abaRodape === 'responder'
-                    ? 'border-[color-mix(in_srgb,var(--brand-primary)_35%,transparent)] bg-[var(--brand-primary-soft)] text-[var(--brand-primary)]'
-                    : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                Responder
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={abaRodape === 'privada'}
-                onClick={() => setAbaRodape('privada')}
-                className={`inline-flex h-9 items-center gap-1.5 rounded-[10px] border px-3.5 text-[13px] font-semibold transition ${
-                  abaRodape === 'privada'
-                    ? 'border-amber-200 bg-amber-50 text-amber-700'
-                    : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                <IconeCadeado tamanho={14} />
-                Mensagem Privada
-              </button>
-            </div>
-
-            {erro && <div className="mb-3"><Alerta>{erro}</Alerta></div>}
+            {erro && <div className="mb-2"><Alerta>{erro}</Alerta></div>}
+            {gravador.erro && <div className="mb-2"><Alerta>{gravador.erro}</Alerta></div>}
 
             {abaRodape === 'responder' ? (
               <>
@@ -800,85 +786,89 @@ export function PainelChat({
                     ) : <p className="px-3 py-2 text-sm text-slate-500">Nenhuma mensagem encontrada. Esc para fechar.</p>}
                   </div>
                 )}
-                <div className="rounded-2xl border border-slate-300 bg-white shadow-[0_4px_14px_rgba(15,23,42,0.07)] transition focus-within:border-[var(--brand-primary)] focus-within:shadow-[0_4px_16px_rgba(37,99,235,0.14)]">
-                  <label htmlFor={`resposta-${conversa.id}`} className="sr-only">Resposta para o cliente</label>
-                  <textarea
-                    id={`resposta-${conversa.id}`}
-                    ref={textareaResposta}
-                    value={texto}
-                    onChange={(e) => {
-                      const valor = e.target.value;
-                      const caret = e.target.selectionStart;
-                      if (chavesEnvioPendente.current.get(conversa.id)?.conteudo !== valor.trim()) chavesEnvioPendente.current.delete(conversa.id);
-                      setTexto(valor);
-                      const trecho = valor.slice(0, caret);
-                      const gatilho = /(?:^|\s)\/([^\s]*)$/.exec(trecho);
-                      if (gatilho) {
-                        const token = gatilho[0];
-                        setSeletorRapido({ inicio: caret - token.length, fim: caret, busca: gatilho[1] ?? '' });
-                      } else setSeletorRapido(null);
-                    }}
-                    onKeyDown={(e) => {
-                      if (seletorRapido && e.key === 'Escape') { e.preventDefault(); setSeletorRapido(null); return; }
-                      if (seletorRapido && e.key === 'Enter' && visiveisRapidas[0]) { e.preventDefault(); escolherRapida(visiveisRapidas[0]); return; }
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        void enviar(e);
-                      }
-                    }}
-                    rows={2}
-                    disabled={janelaFechada || ocupado}
-                    placeholder={janelaFechada ? 'Janela fechada — texto livre indisponível' : 'Escreva sua resposta…  Digite / para mensagens rápidas'}
-                    className="block max-h-40 min-h-[56px] w-full resize-none rounded-t-2xl bg-transparent px-4 pb-1 pt-3.5 text-sm text-slate-800 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed"
-                  />
-                  <div className="flex flex-wrap items-center gap-1 px-2 pb-2 pt-1">
-                    <BotaoMais
-                      desabilitado={janelaFechada || ocupado}
-                      itens={[
-                        { chave: 'arquivo', rotulo: 'Anexar arquivo', icone: <IconeClipe tamanho={16} />, aoSelecionar: () => inputArquivoResposta.current?.click() },
-                        { chave: 'rapida', rotulo: 'Mensagem rápida', icone: <IconeRaio tamanho={16} />, desabilitado: respostasRapidas.length === 0, aoSelecionar: abrirRapidas },
-                        { chave: 'nota', rotulo: 'Nota interna', icone: <IconeCadeado tamanho={16} />, aoSelecionar: () => setAbaRodape('privada') },
-                      ]}
-                    />
-                    <BotaoEmoji desabilitado={janelaFechada || ocupado} aoEscolher={(emoji) => inserirEmoji(emoji)} />
-                    <label
-                      title="Anexar arquivo"
-                      aria-label="Anexar arquivo"
-                      className={`${BOTAO_ICONE} ${ocupado || janelaFechada ? 'pointer-events-none opacity-50' : ''}`}
-                    >
-                      <IconeClipe tamanho={19} />
-                      <input
-                        ref={inputArquivoResposta}
-                        type="file"
-                        className="hidden"
-                        disabled={ocupado || janelaFechada}
-                        onChange={(e) => {
-                          const arquivo = e.target.files?.[0];
-                          e.target.value = '';
-                          if (arquivo) void anexar(arquivo);
-                        }}
+                {/* Uma linha so, como o WhatsApp: clipe, emoji, campo e microfone/enviar. */}
+                <div className="flex items-end gap-0.5 rounded-[26px] border border-slate-300 bg-white px-1.5 py-1 shadow-sm transition focus-within:border-[var(--brand-primary)]">
+                  {gravador.gravando ? (
+                    <BarraDeGravacao segundos={gravador.segundos} aoCancelar={gravador.cancelar} />
+                  ) : (
+                    <>
+                      <MenuAnexos
+                        desabilitado={janelaFechada || ocupado}
+                        aoArquivo={(arquivo) => void anexar(arquivo)}
+                        aoAbrirCamera={() => setCameraAberta(true)}
+                        rapidasDisponiveis={respostasRapidas.length > 0}
+                        aoRapidas={abrirRapidas}
                       />
-                    </label>
-                    <button
-                      type="button"
-                      className={BOTAO_ICONE}
-                      disabled={janelaFechada || ocupado || respostasRapidas.length === 0}
-                      aria-label="Mensagens rápidas"
-                      title="Mensagens rápidas (ou digite /)"
-                      onClick={abrirRapidas}
-                    >
-                      <IconeDocumento tamanho={19} />
+                      <BotaoEmoji desabilitado={janelaFechada || ocupado} aoEscolher={(emoji) => inserirEmoji(emoji)} />
+                      <button
+                        type="button"
+                        className={BOTAO_ICONE}
+                        disabled={ocupado}
+                        aria-label="Nota interna"
+                        title="Nota interna (só a equipe vê)"
+                        onClick={() => setAbaRodape('privada')}
+                      >
+                        <IconeCadeado tamanho={18} />
+                      </button>
+                      <label htmlFor={`resposta-${conversa.id}`} className="sr-only">Resposta para o cliente</label>
+                      <textarea
+                        id={`resposta-${conversa.id}`}
+                        ref={textareaResposta}
+                        value={texto}
+                        onChange={(e) => {
+                          const valor = e.target.value;
+                          const caret = e.target.selectionStart;
+                          if (chavesEnvioPendente.current.get(conversa.id)?.conteudo !== valor.trim()) chavesEnvioPendente.current.delete(conversa.id);
+                          setTexto(valor);
+                          const trecho = valor.slice(0, caret);
+                          const gatilho = /(?:^|\s)\/([^\s]*)$/.exec(trecho);
+                          if (gatilho) {
+                            const token = gatilho[0];
+                            setSeletorRapido({ inicio: caret - token.length, fim: caret, busca: gatilho[1] ?? '' });
+                          } else setSeletorRapido(null);
+                        }}
+                        onKeyDown={(e) => {
+                          if (seletorRapido && e.key === 'Escape') { e.preventDefault(); setSeletorRapido(null); return; }
+                          if (seletorRapido && e.key === 'Enter' && visiveisRapidas[0]) { e.preventDefault(); escolherRapida(visiveisRapidas[0]); return; }
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            void enviar(e);
+                          }
+                        }}
+                        rows={1}
+                        disabled={janelaFechada || ocupado}
+                        title="Enter envia · Shift+Enter quebra linha · Digite / para mensagens rápidas"
+                        placeholder={janelaFechada ? 'Janela fechada — texto livre indisponível' : 'Digite uma mensagem'}
+                        className="mx-1 block max-h-32 min-h-[40px] min-w-0 flex-1 resize-none self-center bg-transparent py-2.5 text-sm leading-5 text-slate-800 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed"
+                      />
+                    </>
+                  )}
+                  {gravador.gravando ? (
+                    <button type="button" onClick={gravador.enviar} aria-label="Enviar áudio" title="Enviar áudio" className={BOTAO_ENVIAR}>
+                      <IconeEnviar tamanho={17} />
                     </button>
-                    <span className="ml-auto hidden pr-1 text-xs text-slate-500 md:inline">Enter envia · Shift+Enter quebra linha</span>
+                  ) : texto.trim() || !gravador.suportado ? (
                     <button
                       type="submit"
                       disabled={ocupado || janelaFechada || !texto.trim()}
-                      className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-[10px] bg-[var(--brand-primary)] px-4 text-[13px] font-semibold shadow-[0_2px_6px_rgba(37,99,235,0.25)] texto-sobre-cor-fixa transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none md:ml-0"
+                      aria-label="Enviar"
+                      title="Enviar"
+                      className={BOTAO_ENVIAR}
                     >
-                      Enviar
-                      <IconeEnviar tamanho={14} />
+                      <IconeEnviar tamanho={17} />
                     </button>
-                  </div>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={ocupado || janelaFechada}
+                      onClick={() => void gravador.iniciar()}
+                      aria-label="Gravar áudio"
+                      title="Gravar áudio"
+                      className={`${BOTAO_ICONE} h-10 w-10 rounded-full`}
+                    >
+                      <IconeMicrofone tamanho={20} />
+                    </button>
+                  )}
                 </div>
               </form>
               </>
@@ -903,7 +893,26 @@ export function PainelChat({
                   }
                 }}
               >
-                <div className="relative rounded-xl border border-amber-200 bg-amber-50 transition focus-within:border-amber-500">
+                {/* Mesma linha unica, em ambar: a cor avisa que o cliente nao ve. */}
+                <div className="flex items-end gap-0.5 rounded-[26px] border border-amber-300 bg-amber-50 px-1.5 py-1 transition focus-within:border-amber-500">
+                  <button
+                    type="button"
+                    className={`${BOTAO_ICONE} bg-amber-200/70 text-amber-800`}
+                    aria-label="Voltar para a resposta ao cliente"
+                    title="Nota interna ligada — clique para voltar a responder o cliente"
+                    onClick={() => setAbaRodape('responder')}
+                  >
+                    <IconeCadeado tamanho={18} />
+                  </button>
+                  <MenuAnexos
+                    desabilitado={ocupado}
+                    aoArquivo={(arquivo) => void anexar(arquivo, true)}
+                    aoAbrirCamera={() => setCameraAberta(true)}
+                    rapidasDisponiveis={false}
+                    aoRapidas={() => undefined}
+                    semRapidas
+                  />
+                  <BotaoEmoji desabilitado={ocupado} aoEscolher={(emoji) => inserirEmoji(emoji, true)} />
                   <label htmlFor={`nota-${conversa.id}`} className="sr-only">Nota interna para a equipe</label>
                   <textarea
                     id={`nota-${conversa.id}`}
@@ -916,46 +925,30 @@ export function PainelChat({
                         (e.target as HTMLTextAreaElement).form?.requestSubmit();
                       }
                     }}
-                    rows={2}
-                    placeholder="Escreva uma nota interna... só a equipe vê (Enter envia, Shift+Enter quebra linha)"
-                    className="block max-h-40 min-h-[52px] w-full resize-none rounded-t-xl bg-transparent px-3.5 pb-1 pt-3 text-sm text-slate-800 outline-none placeholder:text-slate-500"
+                    rows={1}
+                    title="Enter salva · Shift+Enter quebra linha"
+                    placeholder="Nota interna — só a equipe vê"
+                    className="mx-1 block max-h-32 min-h-[40px] min-w-0 flex-1 resize-none self-center bg-transparent py-2.5 text-sm leading-5 text-slate-800 outline-none placeholder:text-amber-800/70"
                   />
-                  <div className="flex flex-wrap items-center gap-1 px-2 pb-2 pt-1">
-                    <BotaoEmoji desabilitado={ocupado} aoEscolher={(emoji) => inserirEmoji(emoji, true)} />
-                    <span className="inline-flex items-center gap-1.5 px-1.5 text-xs text-amber-700">
-                      <IconeCadeado tamanho={13} />
-                      O cliente não vê esta nota
-                    </span>
-                    <label
-                      title="Anexar arquivo (nota interna)"
-                      className={`inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium text-amber-700 hover:bg-amber-200/40 ${ocupado ? 'pointer-events-none opacity-50' : ''}`}
-                    >
-                      <IconeClipe tamanho={15} />
-                      Anexar
-                      <input
-                        type="file"
-                        className="hidden"
-                        disabled={ocupado}
-                        onChange={(e) => {
-                          const arquivo = e.target.files?.[0];
-                          e.target.value = '';
-                          if (arquivo) void anexar(arquivo, true);
-                        }}
-                      />
-                    </label>
-                    {/* Cor fixa nos dois temas: o ambar da escala vira tom claro no escuro e apagaria o texto branco. */}
-                    <button
-                      type="submit"
-                      disabled={ocupado || !textoPrivado.trim()}
-                      className="ml-auto inline-flex h-9 items-center rounded-lg px-4 text-[13px] font-semibold texto-sobre-cor-fixa transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-                      style={{ backgroundColor: '#b54708' }}
-                    >
-                      Salvar nota
-                    </button>
-                  </div>
+                  {/* Cor fixa nos dois temas: o ambar da escala vira tom claro no escuro e apagaria o icone branco. */}
+                  <button
+                    type="submit"
+                    disabled={ocupado || !textoPrivado.trim()}
+                    aria-label="Salvar nota"
+                    title="Salvar nota"
+                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full texto-sobre-cor-fixa transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                    style={{ backgroundColor: '#b54708' }}
+                  >
+                    <IconeEnviar tamanho={17} />
+                  </button>
                 </div>
               </form>
             )}
+            <ModalCamera
+              aberto={cameraAberta}
+              aoFechar={() => setCameraAberta(false)}
+              aoCapturar={(arquivo) => void anexar(arquivo, abaRodape === 'privada')}
+            />
           </>
         )}
         </div>

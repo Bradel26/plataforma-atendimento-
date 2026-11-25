@@ -116,30 +116,48 @@ describe('PainelChat — ações da conversa', () => {
   });
 });
 
-describe('PainelChat — abas do rodape (Task 5)', () => {
-  it('mostra as duas abas "Responder" e "Mensagem Privada"', () => {
+describe('PainelChat — barra de mensagem no formato do WhatsApp', () => {
+  it('mostra uma linha so: anexar, emoji, nota interna, campo e enviar', () => {
     const html = renderizar();
-    expect(html).toContain('Responder');
-    expect(html).toContain('Mensagem Privada');
+    expect(html).toContain('placeholder="Digite uma mensagem"');
+    expect(html).toContain('aria-label="Anexar"');
+    expect(html).toContain('aria-label="Inserir emoji"');
+    expect(html).toContain('aria-label="Nota interna"');
+    expect(html).toContain('aria-label="Enviar"');
   });
 
-  it('aba "Responder" comeca ativa: o formulário padrão (placeholder de resposta) está no HTML', () => {
+  it('nao tem mais as abas "Responder" e "Mensagem Privada" nem o texto de ajuda sempre visivel', () => {
     const html = renderizar();
-    expect(html).toContain('Escreva sua resposta');
-    // O form da nota interna so existe quando a aba "privada" esta ativa;
-    // como o estado inicial e 'responder', o placeholder da nota interna
-    // nao deve aparecer no primeiro render.
-    expect(html).not.toContain('Escreva uma nota interna');
+    expect(html).not.toContain('Mensagem Privada');
+    expect(html).not.toContain('role="tablist"');
+    expect(html).not.toContain('Escreva sua resposta');
+    expect(html).not.toContain('Enter envia · Shift+Enter quebra linha</span>');
+  });
+
+  it('comeca na resposta ao cliente: o campo da nota interna so aparece depois de ligar a nota', () => {
+    const html = renderizar();
+    expect(html).not.toContain('Nota interna — só a equipe vê');
+  });
+
+  it('o menu de anexos nao oferece o que o servidor nao envia (contato, enquete, pix, evento, figurinha)', () => {
+    // Menu fechado no primeiro render; o conteudo dele vive em AnexosEGravacao.
+    const html = renderizar();
+    for (const t of ['Enquete', 'Pix', 'Evento', 'figurinha']) expect(html).not.toContain(t);
   });
 });
 
 describe('PainelChat — selo de nota interna na bolha (Task 5)', () => {
+  // O cadeado "Nota interna" da barra de mensagem tambem entra no HTML; por isso
+  // compara-se com a conversa sem mensagens, em vez de exigir ausencia do texto.
+  const ocorrencias = (html: string) => html.split('Nota interna').length - 1;
+  const base = ocorrencias(renderizar({ conversa: criarConversaDetalheMock({ mensagens: [] }) }));
+
   it('mensagem com interno=true mostra o selo "Nota interna"', () => {
     const conversa = criarConversaDetalheMock({
       mensagens: [criarMensagemMock({ interno: true, conteudo: 'só a equipe vê' })],
     });
     const html = renderizar({ conversa });
-    expect(html).toContain('Nota interna');
+    expect(ocorrencias(html)).toBeGreaterThan(base);
     expect(html).toContain('só a equipe vê');
   });
 
@@ -148,7 +166,7 @@ describe('PainelChat — selo de nota interna na bolha (Task 5)', () => {
       mensagens: [criarMensagemMock({ interno: false, conteudo: 'mensagem pública' })],
     });
     const html = renderizar({ conversa });
-    expect(html).not.toContain('Nota interna');
+    expect(ocorrencias(html)).toBe(base);
     expect(html).toContain('mensagem pública');
   });
 });
