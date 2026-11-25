@@ -1412,7 +1412,9 @@ app.post('/api/platform/arquivos', async (req, res) => {
     if (!numero || !base64) return res.status(400).json({ error: 'Informe o destinatário e o arquivo.' });
     const destino = await comTempoLimite(resolverDestinoWhatsapp(sessao.client, numero), LIMITE_RESOLVER_MS, 'resolver destinatario');
     const media = new MessageMedia(String(req.body?.tipo || 'application/octet-stream'), base64, String(req.body?.nome || 'arquivo'));
-    const sent = await comTempoLimite(sessao.client.sendMessage(destino, media, { caption: String(req.body?.legenda || '') }), LIMITE_ENVIAR_MS, 'enviar');
+    // Audio em ogg/opus (a API converte antes de mandar) sai como MENSAGEM DE VOZ, com a onda sonora.
+    const comoVoz = /^audio\/ogg/i.test(String(req.body?.tipo || ''));
+    const sent = await comTempoLimite(sessao.client.sendMessage(destino, media, { caption: String(req.body?.legenda || ''), ...(comoVoz ? { sendAudioAsVoice: true } : {}) }), LIMITE_ENVIAR_MS, 'enviar');
     res.json({ idExterno: sent.id?._serialized || null });
   } catch (error) {
     console.warn(`[whatsapp:${sessao.nome}] falha no envio de arquivo${error instanceof EtapaExpirou ? `; etapa=${error.etapa}` : ''}: ${error.message}`);
