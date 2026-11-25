@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { TIPO_OGG_OPUS, converterAudioParaWhatsApp, ehAudio, jaEOggOpus, nomeOgg } from './audioParaWhatsApp';
+import { ARGS_FFMPEG, TIPO_OGG_OPUS, converterAudioParaWhatsApp, ehAudio, jaEOggOpus, nomeOgg } from './audioParaWhatsApp';
 
 const audio = (tipo: string, nome = 'audio-20261125-143005.webm') => ({ buffer: Buffer.from('entrada'), nome, tipo });
 
@@ -33,6 +33,15 @@ describe('converterAudioParaWhatsApp', () => {
 
   it('sem ffmpeg ou conversao falhou: nulo, o envio segue com o original', async () => {
     expect(await converterAudioParaWhatsApp(audio('audio/webm'), vi.fn().mockResolvedValue(null))).toBeNull();
+  });
+});
+
+describe('seguranca do ffmpeg', () => {
+  it('so abre o protocolo pipe, antes da entrada (arquivo forjado nao le arquivos nem URLs)', () => {
+    const i = ARGS_FFMPEG.indexOf('-protocol_whitelist');
+    expect(i).toBeGreaterThanOrEqual(0);
+    expect(ARGS_FFMPEG[i + 1]).toBe('pipe');
+    expect(i).toBeLessThan(ARGS_FFMPEG.indexOf('-i'));
   });
 });
 
