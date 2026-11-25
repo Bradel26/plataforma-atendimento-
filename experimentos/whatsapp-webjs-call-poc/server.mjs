@@ -1403,6 +1403,11 @@ app.post('/api/platform/mensagens', async (req, res) => {
     else respostaDeFalhaNoEnvio(res, error);
   }
 });
+function recusaDeFormatoDoWhatsapp(erro) {
+  if (erro instanceof EtapaExpirou) return false;
+  const texto = String(erro?.message || '').trim();
+  return texto.length <= 3 || /m[ií]dia|media|mime|format|unsupported|invalid/i.test(texto);
+}
 app.post('/api/platform/arquivos', async (req, res) => {
   const sessao = obterSessao(req.body?.session || 'teste-local');
   if (!sessao.client || sessao.status !== 'conectado') return res.status(409).json({ error: 'Conecte o WhatsApp pelo Atendimento primeiro.' });
@@ -1434,7 +1439,11 @@ app.post('/api/platform/arquivos', async (req, res) => {
       } catch (erroDaTentativa) {
         ultimoErro = erroDaTentativa;
         console.warn(`[whatsapp:${sessao.nome}] envio de arquivo como ${tentativa.rotulo} recusado: ${erroDaTentativa.message}`);
-        if (erroDaTentativa instanceof EtapaExpirou) break; // tempo esgotado nao melhora trocando o formato
+        // So troca de formato quando o erro prova que o WhatsApp NAO aceitou a mensagem: a
+        // recusa de formato do WhatsApp Web ("t", ou texto de midia/formato invalido), que
+        // acontece antes do envio. Qualquer outro erro (tempo esgotado, rede, sessao) e
+        // ambiguo: reenviar poderia entregar o audio duas vezes ao cliente.
+        if (!recusaDeFormatoDoWhatsapp(erroDaTentativa)) break;
       }
     }
     if (!sent) throw ultimoErro;
