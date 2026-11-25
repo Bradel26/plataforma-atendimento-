@@ -39,12 +39,15 @@ ENV WHATSAPP_PROVIDER=webjs
 ENV TRANSCRICAO_PROVEDOR=local
 ENV WEBJS_EMBUTIDO=false
 
+# ffmpeg: converte o audio gravado no painel (mp4/webm/m4a) para ogg/opus antes de enviar
+# ao WhatsApp (lib/audioParaWhatsApp.ts). Sem ele o audio sai no formato original, que o
+# WhatsApp Web recusa ("falha no envio de arquivo: t").
 # Producao apenas. O prisma (CLI) esta em dependencies de proposito: o arranque
 # roda migrate deploy, e sem ele o npx tentaria baixar da internet a cada start.
 COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/
 RUN apt-get update \
- && apt-get install -y --no-install-recommends openssl ca-certificates tini \
+ && apt-get install -y --no-install-recommends openssl ca-certificates tini ffmpeg \
  && rm -rf /var/lib/apt/lists/* \
  && npm ci --omit=dev --workspace @plataforma/api --include-workspace-root
 
