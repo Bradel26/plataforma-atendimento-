@@ -94,7 +94,7 @@ export function UsuariosTab() {
   };
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
+    <div className="grid gap-5 min-[1700px]:grid-cols-[1fr_320px]">
       <Card
         titulo="Usuários"
         descricao={`${usuarios.length} cadastrado(s)`}
@@ -110,7 +110,7 @@ export function UsuariosTab() {
           <EmptyState titulo="Nenhum usuário" descricao="Cadastre o primeiro usuário no formulário ao lado." />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+            <table className="w-full min-w-[820px] text-left text-sm">
               <thead className="text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="pb-2 pr-3 font-medium">Selecionar</th>
@@ -143,6 +143,7 @@ export function UsuariosTab() {
                     </td>
                     <td className="py-3">
                       <Select
+                        className="min-w-[140px]"
                         aria-label={`Filial de ${u.nome}`}
                         value={u.filialId ?? ''}
                         onChange={(e) => void definirFilial(u, e.target.value)}

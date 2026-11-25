@@ -123,7 +123,7 @@ export function Barras({
           className="grid items-center gap-2.5"
           style={{ gridTemplateColumns: `${larguraRotulo}px minmax(0, 1fr) auto` }}
         >
-          <span className="truncate text-[13px] text-slate-700" title={item.rotulo}>
+          <span className="line-clamp-2 break-words text-[13px] leading-tight text-slate-700" title={item.rotulo}>
             {item.rotulo}
           </span>
           <span className="block h-2.5" aria-hidden="true">

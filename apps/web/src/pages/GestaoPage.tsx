@@ -215,7 +215,7 @@ export function GestaoPage() {
                   {dados!.volumePorEtapa.map((v) => (
                     <div key={v.funil.id}>
                       <p className="mb-2 text-[12.5px] font-bold text-slate-600">{v.funil.nome}</p>
-                      <ol className="grid gap-1.5 [grid-template-columns:repeat(auto-fill,minmax(118px,1fr))]">
+                      <ol className="grid gap-1.5 [grid-template-columns:repeat(auto-fill,minmax(136px,1fr))]">
                         {v.etapas.map((e, i) => (
                           <li
                             key={e.id}
@@ -223,7 +223,7 @@ export function GestaoPage() {
                               e.parados > 0 ? 'border-red-200 bg-red-50' : 'border-slate-200 bg-slate-50'
                             }`}
                           >
-                            <span className="truncate text-[11.5px] text-slate-600" title={e.nome}>{i + 1}. {e.nome}</span>
+                            <span className="line-clamp-2 break-words text-[11.5px] leading-tight text-slate-600" title={e.nome}>{i + 1}. {e.nome}</span>
                             <span className="text-xl font-bold tabular-nums text-slate-900">{e.total}</span>
                             <span className={`text-[11.5px] font-semibold tabular-nums ${e.parados > 0 ? 'text-red-700' : 'text-slate-500'}`}>
                               {e.parados > 0 ? `${e.parados} parado(s)` : 'nenhum parado'}

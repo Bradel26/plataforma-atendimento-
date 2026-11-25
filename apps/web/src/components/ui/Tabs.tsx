@@ -17,7 +17,8 @@ const CLASSE_ITEM = (ativo: boolean) =>
  * nao do container, para a borda inferior de cada aba colar exatamente na
  * linha divisoria mesmo com a barra rolada.
  */
-const CLASSE_CONTAINER = 'sem-barra-de-rolagem flex min-w-0 gap-1 overflow-x-auto pb-1';
+// Quebram de linha quando nao cabem: com rolagem escondida, a ultima aba sumia sem aviso (tela a 125%).
+const CLASSE_CONTAINER = 'flex min-w-0 flex-wrap gap-1 pb-1';
 
 /**
  * Abas que trocam conteudo sem navegar — `role="tablist"`/`aria-selected`,

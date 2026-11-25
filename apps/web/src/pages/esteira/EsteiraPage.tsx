@@ -687,9 +687,9 @@ export function EsteiraPage() {
           {([
             ['bom', 'até 3 dias'],
             ['atencao', '4–5 dias'],
-            ['grave', 'parado há mais de 5'],
+            ['grave', 'parado há mais de 5 dias'],
           ] as const).map(([tom, rotulo]) => (
-            <li key={tom} className="flex items-center gap-1.5">
+            <li key={tom} className="flex items-center gap-1.5 whitespace-nowrap">
               <span className="h-2 w-2 rounded-full" style={{ backgroundColor: ESTADO[tom] }} aria-hidden="true" />
               {rotulo}
             </li>
