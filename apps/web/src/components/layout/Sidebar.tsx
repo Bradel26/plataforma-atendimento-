@@ -6,6 +6,16 @@ import { useBranding } from '../../features/branding/BrandingProvider';
 import { NAV, itemDaRota } from './nav';
 
 const CHAVE_COLAPSO = 'plataforma:sidebar-colapsada';
+/** Abaixo desta largura de janela (px) o menu recolhe sozinho, se a pessoa nunca escolheu. */
+const LARGURA_AUTO_COLAPSO = 1600;
+
+function preferenciaSalva(): string | null {
+  try {
+    return localStorage.getItem(CHAVE_COLAPSO);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Menu lateral.
@@ -23,13 +33,25 @@ export function Sidebar({ aberta, aoFechar }: { aberta: boolean; aoFechar: () =>
   const { temModulo, temEsteira } = useAuth();
   const { branding } = useBranding();
   const { pathname } = useLocation();
+  // Sem preferencia salva, o menu acompanha a largura da janela: abaixo de
+  // LARGURA_AUTO_COLAPSO ele recolhe sozinho (escala do Windows a 125%/150% deixa
+  // a janela com 1536/1280 px e o conteudo ficava espremido). Quem clicou em
+  // Recolher/Expandir manda: a escolha explicita vale sempre.
   const [colapsada, setColapsada] = useState(() => {
-    try {
-      return localStorage.getItem(CHAVE_COLAPSO) === '1';
-    } catch {
-      return false;
-    }
+    const salva = preferenciaSalva();
+    if (salva !== null) return salva === '1';
+    return typeof window !== 'undefined' && window.innerWidth < LARGURA_AUTO_COLAPSO;
   });
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const consulta = window.matchMedia(`(max-width: ${LARGURA_AUTO_COLAPSO - 1}px)`);
+    const aoMudar = (e: MediaQueryListEvent) => {
+      if (preferenciaSalva() === null) setColapsada(e.matches);
+    };
+    consulta.addEventListener('change', aoMudar);
+    return () => consulta.removeEventListener('change', aoMudar);
+  }, []);
   const navRef = useRef<HTMLElement>(null);
 
   const itens = NAV.filter((item) => temModulo(item.rota.slice(1))).filter(
