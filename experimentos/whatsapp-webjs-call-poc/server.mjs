@@ -1413,8 +1413,31 @@ app.post('/api/platform/arquivos', async (req, res) => {
     const destino = await comTempoLimite(resolverDestinoWhatsapp(sessao.client, numero), LIMITE_RESOLVER_MS, 'resolver destinatario');
     const media = new MessageMedia(String(req.body?.tipo || 'application/octet-stream'), base64, String(req.body?.nome || 'arquivo'));
     // Audio em ogg/opus (a API converte antes de mandar) sai como MENSAGEM DE VOZ, com a onda sonora.
-    const comoVoz = /^audio\/ogg/i.test(String(req.body?.tipo || ''));
-    const sent = await comTempoLimite(sessao.client.sendMessage(destino, media, { caption: String(req.body?.legenda || ''), ...(comoVoz ? { sendAudioAsVoice: true } : {}) }), LIMITE_ENVIAR_MS, 'enviar');
+    const tipoDoArquivo = String(req.body?.tipo || '');
+    const comoVoz = /^audio\//i.test(tipoDoArquivo) && /ogg/i.test(tipoDoArquivo);
+    const legenda = String(req.body?.legenda || '');
+    console.info(`[whatsapp:${sessao.nome}] arquivo para envio: tipo=${tipoDoArquivo} tamanho=${Math.round(base64.length * 0.75)}B voz=${comoVoz}`);
+    // O WhatsApp Web recusa alguns formatos com o erro generico "t". Em vez de perder o audio,
+    // desce a escada: voz -> audio comum -> documento. So a ultima falha vira erro.
+    const tentativas = [
+      ...(comoVoz ? [{ rotulo: 'voz', opcoes: { sendAudioAsVoice: true } }] : []),
+      { rotulo: 'normal', opcoes: {} },
+      ...(/^audio\//i.test(tipoDoArquivo) ? [{ rotulo: 'documento', opcoes: { sendMediaAsDocument: true } }] : []),
+    ];
+    let sent = null;
+    let ultimoErro = null;
+    for (const tentativa of tentativas) {
+      try {
+        sent = await comTempoLimite(sessao.client.sendMessage(destino, media, { caption: legenda, ...tentativa.opcoes }), LIMITE_ENVIAR_MS, 'enviar');
+        if (tentativa.rotulo !== tentativas[0].rotulo) console.warn(`[whatsapp:${sessao.nome}] arquivo enviado como ${tentativa.rotulo} (a primeira tentativa foi recusada)`);
+        break;
+      } catch (erroDaTentativa) {
+        ultimoErro = erroDaTentativa;
+        console.warn(`[whatsapp:${sessao.nome}] envio de arquivo como ${tentativa.rotulo} recusado: ${erroDaTentativa.message}`);
+        if (erroDaTentativa instanceof EtapaExpirou) break; // tempo esgotado nao melhora trocando o formato
+      }
+    }
+    if (!sent) throw ultimoErro;
     res.json({ idExterno: sent.id?._serialized || null });
   } catch (error) {
     console.warn(`[whatsapp:${sessao.nome}] falha no envio de arquivo${error instanceof EtapaExpirou ? `; etapa=${error.etapa}` : ''}: ${error.message}`);
