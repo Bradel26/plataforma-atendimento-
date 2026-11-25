@@ -6,9 +6,9 @@ import { log } from '../../lib/log';
 import { prismaSemIsolamento } from '../../lib/prisma';
 import { comOrganizacao, semOrganizacao } from '../../lib/tenant';
 import { obterSegredoWebhookWppConnect } from '../../config/wppconnect.config';
-import { registrarMensagemEntrante } from './inbound.service';
+import { registrarMensagemEntrante, registrarMensagemPropria } from './inbound.service';
 import { env } from '../../env';
-import { normalizarEventoWpp } from './wppconnect.inbound';
+import { normalizarEventoWpp, normalizarEventoWppPropria } from './wppconnect.inbound';
 import { registrarEstadoDaSessao } from './webhooks/eventos-de-canal';
 import { segredoRecebido } from './providers/segredo-webhook';
 
@@ -150,6 +150,21 @@ wppconnectWebhookRoutes.post(
           sessaoExterna: sessaoBruta,
           camposDoPayload: campos.join(','),
         });
+      }
+
+      // Mensagem enviada pelo proprio celular do dono (so com conector que manda `to`).
+      const propria = normalizarEventoWppPropria(corpo);
+      if (propria) {
+        const resultadoPropria = await registrarMensagemPropria(propria);
+        log.info('webhook', 'mensagem enviada pelo celular gravada', {
+          provider: 'webjs',
+          sessaoExterna: sessaoBruta,
+          canal: 'WHATSAPP',
+          duplicada: 'duplicada' in resultadoPropria ? resultadoPropria.duplicada : false,
+          ignorada: 'ignorada' in resultadoPropria ? resultadoPropria.ignorada : false,
+        });
+        res.json({ ok: true, propria: true });
+        return;
       }
 
       const normalizada = normalizarEventoWpp(corpo);

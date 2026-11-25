@@ -1,4 +1,5 @@
 import type { Channel } from '@prisma/client';
+import { converterAudioParaWhatsApp } from '../../lib/audioParaWhatsApp';
 import { AppError, badRequest } from '../../lib/errors';
 import { env } from '../../env';
 import { obterConfig, obterConfigPorId } from './channels.service';
@@ -186,6 +187,10 @@ export async function enviarArquivoParaCanal(
   if (!enderecoExterno) throw badRequest('Conversa sem endereço externo — não é possível responder');
 
   const config = await configParaEnvio(canal, canalConfigId);
+
+  // Audio gravado/anexado no painel (webm, m4a, mp3...) vai em ogg/opus, o formato nativo do
+  // WhatsApp; o WhatsApp Web recusava webm. Sem ffmpeg ou se falhar, segue o original.
+  if (canal === 'WHATSAPP') arquivo = (await converterAudioParaWhatsApp(arquivo)) ?? arquivo;
 
   // O mesmo desvio do texto. A ponte recebe o binario direto, sem as duas etapas
   // da Cloud API e sem a exigencia de URL publica do Instagram — e por isso este

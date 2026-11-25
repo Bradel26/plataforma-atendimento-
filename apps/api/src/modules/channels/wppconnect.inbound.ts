@@ -52,11 +52,30 @@ function nomeDaMidia(bruto: unknown): string | null {
 }
 
 export function normalizarEventoWpp(bruto: unknown): MensagemNormalizada | null {
+  return normalizar(bruto, false);
+}
+
+/**
+ * Mensagem que o DONO do numero enviou pelo celular (`fromMe`): texto, audio, foto...
+ * So vale quando o conector manda `to` (o destinatario). Sem ele, `chatId` seria o
+ * proprio numero do dono e a conversa nasceria com ele mesmo — por isso conector
+ * antigo continua sendo ignorado, como sempre foi.
+ */
+export function normalizarEventoWppPropria(bruto: unknown): MensagemNormalizada | null {
+  if (!bruto || typeof bruto !== 'object') return null;
+  const evento = bruto as Record<string, unknown>;
+  if (evento.fromMe !== true) return null;
+  const destinatario = typeof evento.to === 'string' ? evento.to.trim() : '';
+  if (!destinatario) return null;
+  return normalizar({ ...evento, chatId: destinatario, from: destinatario, fromMe: false }, true);
+}
+
+function normalizar(bruto: unknown, propria: boolean): MensagemNormalizada | null {
   if (!bruto || typeof bruto !== 'object') return null;
   const evento = bruto as Record<string, unknown>;
 
   if (evento.event !== 'onmessage') return null;
-  if (evento.fromMe === true) return null;
+  if (evento.fromMe === true && !propria) return null;
   if (evento.isGroupMsg === true) return null;
 
   const idExterno = typeof evento.id === 'string' ? evento.id.trim() : '';

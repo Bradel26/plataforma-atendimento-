@@ -902,16 +902,15 @@ async function entregarMensagemNaPlataforma(sessao, message, fromMe) {
   const telefoneContato = fromMe ? null : await telefoneDoRemetente(sessao.client, message.from);
   const payload = {
     event: 'onmessage', session: sessao.nome, id: message.id._serialized,
-    from: message.from, chatId: message.from, body: message.body || '',
+    from: message.from, chatId: message.from, to: message.to || null, body: message.body || '',
     fromMe, isGroupMsg: Boolean(message.from?.endsWith('@g.us')),
     type: message.type || 'chat', notifyName: message._data?.notifyName || null,
     telefoneContato,
   };
-  // So mensagem recebida: a propria conta nao precisa devolver o que enviou.
-  if (!fromMe) {
-    const midia = await baixarMidiaDaMensagem(sessao, message);
-    if (midia) payload.midia = midia;
-  }
+  // Midia tambem das mensagens que o dono enviou pelo celular (audio, foto...): a plataforma
+  // as espelha no historico. O eco do que a propria plataforma enviou e descartado la pelo id.
+  const midia = await baixarMidiaDaMensagem(sessao, message);
+  if (midia) payload.midia = midia;
   console.info(`[whatsapp:${sessao.nome}] encaminhando evento; remetente=${message.from?.endsWith('@lid') ? 'lid' : 'telefone'}, telefoneResolvido=${Boolean(telefoneContato)}`);
   const tentativas = 3;
 

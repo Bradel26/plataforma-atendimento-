@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizarEventoWpp } from './wppconnect.inbound';
+import { normalizarEventoWpp, normalizarEventoWppPropria } from './wppconnect.inbound';
 
 /** Payload real capturado na ETAPA 4.1 (contrato confirmado, nao inferido). */
 const PAYLOAD_REAL_ONMESSAGE = {
@@ -184,5 +184,51 @@ describe('normalizarEventoWpp — miniatura base64 e enderecos que nao sao pesso
   it('status/transmissao/canal nao criam conversa', () => {
     expect(normalizarEventoWpp({ ...PAYLOAD_REAL_ONMESSAGE, chatId: 'status@broadcast', from: 'status@broadcast' })).toBeNull();
     expect(normalizarEventoWpp({ ...PAYLOAD_REAL_ONMESSAGE, chatId: '120363@newsletter', from: '120363@newsletter' })).toBeNull();
+  });
+});
+
+describe('normalizarEventoWppPropria — mensagem enviada pelo proprio celular', () => {
+  const DO_CELULAR = {
+    ...PAYLOAD_REAL_ONMESSAGE,
+    fromMe: true,
+    id: 'true_556298888777@c.us_3EB0AAAA1111',
+    from: '556299671844@c.us', // o proprio dono
+    chatId: '556299671844@c.us',
+    to: '556298888777@c.us', // o cliente
+    type: 'ptt',
+    body: '',
+    content: '',
+    midia: { base64: 'T2dnUw==', mimetype: 'audio/ogg; codecs=opus' },
+  };
+
+  it('audio enviado pelo celular vira mensagem propria da conversa com o DESTINATARIO', () => {
+    const r = normalizarEventoWppPropria(DO_CELULAR);
+    expect(r).toMatchObject({
+      enderecoExterno: '556298888777@c.us',
+      tipoAnexo: 'AUDIO',
+      conteudo: '[áudio recebido]',
+      anexoConteudo: { base64: 'T2dnUw==', mimetype: 'audio/ogg; codecs=opus' },
+    });
+  });
+
+  it('texto digitado no celular tambem entra', () => {
+    const r = normalizarEventoWppPropria({ ...DO_CELULAR, type: 'chat', body: 'Já te mando', content: 'Já te mando', midia: undefined });
+    expect(r?.conteudo).toBe('Já te mando');
+    expect(r?.tipoAnexo).toBe('TEXTO');
+  });
+
+  it('conector antigo (sem `to`) continua ignorado: o chatId seria o proprio dono', () => {
+    const { to: _to, ...semTo } = DO_CELULAR;
+    expect(normalizarEventoWppPropria(semTo)).toBeNull();
+  });
+
+  it('mensagem recebida (fromMe=false) nao e "propria", e o normalizador de recebidas ignora a propria', () => {
+    expect(normalizarEventoWppPropria(PAYLOAD_REAL_ONMESSAGE)).toBeNull();
+    expect(normalizarEventoWpp(DO_CELULAR)).toBeNull();
+  });
+
+  it('grupo e status continuam de fora', () => {
+    expect(normalizarEventoWppPropria({ ...DO_CELULAR, isGroupMsg: true })).toBeNull();
+    expect(normalizarEventoWppPropria({ ...DO_CELULAR, to: 'status@broadcast' })).toBeNull();
   });
 });
