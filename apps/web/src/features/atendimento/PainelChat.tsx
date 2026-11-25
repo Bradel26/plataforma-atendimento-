@@ -25,6 +25,8 @@ import {
   IconeWhatsapp,
 } from './icones';
 import { BarraDeGravacao, MenuAnexos, ModalCamera, useGravadorDeVoz } from './AnexosEGravacao';
+import { microfoneLiberado } from './gravacao';
+import { textoDoErroDeEnvio } from './mensagemDeErroDeEnvio';
 import { BOTAO_ICONE, BotaoEmoji } from './FerramentasResposta';
 import { partesComLinks } from './links';
 import { useAtendimentosAnteriores, type BlocoAnterior } from './useAtendimentosAnteriores';
@@ -467,7 +469,7 @@ export function PainelChat({
       setTexto('');
       onMudou(resp.conversa);
     } catch (err) {
-      setErro(err instanceof ApiError ? err.message : 'Falha ao enviar');
+      setErro(textoDoErroDeEnvio(err, 'Falha ao enviar'));
     } finally {
       enviandoMensagem.current = false;
       setOcupado(false);
@@ -529,7 +531,7 @@ export function PainelChat({
       else setTexto('');
       onMudou(resp.conversa);
     } catch (err) {
-      setErro(err instanceof ApiError ? err.message : 'Falha ao enviar o arquivo');
+      setErro(textoDoErroDeEnvio(err, 'Falha ao enviar o arquivo'));
     } finally {
       setOcupado(false);
     }
@@ -537,6 +539,11 @@ export function PainelChat({
 
   // Microfone do campo de resposta: grava no navegador e manda pelo mesmo caminho dos anexos.
   const gravador = useGravadorDeVoz((arquivo) => void anexar(arquivo));
+  // Escondido por padrao ate o audio ser aceito pelo WhatsApp; liga com ?microfone=1 (ver gravacao.ts).
+  const [microfoneAtivo] = useState(() =>
+    typeof window === 'undefined' ? false : microfoneLiberado(window.location.search, (() => { try { return window.localStorage; } catch { return null; } })()),
+  );
+  const mostrarMicrofone = gravador.suportado && microfoneAtivo;
 
   // Campo de uma linha que cresce com o texto (ate ~5 linhas), como o do WhatsApp.
   useLayoutEffect(() => {
@@ -847,7 +854,7 @@ export function PainelChat({
                     <button type="button" onClick={gravador.enviar} aria-label="Enviar áudio" title="Enviar áudio" className={BOTAO_ENVIAR}>
                       <IconeEnviar tamanho={17} />
                     </button>
-                  ) : texto.trim() || !gravador.suportado ? (
+                  ) : texto.trim() || !mostrarMicrofone ? (
                     <button
                       type="submit"
                       disabled={ocupado || janelaFechada || !texto.trim()}
@@ -887,7 +894,7 @@ export function PainelChat({
                     onMudou(nova);
                     setTextoPrivado('');
                   } catch (err) {
-                    setErro(err instanceof ApiError ? err.message : 'Falha ao enviar a nota interna');
+                    setErro(textoDoErroDeEnvio(err, 'Falha ao enviar a nota interna'));
                   } finally {
                     setOcupado(false);
                   }
