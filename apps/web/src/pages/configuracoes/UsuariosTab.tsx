@@ -94,7 +94,7 @@ export function UsuariosTab() {
   };
 
   return (
-    <div className="grid gap-5 min-[1700px]:grid-cols-[1fr_320px]">
+    <div className="@container"><div className="grid gap-5 @[1240px]:grid-cols-[1fr_320px]">
       <Card
         titulo="Usuários"
         descricao={`${usuarios.length} cadastrado(s)`}
@@ -216,6 +216,6 @@ export function UsuariosTab() {
         </form>
       </Card>
       <PermissoesModuloPanel />
-    </div>
+    </div></div>
   );
 }
