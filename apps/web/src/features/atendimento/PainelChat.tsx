@@ -8,7 +8,7 @@ import { ApiError, api } from '../../lib/api';
 import { telefoneLegivel } from '../../lib/telefone';
 import { LABEL_CONVERSA_STATUS, type ConversaDetalhe, type Mensagem } from '../../lib/types';
 import { AvatarConversa } from './AvatarConversa';
-import { CLASSE_STATUS, clienteAguardandoDesde, esperaPorExtenso, rotuloDoDia } from './apresentacao';
+import { CLASSE_STATUS, clienteAguardandoDesde, esperaPorExtenso, rotuloDoDia, textoSeguroDaMensagem } from './apresentacao';
 import {
   IconeCadeado,
   IconeCheck,
@@ -135,7 +135,7 @@ function Anexo({ mensagem }: { mensagem: Mensagem }) {
   if (tipoAnexo === 'IMAGEM') {
     return (
       <a href={anexoUrl} target="_blank" rel="noreferrer" className="mb-1.5 block">
-        <img src={anexoUrl} alt={conteudo} className="max-h-64 w-auto rounded-lg" />
+        <img src={anexoUrl} alt={textoSeguroDaMensagem(conteudo)} className="max-h-64 w-auto rounded-lg" />
       </a>
     );
   }
@@ -206,7 +206,7 @@ function Bolha({ mensagem, nomeContato }: { mensagem: Mensagem; nomeContato?: st
             Nota interna{mensagem.autorNome ? ` · ${mensagem.autorNome}` : ''}
           </p>
           <Anexo mensagem={mensagem} />
-          <TextoComLinks texto={mensagem.conteudo} />
+          <TextoComLinks texto={textoSeguroDaMensagem(mensagem.conteudo)} />
           <p className="mt-1 text-right text-[11px] tabular-nums text-amber-700">{hora(mensagem.criadoEm)}</p>
         </div>
       </li>
@@ -236,7 +236,7 @@ function Bolha({ mensagem, nomeContato }: { mensagem: Mensagem; nomeContato?: st
           <p className={`mb-0.5 text-[11.5px] font-semibold ${daEmpresa ? 'text-emerald-700' : 'text-slate-500'}`}>{rotulo}</p>
         )}
         <Anexo mensagem={mensagem} />
-        <TextoComLinks texto={mensagem.conteudo} />
+        <TextoComLinks texto={textoSeguroDaMensagem(mensagem.conteudo)} />
         <p className="mt-1 flex items-center justify-end gap-1 text-right text-[11px] tabular-nums text-slate-500">
           {hora(mensagem.criadoEm)}
           {daEmpresa && <TiqueDeStatus status={mensagem.status} />}

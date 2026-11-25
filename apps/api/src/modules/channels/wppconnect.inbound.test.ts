@@ -162,3 +162,27 @@ describe('normalizarEventoWpp', () => {
     expect(resultado?.telefone).toBe('556292885001');
   });
 });
+
+describe('normalizarEventoWpp — miniatura base64 e enderecos que nao sao pessoa', () => {
+  const MINIATURA = '/9j/4AAQSkZJRgABAgAAAQABAAD/4gKASUNDX1BST0ZJTEUAAQEAAAJwQURCRQQgAABtbnRyUkdCIFhZWiAH4QADAAQAFwAqAC9hY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tY=';
+
+  it('foto recebida: o body em base64 nao vira texto, vira o rotulo da midia', () => {
+    const r = normalizarEventoWpp({ ...PAYLOAD_REAL_ONMESSAGE, type: 'image', body: MINIATURA, content: MINIATURA });
+    expect(r?.conteudo).toBe('[imagem recebida]');
+    expect(r?.tipoAnexo).toBe('IMAGEM');
+  });
+
+  it('foto com legenda de verdade mantem a legenda', () => {
+    const r = normalizarEventoWpp({ ...PAYLOAD_REAL_ONMESSAGE, type: 'image', body: 'Segue a foto do local', content: 'Segue a foto do local' });
+    expect(r?.conteudo).toBe('Segue a foto do local');
+  });
+
+  it('base64 num evento que nao e midia e descartado, nao vira mensagem', () => {
+    expect(normalizarEventoWpp({ ...PAYLOAD_REAL_ONMESSAGE, type: 'chat', body: MINIATURA, content: MINIATURA })).toBeNull();
+  });
+
+  it('status/transmissao/canal nao criam conversa', () => {
+    expect(normalizarEventoWpp({ ...PAYLOAD_REAL_ONMESSAGE, chatId: 'status@broadcast', from: 'status@broadcast' })).toBeNull();
+    expect(normalizarEventoWpp({ ...PAYLOAD_REAL_ONMESSAGE, chatId: '120363@newsletter', from: '120363@newsletter' })).toBeNull();
+  });
+});

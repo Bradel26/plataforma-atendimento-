@@ -1,4 +1,5 @@
 import { numeroNormalizado } from './whatsapp.modo';
+import { enderecoNaoEPessoa, pareceBase64DeMidia } from '../../lib/textoDeMidia';
 import type { MensagemNormalizada } from './meta.types';
 
 /**
@@ -69,11 +70,15 @@ export function normalizarEventoWpp(bruto: unknown): MensagemNormalizada | null 
     (typeof evento.from === 'string' && evento.from.trim()) ||
     '';
   if (!enderecoExterno) return null;
+  // Status (stories), listas de transmissao e canais nao sao conversa com uma pessoa.
+  if (enderecoNaoEPessoa(enderecoExterno)) return null;
 
-  const legenda =
+  const legendaBruta =
     (typeof evento.body === 'string' && evento.body.trim()) ||
     (typeof evento.content === 'string' && evento.content.trim()) ||
     '';
+  // Em midia, o `body` do WhatsApp Web e a miniatura em base64, nao uma legenda.
+  const legenda = pareceBase64DeMidia(legendaBruta) ? '' : legendaBruta;
   // Mensagem de midia (audio, foto, video, documento) nao tem texto: o corpo e a
   // legenda, quase sempre vazia. Sem isto ela era descartada. So os tipos da
   // tabela abaixo entram; e2e_notification, protocol, call_log etc. continuam

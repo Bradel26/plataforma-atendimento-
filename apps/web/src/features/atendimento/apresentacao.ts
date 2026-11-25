@@ -60,3 +60,19 @@ export function rotuloDoDia(iso: string, agora = new Date()): string {
     ...(data.getFullYear() !== agora.getFullYear() ? { year: 'numeric' } : {}),
   });
 }
+
+/**
+ * Mensagem cujo "texto" e a miniatura de uma midia em base64 (o conector ja
+ * mandou assim e ficou gravado). Mostra um rotulo em vez de milhares de letras.
+ * Mesma regra de `api/src/lib/textoDeMidia.ts`.
+ */
+export const MSG_MIDIA_SEM_PREVIA = '[mídia recebida — a prévia não pôde ser carregada]';
+
+export function pareceBase64DeMidia(texto: string): boolean {
+  const t = texto.trim();
+  return t.length >= 120 && !/\s/.test(t) && /^[A-Za-z0-9+/_-]+={0,2}$/.test(t);
+}
+
+export function textoSeguroDaMensagem(conteudo: string): string {
+  return pareceBase64DeMidia(conteudo) ? MSG_MIDIA_SEM_PREVIA : conteudo;
+}

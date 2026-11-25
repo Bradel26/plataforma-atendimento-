@@ -1,4 +1,5 @@
 import type { Mensagem } from '../../lib/types';
+import { textoSeguroDaMensagem } from './apresentacao';
 
 const ICONE: Record<Mensagem['tipoAnexo'], string> = { TEXTO: '', IMAGEM: '📷', AUDIO: '🎤', VIDEO: '🎥', ARQUIVO: '📄' };
 const SEM_LEGENDA: Record<Mensagem['tipoAnexo'], string> = {
@@ -11,9 +12,10 @@ type MensagemDaPrevia = Pick<Mensagem, 'conteudo' | 'tipoAnexo' | 'interno'> & {
 export function textoDaPrevia(m: MensagemDaPrevia | null): string {
   if (!m) return 'Sem mensagens';
   if (m.autor === 'SISTEMA') return m.conteudo;
+  const conteudo = textoSeguroDaMensagem(m.conteudo);
   const corpo = m.tipoAnexo === 'TEXTO'
-    ? m.conteudo
-    : `${ICONE[m.tipoAnexo]} ${RESUMO_DE_MIDIA.test(m.conteudo.trim()) ? SEM_LEGENDA[m.tipoAnexo] : m.conteudo}`;
+    ? conteudo
+    : `${ICONE[m.tipoAnexo]} ${RESUMO_DE_MIDIA.test(conteudo.trim()) ? SEM_LEGENDA[m.tipoAnexo] : conteudo}`;
   if (m.interno) return `nota: ${corpo}`;
   return `${m.autor === 'CLIENTE' ? 'cliente' : 'enviada'}: ${corpo}`;
 }
