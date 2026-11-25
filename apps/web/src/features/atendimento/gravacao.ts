@@ -42,9 +42,8 @@ export function nomeDeArquivoCapturado(prefixo: 'audio' | 'foto', mime: string, 
 }
 
 /**
- * O microfone fica escondido por padrao: o WhatsApp Web recusou o audio webm que o
- * Chrome grava (erro 502 do conector em 25/11/2026). Quem esta testando liga com
- * `?microfone=1` na URL (fica salvo no navegador) e desliga com `?microfone=0`.
+ * O WhatsApp Web recusou o audio webm que o Chrome grava (erro 502 em 25/11/2026); o
+ * servidor agora converte para ogg/opus. Interruptor de emergencia: `?microfone=0`.
  * `storage` e injetado para testar sem navegador.
  */
 export const CHAVE_MICROFONE = 'plataforma:microfone';
@@ -53,14 +52,16 @@ export function microfoneLiberado(
   busca: string,
   storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | null,
 ): boolean {
+  // Liberado por padrao desde que o audio passou a ser convertido para ogg/opus no servidor.
+  // `?microfone=0` esconde (e lembra no navegador); `?microfone=1` volta ao normal.
   const pedido = new URLSearchParams(busca).get('microfone');
   try {
-    if (pedido === '1') storage?.setItem(CHAVE_MICROFONE, '1');
-    if (pedido === '0') storage?.removeItem(CHAVE_MICROFONE);
-    if (pedido === '1') return true;
+    if (pedido === '0') storage?.setItem(CHAVE_MICROFONE, '0');
+    if (pedido === '1') storage?.removeItem(CHAVE_MICROFONE);
     if (pedido === '0') return false;
-    return storage?.getItem(CHAVE_MICROFONE) === '1';
+    if (pedido === '1') return true;
+    return storage?.getItem(CHAVE_MICROFONE) !== '0';
   } catch {
-    return pedido === '1';
+    return pedido !== '0';
   }
 }

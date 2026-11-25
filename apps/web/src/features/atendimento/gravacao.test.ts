@@ -56,21 +56,21 @@ function armazem(inicial: Record<string, string> = {}) {
 }
 
 describe('microfoneLiberado', () => {
-  it('por padrao fica escondido', () => {
-    expect(microfoneLiberado('', armazem())).toBe(false);
+  it('por padrao fica liberado', () => {
+    expect(microfoneLiberado('', armazem())).toBe(true);
   });
-  it('?microfone=1 liga e lembra no navegador', () => {
+  it('?microfone=0 esconde e lembra no navegador', () => {
     const s = armazem();
-    expect(microfoneLiberado('?microfone=1', s)).toBe(true);
-    expect(s.dados[CHAVE_MICROFONE]).toBe('1');
-    expect(microfoneLiberado('', s)).toBe(true);
-  });
-  it('?microfone=0 desliga e esquece', () => {
-    const s = armazem({ [CHAVE_MICROFONE]: '1' });
     expect(microfoneLiberado('?microfone=0', s)).toBe(false);
+    expect(s.dados[CHAVE_MICROFONE]).toBe('0');
     expect(microfoneLiberado('', s)).toBe(false);
   });
-  it('sem armazenamento (navegador bloqueou) o padrao continua escondido', () => {
-    expect(microfoneLiberado('', null)).toBe(false);
+  it('?microfone=1 volta ao normal', () => {
+    const s = armazem({ [CHAVE_MICROFONE]: '0' });
+    expect(microfoneLiberado('?microfone=1', s)).toBe(true);
+    expect(microfoneLiberado('', s)).toBe(true);
+  });
+  it('sem armazenamento (navegador bloqueou) o padrao continua liberado', () => {
+    expect(microfoneLiberado('', null)).toBe(true);
   });
 });
