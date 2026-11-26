@@ -899,7 +899,10 @@ async function entregarMensagemNaPlataforma(sessao, message, fromMe) {
   endpoint.searchParams.set('secret', WEBHOOK_SECRET);
   // Remetente `@lid` chega sem telefone; resolve o numero real para a API
   // ligar a conversa ao contato ja cadastrado (campo `telefoneContato`).
-  const telefoneContato = fromMe ? null : await telefoneDoRemetente(sessao.client, message.from);
+  // Em mensagem enviada pelo proprio dono (celular), o contato e o DESTINATARIO (`to`), nao o
+  // remetente. Sem resolver o telefone dele, um chat `@lid` virava um cadastro novo, sem telefone,
+  // duplicado do contato que ja existia.
+  const telefoneContato = await telefoneDoRemetente(sessao.client, fromMe ? message.to : message.from);
   const payload = {
     event: 'onmessage', session: sessao.nome, id: message.id._serialized,
     from: message.from, chatId: message.from, to: message.to || null, body: message.body || '',

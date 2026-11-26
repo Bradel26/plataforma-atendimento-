@@ -450,9 +450,23 @@ async function encontrarOuCriarContato(dados: MensagemNormalizada, canalConfigId
         ? contatos.find((contato) => contato.telefoneNormalizado === numeroNonoDigito)
         : undefined;
       const principal = contatoNonoDigito ?? contatos[0]!;
+      // Cadastro sem telefone criado so pelo @lid deste mesmo endereco (antes de o telefone ser
+      // resolvido): e o mesmo titular. Funde no contato real para nao deixar duplicata.
+      const duplicadosDoLid = await prisma.conversation.findMany({
+        where: {
+          enderecoExterno: dados.enderecoExterno,
+          canal: dados.canal,
+          contato: { telefone: null, excluidoEm: null, anonimizadoEm: null },
+        },
+        select: { contatoId: true },
+        distinct: ['contatoId'],
+      });
       await prisma.$transaction(async (tx) => {
         for (const contato of contatos) {
           if (contato.id !== principal.id) await mesclarContatos(tx, principal.id, contato.id);
+        }
+        for (const { contatoId } of duplicadosDoLid) {
+          if (contatoId !== principal.id) await mesclarContatos(tx, principal.id, contatoId);
         }
         if (
           telefoneResolvido?.length === 13 && telefoneResolvido.startsWith('55') && telefoneResolvido[4] === '9' &&
@@ -531,6 +545,12 @@ async function encontrarOuCriarContato(dados: MensagemNormalizada, canalConfigId
 
   if (porConversa) {
     const contato = await prisma.contact.findUniqueOrThrow({ where: { id: porConversa.contatoId } });
+    if (porTelefone && porTelefone.id !== contato.id && contato.telefone === null) {
+      // Cadastro criado so pelo @lid (sem telefone) e o mesmo titular do contato com telefone:
+      // funde tudo (conversas, historico, CRM) no contato real, sem deixar duplicata para tras.
+      await prisma.$transaction((tx) => mesclarContatos(tx, porTelefone.id, contato.id));
+      return porTelefone;
+    }
     if (porTelefone && porTelefone.id !== contato.id) {
       // Reassocia só as conversas deste endereço e desta linha. Mensagens e
       // CRM continuam preservados; não junta identidades de linhas distintas.
