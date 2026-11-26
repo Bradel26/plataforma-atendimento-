@@ -15,6 +15,15 @@ app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 _model: WhisperModel | None = None
 _model_lock = Lock()
 _max_bytes = 10 * 1024 * 1024
+# Vocabulario do negocio: o Whisper erra termos que nao conhece ("Starlink" vira "star links",
+# "credenciamento" vira palavra parecida). O prompt inicial ensina a grafia correta e o contexto
+# (conversa telefonica em portugues do Brasil), o que melhora nomes e termos tecnicos.
+_initial_prompt = os.environ.get(
+    "WHISPER_INITIAL_PROMPT",
+    "Ligação telefônica em português do Brasil entre um atendente da Bradel e um cliente ou parceiro. "
+    "Assuntos: credenciamento de parceiros TIM e Starlink, chip, plano, recarga, ativação, pedido, "
+    "proposta, boleto, nota fiscal, Protheus, ar-condicionado Philco, WhatsApp, CRM, protocolo.",
+)
 _model_dir = Path(os.environ.get("WHISPER_MODEL_DIR", "/app/apps/api/storage/whisper-models"))
 
 
@@ -29,7 +38,7 @@ def _get_model() -> WhisperModel:
         with _model_lock:
             if _model is None:
                 _model = WhisperModel(
-                    os.environ.get("TRANSCRICAO_LOCAL_MODELO", "base"),
+                    os.environ.get("TRANSCRICAO_LOCAL_MODELO", "small"),
                     device="cpu",
                     compute_type="int8",
                     cpu_threads=max(1, int(os.environ.get("WHISPER_CPU_THREADS", "2"))),
@@ -60,9 +69,12 @@ def transcribe(model: str = Form(...), language: str | None = Form(None), file: 
         recognizer = _get_model()
         segments, info = recognizer.transcribe(
             temporary_path,
-            language=language or None,
+            language=language or "pt",
             beam_size=5,
             vad_filter=True,
+            initial_prompt=_initial_prompt,
+            # Evita o efeito "bola de neve": um erro no inicio contamina o resto da frase.
+            condition_on_previous_text=False,
         )
         segments = list(segments)
         text = " ".join(segment.text.strip() for segment in segments).strip()
@@ -75,7 +87,8 @@ def transcribe(model: str = Form(...), language: str | None = Form(None), file: 
             try:
                 retry_segments, _retry_info = recognizer.transcribe(
                     temporary_path,
-                    language=language or None,
+                    language=language or "pt",
+                    initial_prompt=_initial_prompt,
                     beam_size=3,
                     temperature=0.2,
                     condition_on_previous_text=False,

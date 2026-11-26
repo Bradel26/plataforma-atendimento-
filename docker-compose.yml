@@ -43,7 +43,7 @@ services:
       dockerfile: apps/api/transcriber/Dockerfile
     restart: unless-stopped
     environment:
-      TRANSCRICAO_LOCAL_MODELO: ${TRANSCRICAO_LOCAL_MODELO:-base}
+      TRANSCRICAO_LOCAL_MODELO: ${TRANSCRICAO_LOCAL_MODELO:-small}
       WHISPER_MODEL_DIR: /models
       WHISPER_CPU_THREADS: ${WHISPER_CPU_THREADS:-2}
     ports:
