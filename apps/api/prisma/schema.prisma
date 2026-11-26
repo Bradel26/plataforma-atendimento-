@@ -110,6 +110,7 @@ model Organizacao {
   produtosDoCliente           ProdutoDoCliente[]
   visoesSalvas                VisaoSalva[]
   permissoesModulo            ModulePermission[]
+  resumosConversa             ResumoConversa[]
   filiais                     Filial[]
   camposCustomizados          CampoCustomizado[]
   mensagensRapidas            MensagemRapida[]
@@ -548,6 +549,7 @@ model Conversation {
   pesquisa         Survey?
   chamadas         Call[]
   execucaoFluxo    ExecucaoFluxo?
+  resumos          ResumoConversa[]
   organizacao      Organizacao    @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
 
   @@unique([organizacaoId, protocolo])
@@ -1537,6 +1539,27 @@ model VisaoSalva {
 /// Permissao de modulo por perfil (ADMIN configura em Configuracoes >
 /// Usuarios e permissoes). Presenca da linha = perfil ve o modulo. ADMIN
 /// nunca aparece aqui: sempre ve tudo, tratado em codigo (lib/modulos.ts).
+/// Resumo de um trecho de 2 horas de uma conversa, para entender a situacao do cliente sem ler tudo.
+/// So janelas ja encerradas sao guardadas: a janela em andamento muda a cada mensagem.
+model ResumoConversa {
+  id            String   @id @default(cuid())
+  organizacaoId String   @default("") @map("organizacao_id")
+  conversaId    String   @map("conversa_id")
+  janelaInicio  DateTime @map("janela_inicio")
+  janelaFim     DateTime @map("janela_fim")
+  texto         String
+  mensagens     Int
+  motor         String
+  criadoEm      DateTime @default(now()) @map("criado_em")
+
+  conversa    Conversation @relation(fields: [conversaId], references: [id], onDelete: Cascade)
+  organizacao Organizacao  @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+
+  @@unique([conversaId, janelaInicio])
+  @@index([organizacaoId, conversaId])
+  @@map("resumos_conversa")
+}
+
 model ModulePermission {
   id            String   @id @default(cuid())
   organizacaoId String   @default("") @map("organizacao_id")
