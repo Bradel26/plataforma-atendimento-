@@ -18,7 +18,7 @@ _max_bytes = 10 * 1024 * 1024
 # Atendimento em português do Brasil: sem idioma explícito, a detecção automática erra em trechos curtos (ex.: virava inglês).
 _default_language = os.environ.get("TRANSCRICAO_IDIOMA", "pt") or None
 # Vocabulário do negócio: ajuda o Whisper a acertar marcas e siglas ("Philco", "Protheus", "BTUs") em vez de escrever o som.
-_vocabulario = os.environ.get("TRANSCRICAO_VOCABULARIO", "Bradel, Philco, WhatsApp, Protheus, BTUs, split inverter, CNPJ, ar-condicionado.") or None
+_vocabulario = os.environ.get("TRANSCRICAO_VOCABULARIO", "Bradel, Philco, WhatsApp, Protheus, BTUs, split inverter, CNPJ, ar-condicionado, TIM, Starlink, credenciamento.") or None
 _model_dir = Path(os.environ.get("WHISPER_MODEL_DIR", "/app/apps/api/storage/whisper-models"))
 
 
