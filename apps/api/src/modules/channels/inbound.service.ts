@@ -14,7 +14,7 @@ import { inclusaoDetalhe, toConversaDetalhe, toMensagem } from '../conversations
 import { reservarProtocolo } from '../conversations/protocolo';
 import type { MensagemNormalizada } from './meta.types';
 import { numeroNormalizado } from './whatsapp.modo';
-import { mesclarContatos, telefoneBrAlternativo } from '../contacts/merge.service';
+import { mesclarContatos, telefoneBrAlternativo, unificarConversasAbertas } from '../contacts/merge.service';
 
 type DestinoConversa = { canalConfigId: string | null; filaId: string | null; agenteId: string | null };
 
@@ -468,6 +468,8 @@ async function encontrarOuCriarContato(dados: MensagemNormalizada, canalConfigId
         for (const { contatoId } of duplicadosDoLid) {
           if (contatoId !== principal.id) await mesclarContatos(tx, principal.id, contatoId);
         }
+        // Cura duplicatas ja existentes: duas conversas abertas do mesmo titular na mesma linha.
+        await unificarConversasAbertas(tx, principal.id);
         if (
           telefoneResolvido?.length === 13 && telefoneResolvido.startsWith('55') && telefoneResolvido[4] === '9' &&
           principal.telefoneNormalizado !== telefoneResolvido &&

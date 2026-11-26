@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ClienteDeEscrita } from '../../lib/prisma';
-import { mesclarContatos, telefoneBrAlternativo } from './merge.service';
+import { mesclarContatos, telefoneBrAlternativo, unificarConversasAbertas } from './merge.service';
 
 describe('mesclagem segura de contatos', () => {
   it('reconhece apenas variantes brasileiras de celular com/sem nono dígito', () => {
@@ -37,7 +37,7 @@ describe('mesclagem segura de contatos', () => {
         update: vi.fn().mockResolvedValue({}), delete: vi.fn().mockResolvedValue({}),
       },
       contactOperation: { findMany: vi.fn().mockResolvedValue([]), delete: vi.fn(), update: vi.fn() },
-      conversation: { updateMany: vi.fn().mockResolvedValue({}) }, lead: { updateMany: vi.fn().mockResolvedValue({}) },
+      conversation: { updateMany: vi.fn().mockResolvedValue({}), findMany: vi.fn().mockResolvedValue([]) }, lead: { updateMany: vi.fn().mockResolvedValue({}) },
       ticket: { updateMany: vi.fn().mockResolvedValue({}) }, call: { updateMany: vi.fn().mockResolvedValue({}) },
       activity: { updateMany: vi.fn().mockResolvedValue({}) }, credenciamento: { updateMany: vi.fn().mockResolvedValue({}) },
       contactDeletionRequest: { findMany: vi.fn().mockResolvedValue([]) },
@@ -55,6 +55,27 @@ describe('mesclagem segura de contatos', () => {
       where: { id: 'principal' }, data: expect.objectContaining({ email: 'cliente@example.com', tags: ['cliente', 'parceiro'] }),
     }));
     expect(tx.contact.update).toHaveBeenLastCalledWith({ where: { id: 'secundario' }, data: { excluidoEm: expect.any(Date) } });
+  });
+
+  it('unifica conversas abertas do mesmo titular na mesma linha: fica a mais antiga e as outras entregam o historico', async () => {
+    const base = { contatoId: 'c', canal: 'WHATSAPP', canalConfigId: 'linha-1', naoLidas: 0, arquivada: false };
+    const antiga = { ...base, id: '00008', status: 'AGUARDANDO_CLIENTE', agenteId: 'u1', criadoEm: new Date(1), ultimaMensagemEm: new Date(10) };
+    const nova = { ...base, id: '00009', status: 'EM_ATENDIMENTO', agenteId: 'u1', criadoEm: new Date(2), ultimaMensagemEm: new Date(20), naoLidas: 1 };
+    const outraLinha = { ...base, id: 'outra', canalConfigId: 'linha-2', status: 'ATRIBUIDO', agenteId: null, criadoEm: new Date(3), ultimaMensagemEm: new Date(30) };
+    const tx = {
+      conversation: { findMany: vi.fn().mockResolvedValue([antiga, nova, outraLinha]), update: vi.fn(), deleteMany: vi.fn() },
+      message: { updateMany: vi.fn() }, call: { updateMany: vi.fn() }, ticket: { updateMany: vi.fn() },
+    } as unknown as ClienteDeEscrita;
+
+    await unificarConversasAbertas(tx, 'c');
+
+    expect(tx.message.updateMany).toHaveBeenCalledWith({ where: { conversaId: { in: ['00009'] } }, data: { conversaId: '00008' } });
+    expect(tx.conversation.update).toHaveBeenCalledWith({
+      where: { id: '00008' },
+      data: expect.objectContaining({ status: 'EM_ATENDIMENTO', ultimaMensagemEm: new Date(20), naoLidas: 1 }),
+    });
+    expect(tx.conversation.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['00009'] } } });
+    expect(tx.conversation.deleteMany).toHaveBeenCalledTimes(1); // a conversa de outra linha nao e tocada
   });
 
   it('não mescla contato de outra organização nem contato anonimizado', async () => {

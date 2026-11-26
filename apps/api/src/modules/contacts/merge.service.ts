@@ -88,6 +88,45 @@ export async function mesclarContatos(tx: ClienteDeEscrita, principalId: string,
     },
   });
   await tx.contact.update({ where: { id: secundarioId }, data: { excluidoEm: new Date() } });
+  await unificarConversasAbertas(tx, principalId);
+}
+
+/**
+ * Um titular tem UMA conversa aberta por linha. Quando a fusao de contatos junta duas abertas
+ * (ex.: a enviada pela plataforma e a que nasceu do @lid antes de o telefone ser resolvido), fica
+ * a mais antiga (mesmo protocolo de origem) e as demais entregam mensagens, ligacoes e protocolos
+ * a ela e somem. O estado e o responsavel seguem a conversa mais recente.
+ */
+export async function unificarConversasAbertas(tx: ClienteDeEscrita, contatoId: string) {
+  const abertas = await tx.conversation.findMany({
+    where: { contatoId, status: { not: 'FINALIZADO' } },
+    orderBy: { criadoEm: 'asc' },
+  });
+  const grupos = new Map<string, typeof abertas>();
+  for (const conversa of abertas) {
+    const chave = `${conversa.canal}|${conversa.canalConfigId ?? ''}`;
+    grupos.set(chave, [...(grupos.get(chave) ?? []), conversa]);
+  }
+  for (const grupo of grupos.values()) {
+    if (grupo.length < 2) continue;
+    const [mantida, ...sobras] = grupo as [(typeof abertas)[number], ...typeof abertas];
+    const maisRecente = sobras.reduce((a, b) => (b.ultimaMensagemEm > a.ultimaMensagemEm ? b : a), mantida);
+    const ids = sobras.map((c) => c.id);
+    await tx.message.updateMany({ where: { conversaId: { in: ids } }, data: { conversaId: mantida.id } });
+    await tx.call.updateMany({ where: { conversaId: { in: ids } }, data: { conversaId: mantida.id } });
+    await tx.ticket.updateMany({ where: { conversaId: { in: ids } }, data: { conversaId: mantida.id } });
+    await tx.conversation.update({
+      where: { id: mantida.id },
+      data: {
+        status: maisRecente.status,
+        agenteId: maisRecente.agenteId ?? mantida.agenteId,
+        ultimaMensagemEm: maisRecente.ultimaMensagemEm > mantida.ultimaMensagemEm ? maisRecente.ultimaMensagemEm : mantida.ultimaMensagemEm,
+        naoLidas: grupo.reduce((total, c) => total + c.naoLidas, 0),
+        arquivada: grupo.every((c) => c.arquivada),
+      },
+    });
+    await tx.conversation.deleteMany({ where: { id: { in: ids } } });
+  }
 }
 
 /** Retorna o número brasileiro equivalente com ou sem nono dígito móvel. */
