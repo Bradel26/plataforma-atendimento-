@@ -416,7 +416,9 @@ export async function entregarParaIa(
     const corpo = JSON.stringify(corpoDaEntrega(mensagem, conversa, contato));
     const timestamp = Math.floor(Date.now() / 1000);
 
+    // `redirect: error`: um 302 do webhook nao pode empurrar a API para um host interno.
     const resposta = await fetch(config.iaUrlWebhook, {
+      redirect: 'error',
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

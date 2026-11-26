@@ -218,11 +218,12 @@ describe('hub — notificarMensagem / incluirSalaDaConversa', () => {
     );
 
     const alvos = (to.mock.calls[0]?.[0] as string[] | undefined) ?? [];
+    expect(alvos).not.toContain(salas.fila('org-A', 'fila-1'));
     expect(new Set(alvos)).toEqual(
       new Set([
         salas.admin('org-A'),
         salas.supervisao('org-A'),
-        salas.fila('org-A', 'fila-1'),
+        // R-01: com responsavel (agenteId) a sala da fila nao recebe mais o texto da mensagem.
         salas.usuario('org-A', 'agente-1'),
         salas.conversa('org-A', 'conv-1'),
       ]),
@@ -239,11 +240,12 @@ describe('hub — notificarMensagem / incluirSalaDaConversa', () => {
 
     const alvos = (to.mock.calls[0]?.[0] as string[] | undefined) ?? [];
     expect(alvos).not.toContain(salas.conversa('org-A', 'conv-1'));
+    expect(alvos).not.toContain(salas.fila('org-A', 'fila-1'));
     expect(new Set(alvos)).toEqual(
       new Set([
         salas.admin('org-A'),
         salas.supervisao('org-A'),
-        salas.fila('org-A', 'fila-1'),
+        // R-01: com responsavel (agenteId) a sala da fila nao recebe mais o texto da mensagem.
         salas.usuario('org-A', 'agente-1'),
       ]),
     );

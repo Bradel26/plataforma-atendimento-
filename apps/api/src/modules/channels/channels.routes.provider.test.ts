@@ -14,6 +14,9 @@ const configFalsa = {
   id: 'canal-1',
   canal: 'WHATSAPP' as const,
   modo: 'NAO_OFICIAL' as const,
+  // A rota do QR/estado da linha compartilhada exige a linha ativa (bbc9e62): sem isso
+  // ela responde "desativada" e nem chega a chamar o provider.
+  ativo: true,
   donoId: null as string | null,
   ponteSessao: null as string | null,
   ponteConectadoEm: new Date('2026-10-13T15:00:00.000Z'),
@@ -130,6 +133,19 @@ describe('channels.routes — QR/estado/desconectar passam pelo WhatsAppProvider
 
     expect(getQRCode).toHaveBeenCalledWith(configFalsa);
     expect(res.json).toHaveBeenCalledWith({ qr: 'data:image/png;base64,abc', conectado: false, motivo: null });
+  });
+
+  it('GET /whatsapp/ponte/qr com a linha desativada nao chama o provider (nao reinicia a sessao)', async () => {
+    const { obterConfig } = await import('./channels.service');
+    vi.mocked(obterConfig).mockResolvedValueOnce({ ...configFalsa, ativo: false } as never);
+    const handler = handlerDe('/whatsapp/ponte/qr', 'get');
+    const res = fakeRes();
+
+    await rodar(handler, fakeReq(), res);
+    await vi.waitFor(() => expect(res.json).toHaveBeenCalled());
+
+    expect(getQRCode).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ qr: null, conectado: false }));
   });
 
   it('GET /whatsapp/ponte/estado chama whatsAppProvider.getStatus', async () => {

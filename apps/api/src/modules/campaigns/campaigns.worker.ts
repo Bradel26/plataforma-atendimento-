@@ -1,13 +1,16 @@
 import { readFile } from 'node:fs/promises';
 import { AppError } from '../../lib/errors';
-import { aguardarVaga, registrarHandler } from '../../lib/fila';
+import { aguardarVaga, registrarHandler, type Contexto } from '../../lib/fila';
 import { prisma } from '../../lib/prisma';
+import { trava } from '../../lib/trava';
 import { enviarArquivoParaCanal, enviarParaCanal } from '../channels/outbound.service';
-import { TIPO_ITEM_CAMPANHA, renderizar } from './campaigns.service';
+import { TIPO_ITEM_CAMPANHA, chaveFilaItem, chaveProcessandoItem, renderizar } from './campaigns.service';
 import { caminhoDe } from '../../lib/storage';
 
 /** Envios por segundo, por canal. Abaixo do limite da Cloud API, com folga. */
 const POR_SEGUNDO = 10;
+/** Validade da trava de processamento de um item (aguardarVaga + anexos cabem folgado). */
+const LEASE_MS = 5 * 60_000;
 
 /**
  * Um trabalho por contato da campanha.
@@ -17,6 +20,21 @@ const POR_SEGUNDO = 10;
  * lanca para a fila reagendar.
  */
 registrarHandler<{ itemId: string }>(TIPO_ITEM_CAMPANHA, async ({ itemId }, ctx) => {
+  // Um worker por item: job duplicado ou varias instancias nao enviam em dobro.
+  // A trava expira sozinha (processo que morre nao bloqueia o item para sempre).
+  const token = await trava.adquirir(chaveProcessandoItem(itemId), LEASE_MS);
+  if (!token) return;
+  try {
+    await processarItem(itemId, ctx);
+    // Terminou sem pedir nova tentativa: o item sai da fila e pode ser disparado
+    // de novo se for reprocessado. Em tentativa pendente (throw) a marca fica.
+    await trava.remover(chaveFilaItem(itemId));
+  } finally {
+    await trava.liberar(chaveProcessandoItem(itemId), token);
+  }
+});
+
+async function processarItem(itemId: string, ctx: Contexto) {
   const item = await prisma.campaignItem.findUnique({
     where: { id: itemId },
     include: { contato: true, campanha: { include: { anexos: { orderBy: { criadoEm: 'asc' } } } } },
@@ -88,7 +106,7 @@ registrarHandler<{ itemId: string }>(TIPO_ITEM_CAMPANHA, async ({ itemId }, ctx)
     await prisma.campaignItem.update({ where: { id: item.id }, data: { erro: `${motivo} (tentando de novo)` } });
     throw err;
   }
-});
+}
 
 async function concluirSeVazia(campanhaId: string) {
   const restantes = await prisma.campaignItem.count({ where: { campanhaId, status: 'PENDENTE' } });

@@ -183,6 +183,15 @@ export function useConversas(
     [carregarContadores],
   );
 
+  /** A conversa ganhou responsavel e saiu da fila: o servidor so manda o id (sem texto nem detalhe). */
+  const sairDaFila = useCallback(
+    ({ id }: { id: string }) => {
+      setConversas((atual) => atual.filter((c) => c.id !== id));
+      void carregarContadores().catch(() => undefined);
+    },
+    [carregarContadores],
+  );
+
   // Um unico socket para todo o painel, reconectado se o token mudar.
   useEffect(() => {
     const token = getAccessToken();
@@ -193,14 +202,16 @@ export function useConversas(
 
     instancia.on(EVENTOS.conversaNova, aplicarEvento);
     instancia.on(EVENTOS.conversaAtualizada, aplicarEvento);
+    instancia.on(EVENTOS.conversaSaiuDaFila, sairDaFila);
 
     return () => {
       instancia.off(EVENTOS.conversaNova, aplicarEvento);
       instancia.off(EVENTOS.conversaAtualizada, aplicarEvento);
+      instancia.off(EVENTOS.conversaSaiuDaFila, sairDaFila);
       instancia.disconnect();
       setSocket(null);
     };
-  }, [aplicarEvento]);
+  }, [aplicarEvento, sairDaFila]);
 
   /** Retorna a funcao de limpeza esperada pelo useEffect (precisa devolver void). */
   const inscreverMensagens = useCallback(

@@ -33,7 +33,7 @@ export function decifrar(valor: string): string {
 
   const [, ivHex, tagHex, cifradoHex] = partes as [string, string, string, string];
   try {
-    const decipher = createDecipheriv('aes-256-gcm', chave(), Buffer.from(ivHex, 'hex'));
+    const decipher = createDecipheriv('aes-256-gcm', chave(), Buffer.from(ivHex, 'hex'), { authTagLength: 16 });
     decipher.setAuthTag(Buffer.from(tagHex, 'hex'));
     return Buffer.concat([decipher.update(Buffer.from(cifradoHex, 'hex')), decipher.final()]).toString('utf8');
   } catch {

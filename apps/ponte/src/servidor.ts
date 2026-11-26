@@ -1,4 +1,4 @@
-import { timingSafeEqual } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import multer from 'multer';
 import { config } from './config.js';
@@ -45,10 +45,11 @@ function autenticar(req: Request, res: Response, proximo: NextFunction) {
   const cabecalho = req.header('authorization') ?? '';
   const recebido = cabecalho.startsWith('Bearer ') ? cabecalho.slice('Bearer '.length).trim() : '';
 
-  const a = Buffer.from(recebido, 'utf8');
-  const b = Buffer.from(config.token, 'utf8');
+  // sha256 iguala o tamanho: a comparacao nao vaza nem o tamanho do token.
+  const a = createHash('sha256').update(recebido, 'utf8').digest();
+  const b = createHash('sha256').update(config.token, 'utf8').digest();
 
-  if (a.length !== b.length || !timingSafeEqual(a, b)) {
+  if (!timingSafeEqual(a, b)) {
     res.status(401).json({ erro: 'token invalido' });
     return;
   }
@@ -93,7 +94,9 @@ export function criarServidor() {
    * ser marcado como morto quando estivesse vivo.
    */
   app.get('/saude', (_req, res) => {
-    res.json({ ok: true, sessoes: listar() });
+    // So o minimo operacional: nome de sessao, estado e numero de WhatsApp de cada
+    // linha exigem token (veja `/saude/detalhe`, abaixo de `autenticar`).
+    res.json({ ok: true });
   });
 
   /*
@@ -109,11 +112,19 @@ export function criarServidor() {
     }
 
     res.setHeader('Content-Type', item.tipo);
+    // Tipo vem do contato no WhatsApp: o navegador nao pode interpretar nem executar.
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', 'sandbox');
     res.setHeader('Content-Disposition', 'inline; filename="' + item.nome.replace(/"/g, '') + '"');
     res.send(item.buffer);
   });
 
   app.use(autenticar);
+
+  /** Detalhe das linhas (antes publico em `/saude`): so com o token da plataforma. */
+  app.get('/saude/detalhe', (_req, res) => {
+    res.json({ ok: true, sessoes: listar() });
+  });
 
   /** Diagnostico. O formato e o que `lerEstadoDaPonte()` sabe ler. */
   const estado = async (req: Request, res: Response) => {

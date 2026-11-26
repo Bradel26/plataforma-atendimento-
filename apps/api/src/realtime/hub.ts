@@ -129,7 +129,30 @@ async function emitirDaConversa(evento: string, payload: unknown, destinos: Dest
   if (!org) return;
   const id = idDaConversa(payload, destinos);
   const dono = id ? await donoDaConversa(id) : null;
-  io?.to(salasDaConversa(org, destinos, dono)).emit(evento, payload);
+  const plano = planoDaEmissao(org, evento, destinos, dono);
+  // Primeiro o aviso minimo da fila: quem esta na fila E tambem enxerga a conversa por outra sala
+  // (admin, supervisao, responsavel) recebe o evento completo logo depois e a mantem na lista.
+  if (plano.salaFila && id) io?.to([plano.salaFila]).emit(EVENTOS.conversaSaiuDaFila, { id });
+  io?.to(plano.salas).emit(evento, payload);
+}
+
+/**
+ * Quem so esta na sala da FILA enxerga conversas em espera (politicaConversas). Depois que a
+ * conversa tem responsavel, o texto das mensagens e o detalhe dela nao podem mais ir para a sala
+ * da fila: a autorizacao e feita aqui, no servidor, antes de emitir, e nao no filtro da tela.
+ * A fila recebe so `conversa:saiu-da-fila` ({ id }), para a lista dos colegas esvaziar a linha.
+ */
+export function planoDaEmissao(
+  org: string,
+  evento: string,
+  destinos: Destinos,
+  dono: DonoDaConversa | null,
+): { salas: string[]; salaFila: string | null } {
+  const todas = salasDaConversa(org, destinos, dono);
+  if (!destinos.filaId || !destinos.agenteId) return { salas: todas, salaFila: null };
+  const salaFila = salas.fila(org, destinos.filaId);
+  const avisaSaida = evento === EVENTOS.conversaNova || evento === EVENTOS.conversaAtualizada;
+  return { salas: todas.filter((s) => s !== salaFila), salaFila: avisaSaida ? salaFila : null };
 }
 
 /**
@@ -148,6 +171,14 @@ function organizacaoDoContexto(): string | null {
     return null;
   }
   return ctx.organizacaoId;
+}
+
+/** A conversa saiu desta fila (transferencia): so o id, nunca o detalhe. */
+export function notificarSaiuDaFila(conversaId: string, filaId: string): void {
+  if (!io) return;
+  const org = organizacaoDoContexto();
+  if (!org) return;
+  io.to([salas.fila(org, filaId)]).emit(EVENTOS.conversaSaiuDaFila, { id: conversaId });
 }
 
 export const notificarConversaNova = (conversa: unknown, destinos: Destinos): Promise<void> =>

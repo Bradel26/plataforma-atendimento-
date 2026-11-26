@@ -13,7 +13,7 @@ import { apos, codificarCursor, decodificarCursor, fatiar } from '../../lib/pagi
 import { normalizarTags } from '../../lib/tags';
 import { colidiuNoIdExterno } from '../../lib/erros-prisma';
 import { AppError, badRequest, conflict, forbidden, notFound } from '../../lib/errors';
-import { notificarConversaAtualizada, notificarConversaNova, notificarMensagem } from '../../realtime/hub';
+import { notificarConversaAtualizada, notificarConversaNova, notificarMensagem, notificarSaiuDaFila } from '../../realtime/hub';
 import { enviarArquivoParaCanal, enviarParaCanal, exigeEnvioExterno } from '../channels/outbound.service';
 import { obterConfig, obterConfigPorId } from '../channels/channels.service';
 import { decidirDestino, filaPadraoDoCanal } from '../channels/inbound.service';
@@ -1033,15 +1033,18 @@ async function publicar(
   // Mesmo cuidado de `publicarNova`: a sala da conversa e compartilhada com o
   // visitante do Webchat, entao o payload nunca leva notas internas.
   const semNotas = semNotasInternas(detalhe);
+  // Fila ANTERIOR: so o id, para a linha sair da lista dela (R-01). Antes ela recebia o detalhe
+  // inteiro (contato e ultima mensagem). Vai primeiro: quem tambem recebe o evento completo
+  // abaixo (ex.: novo responsavel vinculado as duas filas) o mantem na lista.
+  if (anterior.filaAnteriorId && anterior.filaAnteriorId !== detalhe.fila?.id) {
+    notificarSaiuDaFila(id, anterior.filaAnteriorId);
+  }
   notificarConversaAtualizada(semNotas, {
     conversaId: id,
     filaId: detalhe.fila?.id,
     agenteId: detalhe.agente?.id,
     agenteAnteriorId: anterior.agenteAnteriorId,
   });
-  if (anterior.filaAnteriorId && anterior.filaAnteriorId !== detalhe.fila?.id) {
-    notificarConversaAtualizada(semNotas, { filaId: anterior.filaAnteriorId });
-  }
 
   return detalhe;
 }

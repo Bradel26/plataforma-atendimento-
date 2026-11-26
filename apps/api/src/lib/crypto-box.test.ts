@@ -22,6 +22,12 @@ describe('cifragem de segredos', () => {
     expect(decifrar('token-antigo-em-claro')).toBe('token-antigo-em-claro');
   });
 
+  /** Tag GCM truncada (4 bytes) nao pode ser aceita: enfraquece a autenticidade. */
+  it('rejeita texto cifrado com tag de autenticacao truncada', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const [prefixo, iv, tag, dados] = cifrar('segredo-do-canal').split(':');
+    expect(decifrar([prefixo, iv, tag!.slice(0, 8), dados].join(':'))).toBe('');
+  });
   /**
    * GCM detecta alteracao. Devolver vazio faz o canal responder "nao
    * configurado" em vez de tentar autenticar com lixo na Graph API.

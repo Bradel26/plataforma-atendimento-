@@ -8,6 +8,8 @@ export const EVENTOS = {
   /** Status, agente ou fila da conversa mudou. */
   conversaAtualizada: 'conversa:atualizada',
   /** Nova mensagem numa conversa. */
+  /** A conversa ganhou responsavel: a sala da fila so recebe o id, para tirar a linha da lista. */
+  conversaSaiuDaFila: 'conversa:saiu-da-fila',
   mensagemNova: 'mensagem:nova',
   /** Ack do provider mudou o status de entrega de uma mensagem ja enviada. */
   mensagemStatus: 'mensagem:status',

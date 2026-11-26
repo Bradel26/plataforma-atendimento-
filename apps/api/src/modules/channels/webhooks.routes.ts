@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { Router, raw, type Response } from 'express';
 import { asyncHandler } from '../../http/async-handler';
 import { param } from '../../http/params';
@@ -19,6 +20,10 @@ import type { MetaWebhook } from './meta.types';
 import { registrarChamadasMeta } from './meta-calling.service';
 
 export const webhooksRoutes = Router();
+
+/** Compara segredos sem vazar o tamanho nem o ponto da diferenca pelo tempo. */
+const igualEmTempoConstante = (a: string, b: string) =>
+  timingSafeEqual(createHash('sha256').update(a).digest(), createHash('sha256').update(b).digest());
 
 const canalDaRota = (valor: string): CanalExterno => {
   const canal = valor.toUpperCase();
@@ -47,7 +52,8 @@ webhooksRoutes.get(
       canal === 'WHATSAPP' &&
       modo === 'subscribe' &&
       env.META_WEBHOOK_VERIFY_TOKEN &&
-      token === env.META_WEBHOOK_VERIFY_TOKEN
+      typeof token === 'string' &&
+      igualEmTempoConstante(token, env.META_WEBHOOK_VERIFY_TOKEN)
     ) {
       res.type('text/plain').send(String(challenge ?? ''));
       return;

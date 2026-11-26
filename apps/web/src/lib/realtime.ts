@@ -4,6 +4,7 @@ import { io, type Socket } from 'socket.io-client';
 export const EVENTOS = {
   conversaNova: 'conversa:nova',
   conversaAtualizada: 'conversa:atualizada',
+  conversaSaiuDaFila: 'conversa:saiu-da-fila',
   mensagemNova: 'mensagem:nova',
   mensagemStatus: 'mensagem:status',
   agenteStatus: 'agente:status',

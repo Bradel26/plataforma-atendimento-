@@ -31,7 +31,7 @@ widgetRoutes.get(
     // Cache curto: trocar a cor da marca nas configuracoes precisa refletir no
     // site do cliente sem esperar o cache expirar por horas.
     res.setHeader('Cache-Control', 'public, max-age=300');
-    res.send(script({ cor: branding.corPrimaria, nome: branding.appName, origem: env.WEB_ORIGIN }));
+    res.send(script({ cor: branding.corPrimaria, nome: branding.appName.replace(/\*\//g, '* /').replace(/[\r\n]+/g, ' '), origem: env.WEB_ORIGIN }));
   }),
 );
 

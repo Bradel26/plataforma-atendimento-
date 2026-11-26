@@ -3,8 +3,15 @@ import { prisma } from '../../lib/prisma';
 import { badRequest, notFound } from '../../lib/errors';
 import { exigeEnvioExterno } from '../channels/outbound.service';
 import { enfileirar } from '../../lib/fila';
+import { trava } from '../../lib/trava';
 import { organizacaoAtual } from '../../lib/tenant';
 import { urlAssinada } from '../../lib/storage';
+
+/** Marca "item ja esta na fila": evita enfileirar o mesmo contato duas vezes. */
+export const chaveFilaItem = (itemId: string) => `campanha:fila:${itemId}`;
+/** Trava de processamento: um worker por item, mesmo com varias instancias. */
+export const chaveProcessandoItem = (itemId: string) => `campanha:proc:${itemId}`;
+const TTL_MARCA_FILA_MS = 10 * 60_000;
 
 const inclusao = {
   fila: { select: { id: true, nome: true } },
@@ -235,12 +242,29 @@ export async function dispararCampanha(id: string, limite = 500) {
     take: limite,
   });
 
+  // Marca por item: duplo clique ou duas requisicoes simultaneas leem os mesmos
+  // pendentes, mas so uma delas consegue a marca e enfileira. A marca expira
+  // sozinha e o worker a remove ao terminar o item (reprocessar falhas continua
+  // possivel). Um disparo novo e legitimo depois que o item sai da fila.
+  let enfileirados = 0;
+  let jaNaFila = 0;
   for (const item of pendentes) {
-    await enfileirar(TIPO_ITEM_CAMPANHA, { itemId: item.id });
+    const marca = await trava.adquirir(chaveFilaItem(item.id), TTL_MARCA_FILA_MS);
+    if (!marca) {
+      jaNaFila += 1;
+      continue;
+    }
+    try {
+      await enfileirar(TIPO_ITEM_CAMPANHA, { itemId: item.id });
+      enfileirados += 1;
+    } catch (err) {
+      await trava.remover(chaveFilaItem(item.id));
+      throw err;
+    }
   }
 
   const total = await prisma.campaignItem.count({ where: { campanhaId: id, status: 'PENDENTE' } });
-  return { enfileirados: pendentes.length, pendentes: total, foraDoLote: Math.max(0, total - pendentes.length) };
+  return { enfileirados, jaNaFila, pendentes: total, foraDoLote: Math.max(0, total - pendentes.length) };
 }
 
 /** Reenfileira os itens que falharam, para tentar de novo depois de corrigir. */
