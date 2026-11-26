@@ -15,6 +15,7 @@ import { HistoricoTab } from './HistoricoTab';
 import { AcompanhamentosTab } from './AcompanhamentosTab';
 import { CicloParceiroTab } from './CicloParceiroTab';
 import { JornadasTab } from './JornadasTab';
+import { SolicitacoesExclusaoContatos } from './SolicitacoesExclusaoContatos';
 
 /**
  * `perfis` na aba restringe quem a ve.
@@ -72,6 +73,8 @@ const ABAS = [
   // Renomear e remover etiqueta alcancam registros que quem clica nao ve, entao
   // a aba segue o mesmo perfil da rota: ADMIN e SUPERVISOR.
   { id: 'dados', label: 'Importar / Exportar', perfis: ['ADMIN', 'SUPERVISOR'] },
+  // Aprovacao de remocao de contatos: mesma regra de quem decide na API (ADMIN/SUPERVISOR).
+  { id: 'aprovacoes', label: 'Aprovações', perfis: ['ADMIN', 'SUPERVISOR'] },
 ] as const satisfies ReadonlyArray<{ id: string; label: string; perfis?: readonly Perfil[] }>;
 
 type AbaId = (typeof ABAS)[number]['id'];
@@ -179,6 +182,7 @@ export function CrmPage() {
       {aba === 'produtividade' && <ProdutividadeTab />}
       {aba === 'painel-vendedor' && <PainelVendedorTab />}
       {aba === 'dados' && <DadosTab />}
+      {aba === 'aprovacoes' && <SolicitacoesExclusaoContatos />}
     </div>
   );
 }
