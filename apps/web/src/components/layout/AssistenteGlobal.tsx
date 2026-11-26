@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as EventoPonteiro } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../features/auth/AuthProvider';
 import { api } from '../../lib/api';
@@ -42,6 +42,25 @@ function IconeAssistente({ pequeno = false }: { pequeno?: boolean }) {
   );
 }
 
+const CHAVE_POSICAO = 'assistente-global-posicao';
+const TAMANHO_BOLA = 56;
+const MARGEM = 8;
+type Posicao = { x: number; y: number };
+
+function limitar(p: Posicao): Posicao {
+  return {
+    x: Math.min(Math.max(MARGEM, p.x), Math.max(MARGEM, window.innerWidth - TAMANHO_BOLA - MARGEM)),
+    y: Math.min(Math.max(MARGEM, p.y), Math.max(MARGEM, window.innerHeight - TAMANHO_BOLA - MARGEM)),
+  };
+}
+function posicaoInicial(): Posicao {
+  try {
+    const salva = JSON.parse(localStorage.getItem(CHAVE_POSICAO) ?? 'null') as Posicao | null;
+    if (salva && Number.isFinite(salva.x) && Number.isFinite(salva.y)) return limitar(salva);
+  } catch { /* sem armazenamento: usa o canto padrao */ }
+  return limitar({ x: window.innerWidth - TAMANHO_BOLA - 24, y: window.innerHeight - TAMANHO_BOLA - 24 });
+}
+
 /** Assistente persistente do shell. A API aplica as permissões de cada módulo consultado. */
 export function AssistenteGlobal() {
   const { usuario, temModulo } = useAuth();
@@ -52,6 +71,32 @@ export function AssistenteGlobal() {
   const [erro, setErro] = useState<string | null>(null);
   const fimRef = useRef<HTMLDivElement>(null);
   const campoRef = useRef<HTMLTextAreaElement>(null);
+  const [posicao, setPosicao] = useState<Posicao>(posicaoInicial);
+  const arrasto = useRef<{ dx: number; dy: number; x0: number; y0: number; moveu: boolean } | null>(null);
+
+  // Janela redimensionada (ou escala do Windows mudou): a bola nao pode ficar fora da tela.
+  useEffect(() => {
+    const ajustar = () => setPosicao((p) => limitar(p));
+    window.addEventListener('resize', ajustar);
+    return () => window.removeEventListener('resize', ajustar);
+  }, []);
+
+  const iniciarArrasto = (e: EventoPonteiro<HTMLButtonElement>) => {
+    arrasto.current = { dx: e.clientX - posicao.x, dy: e.clientY - posicao.y, x0: e.clientX, y0: e.clientY, moveu: false };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const moverArrasto = (e: EventoPonteiro<HTMLButtonElement>) => {
+    const a = arrasto.current;
+    if (!a) return;
+    if (!a.moveu && Math.hypot(e.clientX - a.x0, e.clientY - a.y0) < 5) return;
+    a.moveu = true;
+    setPosicao(limitar({ x: e.clientX - a.dx, y: e.clientY - a.dy }));
+  };
+  const terminarArrasto = () => {
+    if (arrasto.current?.moveu) {
+      try { localStorage.setItem(CHAVE_POSICAO, JSON.stringify(posicao)); } catch { /* ignora */ }
+    }
+  };
 
   useEffect(() => {
     if (aberto) {
@@ -109,11 +154,16 @@ export function AssistenteGlobal() {
   }
 
   return (
-    <div className="fixed bottom-5 right-5 z-[80] flex flex-col items-end gap-3 sm:bottom-6 sm:right-6">
+    <div className="fixed z-[80]" style={{ left: posicao.x, top: posicao.y, width: TAMANHO_BOLA, height: TAMANHO_BOLA }}>
       {aberto && (
         <section
           aria-label="Assistente da plataforma"
-          className="flex h-[min(680px,calc(100dvh-7rem))] w-[min(420px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/20"
+          style={{
+            // Abre para o lado com mais espaco, sempre alinhado a bola e dentro da tela.
+            ...(posicao.y > window.innerHeight / 2 ? { bottom: TAMANHO_BOLA + 12 } : { top: TAMANHO_BOLA + 12 }),
+            ...(posicao.x > window.innerWidth / 2 ? { right: 0 } : { left: 0 }),
+          }}
+          className="absolute flex h-[min(680px,calc(100dvh-7rem))] w-[min(420px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/20"
         >
           <header className="flex items-center gap-3 border-b border-slate-100 bg-white px-4 py-3.5">
             {mensagens.length > 0 && (
@@ -213,8 +263,12 @@ export function AssistenteGlobal() {
         type="button"
         aria-label={aberto ? 'Fechar assistente' : 'Abrir assistente da plataforma'}
         aria-expanded={aberto}
-        onClick={() => setAberto((valor) => !valor)}
-        className="anel-de-foco flex h-14 w-14 items-center justify-center rounded-full bg-violet-600 text-white shadow-lg shadow-violet-900/25 transition hover:scale-105 hover:bg-violet-700 focus-visible:outline-violet-400"
+        onPointerDown={iniciarArrasto}
+        onPointerMove={moverArrasto}
+        onPointerUp={terminarArrasto}
+        onClick={() => { if (arrasto.current?.moveu) { arrasto.current = null; return; } setAberto((valor) => !valor); }}
+        title="Arraste para mover"
+        className="anel-de-foco flex h-14 w-14 touch-none cursor-grab active:cursor-grabbing items-center justify-center rounded-full bg-violet-600 text-white shadow-lg shadow-violet-900/25 transition hover:scale-105 hover:bg-violet-700 focus-visible:outline-violet-400"
       >
         {aberto ? (
           <svg aria-hidden="true" viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="m6 6 12 12M18 6 6 18" /></svg>
