@@ -272,6 +272,7 @@ describe('iniciarConversa — publicacao em tempo real (Fase 11.2)', () => {
     contactFindFirst.mockResolvedValue({ id: 'contato-1', telefone: '5511999998888' });
     conversationFindFirst
       .mockResolvedValueOnce(null) // nao ha conversa aberta ainda
+      .mockResolvedValueOnce(null) // nenhuma conversa encerrada para reabrir
       .mockResolvedValueOnce({ id: 'conv-1', fila: null, agente: { id: 'user-1' } }); // carregarOuFalhar em publicarNova
     channelConfigFindFirst.mockResolvedValue({ id: 'cfg-pessoal', donoId: 'user-1', filaId: null, ...CONFIG_OFICIAL_BASE });
     conversationCreate.mockResolvedValue({ id: 'conv-1' });
@@ -290,6 +291,7 @@ describe('iniciarConversa — publicacao em tempo real (Fase 11.2)', () => {
     contactFindFirst.mockResolvedValue({ id: 'contato-2', telefone: '5511988887777' });
     conversationFindFirst
       .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null) // nenhuma conversa encerrada para reabrir
       .mockResolvedValueOnce({ id: 'conv-2', fila: { id: 'fila-x' }, agente: null });
     // Sem linha pessoal: configWhatsappDoSolicitante cai no canal compartilhado.
     channelConfigFindFirst.mockResolvedValue(null);
@@ -310,6 +312,7 @@ describe('iniciarConversa — publicacao em tempo real (Fase 11.2)', () => {
     contactFindFirst.mockResolvedValue({ id: 'contato-3', telefone: '5511977776666' });
     conversationFindFirst
       .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null) // nenhuma conversa encerrada para reabrir
       .mockResolvedValueOnce({ id: 'conv-3', fila: null, agente: { id: 'user-1' } });
     channelConfigFindFirst.mockResolvedValue({ id: 'cfg-pessoal', donoId: 'user-1', filaId: null, ...CONFIG_OFICIAL_BASE });
     conversationCreate.mockResolvedValue({ id: 'conv-3' });
@@ -344,6 +347,7 @@ describe('iniciarConversa — publicacao em tempo real (Fase 11.2)', () => {
     contactFindFirst.mockResolvedValue({ id: 'contato-7', telefone: '+55 62 9812-5316' });
     conversationFindFirst
       .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null) // nenhuma conversa encerrada para reabrir
       .mockResolvedValueOnce({ id: 'conv-7', fila: null, agente: { id: 'user-1' } });
     channelConfigFindFirst.mockResolvedValue({ id: 'cfg-pessoal', donoId: 'user-1', filaId: null, ...CONFIG_OFICIAL_BASE });
     conversationCreate.mockResolvedValue({ id: 'conv-7' });
@@ -404,6 +408,7 @@ describe('iniciarConversa — publicacao em tempo real (Fase 11.2)', () => {
     channelConfigFindFirst.mockResolvedValue({ id: 'cfg-vendedor-b', donoId: 'user-1', filaId: null, ...CONFIG_OFICIAL_BASE });
     conversationFindFirst
       .mockResolvedValueOnce(null) // existente, filtrada pela linha do SOLICITANTE -- nao acha
+      .mockResolvedValueOnce(null) // nenhuma conversa encerrada para reabrir
       .mockResolvedValueOnce({ id: 'conv-nova-b', fila: null, agente: { id: 'user-1' } }); // carregarOuFalhar em publicarNova
     conversationCreate.mockResolvedValue({ id: 'conv-nova-b' });
 

@@ -86,12 +86,39 @@ export async function destinoDaMensagem(canal: Channel, identificadorDestino: st
 }
 
 /**
+ * "Encerrar" so tira o atendimento da fila de espera: o historico do cliente e uma
+ * conversa so. Quando ele volta a falar (no dia seguinte, na semana seguinte), a conversa
+ * encerrada mais recente da MESMA linha reabre, com o mesmo protocolo, em vez de nascer
+ * outra. Quem tinha o atendimento continua com ele; sem responsavel, volta para a fila.
+ */
+async function reabrirUltimaFinalizada(
+  contatoId: string,
+  canal: MensagemNormalizada['canal'],
+  canalConfigId: string | null,
+  statusComResponsavel: 'ATRIBUIDO' | 'AGUARDANDO_CLIENTE',
+) {
+  const anterior = await prisma.conversation.findFirst({
+    where: { contatoId, canal, canalConfigId, status: 'FINALIZADO' },
+    orderBy: { ultimaMensagemEm: 'desc' },
+  });
+  if (!anterior) return null;
+  return prisma.conversation.update({
+    where: { id: anterior.id },
+    data: {
+      status: anterior.agenteId ? statusComResponsavel : 'EM_ESPERA',
+      finalizadoEm: null,
+      arquivada: false,
+    },
+  });
+}
+
+/**
  * Grava uma mensagem recebida de canal externo.
  *
  * Idempotente: o webhook da Meta reentrega quando nao recebe 200, e `idExterno`
  * e unico — reentrega devolve `duplicada: true` sem criar nada.
  * Reaproveita a conversa aberta do mesmo interlocutor; se a ultima foi
- * finalizada, abre uma nova conversa (novo protocolo) no mesmo contato.
+ * finalizada, REABRE a mesma conversa (mesmo protocolo; ver `reabrirUltimaFinalizada`).
  */
 export async function registrarMensagemEntrante(dados: MensagemNormalizada) {
   const jaExiste = await prisma.message.findUnique({ where: { idExterno: dados.idExterno } });
@@ -110,15 +137,16 @@ export async function registrarMensagemEntrante(dados: MensagemNormalizada) {
   const canalConfigId = config?.id ?? null;
   const contato = await encontrarOuCriarContato(dados, canalConfigId);
 
-  const emAberto = await prisma.conversation.findFirst({
-    where: {
-      contatoId: contato.id,
-      canal: dados.canal,
-      canalConfigId,
-      status: { not: 'FINALIZADO' },
-    },
-    orderBy: { ultimaMensagemEm: 'desc' },
-  });
+  const emAberto =
+    (await prisma.conversation.findFirst({
+      where: {
+        contatoId: contato.id,
+        canal: dados.canal,
+        canalConfigId,
+        status: { not: 'FINALIZADO' },
+      },
+      orderBy: { ultimaMensagemEm: 'desc' },
+    })) ?? (await reabrirUltimaFinalizada(contato.id, dados.canal, canalConfigId, 'ATRIBUIDO'));
 
   const nova = !emAberto;
   const destino = emAberto
@@ -283,10 +311,11 @@ export async function registrarMensagemPropria(dados: MensagemNormalizada) {
   const canalConfigId = config?.id ?? null;
   const contato = await encontrarOuCriarContato({ ...dados, nomeExibicao: null }, canalConfigId);
 
-  const emAberto = await prisma.conversation.findFirst({
-    where: { contatoId: contato.id, canal: dados.canal, canalConfigId, status: { not: 'FINALIZADO' } },
-    orderBy: { ultimaMensagemEm: 'desc' },
-  });
+  const emAberto =
+    (await prisma.conversation.findFirst({
+      where: { contatoId: contato.id, canal: dados.canal, canalConfigId, status: { not: 'FINALIZADO' } },
+      orderBy: { ultimaMensagemEm: 'desc' },
+    })) ?? (await reabrirUltimaFinalizada(contato.id, dados.canal, canalConfigId, 'AGUARDANDO_CLIENTE'));
 
   const nova = !emAberto;
   let conversa = emAberto;

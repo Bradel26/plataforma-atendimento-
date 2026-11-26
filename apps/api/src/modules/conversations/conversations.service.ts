@@ -36,6 +36,7 @@ import {
 import type { ListarConversasQuery, TransferirInput } from './conversations.schemas';
 import { filtroDaVisao } from './conversations.visao';
 import { reservarProtocolo } from './protocolo';
+import { resumosDaConversa } from './conversations.resumos';
 import { aoFalarComCliente } from './conversations.estados';
 import { registrarAceiteFluxo } from '../fluxos/fluxos.service';
 
@@ -500,6 +501,29 @@ export async function iniciarConversa(
   // formatado ("+55 62 9812-5316") nunca bate com a resposta que chega pelo
   // WhatsApp de verdade (que sempre vem so em digitos), e vira contato duplicado.
   const enderecoExterno = numeroNormalizado(contato.telefone) ?? contato.telefone;
+
+  // "Encerrar" so tira da fila de espera: se o contato ja teve conversa nesta linha, reabre a
+  // mais recente (mesmo protocolo) em vez de abrir outra.
+  const encerrada = await prisma.conversation.findFirst({
+    where: { contatoId, canal: 'WHATSAPP', canalConfigId: resolvedCanalConfigId, status: 'FINALIZADO' },
+    orderBy: { ultimaMensagemEm: 'desc' },
+  });
+  if (encerrada) {
+    const agenteId = encerrada.agenteId ?? destino.agenteId;
+    await prisma.conversation.update({
+      where: { id: encerrada.id },
+      data: {
+        status: agenteId ? 'ATRIBUIDO' : 'EM_ESPERA',
+        agenteId,
+        atribuidoEm: agenteId ? new Date() : null,
+        finalizadoEm: null,
+        arquivada: false,
+      },
+    });
+    await publicar(encerrada.id, { filaAnteriorId: encerrada.filaId });
+    return { id: encerrada.id };
+  }
+
   const conversa = await prisma.conversation.create({
     data: {
       canal: 'WHATSAPP',
@@ -542,6 +566,12 @@ async function carregarOuFalhar(id: string) {
   });
   if (!conversa) throw notFound('Conversa não encontrada');
   return conversa;
+}
+
+/** Resumos de 2 em 2 horas; a conversa so e lida se estiver no escopo de visibilidade de quem pede. */
+export async function listarResumos(solicitante: Solicitante, id: string) {
+  await carregarOuFalhar(id);
+  return resumosDaConversa(id);
 }
 
 export async function obterConversa(solicitante: Solicitante, id: string) {
