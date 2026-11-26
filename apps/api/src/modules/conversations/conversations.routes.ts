@@ -37,6 +37,7 @@ import {
   listarConversas,
   listarDestinosTransferencia,
   listarMensagens,
+  listarResumos,
   listarPrevias,
   marcarComoLida,
   obterConversa,
@@ -85,6 +86,13 @@ conversationsRoutes.get(
   validateQuery(listarMensagensSchema),
   asyncHandler(async (req, res) => {
     res.json(await listarMensagens(quem(req), param(req, 'id'), res.locals.query));
+  }),
+);
+
+conversationsRoutes.get(
+  '/:id/resumos',
+  asyncHandler(async (req, res) => {
+    res.json(await listarResumos(quem(req), param(req, 'id')));
   }),
 );
 

@@ -55,6 +55,53 @@ const diaLegivel = (iso: string) => {
 
 const chave = (iso: string) => new Date(iso).toDateString();
 
+type ResumoJanela = { inicio: string; fim: string; mensagens: number; texto: string | null; emAndamento: boolean };
+
+/** Resumo do que foi conversado, de 2 em 2 horas, para entender a situacao sem ler as mensagens. */
+function ResumosDaConversa({ conversaId }: { conversaId: string }) {
+  const [dados, setDados] = useState<{ disponivel: boolean; resumos: ResumoJanela[] } | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+
+  useEffect(() => {
+    let ativo = true;
+    setDados(null);
+    setErro(null);
+    api.get<{ disponivel: boolean; resumos: ResumoJanela[] }>(`/conversas/${conversaId}/resumos`)
+      .then((r) => { if (ativo) setDados(r); })
+      .catch((e) => { if (ativo) setErro(e instanceof ApiError ? e.message : 'Não foi possível carregar os resumos.'); });
+    return () => { ativo = false; };
+  }, [conversaId]);
+
+  const faixa = (r: ResumoJanela) => {
+    const dia = new Date(r.inicio).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    return `${dia} · ${hora(r.inicio)} às ${hora(r.fim)}`;
+  };
+
+  return (
+    <div>
+      <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Resumo da conversa · a cada 2 horas</h4>
+      {erro && <p className="mt-2 text-sm text-slate-500">{erro}</p>}
+      {!erro && !dados && <p className="mt-2 text-sm text-slate-500">Gerando resumos…</p>}
+      {dados && !dados.disponivel && <p className="mt-2 text-sm text-slate-500">O resumo automático não está configurado neste ambiente.</p>}
+      {dados && dados.disponivel && dados.resumos.length === 0 && <p className="mt-2 text-sm text-slate-500">Esta conversa ainda não tem mensagens.</p>}
+      {dados && dados.disponivel && dados.resumos.length > 0 && (
+        <ol className="mt-2 max-h-72 space-y-2 overflow-y-auto pr-1">
+          {dados.resumos.map((r) => (
+            <li key={r.inicio} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p className="text-[11px] font-semibold text-slate-600">
+                {faixa(r)} · {r.mensagens} mensagem(ns){r.emAndamento ? ' · em andamento' : ''}
+              </p>
+              <p className="mt-1 text-sm leading-relaxed text-slate-800">
+                {r.texto ?? 'Resumo ainda não gerado para este período. Abra novamente em instantes.'}
+              </p>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+}
+
 type Props = {
   /** `/ficha/contato/:id` ou `/ficha/conta/:id`. */
   base: string;
@@ -326,6 +373,7 @@ export function LinhaDoTempo({ base, raizId, recarregar = 0, eventosDemonstracao
               {eventoSelecionado.detalhe || 'Este registro não possui observações adicionais.'}
             </p>
           </div>
+          {eventoSelecionado.tipo === 'CONVERSA' && <ResumosDaConversa conversaId={eventoSelecionado.id} />}
           {eventoSelecionado.gravacaoUrl && <div>
             <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Gravação</h4>
             <audio

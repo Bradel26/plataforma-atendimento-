@@ -70,6 +70,8 @@ const COM_ORGANIZACAO = new Set([
   // Permissao de modulo por perfil: tabela raiz, com organizacao e CHECK proprio.
   'ModulePermission',
   'RegistroEsteira',
+  // Resumo de 2 em 2 horas da conversa: tabela raiz, com organizacao e CHECK proprio.
+  'ResumoConversa',
 ]);
 
 /** Operacoes que leem ou alteram por filtro: ganham `where`. */
