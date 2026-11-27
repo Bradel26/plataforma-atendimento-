@@ -115,6 +115,14 @@ function MensagensComDias({ mensagens, nomeContato }: { mensagens: Mensagem[]; n
   );
 }
 
+/**
+ * Audio no estilo do WhatsApp: so o player, sem texto. O conteudo guardado e o nome do arquivo
+ * (envio) ou um marcador ("[audio recebido]"); com o arquivo carregado ele so polui a bolha.
+ */
+function soPlayerDeAudio(m: Mensagem): boolean {
+  return m.tipoAnexo === 'AUDIO' && Boolean(m.anexoUrl);
+}
+
 function rotuloDoAutor(m: Mensagem): string | null {
   if (m.enviadaPorDispositivo) return 'Mensagem enviada por outro dispositivo';
   if (m.autor === 'BOT') return 'Mensagem do sistema';
@@ -140,7 +148,7 @@ function Anexo({ mensagem }: { mensagem: Mensagem }) {
     );
   }
   if (tipoAnexo === 'AUDIO') {
-    return <audio controls src={anexoUrl} className="mb-1.5 w-full max-w-[260px]" />;
+    return <audio controls src={anexoUrl} className="mb-1.5 w-[260px] max-w-full" />;
   }
   if (tipoAnexo === 'VIDEO') {
     return <video controls src={anexoUrl} className="mb-1.5 max-h-64 w-auto rounded-lg" />;
@@ -206,7 +214,7 @@ function Bolha({ mensagem, nomeContato }: { mensagem: Mensagem; nomeContato?: st
             Nota interna{mensagem.autorNome ? ` · ${mensagem.autorNome}` : ''}
           </p>
           <Anexo mensagem={mensagem} />
-          <TextoComLinks texto={textoSeguroDaMensagem(mensagem.conteudo)} />
+          {!soPlayerDeAudio(mensagem) && <TextoComLinks texto={textoSeguroDaMensagem(mensagem.conteudo)} />}
           <p className="mt-1 text-right text-[11px] tabular-nums text-amber-700">{hora(mensagem.criadoEm)}</p>
         </div>
       </li>
@@ -236,7 +244,7 @@ function Bolha({ mensagem, nomeContato }: { mensagem: Mensagem; nomeContato?: st
           <p className={`mb-0.5 text-[11.5px] font-semibold ${daEmpresa ? 'text-emerald-700' : 'text-slate-500'}`}>{rotulo}</p>
         )}
         <Anexo mensagem={mensagem} />
-        <TextoComLinks texto={textoSeguroDaMensagem(mensagem.conteudo)} />
+        {!soPlayerDeAudio(mensagem) && <TextoComLinks texto={textoSeguroDaMensagem(mensagem.conteudo)} />}
         <p className="mt-1 flex items-center justify-end gap-1 text-right text-[11px] tabular-nums text-slate-500">
           {hora(mensagem.criadoEm)}
           {daEmpresa && <TiqueDeStatus status={mensagem.status} />}
