@@ -55,17 +55,46 @@ const diaLegivel = (iso: string) => {
 
 const chave = (iso: string) => new Date(iso).toDateString();
 
+type ResumoAgora = {
+  disponivel: boolean;
+  inicio: string;
+  fim: string;
+  mensagens: number;
+  texto: string | null;
+  motivo: 'sem-mensagens' | 'indisponivel' | 'falha' | null;
+};
+
+const MENSAGEM_MOTIVO: Record<NonNullable<ResumoAgora['motivo']>, string> = {
+  'sem-mensagens': 'Não houve mensagens nas últimas 2 horas.',
+  indisponivel: 'O resumo automático não está configurado neste ambiente.',
+  falha: 'O modelo de resumo não respondeu. Tente de novo em instantes.',
+};
+
 type ResumoJanela = { inicio: string; fim: string; mensagens: number; texto: string | null; emAndamento: boolean };
 
 /** Resumo do que foi conversado, de 2 em 2 horas, para entender a situacao sem ler as mensagens. */
 function ResumosDaConversa({ conversaId }: { conversaId: string }) {
   const [dados, setDados] = useState<{ disponivel: boolean; resumos: ResumoJanela[] } | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [agora, setAgora] = useState<ResumoAgora | null>(null);
+  const [gerandoAgora, setGerandoAgora] = useState(false);
+  const [erroAgora, setErroAgora] = useState<string | null>(null);
+
+  const resumirAgora = () => {
+    setGerandoAgora(true);
+    setErroAgora(null);
+    api.post<ResumoAgora>(`/conversas/${conversaId}/resumos/agora`, {})
+      .then(setAgora)
+      .catch((e) => setErroAgora(e instanceof ApiError ? e.message : 'Não foi possível gerar o resumo.'))
+      .finally(() => setGerandoAgora(false));
+  };
 
   useEffect(() => {
     let ativo = true;
     setDados(null);
     setErro(null);
+    setAgora(null);
+    setErroAgora(null);
     api.get<{ disponivel: boolean; resumos: ResumoJanela[] }>(`/conversas/${conversaId}/resumos`)
       .then((r) => { if (ativo) setDados(r); })
       .catch((e) => { if (ativo) setErro(e instanceof ApiError ? e.message : 'Não foi possível carregar os resumos.'); });
@@ -79,7 +108,29 @@ function ResumosDaConversa({ conversaId }: { conversaId: string }) {
 
   return (
     <div>
-      <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Resumo da conversa · a cada 2 horas</h4>
+      <div className="flex items-center justify-between gap-2">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Resumo da conversa · a cada 2 horas</h4>
+        <button
+          type="button"
+          onClick={resumirAgora}
+          disabled={gerandoAgora}
+          className="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"
+        >
+          {gerandoAgora ? 'Resumindo…' : 'Resumir últimas 2 horas'}
+        </button>
+      </div>
+      {gerandoAgora && <p className="mt-2 text-sm text-slate-500">Lendo a conversa e gerando o resumo. Pode levar alguns segundos…</p>}
+      {erroAgora && <p className="mt-2 text-sm text-red-600">{erroAgora}</p>}
+      {agora && !gerandoAgora && (
+        <div className="mt-2 rounded-lg border border-sky-200 bg-sky-50 p-3">
+          <p className="text-[11px] font-semibold text-sky-800">
+            Últimas 2 horas · {hora(agora.inicio)} às {hora(agora.fim)} · {agora.mensagens} mensagem(ns)
+          </p>
+          <p className="mt-1 text-sm leading-relaxed text-slate-800">
+            {agora.texto ?? (agora.motivo ? MENSAGEM_MOTIVO[agora.motivo] : 'Sem resumo.')}
+          </p>
+        </div>
+      )}
       {erro && <p className="mt-2 text-sm text-slate-500">{erro}</p>}
       {!erro && !dados && <p className="mt-2 text-sm text-slate-500">Gerando resumos…</p>}
       {dados && !dados.disponivel && <p className="mt-2 text-sm text-slate-500">O resumo automático não está configurado neste ambiente.</p>}

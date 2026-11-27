@@ -36,7 +36,7 @@ import {
 import type { ListarConversasQuery, TransferirInput } from './conversations.schemas';
 import { filtroDaVisao } from './conversations.visao';
 import { reservarProtocolo } from './protocolo';
-import { resumosDaConversa } from './conversations.resumos';
+import { resumoDasUltimasHoras, resumosDaConversa } from './conversations.resumos';
 import { aoFalarComCliente } from './conversations.estados';
 import { registrarAceiteFluxo } from '../fluxos/fluxos.service';
 
@@ -572,6 +572,12 @@ async function carregarOuFalhar(id: string) {
 export async function listarResumos(solicitante: Solicitante, id: string) {
   await carregarOuFalhar(id);
   return resumosDaConversa(id);
+}
+
+/** Resumo das ultimas 2 horas, sob demanda (botao da ficha). Mesmo escopo de visibilidade da conversa. */
+export async function resumirUltimasHoras(solicitante: Solicitante, id: string) {
+  await carregarOuFalhar(id);
+  return resumoDasUltimasHoras(id, 2);
 }
 
 export async function obterConversa(solicitante: Solicitante, id: string) {

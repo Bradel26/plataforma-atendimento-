@@ -82,6 +82,42 @@ async function resumirTrecho(linhas: string): Promise<{ texto: string; motor: st
   }
 }
 
+export type ResumoAgora = {
+  disponivel: boolean;
+  inicio: string;
+  fim: string;
+  mensagens: number;
+  /** Nulo quando nao ha o que resumir ou o modelo nao respondeu; `motivo` diz qual dos casos. */
+  texto: string | null;
+  motivo: 'sem-mensagens' | 'indisponivel' | 'falha' | null;
+};
+
+/**
+ * Resumo sob demanda do que foi conversado nas ultimas `horas` (a contar de agora, sem alinhar a janelas
+ * de relogio). Nao e guardado: o botao existe justamente para olhar o estado atual da conversa.
+ * Chamar depois de a visibilidade da conversa ter sido verificada.
+ */
+export async function resumoDasUltimasHoras(conversaId: string, horas = 2, agora = Date.now()): Promise<ResumoAgora> {
+  const inicio = agora - horas * 60 * 60 * 1000;
+  const base = { inicio: new Date(inicio).toISOString(), fim: new Date(agora).toISOString() };
+  const mensagens = await prisma.message.findMany({
+    where: { conversaId, interno: false, autor: { not: 'SISTEMA' }, criadoEm: { gte: new Date(inicio), lte: new Date(agora) } },
+    orderBy: { criadoEm: 'asc' },
+    take: MAX_MENSAGENS,
+    select: { autor: true, conteudo: true },
+  });
+  const disponivel = modeloDeResumoConfigurado() !== null;
+  if (mensagens.length === 0) return { ...base, disponivel, mensagens: 0, texto: null, motivo: 'sem-mensagens' };
+  if (!disponivel) return { ...base, disponivel, mensagens: mensagens.length, texto: null, motivo: 'indisponivel' };
+  const linhas = mensagens
+    .map((m) => `${m.autor === 'CLIENTE' ? 'Cliente' : 'Atendente'}: ${m.conteudo}`)
+    .join('\n')
+    .slice(-MAX_CARACTERES_POR_TRECHO);
+  const gerado = await resumirTrecho(linhas);
+  if (!gerado) return { ...base, disponivel, mensagens: mensagens.length, texto: null, motivo: 'falha' };
+  return { ...base, disponivel, mensagens: mensagens.length, texto: gerado.texto, motivo: null };
+}
+
 /** Chamar depois de a visibilidade da conversa ter sido verificada. */
 export async function resumosDaConversa(conversaId: string, agora = Date.now()) {
   const mensagens = await prisma.message.findMany({

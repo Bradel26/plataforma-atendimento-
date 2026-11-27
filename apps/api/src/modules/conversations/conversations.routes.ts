@@ -38,6 +38,7 @@ import {
   listarDestinosTransferencia,
   listarMensagens,
   listarResumos,
+  resumirUltimasHoras,
   listarPrevias,
   marcarComoLida,
   obterConversa,
@@ -93,6 +94,14 @@ conversationsRoutes.get(
   '/:id/resumos',
   asyncHandler(async (req, res) => {
     res.json(await listarResumos(quem(req), param(req, 'id')));
+  }),
+);
+
+/** Botao "Resumir ultimas 2 horas" da ficha: gera na hora, nao guarda. */
+conversationsRoutes.post(
+  '/:id/resumos/agora',
+  asyncHandler(async (req, res) => {
+    res.json(await resumirUltimasHoras(quem(req), param(req, 'id')));
   }),
 );
 
