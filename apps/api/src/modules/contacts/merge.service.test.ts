@@ -64,12 +64,14 @@ describe('mesclagem segura de contatos', () => {
     const outraLinha = { ...base, id: 'outra', canalConfigId: 'linha-2', status: 'ATRIBUIDO', agenteId: null, criadoEm: new Date(3), ultimaMensagemEm: new Date(30) };
     const tx = {
       conversation: { findMany: vi.fn().mockResolvedValue([antiga, nova, outraLinha]), update: vi.fn(), deleteMany: vi.fn() },
-      message: { updateMany: vi.fn() }, call: { updateMany: vi.fn() }, ticket: { updateMany: vi.fn() },
+      message: { updateMany: vi.fn() }, call: { updateMany: vi.fn() }, ticket: { updateMany: vi.fn() }, survey: { updateMany: vi.fn() }, execucaoFluxo: { updateMany: vi.fn() },
     } as unknown as ClienteDeEscrita;
 
     await unificarConversasAbertas(tx, 'c');
 
     expect(tx.message.updateMany).toHaveBeenCalledWith({ where: { conversaId: { in: ['00009'] } }, data: { conversaId: '00008' } });
+    expect(tx.survey.updateMany).toHaveBeenCalledWith({ where: { conversaId: { in: ['00009'] } }, data: { conversaId: '00008' } });
+    expect(tx.execucaoFluxo.updateMany).toHaveBeenCalledWith({ where: { conversaId: { in: ['00009'] } }, data: { conversaId: '00008' } });
     expect(tx.conversation.update).toHaveBeenCalledWith({
       where: { id: '00008' },
       data: expect.objectContaining({ status: 'EM_ATENDIMENTO', ultimaMensagemEm: new Date(20), naoLidas: 1 }),

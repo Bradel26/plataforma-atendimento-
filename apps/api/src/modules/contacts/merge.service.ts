@@ -115,6 +115,9 @@ export async function unificarConversasAbertas(tx: ClienteDeEscrita, contatoId: 
     await tx.message.updateMany({ where: { conversaId: { in: ids } }, data: { conversaId: mantida.id } });
     await tx.call.updateMany({ where: { conversaId: { in: ids } }, data: { conversaId: mantida.id } });
     await tx.ticket.updateMany({ where: { conversaId: { in: ids } }, data: { conversaId: mantida.id } });
+    // Pesquisas e execucoes de fluxo cairiam em cascata junto com a conversa apagada: preserva.
+    await tx.survey.updateMany({ where: { conversaId: { in: ids } }, data: { conversaId: mantida.id } });
+    await tx.execucaoFluxo.updateMany({ where: { conversaId: { in: ids } }, data: { conversaId: mantida.id } });
     await tx.conversation.update({
       where: { id: mantida.id },
       data: {
