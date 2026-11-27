@@ -8,12 +8,12 @@ vi.mock('../../lib/prisma', () => ({ prisma: { message: { findMany }, resumoConv
 vi.mock('../../env', () => ({ env: envMock }));
 vi.mock('../../lib/log', () => ({ log: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } }));
 
-import { resumoDasUltimasHoras } from './conversations.resumos';
+import { linhaParaResumo, resumoDasUltimasHoras } from './conversations.resumos';
 
 const AGORA = Date.parse('2026-11-27T18:00:00.000Z');
 const msgs = [
-  { autor: 'CLIENTE', conteudo: 'Preciso do credenciamento TIM' },
-  { autor: 'AGENTE', conteudo: 'Envio a lista de documentos' },
+  { autor: 'CLIENTE', conteudo: 'Preciso do credenciamento TIM', tipoAnexo: 'TEXTO' },
+  { autor: 'AGENTE', conteudo: 'Envio a lista de documentos', tipoAnexo: 'TEXTO' },
 ];
 
 describe('resumoDasUltimasHoras', () => {
@@ -85,5 +85,20 @@ describe('resumoDasUltimasHoras', () => {
     expect(r).toMatchObject({ texto: 'Cliente pediu o credenciamento TIM; documentos enviados.', motivo: null, mensagens: 2 });
     expect(r.inicio).toBe(new Date(AGORA - 2 * 3600_000).toISOString());
     expect(r.fim).toBe(new Date(AGORA).toISOString());
+  });
+});
+
+describe('linhaParaResumo', () => {
+  it('audio vira descricao, nunca o nome do arquivo', () => {
+    expect(linhaParaResumo({ autor: 'AGENTE', tipoAnexo: 'AUDIO', conteudo: 'audio-20261127-145113.m4a' })).toBe('Atendente: [enviou um áudio]');
+    expect(linhaParaResumo({ autor: 'CLIENTE', tipoAnexo: 'AUDIO', conteudo: '[Áudio recebido]' })).toBe('Cliente: [enviou um áudio]');
+  });
+  it('foto sem legenda vira descricao; com legenda preserva o texto', () => {
+    expect(linhaParaResumo({ autor: 'CLIENTE', tipoAnexo: 'IMAGEM', conteudo: '[imagem recebida]' })).toBe('Cliente: [enviou uma foto]');
+    expect(linhaParaResumo({ autor: 'AGENTE', tipoAnexo: 'IMAGEM', conteudo: 'IMG-20261127-WA0012.jpg' })).toBe('Atendente: [enviou uma foto]');
+    expect(linhaParaResumo({ autor: 'CLIENTE', tipoAnexo: 'IMAGEM', conteudo: 'Segue o comprovante' })).toBe('Cliente: [enviou uma foto] Segue o comprovante');
+  });
+  it('texto comum passa como veio', () => {
+    expect(linhaParaResumo({ autor: 'CLIENTE', tipoAnexo: 'TEXTO', conteudo: 'sim e uma viagem cara' })).toBe('Cliente: sim e uma viagem cara');
   });
 });
