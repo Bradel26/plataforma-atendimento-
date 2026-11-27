@@ -8,6 +8,7 @@ import { ApiError, api } from '../../lib/api';
 import { telefoneLegivel } from '../../lib/telefone';
 import { LABEL_CONVERSA_STATUS, type ConversaDetalhe, type Mensagem } from '../../lib/types';
 import { AvatarConversa } from './AvatarConversa';
+import { escondeTextoDaMidia } from './textoDeMidia';
 import { CLASSE_STATUS, clienteAguardandoDesde, esperaPorExtenso, rotuloDoDia, textoSeguroDaMensagem } from './apresentacao';
 import {
   IconeCadeado,
@@ -115,14 +116,6 @@ function MensagensComDias({ mensagens, nomeContato }: { mensagens: Mensagem[]; n
   );
 }
 
-/**
- * Audio no estilo do WhatsApp: so o player, sem texto. O conteudo guardado e o nome do arquivo
- * (envio) ou um marcador ("[audio recebido]"); com o arquivo carregado ele so polui a bolha.
- */
-function soPlayerDeAudio(m: Mensagem): boolean {
-  return m.tipoAnexo === 'AUDIO' && Boolean(m.anexoUrl);
-}
-
 function rotuloDoAutor(m: Mensagem): string | null {
   if (m.enviadaPorDispositivo) return 'Mensagem enviada por outro dispositivo';
   if (m.autor === 'BOT') return 'Mensagem do sistema';
@@ -136,17 +129,53 @@ function rotuloDoAutor(m: Mensagem): string | null {
  * resolve. Anexo que a plataforma nao conseguiu baixar fica sem `anexoUrl` e a
  * bolha mostra apenas o texto ("[imagem recebida]").
  */
+/**
+ * Foto no padrao do WhatsApp: clicar amplia na propria tela (fundo escuro) e fecha com X, Esc ou
+ * clique fora, sem abrir outra guia.
+ */
+function FotoAmpliavel({ url, alt }: { url: string; alt: string }) {
+  const [aberta, setAberta] = useState(false);
+  useEffect(() => {
+    if (!aberta) return;
+    const aoTeclar = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setAberta(false);
+    };
+    window.addEventListener('keydown', aoTeclar);
+    return () => window.removeEventListener('keydown', aoTeclar);
+  }, [aberta]);
+  return (
+    <>
+      <button type="button" onClick={() => setAberta(true)} className="mb-1.5 block cursor-zoom-in" aria-label="Ampliar foto">
+        <img src={url} alt={alt} className="max-h-64 w-auto rounded-lg" />
+      </button>
+      {aberta && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Foto ampliada"
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 p-4"
+          onClick={() => setAberta(false)}
+        >
+          <button
+            type="button"
+            onClick={() => setAberta(false)}
+            className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-2xl leading-none text-white hover:bg-white/20"
+            aria-label="Fechar"
+          >
+            ×
+          </button>
+          <img src={url} alt={alt} className="max-h-full max-w-full rounded-md object-contain" onClick={(e) => e.stopPropagation()} />
+        </div>
+      )}
+    </>
+  );
+}
+
 function Anexo({ mensagem }: { mensagem: Mensagem }) {
   const { tipoAnexo, anexoUrl, conteudo } = mensagem;
   if (!anexoUrl || tipoAnexo === 'TEXTO') return null;
 
-  if (tipoAnexo === 'IMAGEM') {
-    return (
-      <a href={anexoUrl} target="_blank" rel="noreferrer" className="mb-1.5 block">
-        <img src={anexoUrl} alt={textoSeguroDaMensagem(conteudo)} className="max-h-64 w-auto rounded-lg" />
-      </a>
-    );
-  }
+  if (tipoAnexo === 'IMAGEM') return <FotoAmpliavel url={anexoUrl} alt={textoSeguroDaMensagem(conteudo)} />;
   if (tipoAnexo === 'AUDIO') {
     return <audio controls src={anexoUrl} className="mb-1.5 w-[260px] max-w-full" />;
   }
@@ -214,7 +243,7 @@ function Bolha({ mensagem, nomeContato }: { mensagem: Mensagem; nomeContato?: st
             Nota interna{mensagem.autorNome ? ` · ${mensagem.autorNome}` : ''}
           </p>
           <Anexo mensagem={mensagem} />
-          {!soPlayerDeAudio(mensagem) && <TextoComLinks texto={textoSeguroDaMensagem(mensagem.conteudo)} />}
+          {!escondeTextoDaMidia(mensagem) && <TextoComLinks texto={textoSeguroDaMensagem(mensagem.conteudo)} />}
           <p className="mt-1 text-right text-[11px] tabular-nums text-amber-700">{hora(mensagem.criadoEm)}</p>
         </div>
       </li>
@@ -244,7 +273,7 @@ function Bolha({ mensagem, nomeContato }: { mensagem: Mensagem; nomeContato?: st
           <p className={`mb-0.5 text-[11.5px] font-semibold ${daEmpresa ? 'text-emerald-700' : 'text-slate-500'}`}>{rotulo}</p>
         )}
         <Anexo mensagem={mensagem} />
-        {!soPlayerDeAudio(mensagem) && <TextoComLinks texto={textoSeguroDaMensagem(mensagem.conteudo)} />}
+        {!escondeTextoDaMidia(mensagem) && <TextoComLinks texto={textoSeguroDaMensagem(mensagem.conteudo)} />}
         <p className="mt-1 flex items-center justify-end gap-1 text-right text-[11px] tabular-nums text-slate-500">
           {hora(mensagem.criadoEm)}
           {daEmpresa && <TiqueDeStatus status={mensagem.status} />}
