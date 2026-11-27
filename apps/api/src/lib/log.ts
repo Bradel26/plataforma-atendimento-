@@ -11,7 +11,7 @@
  * campos sao gravados como vierem. Identificador sim, conteudo nao.
  */
 
-export type Camada = 'webhook' | 'provider' | 'sessao' | 'mensagem' | 'canal';
+export type Camada = 'webhook' | 'provider' | 'sessao' | 'mensagem' | 'canal' | 'resumo';
 type Nivel = 'info' | 'warn' | 'error';
 type Campos = Record<string, string | number | boolean | null | undefined>;
 

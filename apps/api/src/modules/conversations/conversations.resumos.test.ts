@@ -6,6 +6,7 @@ const { findMany, envMock } = vi.hoisted(() => ({
 }));
 vi.mock('../../lib/prisma', () => ({ prisma: { message: { findMany }, resumoConversa: { findMany: vi.fn(), upsert: vi.fn() } } }));
 vi.mock('../../env', () => ({ env: envMock }));
+vi.mock('../../lib/log', () => ({ log: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } }));
 
 import { resumoDasUltimasHoras } from './conversations.resumos';
 
@@ -52,7 +53,23 @@ describe('resumoDasUltimasHoras', () => {
     findMany.mockResolvedValue(msgs);
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('timeout')));
     const r = await resumoDasUltimasHoras('c1', 2, AGORA);
-    expect(r).toMatchObject({ texto: null, motivo: 'falha', disponivel: true });
+    expect(r).toMatchObject({ texto: null, motivo: 'falha', disponivel: true, detalhe: 'erro-inesperado' });
+  });
+
+  it('falha de rede traz o codigo, sem endereco', async () => {
+    findMany.mockResolvedValue(msgs);
+    const erro = Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNREFUSED' } });
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(erro));
+    const r = await resumoDasUltimasHoras('c1', 2, AGORA);
+    expect(r.detalhe).toBe('sem-conexao');
+    expect(JSON.stringify(r)).not.toContain('ollama:11434');
+  });
+
+  it('modelo responde 404: codigo http-404', async () => {
+    findMany.mockResolvedValue(msgs);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 404 }));
+    const r = await resumoDasUltimasHoras('c1', 2, AGORA);
+    expect(r).toMatchObject({ motivo: 'falha', detalhe: 'http-404' });
   });
 
   it('modelo respondeu: devolve o texto e o periodo', async () => {

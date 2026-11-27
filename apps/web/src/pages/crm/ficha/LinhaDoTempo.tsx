@@ -62,6 +62,7 @@ type ResumoAgora = {
   mensagens: number;
   texto: string | null;
   motivo: 'sem-mensagens' | 'indisponivel' | 'falha' | null;
+  detalhe?: string | null;
 };
 
 const MENSAGEM_MOTIVO: Record<NonNullable<ResumoAgora['motivo']>, string> = {
@@ -129,6 +130,7 @@ function ResumosDaConversa({ conversaId }: { conversaId: string }) {
           <p className="mt-1 text-sm leading-relaxed text-slate-800">
             {agora.texto ?? (agora.motivo ? MENSAGEM_MOTIVO[agora.motivo] : 'Sem resumo.')}
           </p>
+          {!agora.texto && agora.detalhe && <p className="mt-1 text-[11px] text-slate-500">Código técnico: {agora.detalhe}</p>}
         </div>
       )}
       {erro && <p className="mt-2 text-sm text-slate-500">{erro}</p>}

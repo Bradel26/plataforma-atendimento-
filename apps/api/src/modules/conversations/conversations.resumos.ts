@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { env } from '../../env';
+import { log } from '../../lib/log';
 import { prisma } from '../../lib/prisma';
 
 /**
@@ -47,9 +48,21 @@ export function modeloDeResumoConfigurado(): { url: string; modelo: string } | n
   return { url, modelo: env.LIGACAO_IA_OLLAMA_MODELO ?? env.OPORTUNIDADE_IA_OLLAMA_MODELO };
 }
 
-async function resumirTrecho(linhas: string): Promise<{ texto: string; motor: string } | null> {
+type ResultadoResumo = { texto: string; motor: string } | { erro: string };
+
+/** Codigo curto e sem endereco interno: serve para o usuario e para o log dizerem o que quebrou. */
+function codigoDoErro(erro: unknown): string {
+  const nome = erro instanceof Error ? erro.name : '';
+  const causa = (erro as { cause?: { code?: string } } | null)?.cause?.code;
+  if (nome === 'TimeoutError' || nome === 'AbortError') return 'timeout';
+  if (causa === 'ENOTFOUND' || causa === 'EAI_AGAIN') return 'sem-dns';
+  if (causa === 'ECONNREFUSED' || causa === 'EHOSTUNREACH' || causa === 'ENETUNREACH') return 'sem-conexao';
+  return causa ? `rede-${causa}` : 'erro-inesperado';
+}
+
+async function resumirTrecho(linhas: string): Promise<ResultadoResumo> {
   const cfg = modeloDeResumoConfigurado();
-  if (!cfg) return null;
+  if (!cfg) return { erro: 'nao-configurado' };
   try {
     const resposta = await fetch(new URL('/api/chat', cfg.url), {
       method: 'POST',
@@ -71,14 +84,25 @@ async function resumirTrecho(linhas: string): Promise<{ texto: string; motor: st
       }),
       signal: AbortSignal.timeout(120_000),
     });
-    if (!resposta.ok) return null;
+    if (!resposta.ok) {
+      log.warn('resumo', 'modelo de resumo recusou o pedido', { status: resposta.status, modelo: cfg.modelo });
+      return { erro: `http-${resposta.status}` };
+    }
     const envelope = envelopeSchema.safeParse(await resposta.json().catch(() => null));
-    if (!envelope.success) return null;
+    if (!envelope.success) {
+      log.warn('resumo', 'resposta do modelo fora do formato esperado', { modelo: cfg.modelo });
+      return { erro: 'resposta-invalida' };
+    }
     const dados = respostaSchema.safeParse(JSON.parse(envelope.data.message.content));
-    if (!dados.success) return null;
+    if (!dados.success) {
+      log.warn('resumo', 'o modelo nao devolveu o JSON de resumo', { modelo: cfg.modelo });
+      return { erro: 'resposta-invalida' };
+    }
     return { texto: dados.data.resumo.trim(), motor: `ollama:${cfg.modelo}` };
-  } catch {
-    return null;
+  } catch (erro) {
+    const codigo = codigoDoErro(erro);
+    log.warn('resumo', 'falha ao chamar o modelo de resumo', { codigo, modelo: cfg.modelo });
+    return { erro: codigo };
   }
 }
 
@@ -90,6 +114,8 @@ export type ResumoAgora = {
   /** Nulo quando nao ha o que resumir ou o modelo nao respondeu; `motivo` diz qual dos casos. */
   texto: string | null;
   motivo: 'sem-mensagens' | 'indisponivel' | 'falha' | null;
+  /** Codigo tecnico curto da falha (ex.: sem-conexao, timeout, http-404); nunca endereco interno. */
+  detalhe?: string | null;
 };
 
 /**
@@ -113,9 +139,9 @@ export async function resumoDasUltimasHoras(conversaId: string, horas = 2, agora
     .map((m) => `${m.autor === 'CLIENTE' ? 'Cliente' : 'Atendente'}: ${m.conteudo}`)
     .join('\n')
     .slice(-MAX_CARACTERES_POR_TRECHO);
-  const gerado = await resumirTrecho(linhas);
-  if (!gerado) return { ...base, disponivel, mensagens: mensagens.length, texto: null, motivo: 'falha' };
-  return { ...base, disponivel, mensagens: mensagens.length, texto: gerado.texto, motivo: null };
+  const resultado = await resumirTrecho(linhas);
+  if ('erro' in resultado) return { ...base, disponivel, mensagens: mensagens.length, texto: null, motivo: 'falha', detalhe: resultado.erro };
+  return { ...base, disponivel, mensagens: mensagens.length, texto: resultado.texto, motivo: null, detalhe: null };
 }
 
 /** Chamar depois de a visibilidade da conversa ter sido verificada. */
@@ -161,7 +187,8 @@ export async function resumosDaConversa(conversaId: string, agora = Date.now()) 
       .map((m) => `${m.autor === 'CLIENTE' ? 'Cliente' : 'Atendente'}: ${m.conteudo}`)
       .join('\n')
       .slice(0, MAX_CARACTERES_POR_TRECHO);
-    const gerado = await resumirTrecho(linhas);
+    const resultado = await resumirTrecho(linhas);
+    const gerado = 'texto' in resultado ? resultado : null;
     if (gerado && !emAndamento) {
       await prisma.resumoConversa.upsert({
         where: { conversaId_janelaInicio: { conversaId, janelaInicio: new Date(inicio) } },
